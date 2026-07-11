@@ -3,17 +3,23 @@ description: 버그를 제보합니다
 title: "[fix] "
 labels: ["🚨 fix"]
 body:
-  - type: markdown
-    attributes:
-      value: |
-        버그를 제보해주세요. 재현 절차가 구체적일수록 빠르게 고칠 수 있습니다.
-
   - type: textarea
-    id: context
+    id: summary
     attributes:
-      label: 어떤 이슈인가요?
-      description: 컨텍스트 / 배경을 설명합니다. (어떤 상황에서 생긴 버그인지)
-      placeholder: 예) 로그인 기능에서 인증 상태 유지 중 에러가 발생하여 핫픽스 합니다.
+      label: 요약
+      description: 어떤 버그인지 한두 줄로 요약합니다.
+      placeholder: 예) 로그인 후 새로고침하면 인증이 풀립니다.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: 발생 환경
+      options:
+        - local
+        - dev
+        - prod
     validations:
       required: true
 
@@ -33,7 +39,6 @@ body:
     id: expected
     attributes:
       label: 기대한 동작
-      placeholder: 정상적으로는 어떻게 동작해야 하나요?
     validations:
       required: true
 
@@ -41,67 +46,52 @@ body:
     id: actual
     attributes:
       label: 실제 동작
-      placeholder: 실제로는 어떻게 동작했나요? (에러 로그 / 스크린샷 첨부 가능)
+      description: 에러 로그 · 스크린샷을 함께 첨부하면 좋습니다.
     validations:
       required: true
 
-  - type: textarea
-    id: why-now
+  - type: dropdown
+    id: severity
     attributes:
-      label: 🎯 왜 지금 이걸 하는가
-      description: 지금 처리해야 하는 이유. (사용자 이탈, 다른 기능의 사전 조건, SLA 위반 등)
-      placeholder: 예) 세션 만료 버그로 DAU 5% 이탈 발생 중
+      label: 심각도
+      options:
+        - Blocker - 서비스 사용 불가
+        - Critical - 핵심 기능 장애
+        - Major - 일부 기능 오작동
+        - Minor - 경미한 결함
+      default: 2
+    validations:
+      required: true
+
+  - type: input
+    id: impact
+    attributes:
+      label: 영향 범위
+      description: 어떤 사용자 / 기능이 영향을 받나요?
+      placeholder: 예) 전체 로그인 사용자
+
+  - type: textarea
+    id: cause
+    attributes:
+      label: 원인 추정
+      description: 짐작되는 원인이 있으면 적습니다. (선택)
     validations:
       required: false
 
   - type: textarea
     id: acceptance
     attributes:
-      label: ✅ 성공 기준
-      description: 버그가 수정되었음을 검증할 수 있는 조건을 체크리스트로 작성합니다.
+      label: ✅ 완료 조건 (DoD)
+      description: 수정 완료를 판단할 수 있는 조건을 체크리스트로 작성합니다.
       value: |
         - [ ]
         - [ ]
     validations:
       required: true
 
-  - type: dropdown
-    id: priority
-    attributes:
-      label: 우선순위
-      options:
-        - P0 - 긴급
-        - P1 - 높음
-        - P2 - 보통
-        - P3 - 낮음
-      default: 1
-    validations:
-      required: true
-
   - type: input
-    id: due-dev
-    attributes:
-      label: 작업 마감일
-      placeholder: "YYYY-MM-DD (예: 2025-07-15까지 수정 완료 필요)"
-
-  - type: input
-    id: due-pr
-    attributes:
-      label: PR 마감일 (코드 리뷰 및 머지)
-      placeholder: "YYYY-MM-DD (예: 2025-07-17까지 PR 머지 완료 예정)"
-
-  - type: textarea
     id: related
     attributes:
       label: 연관 이슈
-      description: 상위 / 하위 이슈를 적습니다. 없으면 생략합니다.
-      placeholder: |
-        상위 이슈: #
-        하위 이슈: #
-
-  - type: textarea
-    id: todo
-    attributes:
-      label: 🔧 TODO
-      value: |
-        - [ ]
+      description: 상위 / 하위 / 관련 이슈 번호. 없으면 비워둡니다.
+      placeholder: "예) 관련 #15"
