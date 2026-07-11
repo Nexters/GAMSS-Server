@@ -1,6 +1,6 @@
 name: 🐞 Bug Report
 description: 버그를 제보합니다
-title: "[Bug] "
+title: "[fix] "
 labels: ["🚨 fix"]
 body:
   - type: markdown
