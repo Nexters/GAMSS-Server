@@ -41,20 +41,6 @@ body:
       required: true
 
   - type: textarea
-    id: scope
-    attributes:
-      label: 범위 (In / Out)
-      description: 이번 작업에 포함/제외되는 범위를 명확히 합니다.
-      value: |
-        **In-scope**
-        -
-
-        **Out-of-scope**
-        -
-    validations:
-      required: false
-
-  - type: textarea
     id: tech
     attributes:
       label: 기술 고려사항
