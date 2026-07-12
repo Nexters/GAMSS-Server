@@ -21,22 +21,33 @@ jobs:
         with:
           fetch-depth: 0 # 모든 태그·히스토리 필요
 
-      - name: Compute next version (patch bump)
+      - name: Compute next version
         id: ver
         run: |
           # 기존 vX.Y.Z 태그 중 최신 버전
           LATEST=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
+          # 머지 커밋 메시지(= PR 제목 포함)로 bump 단계 결정
+          MSG=$(git log -1 --pretty=%B)
 
           if [ -z "$LATEST" ]; then
-            NEXT="v0.0.1"
+            MAJOR=0; MINOR=0; PATCH=0
           else
             V=${LATEST#v}
             MAJOR=$(echo "$V" | cut -d. -f1)
             MINOR=$(echo "$V" | cut -d. -f2)
             PATCH=$(echo "$V" | cut -d. -f3)
-            NEXT="v${MAJOR}.${MINOR}.$((PATCH + 1))"
           fi
 
+          # #major → X+1, #minor → Y+1, 그 외 → Z+1 (기본 patch)
+          if echo "$MSG" | grep -qiE '#major'; then
+            MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0
+          elif echo "$MSG" | grep -qiE '#minor'; then
+            MINOR=$((MINOR + 1)); PATCH=0
+          else
+            PATCH=$((PATCH + 1))
+          fi
+
+          NEXT="v${MAJOR}.${MINOR}.${PATCH}"
           echo "이전 버전: ${LATEST:-(없음)} → 다음 버전: $NEXT"
           echo "next=$NEXT" >> "$GITHUB_OUTPUT"
 
