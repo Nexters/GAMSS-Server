@@ -6,6 +6,11 @@ on:
   push:
     branches: [dev, prod]
 
+concurrency:
+  # 같은 PR(브랜치)에 새 push가 오면 진행 중이던 이전 CI를 취소
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   checks: write
