@@ -1,0 +1,50 @@
+name: Release
+
+on:
+  push:
+    branches: [prod]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 모든 태그·히스토리 필요
+
+      - name: Compute next version (patch bump)
+        id: ver
+        run: |
+          # 기존 vX.Y.Z 태그 중 최신 버전
+          LATEST=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
+
+          if [ -z "$LATEST" ]; then
+            NEXT="v0.0.1"
+          else
+            V=${LATEST#v}
+            MAJOR=$(echo "$V" | cut -d. -f1)
+            MINOR=$(echo "$V" | cut -d. -f2)
+            PATCH=$(echo "$V" | cut -d. -f3)
+            NEXT="v${MAJOR}.${MINOR}.$((PATCH + 1))"
+          fi
+
+          echo "이전 버전: ${LATEST:-(없음)} → 다음 버전: $NEXT"
+          echo "next=$NEXT" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.ver.outputs.next }}" \
+            --target prod \
+            --title "${{ steps.ver.outputs.next }}" \
+            --generate-notes
