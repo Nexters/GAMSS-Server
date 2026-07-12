@@ -19,3 +19,21 @@
 ## 💬 리뷰 포인트
 
 <!-- 집중해서 봐줬으면 하는 부분 -->
+
+---
+
+<details>
+<summary>📌 PR 제목 작성 규칙 (펼치기)</summary>
+
+형식: `[태그] 내용` — 태그는 **소문자** (`feat` `fix` `chore` `doc` `refactor`), 내용 5자 이상
+
+- 일반 PR 예) `[feat] 소셜 로그인 API 구현`
+- **릴리스 PR(dev → prod)** 은 제목 키워드로 버전 bump 단계를 지정:
+
+| 키워드 | 버전 | 예시 (v0.2.1 기준) |
+|---|---|---|
+| (없음) | patch | `[chore] 정기 배포` → v0.2.2 |
+| `#minor` | minor | `[feat] 채팅 출시 #minor` → v0.3.0 |
+| `#major` | major | `[chore] 정식 출시 #major` → v1.0.0 |
+
+</details>
