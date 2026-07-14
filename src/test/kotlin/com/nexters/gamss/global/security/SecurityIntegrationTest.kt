@@ -53,6 +53,8 @@ class SecurityIntegrationTest {
                 status { isOk() }
                 jsonPath("$.data.id") { value(member.id) }
                 jsonPath("$.data.email") { value("me@a.com") }
+                jsonPath("$.data.status") { value("ACTIVE") }
+                jsonPath("$.data.createdAt") { exists() }
             }
     }
 

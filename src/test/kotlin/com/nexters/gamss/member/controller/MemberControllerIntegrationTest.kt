@@ -90,7 +90,22 @@ class MemberControllerIntegrationTest {
                 content = """{"nickname":"$tooLong"}"""
             }.andExpect {
                 status { isBadRequest() }
-                jsonPath("$.error.code") { value("INVALID_INPUT") }
+                jsonPath("$.error.code") { value("INVALID_NICKNAME") }
+            }
+    }
+
+    @Test
+    fun `금칙어가 포함된 닉네임은 400을 반환한다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+
+        mockMvc
+            .patch("/api/members/me/nickname") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"nickname":"시발이"}"""
+            }.andExpect {
+                status { isBadRequest() }
+                jsonPath("$.error.code") { value("INVALID_NICKNAME") }
             }
     }
 
