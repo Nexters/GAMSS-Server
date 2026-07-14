@@ -16,15 +16,29 @@ class Nickname(
     val value: String = value.trim()
 
     init {
-        if (this.value.length !in MIN_LENGTH..MAX_LENGTH) {
-            throw BusinessException(
-                ErrorCode.INVALID_NICKNAME,
-                "닉네임은 ${MIN_LENGTH}자 이상 ${MAX_LENGTH}자 이하여야 합니다.",
-            )
+        validate(this.value)
+    }
+
+    private fun validate(value: String) {
+        validateLength(value)
+        validateBannedWord(value)
+    }
+
+    private fun validateLength(value: String) {
+        if (value.length in MIN_LENGTH..MAX_LENGTH) {
+            return
         }
-        if (BANNED_WORDS.any { this.value.contains(it, ignoreCase = true) }) {
-            throw BusinessException(ErrorCode.INVALID_NICKNAME, "닉네임에 사용할 수 없는 표현이 포함되어 있습니다.")
+        throw BusinessException(
+            ErrorCode.INVALID_NICKNAME,
+            "닉네임은 ${MIN_LENGTH}자 이상 ${MAX_LENGTH}자 이하여야 합니다.",
+        )
+    }
+
+    private fun validateBannedWord(value: String) {
+        if (BANNED_WORDS.none { value.contains(it, ignoreCase = true) }) {
+            return
         }
+        throw BusinessException(ErrorCode.INVALID_NICKNAME, "닉네임에 사용할 수 없는 표현이 포함되어 있습니다.")
     }
 
     override fun equals(other: Any?): Boolean {
