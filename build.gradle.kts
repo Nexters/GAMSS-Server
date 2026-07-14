@@ -87,4 +87,10 @@ tasks.jacocoTestReport {
         xml.required.set(true)
         html.required.set(true)
     }
+    // 부트스트랩 진입점(main)은 단위 테스트 대상이 아니므로 커버리지에서 제외한다.
+    classDirectories.setFrom(
+        classDirectories.files.map {
+            fileTree(it) { exclude("**/GamssApplication*") }
+        },
+    )
 }

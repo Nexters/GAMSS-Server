@@ -2,6 +2,7 @@ package com.nexters.gamss.member.domain
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 class MemberTest {
@@ -10,6 +11,14 @@ class MemberTest {
         val member = Member("user@example.com")
 
         assertEquals("user@example.com", member.email)
+    }
+
+    @Test
+    fun `생성 시 생성 시각이 기록되고 식별자 기본값은 0이다`() {
+        val member = Member("user@example.com")
+
+        assertNotNull(member.createdAt)
+        assertEquals(0L, member.id)
     }
 
     @Test

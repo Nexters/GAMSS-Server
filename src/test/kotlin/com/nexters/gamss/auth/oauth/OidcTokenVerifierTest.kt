@@ -33,7 +33,7 @@ class OidcTokenVerifierTest {
     private val verifier = OidcTokenVerifier(provider, jwkSource)
 
     private fun signedToken(
-        subject: String = "user-sub-1",
+        subject: String? = "user-sub-1",
         iss: String = issuer,
         aud: String = clientId,
         email: String? = "user@example.com",
@@ -43,11 +43,11 @@ class OidcTokenVerifierTest {
         val builder =
             JWTClaimsSet
                 .Builder()
-                .subject(subject)
                 .issuer(iss)
                 .audience(aud)
                 .expirationTime(expiresAt)
                 .issueTime(Date())
+        if (subject != null) builder.subject(subject)
         if (email != null) builder.claim("email", email)
         val jwt = SignedJWT(JWSHeader.Builder(JWSAlgorithm.RS256).keyID(signingKey.keyID).build(), builder.build())
         jwt.sign(RSASSASigner(signingKey))
@@ -93,6 +93,11 @@ class OidcTokenVerifierTest {
     @Test
     fun `형식이 잘못된 토큰이면 INVALID_SOCIAL_TOKEN`() {
         assertSocialTokenInvalid("not-a-jwt")
+    }
+
+    @Test
+    fun `subject(sub)가 없으면 INVALID_SOCIAL_TOKEN`() {
+        assertSocialTokenInvalid(signedToken(subject = null))
     }
 
     private fun assertSocialTokenInvalid(token: String) {

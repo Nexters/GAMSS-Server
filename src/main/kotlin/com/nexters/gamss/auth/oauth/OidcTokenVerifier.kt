@@ -28,7 +28,7 @@ class OidcTokenVerifier(
             jwtClaimsSetVerifier =
                 DefaultJWTClaimsVerifier(
                     JWTClaimsSet.Builder().issuer(provider.issuer).build(),
-                    setOf("sub", "exp"),
+                    setOf("exp"),
                 )
         }
 

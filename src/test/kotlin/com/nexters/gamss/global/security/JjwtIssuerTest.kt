@@ -57,4 +57,11 @@ class JjwtIssuerTest {
 
         assertEquals(ErrorCode.INVALID_TOKEN, exception.errorCode)
     }
+
+    @Test
+    fun `빈 토큰은 INVALID_TOKEN 예외를 던진다`() {
+        val exception = assertFailsWith<BusinessException> { jwtIssuer.parseMemberId("") }
+
+        assertEquals(ErrorCode.INVALID_TOKEN, exception.errorCode)
+    }
 }

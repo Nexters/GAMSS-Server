@@ -2,9 +2,12 @@ package com.nexters.gamss.auth.oauth
 
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
+import io.mockk.every
+import io.mockk.mockk
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertSame
 
 class OAuthClientTest {
     private val properties =
@@ -45,5 +48,23 @@ class OAuthClientTest {
         val exception = assertFailsWith<BusinessException> { AppleOAuthClient(properties).verify("garbage") }
 
         assertEquals(ErrorCode.INVALID_SOCIAL_TOKEN, exception.errorCode)
+    }
+
+    @Test
+    fun `Google 클라이언트는 검증기의 결과를 그대로 반환한다`() {
+        val verifier = mockk<OidcTokenVerifier>()
+        val userInfo = OAuthUserInfo("google-sub", "g@example.com")
+        every { verifier.verify("token") } returns userInfo
+
+        assertSame(userInfo, GoogleOAuthClient(verifier).verify("token"))
+    }
+
+    @Test
+    fun `Apple 클라이언트는 검증기의 결과를 그대로 반환한다`() {
+        val verifier = mockk<OidcTokenVerifier>()
+        val userInfo = OAuthUserInfo("apple-sub", null)
+        every { verifier.verify("token") } returns userInfo
+
+        assertSame(userInfo, AppleOAuthClient(verifier).verify("token"))
     }
 }

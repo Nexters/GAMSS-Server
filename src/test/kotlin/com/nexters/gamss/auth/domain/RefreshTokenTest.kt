@@ -22,4 +22,9 @@ class RefreshTokenTest {
         assertTrue(refreshToken.matches("abc"))
         assertFalse(refreshToken.matches("xyz"))
     }
+
+    @Test
+    fun `식별자 기본값은 0이다`() {
+        assertEquals(0L, RefreshToken(memberId = 1L, token = "abc").id)
+    }
 }

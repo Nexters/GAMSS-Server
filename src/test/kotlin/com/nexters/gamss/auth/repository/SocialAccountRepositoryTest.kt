@@ -14,12 +14,13 @@ class SocialAccountRepositoryTest : RepositoryTest() {
 
     @Test
     fun `provider와 providerId로 소셜 계정을 조회한다`() {
-        socialAccountRepository.save(SocialAccount(memberId = 1L, provider = "GOOGLE", providerId = "sub-1"))
+        val saved = socialAccountRepository.save(SocialAccount(memberId = 1L, provider = "GOOGLE", providerId = "sub-1"))
 
         val found = socialAccountRepository.findByProviderAndProviderId("GOOGLE", "sub-1")
 
         assertNotNull(found)
         assertEquals(1L, found.memberId)
+        assertEquals(saved.id, found.id)
     }
 
     @Test

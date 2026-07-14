@@ -77,4 +77,15 @@ class SecurityIntegrationTest {
                 jsonPath("$.error.code") { value("UNAUTHORIZED") }
             }
     }
+
+    @Test
+    fun `Bearer 형식이 아닌 헤더는 인증되지 않아 401을 반환한다`() {
+        mockMvc
+            .get("/api/members/me") {
+                header(HttpHeaders.AUTHORIZATION, "Basic dXNlcjpwYXNz")
+            }.andExpect {
+                status { isUnauthorized() }
+                jsonPath("$.error.code") { value("UNAUTHORIZED") }
+            }
+    }
 }
