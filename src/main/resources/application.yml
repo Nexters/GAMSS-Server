@@ -1,21 +1,20 @@
 spring:
   application:
     name: gamss
-  datasource:
-    url: ${DB_URL:jdbc:mysql://localhost:3306/gamss}
-    username: ${DB_USERNAME:gamss}
-    password: ${DB_PASSWORD:gamss}
-    driver-class-name: com.mysql.cj.jdbc.Driver
+  profiles:
+    default: local
   jpa:
     hibernate:
-      ddl-auto: ${JPA_DDL_AUTO:update}
+      ddl-auto: validate
     open-in-view: false
     properties:
       hibernate:
-        format_sql: true
+        format_sql: false
+  flyway:
+    enabled: true
 
 jwt:
-  secret: ${JWT_SECRET:local-development-secret-change-me-to-a-long-random-value-0123456789}
+  secret: ${JWT_SECRET}
   access-token-validity: ${JWT_ACCESS_VALIDITY:PT1H}
   refresh-token-validity: ${JWT_REFRESH_VALIDITY:P14D}
 
