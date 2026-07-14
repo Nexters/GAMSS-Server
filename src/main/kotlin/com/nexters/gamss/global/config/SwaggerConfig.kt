@@ -20,7 +20,7 @@ class SwaggerConfig {
             .info(
                 Info()
                     .title("GAMSS API")
-                    .description("감정 쓰레기통 서비스 API 문서")
+                    .description("GAMSS 서비스 API 문서")
                     .version("v0.1"),
             ).addSecurityItem(SecurityRequirement().addList(securitySchemeName))
             .components(
