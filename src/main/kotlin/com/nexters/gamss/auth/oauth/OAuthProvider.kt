@@ -1,10 +1,11 @@
-package com.nexters.gamss.member.domain
+package com.nexters.gamss.auth.oauth
 
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 
 /**
- * 소셜 로그인 제공자. 새 제공자는 여기에 상수만 추가한다.
+ * 지원하는 소셜 제공자. 변경 가능한 목록이므로 인프라(oauth) 계층에 둔다.
+ * 새 제공자 추가 = 상수 + OAuthClient 구현체 추가. (domain 은 provider 를 String 으로만 저장하므로 바뀌지 않는다)
  */
 enum class OAuthProvider {
     GOOGLE,

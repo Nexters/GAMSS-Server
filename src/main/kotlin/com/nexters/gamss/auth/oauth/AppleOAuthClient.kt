@@ -1,6 +1,5 @@
 package com.nexters.gamss.auth.oauth
 
-import com.nexters.gamss.member.domain.OAuthProvider
 import org.springframework.stereotype.Component
 
 @Component

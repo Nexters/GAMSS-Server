@@ -14,21 +14,21 @@ import java.time.Instant
 import java.util.Date
 
 /**
- * 서비스 자체 JWT(access/refresh) 발급·파싱. 서명은 HMAC-SHA256.
+ * jjwt 기반 JwtIssuer 구현. 서명은 HMAC-SHA256.
  */
 @Component
-class JwtProvider(
+class JjwtIssuer(
     properties: JwtProperties,
-) {
+) : JwtIssuer {
     private val key = Keys.hmacShaKeyFor(properties.secret.toByteArray(StandardCharsets.UTF_8))
     private val accessTokenValidity = properties.accessTokenValidity
     private val refreshTokenValidity = properties.refreshTokenValidity
 
-    fun issueAccessToken(memberId: Long): String = build(memberId, accessTokenValidity)
+    override fun issueAccessToken(memberId: Long): String = build(memberId, accessTokenValidity)
 
-    fun issueRefreshToken(memberId: Long): String = build(memberId, refreshTokenValidity)
+    override fun issueRefreshToken(memberId: Long): String = build(memberId, refreshTokenValidity)
 
-    fun parseMemberId(token: String): Long = parse(token).subject.toLong()
+    override fun parseMemberId(token: String): Long = parse(token).subject.toLong()
 
     private fun build(
         memberId: Long,

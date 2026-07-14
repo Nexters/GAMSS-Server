@@ -3,7 +3,6 @@ package com.nexters.gamss.member.service
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.member.domain.Member
-import com.nexters.gamss.member.domain.OAuthProvider
 import com.nexters.gamss.member.repository.MemberRepository
 import io.mockk.every
 import io.mockk.mockk
@@ -19,41 +18,18 @@ class MemberServiceTest {
     private val memberService = MemberService(memberRepository)
 
     @Test
-    fun `기존 회원이면 저장하지 않고 반환한다`() {
-        val member = Member(OAuthProvider.GOOGLE, "sub-1", "a@example.com")
-        every { memberRepository.findByProviderAndProviderId(OAuthProvider.GOOGLE, "sub-1") } returns member
-
-        val result = memberService.findOrCreate(OAuthProvider.GOOGLE, "sub-1", "a@example.com")
-
-        assertSame(member, result)
-        verify(exactly = 0) { memberRepository.save(any()) }
-    }
-
-    @Test
-    fun `신규 회원이면 저장한다`() {
-        every { memberRepository.findByProviderAndProviderId(OAuthProvider.APPLE, "sub-2") } returns null
+    fun `회원을 생성한다`() {
         every { memberRepository.save(any()) } answers { firstArg() }
 
-        val result = memberService.findOrCreate(OAuthProvider.APPLE, "sub-2", "b@example.com")
+        val member = memberService.create("a@example.com")
 
-        assertEquals("sub-2", result.providerId)
-        assertEquals(OAuthProvider.APPLE, result.provider)
+        assertEquals("a@example.com", member.email)
         verify(exactly = 1) { memberRepository.save(any()) }
     }
 
     @Test
-    fun `기존 회원의 이메일이 바뀌면 갱신한다`() {
-        val member = Member(OAuthProvider.GOOGLE, "sub-3", "old@example.com")
-        every { memberRepository.findByProviderAndProviderId(OAuthProvider.GOOGLE, "sub-3") } returns member
-
-        memberService.findOrCreate(OAuthProvider.GOOGLE, "sub-3", "new@example.com")
-
-        assertEquals("new@example.com", member.email)
-    }
-
-    @Test
     fun `getById로 회원을 조회한다`() {
-        val member = Member(OAuthProvider.GOOGLE, "sub-4", "c@example.com")
+        val member = Member("b@example.com")
         every { memberRepository.findById(10L) } returns Optional.of(member)
 
         assertSame(member, memberService.getById(10L))

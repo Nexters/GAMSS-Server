@@ -18,9 +18,10 @@ import java.text.ParseException
  * JWKS 소스를 주입받아 테스트에서 로컬 키로 대체할 수 있다.
  */
 class OidcTokenVerifier(
-    private val provider: OAuthProperties.Provider,
+    provider: OAuthProperties.Provider,
     jwkSource: JWKSource<SecurityContext>,
 ) {
+    private val allowedAudiences = AllowedAudiences(provider.clientIds)
     private val processor =
         DefaultJWTProcessor<SecurityContext>().apply {
             jwsKeySelector = JWSVerificationKeySelector(JWSAlgorithm.RS256, jwkSource)
@@ -42,15 +43,10 @@ class OidcTokenVerifier(
             } catch (e: JOSEException) {
                 throw BusinessException(ErrorCode.INVALID_SOCIAL_TOKEN)
             }
-        verifyAudience(claims.audience)
-        val subject = claims.subject ?: throw BusinessException(ErrorCode.INVALID_SOCIAL_TOKEN)
-        return OAuthUserInfo(providerId = subject, email = claims.getStringClaim("email"))
-    }
-
-    private fun verifyAudience(audience: List<String>?) {
-        if (provider.clientIds.isEmpty()) return
-        if (audience.isNullOrEmpty() || audience.none { it in provider.clientIds }) {
+        if (!allowedAudiences.accepts(claims.audience)) {
             throw BusinessException(ErrorCode.INVALID_SOCIAL_TOKEN)
         }
+        val subject = claims.subject ?: throw BusinessException(ErrorCode.INVALID_SOCIAL_TOKEN)
+        return OAuthUserInfo(providerId = subject, email = claims.getStringClaim("email"))
     }
 }

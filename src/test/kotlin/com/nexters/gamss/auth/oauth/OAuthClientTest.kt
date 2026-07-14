@@ -2,7 +2,6 @@ package com.nexters.gamss.auth.oauth
 
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
-import com.nexters.gamss.member.domain.OAuthProvider
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
