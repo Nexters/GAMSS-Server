@@ -8,13 +8,6 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertSame
 
 class OAuthClientResolverTest {
-    private fun fakeClient(target: OAuthProvider) =
-        object : OAuthClient {
-            override val provider = target
-
-            override fun verify(idToken: String) = OAuthUserInfo("id", null)
-        }
-
     @Test
     fun `provider에 맞는 클라이언트를 반환한다`() {
         val googleClient = fakeClient(OAuthProvider.GOOGLE)
@@ -31,4 +24,11 @@ class OAuthClientResolverTest {
 
         assertEquals(ErrorCode.UNSUPPORTED_OAUTH_PROVIDER, exception.errorCode)
     }
+
+    private fun fakeClient(target: OAuthProvider) =
+        object : OAuthClient {
+            override val provider = target
+
+            override fun verify(idToken: String) = OAuthUserInfo("id", null)
+        }
 }

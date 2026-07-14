@@ -32,28 +32,6 @@ class OidcTokenVerifierTest {
         )
     private val verifier = OidcTokenVerifier(provider, jwkSource)
 
-    private fun signedToken(
-        subject: String? = "user-sub-1",
-        iss: String = issuer,
-        aud: String = clientId,
-        email: String? = "user@example.com",
-        expiresAt: Date = Date.from(Instant.now().plusSeconds(300)),
-        signingKey: RSAKey = rsaKey,
-    ): String {
-        val builder =
-            JWTClaimsSet
-                .Builder()
-                .issuer(iss)
-                .audience(aud)
-                .expirationTime(expiresAt)
-                .issueTime(Date())
-        if (subject != null) builder.subject(subject)
-        if (email != null) builder.claim("email", email)
-        val jwt = SignedJWT(JWSHeader.Builder(JWSAlgorithm.RS256).keyID(signingKey.keyID).build(), builder.build())
-        jwt.sign(RSASSASigner(signingKey))
-        return jwt.serialize()
-    }
-
     @Test
     fun `유효한 토큰이면 사용자 정보를 반환한다`() {
         val info = verifier.verify(signedToken())
@@ -103,5 +81,27 @@ class OidcTokenVerifierTest {
     private fun assertSocialTokenInvalid(token: String) {
         val exception = assertFailsWith<BusinessException> { verifier.verify(token) }
         assertEquals(ErrorCode.INVALID_SOCIAL_TOKEN, exception.errorCode)
+    }
+
+    private fun signedToken(
+        subject: String? = "user-sub-1",
+        iss: String = issuer,
+        aud: String = clientId,
+        email: String? = "user@example.com",
+        expiresAt: Date = Date.from(Instant.now().plusSeconds(300)),
+        signingKey: RSAKey = rsaKey,
+    ): String {
+        val builder =
+            JWTClaimsSet
+                .Builder()
+                .issuer(iss)
+                .audience(aud)
+                .expirationTime(expiresAt)
+                .issueTime(Date())
+        if (subject != null) builder.subject(subject)
+        if (email != null) builder.claim("email", email)
+        val jwt = SignedJWT(JWSHeader.Builder(JWSAlgorithm.RS256).keyID(signingKey.keyID).build(), builder.build())
+        jwt.sign(RSASSASigner(signingKey))
+        return jwt.serialize()
     }
 }

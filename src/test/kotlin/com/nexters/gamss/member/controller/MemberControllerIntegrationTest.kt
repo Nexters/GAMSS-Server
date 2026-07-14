@@ -46,8 +46,6 @@ class MemberControllerIntegrationTest {
                 .build()
     }
 
-    private fun bearerFor(member: Member): String = "Bearer ${jwtIssuer.issueAccessToken(member.id)}"
-
     @Test
     fun `닉네임을 수정하면 변경된 닉네임을 반환한다`() {
         val member = memberRepository.save(Member("me@a.com"))
@@ -161,4 +159,6 @@ class MemberControllerIntegrationTest {
                 status { isUnauthorized() }
             }
     }
+
+    private fun bearerFor(member: Member): String = "Bearer ${jwtIssuer.issueAccessToken(member.id)}"
 }

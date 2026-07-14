@@ -33,20 +33,22 @@ class OidcTokenVerifier(
         }
 
     fun verify(idToken: String): OAuthUserInfo {
-        val claims =
-            try {
-                processor.process(idToken, null)
-            } catch (e: ParseException) {
-                throw BusinessException(ErrorCode.INVALID_SOCIAL_TOKEN)
-            } catch (e: BadJOSEException) {
-                throw BusinessException(ErrorCode.INVALID_SOCIAL_TOKEN)
-            } catch (e: JOSEException) {
-                throw BusinessException(ErrorCode.INVALID_SOCIAL_TOKEN)
-            }
+        val claims = parseClaims(idToken)
         if (!allowedAudiences.accepts(claims.audience)) {
             throw BusinessException(ErrorCode.INVALID_SOCIAL_TOKEN)
         }
         val subject = claims.subject ?: throw BusinessException(ErrorCode.INVALID_SOCIAL_TOKEN)
         return OAuthUserInfo(providerId = subject, email = claims.getStringClaim("email"))
     }
+
+    private fun parseClaims(idToken: String): JWTClaimsSet =
+        try {
+            processor.process(idToken, null)
+        } catch (e: ParseException) {
+            throw BusinessException(ErrorCode.INVALID_SOCIAL_TOKEN)
+        } catch (e: BadJOSEException) {
+            throw BusinessException(ErrorCode.INVALID_SOCIAL_TOKEN)
+        } catch (e: JOSEException) {
+            throw BusinessException(ErrorCode.INVALID_SOCIAL_TOKEN)
+        }
 }
