@@ -1,0 +1,85 @@
+name: ✨ Feature
+description: 새로운 기능을 제안합니다
+title: "[feat] "
+labels: ["💡 feat"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 배경 / 문제
+      description: 어떤 문제나 니즈에서 출발했는지 설명합니다.
+      placeholder: 예) 비로그인 사용자가 작성 중이던 내용을 잃어버려 이탈이 발생합니다.
+    validations:
+      required: true
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: 목표
+      description: 이 기능으로 달성하려는 결과를 한두 줄로 적습니다.
+      placeholder: 예) 임시 저장으로 작성 내용을 보존해 이탈을 줄인다.
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: 제안하는 해결책
+      description: 구현 아이디어 / 접근 방식. (확정 아니어도 됨)
+    validations:
+      required: false
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: ✅ 완료 조건 (DoD)
+      description: 완료를 판단할 수 있는 조건을 체크리스트로 작성합니다.
+      value: |
+        - [ ]
+        - [ ]
+    validations:
+      required: true
+
+  - type: textarea
+    id: tech
+    attributes:
+      label: 기술 고려사항
+      description: API · DB · 의존성 · 성능 등 미리 짚을 점.
+      placeholder: |
+        - API:
+        - DB:
+        - 의존성/성능:
+    validations:
+      required: false
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 우선순위
+      options:
+        - P0 - 긴급
+        - P1 - 높음
+        - P2 - 보통
+        - P3 - 낮음
+      default: 2
+    validations:
+      required: true
+
+  - type: dropdown
+    id: effort
+    attributes:
+      label: 예상 규모
+      options:
+        - S - 하루 이내
+        - M - 2~3일
+        - L - 일주일 이상
+      default: 1
+    validations:
+      required: false
+
+  - type: input
+    id: related
+    attributes:
+      label: 연관 이슈
+      description: 상위 / 하위 / 관련 이슈 번호. 없으면 비워둡니다.
+      placeholder: "예) 상위 #12, 관련 #15"

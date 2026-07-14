@@ -1,0 +1,97 @@
+name: 🐞 Bug Report
+description: 버그를 제보합니다
+title: "[fix] "
+labels: ["🚨 fix"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: 요약
+      description: 어떤 버그인지 한두 줄로 요약합니다.
+      placeholder: 예) 로그인 후 새로고침하면 인증이 풀립니다.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: 발생 환경
+      options:
+        - local
+        - dev
+        - prod
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 🔁 재현 절차
+      description: 버그를 재현하는 단계를 순서대로 작성합니다.
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 기대한 동작
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 실제 동작
+      description: 에러 로그 · 스크린샷을 함께 첨부하면 좋습니다.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: 심각도
+      options:
+        - Blocker - 서비스 사용 불가
+        - Critical - 핵심 기능 장애
+        - Major - 일부 기능 오작동
+        - Minor - 경미한 결함
+      default: 2
+    validations:
+      required: true
+
+  - type: input
+    id: impact
+    attributes:
+      label: 영향 범위
+      description: 어떤 사용자 / 기능이 영향을 받나요?
+      placeholder: 예) 전체 로그인 사용자
+
+  - type: textarea
+    id: cause
+    attributes:
+      label: 원인 추정
+      description: 짐작되는 원인이 있으면 적습니다. (선택)
+    validations:
+      required: false
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: ✅ 완료 조건 (DoD)
+      description: 수정 완료를 판단할 수 있는 조건을 체크리스트로 작성합니다.
+      value: |
+        - [ ]
+        - [ ]
+    validations:
+      required: true
+
+  - type: input
+    id: related
+    attributes:
+      label: 연관 이슈
+      description: 상위 / 하위 / 관련 이슈 번호. 없으면 비워둡니다.
+      placeholder: "예) 관련 #15"

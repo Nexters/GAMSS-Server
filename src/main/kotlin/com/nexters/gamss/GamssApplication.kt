@@ -7,5 +7,5 @@ import org.springframework.boot.runApplication
 class GamssApplication
 
 fun main(args: Array<String>) {
-	runApplication<GamssApplication>(*args)
+    runApplication<GamssApplication>(*args)
 }

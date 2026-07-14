@@ -1,0 +1,35 @@
+name: PR 제목 검증
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  validate-pr-title:
+    name: Validate PR Title
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check title format
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          echo "PR 제목: $TITLE"
+
+          # 허용 태그 (소문자) — 라벨 체계와 일치
+          ALLOWED="feat|fix|chore|doc|refactor"
+
+          # 1) '[태그] 내용' 형식 + 태그 뒤 공백 1개 + 내용 존재
+          if ! echo "$TITLE" | grep -qE "^\[($ALLOWED)\] .+"; then
+            echo "::error::형식 오류 — '[태그] 내용' 이어야 합니다. 허용 태그(소문자): feat, fix, chore, doc, refactor"
+            echo "올바른 예) [feat] 로그인 API 구현"
+            exit 1
+          fi
+
+          # 2) 태그를 뺀 제목 내용이 5자 이상
+          CONTENT=$(echo "$TITLE" | sed -E 's/^\[[^]]*\] //')
+          if [ ${#CONTENT} -lt 5 ]; then
+            echo "::error::제목 내용이 너무 짧습니다 (5자 이상 권장)."
+            exit 1
+          fi
+
+          echo "✅ PR 제목 검증 통과"
