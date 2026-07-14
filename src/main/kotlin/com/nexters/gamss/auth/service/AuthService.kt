@@ -46,12 +46,19 @@ class AuthService(
     private fun issueTokens(memberId: Long): TokenResult {
         val accessToken = jwtIssuer.issueAccessToken(memberId)
         val refreshToken = jwtIssuer.issueRefreshToken(memberId)
-        val stored = refreshTokenRepository.findByMemberId(memberId)
-        if (stored != null) {
-            stored.rotate(refreshToken)
-        } else {
-            refreshTokenRepository.save(RefreshToken(memberId, refreshToken))
-        }
+        persistRefreshToken(memberId, refreshToken)
         return TokenResult(accessToken, refreshToken)
+    }
+
+    private fun persistRefreshToken(
+        memberId: Long,
+        refreshToken: String,
+    ) {
+        val stored = refreshTokenRepository.findByMemberId(memberId)
+        if (stored == null) {
+            refreshTokenRepository.save(RefreshToken(memberId, refreshToken))
+            return
+        }
+        stored.rotate(refreshToken)
     }
 }
