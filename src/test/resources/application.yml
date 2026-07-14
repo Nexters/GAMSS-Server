@@ -1,0 +1,22 @@
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        format_sql: false
+
+jwt:
+  secret: test-secret-value-sufficiently-long-for-hs256-signing-0123456789abcdef
+  access-token-validity: PT1H
+  refresh-token-validity: P14D
+
+oauth:
+  google:
+    issuer: https://accounts.google.com
+    jwks-uri: https://www.googleapis.com/oauth2/v3/certs
+    client-ids: test-google-client-id
+  apple:
+    issuer: https://appleid.apple.com
+    jwks-uri: https://appleid.apple.com/auth/keys
+    client-ids: test-apple-client-id

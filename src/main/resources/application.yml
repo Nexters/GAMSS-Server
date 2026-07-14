@@ -1,0 +1,34 @@
+spring:
+  application:
+    name: gamss
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/gamss}
+    username: ${DB_USERNAME:gamss}
+    password: ${DB_PASSWORD:gamss}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+
+jwt:
+  secret: ${JWT_SECRET:local-development-secret-change-me-to-a-long-random-value-0123456789}
+  access-token-validity: ${JWT_ACCESS_VALIDITY:PT1H}
+  refresh-token-validity: ${JWT_REFRESH_VALIDITY:P14D}
+
+oauth:
+  google:
+    issuer: https://accounts.google.com
+    jwks-uri: https://www.googleapis.com/oauth2/v3/certs
+    client-ids: ${GOOGLE_CLIENT_IDS:}
+  apple:
+    issuer: https://appleid.apple.com
+    jwks-uri: https://appleid.apple.com/auth/keys
+    client-ids: ${APPLE_CLIENT_IDS:}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html

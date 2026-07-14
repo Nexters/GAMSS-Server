@@ -1,0 +1,18 @@
+# 로컬 개발용 MySQL. 실행: docker compose up -d
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: gamss-mysql
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_DATABASE: gamss
+      MYSQL_USER: gamss
+      MYSQL_PASSWORD: gamss
+      MYSQL_ROOT_PASSWORD: root
+    volumes:
+      - gamss-mysql-data:/var/lib/mysql
+    restart: unless-stopped
+
+volumes:
+  gamss-mysql-data:
