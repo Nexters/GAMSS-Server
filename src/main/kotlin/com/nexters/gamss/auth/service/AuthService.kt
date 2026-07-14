@@ -7,6 +7,7 @@ import com.nexters.gamss.auth.repository.RefreshTokenRepository
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.global.security.JwtIssuer
+import com.nexters.gamss.member.service.MemberService
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -18,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional
 class AuthService(
     private val oAuthClientResolver: OAuthClientResolver,
     private val socialAccountService: SocialAccountService,
+    private val memberService: MemberService,
     private val jwtIssuer: JwtIssuer,
     private val refreshTokenRepository: RefreshTokenRepository,
 ) {
@@ -28,6 +30,9 @@ class AuthService(
     ): TokenResult {
         val userInfo = oAuthClientResolver.resolve(provider).verify(idToken)
         val member = socialAccountService.resolveMember(provider, userInfo.providerId, userInfo.email)
+        if (member.isWithdrawn()) {
+            throw BusinessException(ErrorCode.WITHDRAWN_MEMBER)
+        }
         return issueTokens(member.id)
     }
 
@@ -39,6 +44,9 @@ class AuthService(
                 ?: throw BusinessException(ErrorCode.REFRESH_TOKEN_NOT_FOUND)
         if (!stored.matches(refreshToken)) {
             throw BusinessException(ErrorCode.INVALID_TOKEN)
+        }
+        if (memberService.getById(memberId).isWithdrawn()) {
+            throw BusinessException(ErrorCode.WITHDRAWN_MEMBER)
         }
         return issueTokens(memberId)
     }

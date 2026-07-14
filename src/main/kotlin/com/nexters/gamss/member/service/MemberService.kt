@@ -30,4 +30,13 @@ class MemberService(
         member.updateNickname(nickname)
         return member
     }
+
+    @Transactional
+    fun withdraw(id: Long) {
+        val member = getById(id)
+        if (member.isWithdrawn()) {
+            throw BusinessException(ErrorCode.ALREADY_WITHDRAWN)
+        }
+        member.withdraw()
+    }
 }

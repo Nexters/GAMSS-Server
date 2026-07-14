@@ -2,8 +2,10 @@ package com.nexters.gamss.member.domain
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class MemberTest {
     @Test
@@ -42,5 +44,25 @@ class MemberTest {
         member.updateNickname(Nickname("바다"))
 
         assertEquals(Nickname("바다"), member.nickname)
+    }
+
+    @Test
+    fun `생성 직후에는 활성 상태이며 탈퇴하지 않았다`() {
+        val member = Member("user@example.com")
+
+        assertEquals(MemberStatus.ACTIVE, member.status)
+        assertFalse(member.isWithdrawn())
+        assertNull(member.deletedAt)
+    }
+
+    @Test
+    fun `탈퇴하면 상태가 WITHDRAWN이 되고 삭제 시각이 기록된다`() {
+        val member = Member("user@example.com")
+
+        member.withdraw()
+
+        assertEquals(MemberStatus.WITHDRAWN, member.status)
+        assertTrue(member.isWithdrawn())
+        assertNotNull(member.deletedAt)
     }
 }

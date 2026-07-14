@@ -55,4 +55,24 @@ class MemberServiceTest {
         assertSame(member, updated)
         assertEquals(Nickname("바다"), updated.nickname)
     }
+
+    @Test
+    fun `회원을 탈퇴 처리한다`() {
+        val member = Member("b@example.com")
+        every { memberRepository.findById(10L) } returns Optional.of(member)
+
+        memberService.withdraw(10L)
+
+        assertEquals(true, member.isWithdrawn())
+    }
+
+    @Test
+    fun `이미 탈퇴한 회원을 다시 탈퇴하면 ALREADY_WITHDRAWN`() {
+        val member = Member("b@example.com").apply { withdraw() }
+        every { memberRepository.findById(10L) } returns Optional.of(member)
+
+        val exception = assertFailsWith<BusinessException> { memberService.withdraw(10L) }
+
+        assertEquals(ErrorCode.ALREADY_WITHDRAWN, exception.errorCode)
+    }
 }
