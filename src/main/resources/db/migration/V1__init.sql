@@ -1,6 +1,7 @@
 CREATE TABLE members (
     id         BIGINT       NOT NULL AUTO_INCREMENT,
     email      VARCHAR(255) NULL,
+    nickname   VARCHAR(20)  NULL,
     created_at DATETIME(6)  NOT NULL,
     PRIMARY KEY (id)
 ) ENGINE = InnoDB;

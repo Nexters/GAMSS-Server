@@ -34,4 +34,13 @@ class MemberTest {
 
         assertEquals("new@example.com", member.email)
     }
+
+    @Test
+    fun `닉네임을 수정한다`() {
+        val member = Member("user@example.com")
+
+        member.updateNickname(Nickname("바다"))
+
+        assertEquals(Nickname("바다"), member.nickname)
+    }
 }

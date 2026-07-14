@@ -1,6 +1,7 @@
 package com.nexters.gamss.member.domain
 
 import jakarta.persistence.Column
+import jakarta.persistence.Embedded
 import jakarta.persistence.Entity
 import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
@@ -16,6 +17,8 @@ import java.time.Instant
 class Member(
     @Column(name = "email")
     var email: String? = null,
+    @Embedded
+    var nickname: Nickname? = null,
 ) {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -26,5 +29,9 @@ class Member(
 
     fun updateEmail(email: String?) {
         this.email = email
+    }
+
+    fun updateNickname(nickname: Nickname) {
+        this.nickname = nickname
     }
 }

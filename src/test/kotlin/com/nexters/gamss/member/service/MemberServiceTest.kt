@@ -3,6 +3,7 @@ package com.nexters.gamss.member.service
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.member.domain.Member
+import com.nexters.gamss.member.domain.Nickname
 import com.nexters.gamss.member.repository.MemberRepository
 import io.mockk.every
 import io.mockk.mockk
@@ -42,5 +43,16 @@ class MemberServiceTest {
         val exception = assertFailsWith<BusinessException> { memberService.getById(99L) }
 
         assertEquals(ErrorCode.MEMBER_NOT_FOUND, exception.errorCode)
+    }
+
+    @Test
+    fun `닉네임을 수정한다`() {
+        val member = Member("b@example.com")
+        every { memberRepository.findById(10L) } returns Optional.of(member)
+
+        val updated = memberService.updateNickname(10L, Nickname("바다"))
+
+        assertSame(member, updated)
+        assertEquals(Nickname("바다"), updated.nickname)
     }
 }
