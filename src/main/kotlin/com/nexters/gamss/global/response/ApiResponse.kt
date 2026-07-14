@@ -16,8 +16,3 @@ data class ApiResponse<T>(
         fun error(error: ErrorResponse): ApiResponse<Nothing> = ApiResponse(success = false, error = error)
     }
 }
-
-data class ErrorResponse(
-    val code: String,
-    val message: String,
-)
