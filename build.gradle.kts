@@ -31,6 +31,9 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     runtimeOnly("com.mysql:mysql-connector-j")
 
+    // 로컬 실행 시 docker-compose(MySQL) 자동 기동·종료 (배포 산출물에는 미포함)
+    developmentOnly("org.springframework.boot:spring-boot-docker-compose")
+
     // DB Migration (Flyway) — spring-boot-flyway 모듈이 Boot 4 자동설정을 제공
     implementation("org.springframework.boot:spring-boot-flyway")
     implementation("org.flywaydb:flyway-core")
