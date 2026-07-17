@@ -76,6 +76,11 @@ tasks.withType<Test> {
     finalizedBy(tasks.jacocoTestReport)
 }
 
+// 실행 가능한 boot jar만 사용하므로 일반(plain) jar는 생성하지 않는다.
+tasks.named("jar") {
+    enabled = false
+}
+
 ktlint {
     version.set("1.8.0")
 }
