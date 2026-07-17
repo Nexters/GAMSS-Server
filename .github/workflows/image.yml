@@ -17,6 +17,10 @@ permissions:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    # 이미지 태그에 브랜치명을 쓰는데 Docker 태그는 슬래시를 허용하지 않는다.
+    # workflow_dispatch로 feat/x 같은 브랜치에서 돌면 빌드를 다 끝내고 push에서 죽으므로
+    # 배포 대상 브랜치가 아니면 아예 시작하지 않는다.
+    if: github.ref_name == 'dev' || github.ref_name == 'prod'
     outputs:
       image: ${{ steps.meta.outputs.image }}
       tag: ${{ steps.meta.outputs.tag }}
