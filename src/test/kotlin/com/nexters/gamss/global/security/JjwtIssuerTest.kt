@@ -20,14 +20,32 @@ class JjwtIssuerTest {
     fun `액세스 토큰을 발급하고 memberId를 파싱한다`() {
         val token = jwtIssuer.issueAccessToken(42L)
 
-        assertEquals(42L, jwtIssuer.parseMemberId(token))
+        assertEquals(42L, jwtIssuer.parseAccessToken(token))
     }
 
     @Test
-    fun `리프레시 토큰도 memberId를 파싱한다`() {
+    fun `리프레시 토큰을 발급하고 memberId를 파싱한다`() {
         val token = jwtIssuer.issueRefreshToken(7L)
 
-        assertEquals(7L, jwtIssuer.parseMemberId(token))
+        assertEquals(7L, jwtIssuer.parseRefreshToken(token))
+    }
+
+    @Test
+    fun `리프레시 토큰을 액세스 토큰으로 파싱하면 INVALID_TOKEN 예외를 던진다`() {
+        val refreshToken = jwtIssuer.issueRefreshToken(1L)
+
+        val exception = assertFailsWith<BusinessException> { jwtIssuer.parseAccessToken(refreshToken) }
+
+        assertEquals(ErrorCode.INVALID_TOKEN, exception.errorCode)
+    }
+
+    @Test
+    fun `액세스 토큰을 리프레시 토큰으로 파싱하면 INVALID_TOKEN 예외를 던진다`() {
+        val accessToken = jwtIssuer.issueAccessToken(1L)
+
+        val exception = assertFailsWith<BusinessException> { jwtIssuer.parseRefreshToken(accessToken) }
+
+        assertEquals(ErrorCode.INVALID_TOKEN, exception.errorCode)
     }
 
     @Test
@@ -35,7 +53,7 @@ class JjwtIssuerTest {
         val other = JjwtIssuer(properties.copy(secret = "another-secret-value-also-long-enough-for-hs256-abcdefghijklmnop"))
         val forged = other.issueAccessToken(1L)
 
-        val exception = assertFailsWith<BusinessException> { jwtIssuer.parseMemberId(forged) }
+        val exception = assertFailsWith<BusinessException> { jwtIssuer.parseAccessToken(forged) }
 
         assertEquals(ErrorCode.INVALID_TOKEN, exception.errorCode)
     }
@@ -46,21 +64,21 @@ class JjwtIssuerTest {
         val token = shortLived.issueAccessToken(1L)
         Thread.sleep(50)
 
-        val exception = assertFailsWith<BusinessException> { shortLived.parseMemberId(token) }
+        val exception = assertFailsWith<BusinessException> { shortLived.parseAccessToken(token) }
 
         assertEquals(ErrorCode.EXPIRED_TOKEN, exception.errorCode)
     }
 
     @Test
     fun `형식이 잘못된 토큰은 INVALID_TOKEN 예외를 던진다`() {
-        val exception = assertFailsWith<BusinessException> { jwtIssuer.parseMemberId("not-a-valid-jwt") }
+        val exception = assertFailsWith<BusinessException> { jwtIssuer.parseAccessToken("not-a-valid-jwt") }
 
         assertEquals(ErrorCode.INVALID_TOKEN, exception.errorCode)
     }
 
     @Test
     fun `빈 토큰은 INVALID_TOKEN 예외를 던진다`() {
-        val exception = assertFailsWith<BusinessException> { jwtIssuer.parseMemberId("") }
+        val exception = assertFailsWith<BusinessException> { jwtIssuer.parseAccessToken("") }
 
         assertEquals(ErrorCode.INVALID_TOKEN, exception.errorCode)
     }

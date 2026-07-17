@@ -12,6 +12,8 @@ import org.springframework.web.filter.OncePerRequestFilter
 /**
  * Authorization: Bearer 토큰을 파싱해 SecurityContext에 인증 정보를 채운다.
  * 토큰이 없거나 유효하지 않으면 인증하지 않고 통과시켜 EntryPoint가 401을 응답하게 한다.
+ *
+ * access 토큰만 받는다. refresh 토큰은 재발급(reissue)에만 쓰인다.
  */
 @Component
 class JwtAuthenticationFilter(
@@ -23,7 +25,7 @@ class JwtAuthenticationFilter(
         filterChain: FilterChain,
     ) {
         resolveToken(request)?.let { token ->
-            runCatching { jwtIssuer.parseMemberId(token) }
+            runCatching { jwtIssuer.parseAccessToken(token) }
                 .onSuccess { memberId ->
                     val authentication =
                         UsernamePasswordAuthenticationToken(AuthPrincipal(memberId), null, emptyList())

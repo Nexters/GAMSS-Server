@@ -38,7 +38,7 @@ class AuthService(
 
     @Transactional
     fun reissue(refreshToken: String): TokenResult {
-        val memberId = jwtIssuer.parseMemberId(refreshToken)
+        val memberId = jwtIssuer.parseRefreshToken(refreshToken)
         val stored =
             refreshTokenRepository.findByMemberId(memberId)
                 ?: throw BusinessException(ErrorCode.REFRESH_TOKEN_NOT_FOUND)

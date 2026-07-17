@@ -87,7 +87,7 @@ class AuthServiceTest {
 
     @Test
     fun `재발급이 정상이면 새 토큰을 발급하고 회전한다`() {
-        every { jwtIssuer.parseMemberId("refresh") } returns 100L
+        every { jwtIssuer.parseRefreshToken("refresh") } returns 100L
         val stored = mockk<RefreshToken>(relaxed = true)
         every { stored.matches("refresh") } returns true
         every { refreshTokenRepository.findByMemberId(100L) } returns stored
@@ -104,7 +104,7 @@ class AuthServiceTest {
 
     @Test
     fun `탈퇴한 회원이 재발급하면 WITHDRAWN_MEMBER`() {
-        every { jwtIssuer.parseMemberId("refresh") } returns 100L
+        every { jwtIssuer.parseRefreshToken("refresh") } returns 100L
         val stored = mockk<RefreshToken>()
         every { stored.matches("refresh") } returns true
         every { refreshTokenRepository.findByMemberId(100L) } returns stored
@@ -117,7 +117,7 @@ class AuthServiceTest {
 
     @Test
     fun `재발급 시 저장된 토큰이 없으면 REFRESH_TOKEN_NOT_FOUND`() {
-        every { jwtIssuer.parseMemberId("r") } returns 1L
+        every { jwtIssuer.parseRefreshToken("r") } returns 1L
         every { refreshTokenRepository.findByMemberId(1L) } returns null
 
         val exception = assertFailsWith<BusinessException> { authService.reissue("r") }
@@ -127,7 +127,7 @@ class AuthServiceTest {
 
     @Test
     fun `재발급 시 토큰이 일치하지 않으면 INVALID_TOKEN`() {
-        every { jwtIssuer.parseMemberId("r") } returns 1L
+        every { jwtIssuer.parseRefreshToken("r") } returns 1L
         val stored = mockk<RefreshToken>()
         every { stored.matches("r") } returns false
         every { refreshTokenRepository.findByMemberId(1L) } returns stored
@@ -139,7 +139,7 @@ class AuthServiceTest {
 
     @Test
     fun `재발급 시 토큰 파싱 예외를 전파한다`() {
-        every { jwtIssuer.parseMemberId("bad") } throws BusinessException(ErrorCode.EXPIRED_TOKEN)
+        every { jwtIssuer.parseRefreshToken("bad") } throws BusinessException(ErrorCode.EXPIRED_TOKEN)
 
         val exception = assertFailsWith<BusinessException> { authService.reissue("bad") }
 
