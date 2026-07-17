@@ -1,7 +1,11 @@
 # GAMSS dev 서버용 (app + MySQL, 한 서버)
 # 필요한 환경변수는 같은 디렉토리 .env 에 정의한다(CD가 GitHub Secrets로 생성):
-#   DB_PASSWORD, DB_ROOT_PASSWORD, JWT_SECRET, GOOGLE_CLIENT_IDS, APPLE_CLIENT_IDS, IMAGE_TAG(선택)
-# 튜닝은 2GB 서버 기준. 사양을 올리면 JAVA_OPTS(-Xmx)·innodb-buffer-pool-size만 키우면 된다.
+#   DB_PASSWORD, DB_ROOT_PASSWORD, JWT_SECRET, GOOGLE_CLIENT_IDS, APPLE_CLIENT_IDS, IMAGE_TAG
+#
+# 튜닝은 8GB 서버(가비아 Standard 2vCore/8GB) 기준으로 배분했다:
+#   app 힙 3G + 비힙 약 0.8G / MySQL 약 2.5G / OS·Docker 약 0.5G → 여유 약 1.2G
+# 여유분은 스레드 스택용이다. LLM 호출은 응답까지 스레드를 붙잡고 있어서
+# 동시성을 올리려면 스레드를 늘려야 하고, 스레드당 스택이 1MB씩 붙는다.
 services:
   app:
     image: ghcr.io/nexters/gamss-server:${IMAGE_TAG:-dev}
@@ -17,7 +21,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       GOOGLE_CLIENT_IDS: ${GOOGLE_CLIENT_IDS:-}
       APPLE_CLIENT_IDS: ${APPLE_CLIENT_IDS:-}
-      JAVA_OPTS: -Xms256m -Xmx768m
+      JAVA_OPTS: -Xms1g -Xmx3g
     ports:
       - "127.0.0.1:8080:8080" # Nginx만 접근, 외부 비공개
     networks: [gamss]
@@ -28,7 +32,7 @@ services:
     command: >
       --character-set-server=utf8mb4
       --collation-server=utf8mb4_unicode_ci
-      --innodb-buffer-pool-size=384M
+      --innodb-buffer-pool-size=2G
     environment:
       MYSQL_DATABASE: gamss
       MYSQL_USER: gamss
