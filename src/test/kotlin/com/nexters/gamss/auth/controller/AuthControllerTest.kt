@@ -1,7 +1,7 @@
 package com.nexters.gamss.auth.controller
 
 import com.nexters.gamss.auth.oauth.OAuthProvider
-import com.nexters.gamss.auth.service.AuthFacade
+import com.nexters.gamss.auth.service.AuthService
 import com.nexters.gamss.auth.service.TokenResult
 import com.nexters.gamss.global.exception.GlobalExceptionHandler
 import io.mockk.every
@@ -13,17 +13,17 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean
 import kotlin.test.Test
 
 class AuthControllerTest {
-    private val authFacade = mockk<AuthFacade>()
+    private val authService = mockk<AuthService>()
     private val mockMvc =
         MockMvcBuilders
-            .standaloneSetup(AuthController(authFacade))
+            .standaloneSetup(AuthController(authService))
             .setControllerAdvice(GlobalExceptionHandler())
             .setValidator(LocalValidatorFactoryBean().apply { afterPropertiesSet() })
             .build()
 
     @Test
     fun `로그인에 성공하면 토큰을 반환한다`() {
-        every { authFacade.login(OAuthProvider.GOOGLE, "idtok") } returns TokenResult("access", "refresh")
+        every { authService.login(OAuthProvider.GOOGLE, "idtok") } returns TokenResult("access", "refresh")
 
         mockMvc
             .post("/api/auth/login/google") {
@@ -63,7 +63,7 @@ class AuthControllerTest {
 
     @Test
     fun `재발급에 성공하면 새 토큰을 반환한다`() {
-        every { authFacade.reissue("r") } returns TokenResult("na", "nr")
+        every { authService.reissue("r") } returns TokenResult("na", "nr")
 
         mockMvc
             .post("/api/auth/reissue") {

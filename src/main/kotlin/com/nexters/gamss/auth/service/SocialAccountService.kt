@@ -5,6 +5,7 @@ import com.nexters.gamss.auth.oauth.OAuthProvider
 import com.nexters.gamss.auth.repository.SocialAccountRepository
 import com.nexters.gamss.member.domain.Member
 import com.nexters.gamss.member.service.MemberService
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -29,7 +30,13 @@ class SocialAccountService(
             return memberService.getById(socialAccount.memberId)
         }
         val member = memberService.create(email)
-        socialAccountRepository.save(SocialAccount(member.id, storedProvider, providerId))
+        // 동시 최초 로그인 시 (provider, providerId) 유니크 제약에 걸릴 수 있다.
+        // 영속성 예외를 도메인 예외로 번역해, 재시도 판단이 특정 영속성 기술에 의존하지 않게 한다.
+        try {
+            socialAccountRepository.save(SocialAccount(member.id, storedProvider, providerId))
+        } catch (e: DataIntegrityViolationException) {
+            throw ConcurrentRegistrationException(provider, providerId)
+        }
         return member
     }
 }

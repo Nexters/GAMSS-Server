@@ -1,74 +1,24 @@
 package com.nexters.gamss.auth.service
 
-import com.nexters.gamss.auth.domain.RefreshToken
-import com.nexters.gamss.auth.oauth.OAuthClientResolver
 import com.nexters.gamss.auth.oauth.OAuthProvider
-import com.nexters.gamss.auth.repository.RefreshTokenRepository
-import com.nexters.gamss.global.exception.BusinessException
-import com.nexters.gamss.global.exception.ErrorCode
-import com.nexters.gamss.global.security.JwtIssuer
-import com.nexters.gamss.member.service.MemberService
 import org.springframework.stereotype.Service
-import org.springframework.transaction.annotation.Transactional
 
 /**
- * 소셜 로그인·토큰 재발급 오케스트레이션.
- * 소셜 검증(OAuthClient), 소셜↔회원 연결(SocialAccountService), 토큰(JwtIssuer)은 각 컴포넌트에 위임한다.
+ * 인증 진입점. 로그인·재발급 흐름을 조율한다.
+ *
+ * 트랜잭션 작업은 LoginService 에, 동시 가입 경합의 재시도는 ConflictRetry 에 위임한다.
+ * 재시도를 별도 객체로 두는 것은 트랜잭션 경계 바깥에서 실행돼야 하기 때문이자(같은 빈 내부
+ * 호출은 트랜잭션 프록시를 거치지 않는다), 재시도 정책과 흐름 조율을 분리하기 위함이다.
  */
 @Service
 class AuthService(
-    private val oAuthClientResolver: OAuthClientResolver,
-    private val socialAccountService: SocialAccountService,
-    private val memberService: MemberService,
-    private val jwtIssuer: JwtIssuer,
-    private val refreshTokenRepository: RefreshTokenRepository,
+    private val loginService: LoginService,
+    private val conflictRetry: ConflictRetry,
 ) {
-    // 동시 최초 로그인 시 유니크 충돌 재시도는 AuthFacade 가 트랜잭션 경계 바깥에서 담당한다.
-    // 여기서 소셜 계정·리프레시 토큰을 한 트랜잭션으로 커밋해야 그 재시도가 성립한다.
-    @Transactional
     fun login(
         provider: OAuthProvider,
         idToken: String,
-    ): TokenResult {
-        val userInfo = oAuthClientResolver.resolve(provider).verify(idToken)
-        val member = socialAccountService.resolveMember(provider, userInfo.providerId, userInfo.email)
-        if (member.isWithdrawn()) {
-            throw BusinessException(ErrorCode.WITHDRAWN_MEMBER)
-        }
-        return issueTokens(member.id)
-    }
+    ): TokenResult = conflictRetry.execute { loginService.login(provider, idToken) }
 
-    @Transactional
-    fun reissue(refreshToken: String): TokenResult {
-        val memberId = jwtIssuer.parseRefreshToken(refreshToken)
-        val stored =
-            refreshTokenRepository.findByMemberId(memberId)
-                ?: throw BusinessException(ErrorCode.REFRESH_TOKEN_NOT_FOUND)
-        if (!stored.matches(refreshToken)) {
-            throw BusinessException(ErrorCode.INVALID_TOKEN)
-        }
-        if (memberService.getById(memberId).isWithdrawn()) {
-            throw BusinessException(ErrorCode.WITHDRAWN_MEMBER)
-        }
-        return issueTokens(memberId)
-    }
-
-    private fun issueTokens(memberId: Long): TokenResult {
-        val accessToken = jwtIssuer.issueAccessToken(memberId)
-        val refreshToken = jwtIssuer.issueRefreshToken(memberId)
-        persistRefreshToken(memberId, refreshToken)
-        return TokenResult(accessToken, refreshToken)
-    }
-
-    private fun persistRefreshToken(
-        memberId: Long,
-        refreshToken: String,
-    ) {
-        val stored = refreshTokenRepository.findByMemberId(memberId)
-        if (stored == null) {
-            refreshTokenRepository.save(RefreshToken(memberId, refreshToken))
-            return
-        }
-        stored.rotate(refreshToken)
-    }
+    fun reissue(refreshToken: String): TokenResult = loginService.reissue(refreshToken)
 }

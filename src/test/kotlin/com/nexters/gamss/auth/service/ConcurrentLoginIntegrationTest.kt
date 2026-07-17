@@ -33,7 +33,7 @@ import kotlin.test.assertTrue
 @Import(TestcontainersConfig::class, ConcurrentLoginIntegrationTest.StubOAuthConfig::class)
 class ConcurrentLoginIntegrationTest {
     @Autowired
-    private lateinit var authFacade: AuthFacade
+    private lateinit var authService: AuthService
 
     @Autowired
     private lateinit var memberRepository: MemberRepository
@@ -81,7 +81,7 @@ class ConcurrentLoginIntegrationTest {
                 executor.submit {
                     try {
                         startLine.await() // 모든 스레드를 동시에 출발시켜 경합을 유도한다
-                        authFacade.login(OAuthProvider.GOOGLE, "idtok")
+                        authService.login(OAuthProvider.GOOGLE, "idtok")
                     } catch (t: Throwable) {
                         errors.add(t)
                     }

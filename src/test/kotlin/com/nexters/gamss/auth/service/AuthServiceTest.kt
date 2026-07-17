@@ -1,16 +1,6 @@
 package com.nexters.gamss.auth.service
 
-import com.nexters.gamss.auth.domain.RefreshToken
-import com.nexters.gamss.auth.oauth.OAuthClient
-import com.nexters.gamss.auth.oauth.OAuthClientResolver
 import com.nexters.gamss.auth.oauth.OAuthProvider
-import com.nexters.gamss.auth.oauth.OAuthUserInfo
-import com.nexters.gamss.auth.repository.RefreshTokenRepository
-import com.nexters.gamss.global.exception.BusinessException
-import com.nexters.gamss.global.exception.ErrorCode
-import com.nexters.gamss.global.security.JwtIssuer
-import com.nexters.gamss.member.domain.Member
-import com.nexters.gamss.member.service.MemberService
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -19,130 +9,46 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class AuthServiceTest {
-    private val oAuthClientResolver = mockk<OAuthClientResolver>()
-    private val socialAccountService = mockk<SocialAccountService>()
-    private val memberService = mockk<MemberService>()
-    private val jwtIssuer = mockk<JwtIssuer>()
-    private val refreshTokenRepository = mockk<RefreshTokenRepository>()
-    private val authService =
-        AuthService(oAuthClientResolver, socialAccountService, memberService, jwtIssuer, refreshTokenRepository)
+    private val loginService = mockk<LoginService>()
+
+    // 실제 재시도 정책을 그대로 사용해 위임이 올바른지 검증한다.
+    private val authService = AuthService(loginService, ConflictRetry())
 
     @Test
-    fun `로그인 시 신규 회원이면 리프레시 토큰을 저장한다`() {
-        val client = mockk<OAuthClient>()
-        every { oAuthClientResolver.resolve(OAuthProvider.GOOGLE) } returns client
-        every { client.verify("idtok") } returns OAuthUserInfo("sub-1", "a@a.com")
-        val member =
-            mockk<Member> {
-                every { id } returns 100L
-                every { isWithdrawn() } returns false
-            }
-        every { socialAccountService.resolveMember(OAuthProvider.GOOGLE, "sub-1", "a@a.com") } returns member
-        every { jwtIssuer.issueAccessToken(100L) } returns "access"
-        every { jwtIssuer.issueRefreshToken(100L) } returns "refresh"
-        every { refreshTokenRepository.findByMemberId(100L) } returns null
-        every { refreshTokenRepository.save(any()) } answers { firstArg() }
+    fun `로그인은 LoginService에 위임하고 정상이면 재시도하지 않는다`() {
+        every { loginService.login(OAuthProvider.GOOGLE, "t") } returns TokenResult("a", "r")
 
-        val result = authService.login(OAuthProvider.GOOGLE, "idtok")
+        val result = authService.login(OAuthProvider.GOOGLE, "t")
 
-        assertEquals("access", result.accessToken)
-        assertEquals("refresh", result.refreshToken)
-        verify { refreshTokenRepository.save(match { it.memberId == 100L && it.token == "refresh" }) }
+        assertEquals("a", result.accessToken)
+        verify(exactly = 1) { loginService.login(OAuthProvider.GOOGLE, "t") }
     }
 
     @Test
-    fun `로그인 시 기존 리프레시 토큰이 있으면 회전한다`() {
-        val client = mockk<OAuthClient>()
-        every { oAuthClientResolver.resolve(OAuthProvider.APPLE) } returns client
-        every { client.verify("t") } returns OAuthUserInfo("sub", "e@e.com")
-        val member =
-            mockk<Member> {
-                every { id } returns 1L
-                every { isWithdrawn() } returns false
-            }
-        every { socialAccountService.resolveMember(OAuthProvider.APPLE, "sub", "e@e.com") } returns member
-        every { jwtIssuer.issueAccessToken(1L) } returns "a"
-        every { jwtIssuer.issueRefreshToken(1L) } returns "r"
-        val stored = mockk<RefreshToken>(relaxed = true)
-        every { refreshTokenRepository.findByMemberId(1L) } returns stored
+    fun `동시 가입 경합이 나면 재시도해 성공한다`() {
+        every { loginService.login(OAuthProvider.GOOGLE, "t") } throws
+            ConcurrentRegistrationException(OAuthProvider.GOOGLE, "sub") andThen TokenResult("a", "r")
 
-        authService.login(OAuthProvider.APPLE, "t")
+        val result = authService.login(OAuthProvider.GOOGLE, "t")
 
-        verify { stored.rotate("r") }
-        verify(exactly = 0) { refreshTokenRepository.save(any()) }
+        assertEquals("a", result.accessToken)
+        verify(exactly = 2) { loginService.login(OAuthProvider.GOOGLE, "t") }
     }
 
     @Test
-    fun `탈퇴한 회원이 로그인하면 WITHDRAWN_MEMBER`() {
-        val client = mockk<OAuthClient>()
-        every { oAuthClientResolver.resolve(OAuthProvider.GOOGLE) } returns client
-        every { client.verify("idtok") } returns OAuthUserInfo("sub-1", "a@a.com")
-        val member = mockk<Member> { every { isWithdrawn() } returns true }
-        every { socialAccountService.resolveMember(OAuthProvider.GOOGLE, "sub-1", "a@a.com") } returns member
+    fun `재발급은 재시도 없이 LoginService에 위임한다`() {
+        every { loginService.reissue("r") } returns TokenResult("na", "nr")
 
-        val exception = assertFailsWith<BusinessException> { authService.login(OAuthProvider.GOOGLE, "idtok") }
-
-        assertEquals(ErrorCode.WITHDRAWN_MEMBER, exception.errorCode)
-    }
-
-    @Test
-    fun `재발급이 정상이면 새 토큰을 발급하고 회전한다`() {
-        every { jwtIssuer.parseRefreshToken("refresh") } returns 100L
-        val stored = mockk<RefreshToken>(relaxed = true)
-        every { stored.matches("refresh") } returns true
-        every { refreshTokenRepository.findByMemberId(100L) } returns stored
-        every { memberService.getById(100L) } returns mockk { every { isWithdrawn() } returns false }
-        every { jwtIssuer.issueAccessToken(100L) } returns "na"
-        every { jwtIssuer.issueRefreshToken(100L) } returns "nr"
-
-        val result = authService.reissue("refresh")
+        val result = authService.reissue("r")
 
         assertEquals("na", result.accessToken)
-        assertEquals("nr", result.refreshToken)
-        verify { stored.rotate("nr") }
+        verify(exactly = 1) { loginService.reissue("r") }
     }
 
     @Test
-    fun `탈퇴한 회원이 재발급하면 WITHDRAWN_MEMBER`() {
-        every { jwtIssuer.parseRefreshToken("refresh") } returns 100L
-        val stored = mockk<RefreshToken>()
-        every { stored.matches("refresh") } returns true
-        every { refreshTokenRepository.findByMemberId(100L) } returns stored
-        every { memberService.getById(100L) } returns mockk { every { isWithdrawn() } returns true }
+    fun `재발급 중 예외는 그대로 전파한다`() {
+        every { loginService.reissue("bad") } throws IllegalStateException("boom")
 
-        val exception = assertFailsWith<BusinessException> { authService.reissue("refresh") }
-
-        assertEquals(ErrorCode.WITHDRAWN_MEMBER, exception.errorCode)
-    }
-
-    @Test
-    fun `재발급 시 저장된 토큰이 없으면 REFRESH_TOKEN_NOT_FOUND`() {
-        every { jwtIssuer.parseRefreshToken("r") } returns 1L
-        every { refreshTokenRepository.findByMemberId(1L) } returns null
-
-        val exception = assertFailsWith<BusinessException> { authService.reissue("r") }
-
-        assertEquals(ErrorCode.REFRESH_TOKEN_NOT_FOUND, exception.errorCode)
-    }
-
-    @Test
-    fun `재발급 시 토큰이 일치하지 않으면 INVALID_TOKEN`() {
-        every { jwtIssuer.parseRefreshToken("r") } returns 1L
-        val stored = mockk<RefreshToken>()
-        every { stored.matches("r") } returns false
-        every { refreshTokenRepository.findByMemberId(1L) } returns stored
-
-        val exception = assertFailsWith<BusinessException> { authService.reissue("r") }
-
-        assertEquals(ErrorCode.INVALID_TOKEN, exception.errorCode)
-    }
-
-    @Test
-    fun `재발급 시 토큰 파싱 예외를 전파한다`() {
-        every { jwtIssuer.parseRefreshToken("bad") } throws BusinessException(ErrorCode.EXPIRED_TOKEN)
-
-        val exception = assertFailsWith<BusinessException> { authService.reissue("bad") }
-
-        assertEquals(ErrorCode.EXPIRED_TOKEN, exception.errorCode)
+        assertFailsWith<IllegalStateException> { authService.reissue("bad") }
     }
 }

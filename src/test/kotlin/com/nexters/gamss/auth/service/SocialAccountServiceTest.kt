@@ -8,7 +8,9 @@ import com.nexters.gamss.member.service.MemberService
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import org.springframework.dao.DataIntegrityViolationException
 import kotlin.test.Test
+import kotlin.test.assertFailsWith
 import kotlin.test.assertSame
 
 class SocialAccountServiceTest {
@@ -43,6 +45,17 @@ class SocialAccountServiceTest {
             socialAccountRepository.save(
                 match { it.memberId == 9L && it.provider == "APPLE" && it.providerId == "sub-2" },
             )
+        }
+    }
+
+    @Test
+    fun `소셜 계정 저장이 유니크 제약에 걸리면 도메인 예외로 번역한다`() {
+        every { socialAccountRepository.findByProviderAndProviderId("GOOGLE", "sub-3") } returns null
+        every { memberService.create("c@a.com") } returns mockk { every { id } returns 3L }
+        every { socialAccountRepository.save(any()) } throws DataIntegrityViolationException("duplicate")
+
+        assertFailsWith<ConcurrentRegistrationException> {
+            socialAccountService.resolveMember(OAuthProvider.GOOGLE, "sub-3", "c@a.com")
         }
     }
 }
