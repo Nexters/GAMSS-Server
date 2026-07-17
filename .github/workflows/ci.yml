@@ -3,12 +3,16 @@ name: CI
 on:
   pull_request:
     branches: [dev, prod]
-  push:
-    branches: [dev, prod]
+  # dev·prod push 시에는 Build & Deploy 가 이 워크플로를 호출한다.
+  # 여기에 push 트리거를 두면 테스트가 두 번 돌고, 무엇보다 배포와 병렬로 돌아서
+  # 테스트가 깨져도 배포를 막지 못한다.
+  workflow_call:
 
 concurrency:
-  # 같은 PR(브랜치)에 새 push가 오면 진행 중이던 이전 CI를 취소
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # 같은 PR에 새 push가 오면 진행 중이던 이전 CI를 취소.
+  # 그룹명에 github.workflow 를 쓰면 호출된 경우 caller 의 워크플로명이 잡혀
+  # caller 와 그룹이 겹치므로, 고정 접두사를 쓴다.
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:

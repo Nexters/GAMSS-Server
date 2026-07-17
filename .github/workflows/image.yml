@@ -6,21 +6,35 @@ on:
   workflow_dispatch:
 
 concurrency:
-  # 같은 브랜치에 새 push가 오면 진행 중이던 이전 배포를 취소
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # rollback.yml 과 같은 그룹을 써서 한 환경에 배포·롤백이 겹치지 않게 한다.
+  # 둘 다 서버 .env 의 IMAGE_TAG 를 고쳐서, 동시에 돌면 롤백 기준이 꼬인다.
+  #
+  # cancel-in-progress 는 false — SSH로 원격 상태를 바꾸는 중에 취소당하면
+  # .env 만 갱신되고 컨테이너는 그대로인 어정쩡한 상태가 남는다.
+  # 대기 중인 run 은 GitHub가 최신 것만 남기고 정리하므로 밀리지 않는다.
+  group: deploy-${{ github.ref_name }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
   packages: write
 
 jobs:
-  build-and-push:
-    runs-on: ubuntu-latest
-    # 이미지 태그에 브랜치명을 쓰는데 Docker 태그는 슬래시를 허용하지 않는다.
-    # workflow_dispatch로 feat/x 같은 브랜치에서 돌면 빌드를 다 끝내고 push에서 죽으므로
-    # 배포 대상 브랜치가 아니면 아예 시작하지 않는다.
+  # 테스트·린트가 통과해야 빌드·배포로 넘어간다.
+  # 이미지 태그에 브랜치명을 쓰는데 Docker 태그는 슬래시를 허용하지 않으므로,
+  # 배포 대상 브랜치가 아니면 여기서 멈춘다(이후 job은 needs 로 함께 skip).
+  ci:
     if: github.ref_name == 'dev' || github.ref_name == 'prod'
+    uses: ./.github/workflows/ci.yml
+    # 워크플로 기본 권한에는 checks·pull-requests 가 없어 테스트 결과 게시가 실패한다.
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
+
+  build-and-push:
+    needs: ci
+    runs-on: ubuntu-latest
     outputs:
       image: ${{ steps.meta.outputs.image }}
       tag: ${{ steps.meta.outputs.tag }}
