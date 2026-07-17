@@ -52,6 +52,9 @@ dependencies {
     // API Docs (Swagger)
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.0")
 
+    // Actuator (헬스체크)
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
+
     // Test
     testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
