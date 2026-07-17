@@ -7,6 +7,7 @@ import com.nexters.gamss.auth.repository.RefreshTokenRepository
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.global.security.JwtIssuer
+import com.nexters.gamss.global.security.TokenHasher
 import com.nexters.gamss.member.service.MemberService
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -25,6 +26,7 @@ class LoginService(
     private val memberService: MemberService,
     private val jwtIssuer: JwtIssuer,
     private val refreshTokenRepository: RefreshTokenRepository,
+    private val tokenHasher: TokenHasher,
 ) {
     @Transactional
     fun login(
@@ -45,7 +47,7 @@ class LoginService(
         val stored =
             refreshTokenRepository.findByMemberId(memberId)
                 ?: throw BusinessException(ErrorCode.REFRESH_TOKEN_NOT_FOUND)
-        if (!stored.matches(refreshToken)) {
+        if (!stored.matches(tokenHasher.hash(refreshToken))) {
             throw BusinessException(ErrorCode.INVALID_TOKEN)
         }
         if (memberService.getById(memberId).isWithdrawn()) {
@@ -65,11 +67,13 @@ class LoginService(
         memberId: Long,
         refreshToken: String,
     ) {
+        // 원본 토큰은 클라이언트에만 주고, DB에는 해시만 저장한다(유출 시 재사용 방지).
+        val hashed = tokenHasher.hash(refreshToken)
         val stored = refreshTokenRepository.findByMemberId(memberId)
         if (stored == null) {
-            refreshTokenRepository.save(RefreshToken(memberId, refreshToken))
+            refreshTokenRepository.save(RefreshToken(memberId, hashed))
             return
         }
-        stored.rotate(refreshToken)
+        stored.rotate(hashed)
     }
 }

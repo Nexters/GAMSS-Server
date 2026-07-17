@@ -9,6 +9,7 @@ import com.nexters.gamss.auth.repository.RefreshTokenRepository
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.global.security.JwtIssuer
+import com.nexters.gamss.global.security.Sha256TokenHasher
 import com.nexters.gamss.member.domain.Member
 import com.nexters.gamss.member.service.MemberService
 import io.mockk.every
@@ -24,8 +25,18 @@ class LoginServiceTest {
     private val memberService = mockk<MemberService>()
     private val jwtIssuer = mockk<JwtIssuer>()
     private val refreshTokenRepository = mockk<RefreshTokenRepository>()
+
+    // 실제 해시로 저장·비교되는지 검증하기 위해 진짜 해셔를 쓴다.
+    private val tokenHasher = Sha256TokenHasher()
     private val loginService =
-        LoginService(oAuthClientResolver, socialAccountService, memberService, jwtIssuer, refreshTokenRepository)
+        LoginService(
+            oAuthClientResolver,
+            socialAccountService,
+            memberService,
+            jwtIssuer,
+            refreshTokenRepository,
+            tokenHasher,
+        )
 
     @Test
     fun `로그인 시 신규 회원이면 리프레시 토큰을 저장한다`() {
@@ -46,8 +57,13 @@ class LoginServiceTest {
         val result = loginService.login(OAuthProvider.GOOGLE, "idtok")
 
         assertEquals("access", result.accessToken)
+        // 클라이언트에는 원본 토큰을, DB에는 해시를 저장한다.
         assertEquals("refresh", result.refreshToken)
-        verify { refreshTokenRepository.save(match { it.memberId == 100L && it.token == "refresh" }) }
+        verify {
+            refreshTokenRepository.save(
+                match { it.memberId == 100L && it.token == tokenHasher.hash("refresh") },
+            )
+        }
     }
 
     @Test
@@ -68,7 +84,7 @@ class LoginServiceTest {
 
         loginService.login(OAuthProvider.APPLE, "t")
 
-        verify { stored.rotate("r") }
+        verify { stored.rotate(tokenHasher.hash("r")) }
         verify(exactly = 0) { refreshTokenRepository.save(any()) }
     }
 
@@ -89,7 +105,7 @@ class LoginServiceTest {
     fun `재발급이 정상이면 새 토큰을 발급하고 회전한다`() {
         every { jwtIssuer.parseRefreshToken("refresh") } returns 100L
         val stored = mockk<RefreshToken>(relaxed = true)
-        every { stored.matches("refresh") } returns true
+        every { stored.matches(tokenHasher.hash("refresh")) } returns true
         every { refreshTokenRepository.findByMemberId(100L) } returns stored
         every { memberService.getById(100L) } returns mockk { every { isWithdrawn() } returns false }
         every { jwtIssuer.issueAccessToken(100L) } returns "na"
@@ -99,14 +115,14 @@ class LoginServiceTest {
 
         assertEquals("na", result.accessToken)
         assertEquals("nr", result.refreshToken)
-        verify { stored.rotate("nr") }
+        verify { stored.rotate(tokenHasher.hash("nr")) }
     }
 
     @Test
     fun `탈퇴한 회원이 재발급하면 WITHDRAWN_MEMBER`() {
         every { jwtIssuer.parseRefreshToken("refresh") } returns 100L
         val stored = mockk<RefreshToken>()
-        every { stored.matches("refresh") } returns true
+        every { stored.matches(tokenHasher.hash("refresh")) } returns true
         every { refreshTokenRepository.findByMemberId(100L) } returns stored
         every { memberService.getById(100L) } returns mockk { every { isWithdrawn() } returns true }
 
@@ -129,7 +145,7 @@ class LoginServiceTest {
     fun `재발급 시 토큰이 일치하지 않으면 INVALID_TOKEN`() {
         every { jwtIssuer.parseRefreshToken("r") } returns 1L
         val stored = mockk<RefreshToken>()
-        every { stored.matches("r") } returns false
+        every { stored.matches(tokenHasher.hash("r")) } returns false
         every { refreshTokenRepository.findByMemberId(1L) } returns stored
 
         val exception = assertFailsWith<BusinessException> { loginService.reissue("r") }
