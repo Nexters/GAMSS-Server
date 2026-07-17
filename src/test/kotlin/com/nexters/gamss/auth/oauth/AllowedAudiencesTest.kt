@@ -6,11 +6,11 @@ import kotlin.test.assertTrue
 
 class AllowedAudiencesTest {
     @Test
-    fun `허용 목록이 비어 있으면 모든 audience를 허용한다`() {
+    fun `허용 목록이 비어 있으면 모든 audience를 거부한다`() {
         val audiences = AllowedAudiences(emptyList())
 
-        assertTrue(audiences.accepts(listOf("anything")))
-        assertTrue(audiences.accepts(null))
+        assertFalse(audiences.accepts(listOf("anything")))
+        assertFalse(audiences.accepts(null))
     }
 
     @Test
