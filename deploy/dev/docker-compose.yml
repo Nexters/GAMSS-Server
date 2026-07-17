@@ -23,7 +23,19 @@ services:
       APPLE_CLIENT_IDS: ${APPLE_CLIENT_IDS:-}
       JAVA_OPTS: -Xms1g -Xmx3g
     ports:
-      - "127.0.0.1:8080:8080" # Nginx만 접근, 외부 비공개
+      # 루프백에만 바인딩 → 외부 비공개. 배포 스크립트의 헬스체크용이다.
+      # nginx는 이 포트가 아니라 gamss 네트워크로 app:8080 에 직접 붙는다.
+      - "127.0.0.1:8080:8080"
+    networks: [gamss]
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on: [app]
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/conf:/etc/nginx/conf.d:ro
     networks: [gamss]
 
   db:

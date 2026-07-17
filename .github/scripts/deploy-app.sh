@@ -53,6 +53,21 @@ wait_for_health() {
   return 1
 }
 
+reload_nginx() {
+  # conf는 볼륨 마운트라 up -d 만으로는 갱신이 반영되지 않는다.
+  # 문법 검사를 통과할 때만 무중단 reload 한다.
+  if ! docker compose exec -T nginx nginx -t >/dev/null 2>&1; then
+    log "nginx 설정 문법 오류 — reload 건너뛴다 (이전 설정 유지)"
+    return
+  fi
+
+  if docker compose exec -T nginx nginx -s reload >/dev/null 2>&1; then
+    log "nginx 설정 reload 완료"
+    return
+  fi
+  log "nginx reload 실패 — 서버 수동 확인 필요"
+}
+
 rollback() {
   local prev_tag="$1"
 
@@ -94,11 +109,12 @@ main() {
     exit 1
   fi
 
-  log "컨테이너 기동 (db는 실행 중이면 유지)"
+  log "컨테이너 기동 (db·nginx는 실행 중이면 유지)"
   docker compose up -d
 
   log "헬스체크 대기 (최대 $((HEALTH_RETRIES * HEALTH_INTERVAL))초)"
   if wait_for_health; then
+    reload_nginx
     log "배포 완료: ${NEW_TAG}"
     docker image prune -f >/dev/null 2>&1 || true
     exit 0
