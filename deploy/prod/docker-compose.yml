@@ -1,0 +1,51 @@
+# GAMSS prod 서버용 (app + MySQL, 한 서버)
+# 필요한 환경변수는 같은 디렉토리 .env 에 정의한다(CD가 GitHub Secrets로 생성):
+#   DB_PASSWORD, DB_ROOT_PASSWORD, JWT_SECRET, GOOGLE_CLIENT_IDS, APPLE_CLIENT_IDS, IMAGE_TAG(선택)
+# 튜닝은 2GB 서버 기준. 사양을 올리면 JAVA_OPTS(-Xmx)·innodb-buffer-pool-size만 키우면 된다.
+services:
+  app:
+    image: ghcr.io/nexters/gamss-server:${IMAGE_TAG:-prod}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:mysql://db:3306/gamss
+      DB_USERNAME: gamss
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      GOOGLE_CLIENT_IDS: ${GOOGLE_CLIENT_IDS:-}
+      APPLE_CLIENT_IDS: ${APPLE_CLIENT_IDS:-}
+      JAVA_OPTS: -Xms256m -Xmx768m
+    ports:
+      - "127.0.0.1:8080:8080" # Nginx만 접근, 외부 비공개
+    networks: [gamss]
+
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --innodb-buffer-pool-size=384M
+    environment:
+      MYSQL_DATABASE: gamss
+      MYSQL_USER: gamss
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [gamss]
+    # 포트 미노출 → 외부 비공개(같은 네트워크의 app만 접속)
+
+volumes:
+  db-data:
+
+networks:
+  gamss:
