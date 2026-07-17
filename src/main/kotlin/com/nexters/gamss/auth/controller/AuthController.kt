@@ -4,7 +4,7 @@ import com.nexters.gamss.auth.controller.dto.LoginRequest
 import com.nexters.gamss.auth.controller.dto.ReissueRequest
 import com.nexters.gamss.auth.controller.dto.TokenResponse
 import com.nexters.gamss.auth.oauth.OAuthProvider
-import com.nexters.gamss.auth.service.AuthService
+import com.nexters.gamss.auth.service.AuthFacade
 import com.nexters.gamss.global.response.ApiResponse
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController
 @RestController
 @RequestMapping("/api/auth")
 class AuthController(
-    private val authService: AuthService,
+    private val authFacade: AuthFacade,
 ) {
     @Operation(
         summary = "소셜 로그인",
@@ -34,7 +34,7 @@ class AuthController(
         @PathVariable provider: String,
         @Valid @RequestBody request: LoginRequest,
     ): ApiResponse<TokenResponse> {
-        val result = authService.login(OAuthProvider.from(provider), request.idToken)
+        val result = authFacade.login(OAuthProvider.from(provider), request.idToken)
         return ApiResponse.success(TokenResponse.from(result))
     }
 
@@ -48,7 +48,7 @@ class AuthController(
     fun reissue(
         @Valid @RequestBody request: ReissueRequest,
     ): ApiResponse<TokenResponse> {
-        val result = authService.reissue(request.refreshToken)
+        val result = authFacade.reissue(request.refreshToken)
         return ApiResponse.success(TokenResponse.from(result))
     }
 }

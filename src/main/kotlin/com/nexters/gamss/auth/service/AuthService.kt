@@ -23,6 +23,8 @@ class AuthService(
     private val jwtIssuer: JwtIssuer,
     private val refreshTokenRepository: RefreshTokenRepository,
 ) {
+    // 동시 최초 로그인 시 유니크 충돌 재시도는 AuthFacade 가 트랜잭션 경계 바깥에서 담당한다.
+    // 여기서 소셜 계정·리프레시 토큰을 한 트랜잭션으로 커밋해야 그 재시도가 성립한다.
     @Transactional
     fun login(
         provider: OAuthProvider,
