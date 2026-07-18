@@ -1,6 +1,6 @@
 package com.nexters.gamss.auth.service
 
-import com.nexters.gamss.auth.oauth.OAuthProvider
+import com.nexters.gamss.auth.social.SocialProvider
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -27,7 +27,7 @@ class AuthServiceTest {
     @Test
     fun `동시 가입 경합이 나면 재시도해 성공한다`() {
         every { loginService.login("token") } throws
-            ConcurrentRegistrationException(OAuthProvider.GOOGLE, "uid") andThen TokenResult("a", "r")
+            ConcurrentRegistrationException(SocialProvider.GOOGLE, "uid") andThen TokenResult("a", "r")
 
         val result = authService.login("token")
 

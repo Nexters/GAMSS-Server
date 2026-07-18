@@ -1,4 +1,4 @@
-package com.nexters.gamss.auth.oauth
+package com.nexters.gamss.auth.social
 
 /**
  * 소셜 토큰 검증으로 추출한 사용자 식별 정보.
@@ -6,6 +6,6 @@ package com.nexters.gamss.auth.oauth
  */
 data class SocialUser(
     val uid: String,
-    val provider: OAuthProvider,
+    val provider: SocialProvider,
     val email: String?,
 )

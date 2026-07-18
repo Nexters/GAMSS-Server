@@ -1,4 +1,4 @@
-package com.nexters.gamss.auth.oauth
+package com.nexters.gamss.auth.social
 
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
@@ -46,7 +46,7 @@ class FirebaseTokenVerifier(
     override fun verify(idToken: String): SocialUser {
         val claims = parseClaims(idToken)
         val uid = claims.subject ?: throw BusinessException(ErrorCode.INVALID_SOCIAL_TOKEN)
-        val provider = OAuthProvider.fromFirebase(signInProvider(claims))
+        val provider = SocialProvider.fromFirebase(signInProvider(claims))
         return SocialUser(uid = uid, provider = provider, email = claims.getStringClaim("email"))
     }
 

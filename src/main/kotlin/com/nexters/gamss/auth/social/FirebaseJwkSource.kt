@@ -1,4 +1,4 @@
-package com.nexters.gamss.auth.oauth
+package com.nexters.gamss.auth.social
 
 import com.nimbusds.jose.jwk.JWK
 import com.nimbusds.jose.jwk.JWKSelector

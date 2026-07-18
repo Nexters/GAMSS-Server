@@ -1,10 +1,10 @@
 package com.nexters.gamss.auth.service
 
-import com.nexters.gamss.auth.oauth.OAuthProvider
-import com.nexters.gamss.auth.oauth.SocialTokenVerifier
-import com.nexters.gamss.auth.oauth.SocialUser
 import com.nexters.gamss.auth.repository.RefreshTokenRepository
 import com.nexters.gamss.auth.repository.SocialAccountRepository
+import com.nexters.gamss.auth.social.SocialProvider
+import com.nexters.gamss.auth.social.SocialTokenVerifier
+import com.nexters.gamss.auth.social.SocialUser
 import com.nexters.gamss.member.repository.MemberRepository
 import com.nexters.gamss.support.TestcontainersConfig
 import org.junit.jupiter.api.AfterEach
@@ -50,7 +50,7 @@ class ConcurrentLoginIntegrationTest {
         @Primary
         fun stubSocialTokenVerifier(): SocialTokenVerifier =
             object : SocialTokenVerifier {
-                override fun verify(idToken: String) = SocialUser("concurrent-uid", OAuthProvider.GOOGLE, "u@a.com")
+                override fun verify(idToken: String) = SocialUser("concurrent-uid", SocialProvider.GOOGLE, "u@a.com")
             }
     }
 

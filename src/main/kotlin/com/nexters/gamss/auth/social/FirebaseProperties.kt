@@ -1,4 +1,4 @@
-package com.nexters.gamss.auth.oauth
+package com.nexters.gamss.auth.social
 
 import org.springframework.boot.context.properties.ConfigurationProperties
 

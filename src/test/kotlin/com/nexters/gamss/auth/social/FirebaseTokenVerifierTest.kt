@@ -1,4 +1,4 @@
-package com.nexters.gamss.auth.oauth
+package com.nexters.gamss.auth.social
 
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
@@ -31,7 +31,7 @@ class FirebaseTokenVerifierTest {
         val user = verifier.verify(signedToken())
 
         assertEquals("firebase-uid-1", user.uid)
-        assertEquals(OAuthProvider.GOOGLE, user.provider)
+        assertEquals(SocialProvider.GOOGLE, user.provider)
         assertEquals("user@example.com", user.email)
     }
 
@@ -39,7 +39,7 @@ class FirebaseTokenVerifierTest {
     fun `애플 로그인 수단을 매핑한다`() {
         val user = verifier.verify(signedToken(signInProvider = "apple.com"))
 
-        assertEquals(OAuthProvider.APPLE, user.provider)
+        assertEquals(SocialProvider.APPLE, user.provider)
     }
 
     @Test
@@ -50,10 +50,10 @@ class FirebaseTokenVerifierTest {
     }
 
     @Test
-    fun `지원하지 않는 로그인 수단이면 UNSUPPORTED_OAUTH_PROVIDER`() {
+    fun `지원하지 않는 로그인 수단이면 UNSUPPORTED_SOCIAL_PROVIDER`() {
         val exception = assertFailsWith<BusinessException> { verifier.verify(signedToken(signInProvider = "password")) }
 
-        assertEquals(ErrorCode.UNSUPPORTED_OAUTH_PROVIDER, exception.errorCode)
+        assertEquals(ErrorCode.UNSUPPORTED_SOCIAL_PROVIDER, exception.errorCode)
     }
 
     @Test

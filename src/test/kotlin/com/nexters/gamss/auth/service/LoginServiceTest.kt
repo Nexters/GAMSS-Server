@@ -1,10 +1,10 @@
 package com.nexters.gamss.auth.service
 
 import com.nexters.gamss.auth.domain.RefreshToken
-import com.nexters.gamss.auth.oauth.OAuthProvider
-import com.nexters.gamss.auth.oauth.SocialTokenVerifier
-import com.nexters.gamss.auth.oauth.SocialUser
 import com.nexters.gamss.auth.repository.RefreshTokenRepository
+import com.nexters.gamss.auth.social.SocialProvider
+import com.nexters.gamss.auth.social.SocialTokenVerifier
+import com.nexters.gamss.auth.social.SocialUser
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.global.security.JwtIssuer
@@ -39,13 +39,13 @@ class LoginServiceTest {
 
     @Test
     fun `로그인 시 신규 회원이면 리프레시 토큰을 저장한다`() {
-        every { socialTokenVerifier.verify("idtok") } returns SocialUser("uid-1", OAuthProvider.GOOGLE, "a@a.com")
+        every { socialTokenVerifier.verify("idtok") } returns SocialUser("uid-1", SocialProvider.GOOGLE, "a@a.com")
         val member =
             mockk<Member> {
                 every { id } returns 100L
                 every { isWithdrawn() } returns false
             }
-        every { socialAccountService.resolveMember(OAuthProvider.GOOGLE, "uid-1", "a@a.com") } returns member
+        every { socialAccountService.resolveMember(SocialProvider.GOOGLE, "uid-1", "a@a.com") } returns member
         every { jwtIssuer.issueAccessToken(100L) } returns "access"
         every { jwtIssuer.issueRefreshToken(100L) } returns "refresh"
         every { refreshTokenRepository.findByMemberId(100L) } returns null
@@ -65,13 +65,13 @@ class LoginServiceTest {
 
     @Test
     fun `로그인 시 기존 리프레시 토큰이 있으면 회전한다`() {
-        every { socialTokenVerifier.verify("t") } returns SocialUser("uid", OAuthProvider.APPLE, "e@e.com")
+        every { socialTokenVerifier.verify("t") } returns SocialUser("uid", SocialProvider.APPLE, "e@e.com")
         val member =
             mockk<Member> {
                 every { id } returns 1L
                 every { isWithdrawn() } returns false
             }
-        every { socialAccountService.resolveMember(OAuthProvider.APPLE, "uid", "e@e.com") } returns member
+        every { socialAccountService.resolveMember(SocialProvider.APPLE, "uid", "e@e.com") } returns member
         every { jwtIssuer.issueAccessToken(1L) } returns "a"
         every { jwtIssuer.issueRefreshToken(1L) } returns "r"
         val stored = mockk<RefreshToken>(relaxed = true)
@@ -85,9 +85,9 @@ class LoginServiceTest {
 
     @Test
     fun `탈퇴한 회원이 로그인하면 WITHDRAWN_MEMBER`() {
-        every { socialTokenVerifier.verify("idtok") } returns SocialUser("uid-1", OAuthProvider.GOOGLE, "a@a.com")
+        every { socialTokenVerifier.verify("idtok") } returns SocialUser("uid-1", SocialProvider.GOOGLE, "a@a.com")
         val member = mockk<Member> { every { isWithdrawn() } returns true }
-        every { socialAccountService.resolveMember(OAuthProvider.GOOGLE, "uid-1", "a@a.com") } returns member
+        every { socialAccountService.resolveMember(SocialProvider.GOOGLE, "uid-1", "a@a.com") } returns member
 
         val exception = assertFailsWith<BusinessException> { loginService.login("idtok") }
 

@@ -1,8 +1,8 @@
 package com.nexters.gamss.auth.service
 
 import com.nexters.gamss.auth.domain.RefreshToken
-import com.nexters.gamss.auth.oauth.SocialTokenVerifier
 import com.nexters.gamss.auth.repository.RefreshTokenRepository
+import com.nexters.gamss.auth.social.SocialTokenVerifier
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.global.security.JwtIssuer

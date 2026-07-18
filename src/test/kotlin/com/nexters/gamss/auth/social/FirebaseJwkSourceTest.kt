@@ -1,4 +1,4 @@
-package com.nexters.gamss.auth.oauth
+package com.nexters.gamss.auth.social
 
 import com.nimbusds.jose.JWSAlgorithm
 import com.nimbusds.jose.JWSHeader
@@ -101,7 +101,7 @@ class FirebaseJwkSourceTest {
         val user = verifier.verify(signedToken())
 
         assertEquals("firebase-uid-1", user.uid)
-        assertEquals(OAuthProvider.GOOGLE, user.provider)
+        assertEquals(SocialProvider.GOOGLE, user.provider)
     }
 
     private fun signedToken(): String {
