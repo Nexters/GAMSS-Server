@@ -1,8 +1,7 @@
 package com.nexters.gamss.auth.service
 
 import com.nexters.gamss.auth.domain.RefreshToken
-import com.nexters.gamss.auth.oauth.OAuthClientResolver
-import com.nexters.gamss.auth.oauth.OAuthProvider
+import com.nexters.gamss.auth.oauth.SocialTokenVerifier
 import com.nexters.gamss.auth.repository.RefreshTokenRepository
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
@@ -21,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional
  */
 @Service
 class LoginService(
-    private val oAuthClientResolver: OAuthClientResolver,
+    private val socialTokenVerifier: SocialTokenVerifier,
     private val socialAccountService: SocialAccountService,
     private val memberService: MemberService,
     private val jwtIssuer: JwtIssuer,
@@ -29,12 +28,9 @@ class LoginService(
     private val tokenHasher: TokenHasher,
 ) {
     @Transactional
-    fun login(
-        provider: OAuthProvider,
-        idToken: String,
-    ): TokenResult {
-        val userInfo = oAuthClientResolver.resolve(provider).verify(idToken)
-        val member = socialAccountService.resolveMember(provider, userInfo.providerId, userInfo.email)
+    fun login(idToken: String): TokenResult {
+        val user = socialTokenVerifier.verify(idToken)
+        val member = socialAccountService.resolveMember(user.provider, user.uid, user.email)
         if (member.isWithdrawn()) {
             throw BusinessException(ErrorCode.WITHDRAWN_MEMBER)
         }

@@ -8,15 +8,21 @@ import kotlin.test.assertFailsWith
 
 class OAuthProviderTest {
     @Test
-    fun `대소문자 무관하게 provider를 파싱한다`() {
-        assertEquals(OAuthProvider.GOOGLE, OAuthProvider.from("google"))
-        assertEquals(OAuthProvider.GOOGLE, OAuthProvider.from("GOOGLE"))
-        assertEquals(OAuthProvider.APPLE, OAuthProvider.from("Apple"))
+    fun `Firebase sign_in_provider를 provider로 매핑한다`() {
+        assertEquals(OAuthProvider.GOOGLE, OAuthProvider.fromFirebase("google.com"))
+        assertEquals(OAuthProvider.APPLE, OAuthProvider.fromFirebase("apple.com"))
     }
 
     @Test
-    fun `지원하지 않는 provider면 UNSUPPORTED_OAUTH_PROVIDER`() {
-        val exception = assertFailsWith<BusinessException> { OAuthProvider.from("kakao") }
+    fun `지원하지 않는 sign_in_provider면 UNSUPPORTED_OAUTH_PROVIDER`() {
+        val exception = assertFailsWith<BusinessException> { OAuthProvider.fromFirebase("password") }
+
+        assertEquals(ErrorCode.UNSUPPORTED_OAUTH_PROVIDER, exception.errorCode)
+    }
+
+    @Test
+    fun `sign_in_provider가 없으면 UNSUPPORTED_OAUTH_PROVIDER`() {
+        val exception = assertFailsWith<BusinessException> { OAuthProvider.fromFirebase(null) }
 
         assertEquals(ErrorCode.UNSUPPORTED_OAUTH_PROVIDER, exception.errorCode)
     }

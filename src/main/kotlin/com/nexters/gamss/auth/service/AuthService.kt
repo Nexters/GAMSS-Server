@@ -1,6 +1,5 @@
 package com.nexters.gamss.auth.service
 
-import com.nexters.gamss.auth.oauth.OAuthProvider
 import org.springframework.stereotype.Service
 
 /**
@@ -15,10 +14,7 @@ class AuthService(
     private val loginService: LoginService,
     private val conflictRetry: ConflictRetry,
 ) {
-    fun login(
-        provider: OAuthProvider,
-        idToken: String,
-    ): TokenResult = conflictRetry.execute { loginService.login(provider, idToken) }
+    fun login(idToken: String): TokenResult = conflictRetry.execute { loginService.login(idToken) }
 
     fun reissue(refreshToken: String): TokenResult = loginService.reissue(refreshToken)
 }

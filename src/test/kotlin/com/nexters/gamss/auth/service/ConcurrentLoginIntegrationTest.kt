@@ -1,9 +1,8 @@
 package com.nexters.gamss.auth.service
 
-import com.nexters.gamss.auth.oauth.OAuthClient
-import com.nexters.gamss.auth.oauth.OAuthClientResolver
 import com.nexters.gamss.auth.oauth.OAuthProvider
-import com.nexters.gamss.auth.oauth.OAuthUserInfo
+import com.nexters.gamss.auth.oauth.SocialTokenVerifier
+import com.nexters.gamss.auth.oauth.SocialUser
 import com.nexters.gamss.auth.repository.RefreshTokenRepository
 import com.nexters.gamss.auth.repository.SocialAccountRepository
 import com.nexters.gamss.member.repository.MemberRepository
@@ -30,7 +29,7 @@ import kotlin.test.assertTrue
  * 재시도가 없으면 뒤늦은 요청이 (provider, providerId) 유니크 제약 위반으로 실패한다.
  */
 @SpringBootTest
-@Import(TestcontainersConfig::class, ConcurrentLoginIntegrationTest.StubOAuthConfig::class)
+@Import(TestcontainersConfig::class, ConcurrentLoginIntegrationTest.StubVerifierConfig::class)
 class ConcurrentLoginIntegrationTest {
     @Autowired
     private lateinit var authService: AuthService
@@ -45,20 +44,14 @@ class ConcurrentLoginIntegrationTest {
     private lateinit var refreshTokenRepository: RefreshTokenRepository
 
     @TestConfiguration(proxyBeanMethods = false)
-    class StubOAuthConfig {
-        // 어떤 idToken 이든 같은 소셜 신원을 반환해, 동시 요청이 같은 계정으로 경합하게 한다.
+    class StubVerifierConfig {
+        // 어떤 토큰이든 같은 소셜 신원을 반환해, 동시 요청이 같은 계정으로 경합하게 한다.
         @Bean
         @Primary
-        fun stubOAuthClientResolver(): OAuthClientResolver =
-            OAuthClientResolver(
-                listOf(
-                    object : OAuthClient {
-                        override val provider = OAuthProvider.GOOGLE
-
-                        override fun verify(idToken: String) = OAuthUserInfo("concurrent-sub", "u@a.com")
-                    },
-                ),
-            )
+        fun stubSocialTokenVerifier(): SocialTokenVerifier =
+            object : SocialTokenVerifier {
+                override fun verify(idToken: String) = SocialUser("concurrent-uid", OAuthProvider.GOOGLE, "u@a.com")
+            }
     }
 
     @AfterEach
@@ -81,7 +74,7 @@ class ConcurrentLoginIntegrationTest {
                 executor.submit {
                     try {
                         startLine.await() // 모든 스레드를 동시에 출발시켜 경합을 유도한다
-                        authService.login(OAuthProvider.GOOGLE, "idtok")
+                        authService.login("idtok")
                     } catch (t: Throwable) {
                         errors.add(t)
                     }

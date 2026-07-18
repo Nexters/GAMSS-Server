@@ -1,6 +1,5 @@
 package com.nexters.gamss.auth.controller
 
-import com.nexters.gamss.auth.oauth.OAuthProvider
 import com.nexters.gamss.auth.service.AuthService
 import com.nexters.gamss.auth.service.TokenResult
 import com.nexters.gamss.global.exception.GlobalExceptionHandler
@@ -23,10 +22,10 @@ class AuthControllerTest {
 
     @Test
     fun `로그인에 성공하면 토큰을 반환한다`() {
-        every { authService.login(OAuthProvider.GOOGLE, "idtok") } returns TokenResult("access", "refresh")
+        every { authService.login("idtok") } returns TokenResult("access", "refresh")
 
         mockMvc
-            .post("/api/auth/login/google") {
+            .post("/api/auth/login") {
                 contentType = MediaType.APPLICATION_JSON
                 content = """{"idToken":"idtok"}"""
             }.andExpect {
@@ -40,24 +39,12 @@ class AuthControllerTest {
     @Test
     fun `idToken이 비어 있으면 400과 INVALID_INPUT을 반환한다`() {
         mockMvc
-            .post("/api/auth/login/google") {
+            .post("/api/auth/login") {
                 contentType = MediaType.APPLICATION_JSON
                 content = """{"idToken":""}"""
             }.andExpect {
                 status { isBadRequest() }
                 jsonPath("$.error.code") { value("INVALID_INPUT") }
-            }
-    }
-
-    @Test
-    fun `지원하지 않는 provider면 400과 UNSUPPORTED_OAUTH_PROVIDER를 반환한다`() {
-        mockMvc
-            .post("/api/auth/login/kakao") {
-                contentType = MediaType.APPLICATION_JSON
-                content = """{"idToken":"x"}"""
-            }.andExpect {
-                status { isBadRequest() }
-                jsonPath("$.error.code") { value("UNSUPPORTED_OAUTH_PROVIDER") }
             }
     }
 

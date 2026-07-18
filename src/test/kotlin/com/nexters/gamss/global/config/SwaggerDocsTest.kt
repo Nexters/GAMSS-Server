@@ -31,7 +31,7 @@ class SwaggerDocsTest {
             .andExpect {
                 status { isOk() }
                 jsonPath("$.info.title") { value("GAMSS API") }
-                jsonPath("$.paths['/api/auth/login/{provider}'].post") { exists() }
+                jsonPath("$.paths['/api/auth/login'].post") { exists() }
                 jsonPath("$.components.securitySchemes.bearerAuth.scheme") { value("bearer") }
             }
     }

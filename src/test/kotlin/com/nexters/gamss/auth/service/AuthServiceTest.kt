@@ -16,23 +16,23 @@ class AuthServiceTest {
 
     @Test
     fun `로그인은 LoginService에 위임하고 정상이면 재시도하지 않는다`() {
-        every { loginService.login(OAuthProvider.GOOGLE, "t") } returns TokenResult("a", "r")
+        every { loginService.login("token") } returns TokenResult("a", "r")
 
-        val result = authService.login(OAuthProvider.GOOGLE, "t")
+        val result = authService.login("token")
 
         assertEquals("a", result.accessToken)
-        verify(exactly = 1) { loginService.login(OAuthProvider.GOOGLE, "t") }
+        verify(exactly = 1) { loginService.login("token") }
     }
 
     @Test
     fun `동시 가입 경합이 나면 재시도해 성공한다`() {
-        every { loginService.login(OAuthProvider.GOOGLE, "t") } throws
-            ConcurrentRegistrationException(OAuthProvider.GOOGLE, "sub") andThen TokenResult("a", "r")
+        every { loginService.login("token") } throws
+            ConcurrentRegistrationException(OAuthProvider.GOOGLE, "uid") andThen TokenResult("a", "r")
 
-        val result = authService.login(OAuthProvider.GOOGLE, "t")
+        val result = authService.login("token")
 
         assertEquals("a", result.accessToken)
-        verify(exactly = 2) { loginService.login(OAuthProvider.GOOGLE, "t") }
+        verify(exactly = 2) { loginService.login("token") }
     }
 
     @Test

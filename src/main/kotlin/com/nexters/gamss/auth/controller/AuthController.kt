@@ -3,14 +3,11 @@ package com.nexters.gamss.auth.controller
 import com.nexters.gamss.auth.controller.dto.LoginRequest
 import com.nexters.gamss.auth.controller.dto.ReissueRequest
 import com.nexters.gamss.auth.controller.dto.TokenResponse
-import com.nexters.gamss.auth.oauth.OAuthProvider
 import com.nexters.gamss.auth.service.AuthService
 import com.nexters.gamss.global.response.ApiResponse
 import io.swagger.v3.oas.annotations.Operation
-import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
-import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
@@ -25,16 +22,15 @@ class AuthController(
     @Operation(
         summary = "소셜 로그인",
         description =
-            "앱이 소셜 SDK로 받은 id_token을 검증해 회원을 조회·가입하고 " +
-                "서비스 토큰(accessToken·refreshToken)을 발급합니다. 최초 로그인 시 회원이 자동 생성됩니다.",
+            "앱이 Firebase Authentication으로 발급받은 ID 토큰을 검증해 회원을 조회·가입하고 " +
+                "서비스 토큰(accessToken·refreshToken)을 발급합니다. 최초 로그인 시 회원이 자동 생성됩니다. " +
+                "로그인 수단(구글·애플)은 토큰에서 판별하므로 별도로 지정하지 않습니다.",
     )
-    @PostMapping("/login/{provider}")
+    @PostMapping("/login")
     fun login(
-        @Parameter(description = "소셜 제공자 (google 또는 apple)", example = "google")
-        @PathVariable provider: String,
         @Valid @RequestBody request: LoginRequest,
     ): ApiResponse<TokenResponse> {
-        val result = authService.login(OAuthProvider.from(provider), request.idToken)
+        val result = authService.login(request.idToken)
         return ApiResponse.success(TokenResponse.from(result))
     }
 
