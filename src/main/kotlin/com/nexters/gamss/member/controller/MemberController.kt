@@ -26,7 +26,10 @@ class MemberController(
 ) {
     @Operation(
         summary = "내 정보 조회",
-        description = "로그인한 회원의 정보(이메일·닉네임·가입일·상태)를 반환합니다.",
+        description =
+            "로그인한 회원의 정보(이메일·닉네임·가입일·상태)를 반환합니다.\n\n" +
+                "**실패 응답(error.code):**\n" +
+                "- `UNAUTHORIZED` (401): 인증 필요(토큰 없음·만료·무효)",
     )
     @GetMapping("/me")
     fun me(
@@ -38,7 +41,12 @@ class MemberController(
 
     @Operation(
         summary = "닉네임 수정",
-        description = "닉네임을 변경합니다. 앞뒤 공백은 제거되며 2~20자·금칙어 규칙을 따릅니다.",
+        description =
+            "닉네임을 변경합니다. 앞뒤 공백은 제거되며 2~20자·금칙어 규칙을 따릅니다.\n\n" +
+                "**실패 응답(error.code):**\n" +
+                "- `UNAUTHORIZED` (401): 인증 필요\n" +
+                "- `INVALID_INPUT` (400): nickname 누락\n" +
+                "- `INVALID_NICKNAME` (400): 길이(2~20자) 위반 또는 금칙어 포함",
     )
     @PatchMapping("/me/nickname")
     fun updateNickname(
@@ -51,7 +59,11 @@ class MemberController(
 
     @Operation(
         summary = "회원 탈퇴",
-        description = "소프트 삭제로 탈퇴 처리합니다. 탈퇴 후에는 로그인·토큰 재발급이 차단됩니다.",
+        description =
+            "소프트 삭제로 탈퇴 처리합니다. 탈퇴 후에는 로그인·토큰 재발급이 차단됩니다.\n\n" +
+                "**실패 응답(error.code):**\n" +
+                "- `UNAUTHORIZED` (401): 인증 필요\n" +
+                "- `ALREADY_WITHDRAWN` (409): 이미 탈퇴한 회원",
     )
     @DeleteMapping("/me")
     fun withdraw(
