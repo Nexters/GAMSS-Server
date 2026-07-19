@@ -9,6 +9,8 @@ import com.nexters.gamss.global.security.JwtIssuer
 import com.nexters.gamss.member.domain.Member
 import com.nexters.gamss.member.repository.MemberRepository
 import com.nexters.gamss.support.TestcontainersConfig
+import jakarta.persistence.EntityManager
+import jakarta.persistence.PersistenceContext
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -24,6 +26,7 @@ import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.context.WebApplicationContext
+import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
 import kotlin.test.assertEquals
@@ -46,6 +49,9 @@ class ConversationControllerIntegrationTest {
 
     @Autowired
     private lateinit var jwtIssuer: JwtIssuer
+
+    @PersistenceContext
+    private lateinit var entityManager: EntityManager
 
     private lateinit var mockMvc: MockMvc
 
@@ -206,6 +212,39 @@ class ConversationControllerIntegrationTest {
             .get("/api/conversations") {
                 header(HttpHeaders.AUTHORIZATION, bearerFor(member))
                 param("date", serviceDate.plusDays(1).toString())
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.length()") { value(0) }
+            }
+    }
+
+    @Test
+    fun `새벽 6시 이전에 만든 채팅방은 전날 목록으로 조회된다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val conversation = conversationRepository.save(Conversation(member.id))
+        // 생성 시각을 KST 2026-07-19 02:00(새벽) = UTC 2026-07-18 17:00 으로 조작한다.
+        // JDBC 직접 INSERT는 Hibernate와 타임존 변환이 달라질 수 있어 JPQL로 수정한다.
+        entityManager.flush()
+        entityManager
+            .createQuery("update Conversation c set c.createdAt = :createdAt where c.id = :id")
+            .setParameter("createdAt", Instant.parse("2026-07-18T17:00:00Z"))
+            .setParameter("id", conversation.id)
+            .executeUpdate()
+        entityManager.clear()
+
+        mockMvc
+            .get("/api/conversations") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                param("date", "2026-07-18")
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.length()") { value(1) }
+            }
+
+        mockMvc
+            .get("/api/conversations") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                param("date", "2026-07-19")
             }.andExpect {
                 status { isOk() }
                 jsonPath("$.data.length()") { value(0) }
