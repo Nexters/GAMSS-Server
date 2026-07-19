@@ -1,6 +1,6 @@
 # GAMSS dev 서버용 (app + MySQL, 한 서버)
 # 필요한 환경변수는 같은 디렉토리 .env 에 정의한다(CD가 GitHub Secrets로 생성):
-#   DB_PASSWORD, DB_ROOT_PASSWORD, JWT_SECRET, GOOGLE_CLIENT_IDS, APPLE_CLIENT_IDS, IMAGE_TAG
+#   DB_PASSWORD, DB_ROOT_PASSWORD, JWT_SECRET, IMAGE_TAG
 #
 # 튜닝은 8GB 서버(가비아 Standard 2vCore/8GB) 기준으로 배분했다:
 #   app 힙 3G + 비힙 약 0.8G / MySQL 약 2.5G / OS·Docker 약 0.5G → 여유 약 1.2G
@@ -19,8 +19,6 @@ services:
       DB_USERNAME: gamss
       DB_PASSWORD: ${DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
-      GOOGLE_CLIENT_IDS: ${GOOGLE_CLIENT_IDS:-}
-      APPLE_CLIENT_IDS: ${APPLE_CLIENT_IDS:-}
       JAVA_OPTS: -Xms1g -Xmx3g
     ports:
       # 루프백에만 바인딩 → 외부 비공개. 배포 스크립트의 헬스체크용이다.

@@ -92,8 +92,6 @@ jobs:
           DB_PASSWORD=${{ secrets.DB_PASSWORD }}
           DB_ROOT_PASSWORD=${{ secrets.DB_ROOT_PASSWORD }}
           JWT_SECRET=${{ secrets.JWT_SECRET }}
-          GOOGLE_CLIENT_IDS=${{ secrets.GOOGLE_CLIENT_IDS }}
-          APPLE_CLIENT_IDS=${{ secrets.APPLE_CLIENT_IDS }}
           EOF
 
       - name: Transfer files via SCP
