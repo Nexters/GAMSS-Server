@@ -1,5 +1,7 @@
 package com.nexters.gamss.auth.social
 
+import com.nexters.gamss.global.exception.BusinessException
+import com.nexters.gamss.global.exception.ErrorCode
 import com.nimbusds.jose.jwk.JWK
 import com.nimbusds.jose.jwk.JWKSelector
 import com.nimbusds.jose.jwk.JWKSet
@@ -8,6 +10,7 @@ import com.nimbusds.jose.jwk.source.JWKSource
 import com.nimbusds.jose.proc.SecurityContext
 import com.nimbusds.jose.util.JSONObjectUtils
 import java.io.ByteArrayInputStream
+import java.io.IOException
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -57,16 +60,36 @@ class FirebaseJwkSource(
         if (System.currentTimeMillis() < expiresAtMillis) {
             return cached
         }
+        val response = fetch()
+        cached = toJwkSet(response.body())
+        expiresAtMillis = System.currentTimeMillis() + ttlMillis(response)
+        return cached
+    }
+
+    /**
+     * 공개키 엔드포인트를 호출한다. 외부 API 장애(통신 실패·비정상 응답)는 도메인 예외로 번역해,
+     * "서버 버그(500)"가 아니라 "일시적 의존성 장애(503)"로 드러나게 한다.
+     */
+    private fun fetch(): HttpResponse<String> {
         val request =
             HttpRequest
                 .newBuilder(URI(certsUri))
                 .timeout(REQUEST_TIMEOUT)
                 .GET()
                 .build()
-        val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
-        cached = toJwkSet(response.body())
-        expiresAtMillis = System.currentTimeMillis() + ttlMillis(response)
-        return cached
+        val response =
+            try {
+                httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+            } catch (e: IOException) {
+                throw BusinessException(ErrorCode.SOCIAL_AUTH_UNAVAILABLE)
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+                throw BusinessException(ErrorCode.SOCIAL_AUTH_UNAVAILABLE)
+            }
+        if (response.statusCode() != HTTP_OK) {
+            throw BusinessException(ErrorCode.SOCIAL_AUTH_UNAVAILABLE)
+        }
+        return response
     }
 
     private fun ttlMillis(response: HttpResponse<String>): Long {
@@ -84,6 +107,7 @@ class FirebaseJwkSource(
         private const val DEFAULT_CERTS_URI =
             "https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com"
         private const val DEFAULT_TTL_SECONDS = 3600L
+        private const val HTTP_OK = 200
         private val MAX_AGE_REGEX = Regex("""max-age=(\d+)""")
         private val CONNECT_TIMEOUT = Duration.ofSeconds(3)
         private val REQUEST_TIMEOUT = Duration.ofSeconds(5)

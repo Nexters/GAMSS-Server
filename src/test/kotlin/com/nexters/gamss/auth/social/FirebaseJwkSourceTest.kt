@@ -1,8 +1,12 @@
 package com.nexters.gamss.auth.social
 
+import com.nexters.gamss.global.exception.BusinessException
+import com.nexters.gamss.global.exception.ErrorCode
 import com.nimbusds.jose.JWSAlgorithm
 import com.nimbusds.jose.JWSHeader
 import com.nimbusds.jose.crypto.RSASSASigner
+import com.nimbusds.jose.jwk.JWKMatcher
+import com.nimbusds.jose.jwk.JWKSelector
 import com.nimbusds.jose.jwk.RSAKey
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet
 import com.nimbusds.jose.proc.SecurityContext
@@ -15,6 +19,7 @@ import java.util.Base64
 import java.util.Date
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 /**
@@ -102,6 +107,19 @@ class FirebaseJwkSourceTest {
 
         assertEquals("firebase-uid-1", user.uid)
         assertEquals(SocialProvider.GOOGLE, user.provider)
+    }
+
+    @Test
+    fun `공개키 조회에 실패하면 SOCIAL_AUTH_UNAVAILABLE 예외를 던진다`() {
+        // 연결이 거부되는 주소 → 통신 실패를 도메인 예외(503)로 번역하는지 확인
+        val source = FirebaseJwkSource("http://localhost:1/certs")
+
+        val exception =
+            assertFailsWith<BusinessException> {
+                source.get(JWKSelector(JWKMatcher.Builder().build()), null)
+            }
+
+        assertEquals(ErrorCode.SOCIAL_AUTH_UNAVAILABLE, exception.errorCode)
     }
 
     private fun signedToken(): String {

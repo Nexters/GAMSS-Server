@@ -17,6 +17,7 @@ enum class ErrorCode(
     // 인증 · 소셜 로그인
     UNSUPPORTED_SOCIAL_PROVIDER(HttpStatus.BAD_REQUEST, "지원하지 않는 소셜 제공자입니다."),
     INVALID_SOCIAL_TOKEN(HttpStatus.UNAUTHORIZED, "유효하지 않은 소셜 토큰입니다."),
+    SOCIAL_AUTH_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "소셜 인증 서버와 통신할 수 없습니다. 잠시 후 다시 시도해주세요."),
     INVALID_TOKEN(HttpStatus.UNAUTHORIZED, "유효하지 않은 토큰입니다."),
     EXPIRED_TOKEN(HttpStatus.UNAUTHORIZED, "만료된 토큰입니다."),
     REFRESH_TOKEN_NOT_FOUND(HttpStatus.UNAUTHORIZED, "리프레시 토큰을 찾을 수 없습니다."),
