@@ -15,3 +15,6 @@ jwt:
 
 firebase:
   project-id: gamss-test
+
+conversation:
+  day-start-time: "06:00"
