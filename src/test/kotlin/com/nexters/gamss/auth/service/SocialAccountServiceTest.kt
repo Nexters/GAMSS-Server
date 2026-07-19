@@ -1,8 +1,8 @@
 package com.nexters.gamss.auth.service
 
 import com.nexters.gamss.auth.domain.SocialAccount
-import com.nexters.gamss.auth.oauth.OAuthProvider
 import com.nexters.gamss.auth.repository.SocialAccountRepository
+import com.nexters.gamss.auth.social.SocialProvider
 import com.nexters.gamss.member.domain.Member
 import com.nexters.gamss.member.service.MemberService
 import io.mockk.every
@@ -25,7 +25,7 @@ class SocialAccountServiceTest {
         val member = mockk<Member>()
         every { memberService.getById(5L) } returns member
 
-        val result = socialAccountService.resolveMember(OAuthProvider.GOOGLE, "sub-1", "a@a.com")
+        val result = socialAccountService.resolveMember(SocialProvider.GOOGLE, "sub-1", "a@a.com")
 
         assertSame(member, result)
         verify(exactly = 0) { memberService.create(any()) }
@@ -38,7 +38,7 @@ class SocialAccountServiceTest {
         every { memberService.create("b@a.com") } returns member
         every { socialAccountRepository.save(any()) } answers { firstArg() }
 
-        val result = socialAccountService.resolveMember(OAuthProvider.APPLE, "sub-2", "b@a.com")
+        val result = socialAccountService.resolveMember(SocialProvider.APPLE, "sub-2", "b@a.com")
 
         assertSame(member, result)
         verify {
@@ -55,7 +55,7 @@ class SocialAccountServiceTest {
         every { socialAccountRepository.save(any()) } throws DataIntegrityViolationException("duplicate")
 
         assertFailsWith<ConcurrentRegistrationException> {
-            socialAccountService.resolveMember(OAuthProvider.GOOGLE, "sub-3", "c@a.com")
+            socialAccountService.resolveMember(SocialProvider.GOOGLE, "sub-3", "c@a.com")
         }
     }
 }

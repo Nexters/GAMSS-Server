@@ -1,8 +1,8 @@
 package com.nexters.gamss.auth.service
 
 import com.nexters.gamss.auth.domain.SocialAccount
-import com.nexters.gamss.auth.oauth.OAuthProvider
 import com.nexters.gamss.auth.repository.SocialAccountRepository
+import com.nexters.gamss.auth.social.SocialProvider
 import com.nexters.gamss.member.domain.Member
 import com.nexters.gamss.member.service.MemberService
 import org.springframework.dao.DataIntegrityViolationException
@@ -20,7 +20,7 @@ class SocialAccountService(
 ) {
     @Transactional
     fun resolveMember(
-        provider: OAuthProvider,
+        provider: SocialProvider,
         providerId: String,
         email: String?,
     ): Member {
