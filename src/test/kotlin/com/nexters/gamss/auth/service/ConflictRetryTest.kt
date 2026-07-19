@@ -1,6 +1,6 @@
 package com.nexters.gamss.auth.service
 
-import com.nexters.gamss.auth.oauth.OAuthProvider
+import com.nexters.gamss.auth.social.SocialProvider
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -8,7 +8,7 @@ import kotlin.test.assertFailsWith
 class ConflictRetryTest {
     private val conflictRetry = ConflictRetry()
 
-    private fun conflict() = ConcurrentRegistrationException(OAuthProvider.GOOGLE, "sub")
+    private fun conflict() = ConcurrentRegistrationException(SocialProvider.GOOGLE, "sub")
 
     @Test
     fun `성공하면 그대로 반환하고 한 번만 실행한다`() {

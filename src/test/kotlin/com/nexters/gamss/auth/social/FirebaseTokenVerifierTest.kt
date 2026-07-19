@@ -1,4 +1,4 @@
-package com.nexters.gamss.auth.oauth
+package com.nexters.gamss.auth.social
 
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
@@ -19,42 +19,51 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 
-class OidcTokenVerifierTest {
-    private val issuer = "https://accounts.google.com"
-    private val clientId = "gamss-client-id"
+class FirebaseTokenVerifierTest {
+    private val projectId = "gamss-cbdcb"
+    private val issuer = "https://securetoken.google.com/$projectId"
     private val rsaKey: RSAKey = RSAKeyGenerator(2048).keyID("test-key").generate()
     private val jwkSource = ImmutableJWKSet<SecurityContext>(JWKSet(rsaKey))
-    private val provider =
-        OAuthProperties.Provider(
-            issuer = issuer,
-            jwksUri = "https://unused",
-            clientIds = listOf(clientId),
-        )
-    private val verifier = OidcTokenVerifier(provider, jwkSource)
+    private val verifier = FirebaseTokenVerifier(projectId, jwkSource)
 
     @Test
-    fun `유효한 토큰이면 사용자 정보를 반환한다`() {
-        val info = verifier.verify(signedToken())
+    fun `유효한 구글 토큰이면 사용자 정보를 반환한다`() {
+        val user = verifier.verify(signedToken())
 
-        assertEquals("user-sub-1", info.providerId)
-        assertEquals("user@example.com", info.email)
+        assertEquals("firebase-uid-1", user.uid)
+        assertEquals(SocialProvider.GOOGLE, user.provider)
+        assertEquals("user@example.com", user.email)
+    }
+
+    @Test
+    fun `애플 로그인 수단을 매핑한다`() {
+        val user = verifier.verify(signedToken(signInProvider = "apple.com"))
+
+        assertEquals(SocialProvider.APPLE, user.provider)
     }
 
     @Test
     fun `이메일 클레임이 없어도 검증에 성공한다`() {
-        val info = verifier.verify(signedToken(email = null))
+        val user = verifier.verify(signedToken(email = null))
 
-        assertNull(info.email)
+        assertNull(user.email)
+    }
+
+    @Test
+    fun `지원하지 않는 로그인 수단이면 UNSUPPORTED_SOCIAL_PROVIDER`() {
+        val exception = assertFailsWith<BusinessException> { verifier.verify(signedToken(signInProvider = "password")) }
+
+        assertEquals(ErrorCode.UNSUPPORTED_SOCIAL_PROVIDER, exception.errorCode)
     }
 
     @Test
     fun `발급자가 다르면 INVALID_SOCIAL_TOKEN`() {
-        assertSocialTokenInvalid(signedToken(iss = "https://evil.example.com"))
+        assertSocialTokenInvalid(signedToken(iss = "https://securetoken.google.com/other-project"))
     }
 
     @Test
-    fun `대상(aud)이 허용 목록에 없으면 INVALID_SOCIAL_TOKEN`() {
-        assertSocialTokenInvalid(signedToken(aud = "other-client"))
+    fun `대상(aud)이 프로젝트 ID와 다르면 INVALID_SOCIAL_TOKEN`() {
+        assertSocialTokenInvalid(signedToken(aud = "other-project"))
     }
 
     @Test
@@ -74,7 +83,7 @@ class OidcTokenVerifierTest {
     }
 
     @Test
-    fun `subject(sub)가 없으면 INVALID_SOCIAL_TOKEN`() {
+    fun `subject(uid)가 없으면 INVALID_SOCIAL_TOKEN`() {
         assertSocialTokenInvalid(signedToken(subject = null))
     }
 
@@ -84,10 +93,11 @@ class OidcTokenVerifierTest {
     }
 
     private fun signedToken(
-        subject: String? = "user-sub-1",
+        subject: String? = "firebase-uid-1",
         iss: String = issuer,
-        aud: String = clientId,
+        aud: String = projectId,
         email: String? = "user@example.com",
+        signInProvider: String? = "google.com",
         expiresAt: Date = Date.from(Instant.now().plusSeconds(300)),
         signingKey: RSAKey = rsaKey,
     ): String {
@@ -100,6 +110,7 @@ class OidcTokenVerifierTest {
                 .issueTime(Date())
         if (subject != null) builder.subject(subject)
         if (email != null) builder.claim("email", email)
+        if (signInProvider != null) builder.claim("firebase", mapOf("sign_in_provider" to signInProvider))
         val jwt = SignedJWT(JWSHeader.Builder(JWSAlgorithm.RS256).keyID(signingKey.keyID).build(), builder.build())
         jwt.sign(RSASSASigner(signingKey))
         return jwt.serialize()

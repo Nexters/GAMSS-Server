@@ -18,15 +18,9 @@ jwt:
   access-token-validity: ${JWT_ACCESS_VALIDITY:PT1H}
   refresh-token-validity: ${JWT_REFRESH_VALIDITY:P14D}
 
-oauth:
-  google:
-    issuer: https://accounts.google.com
-    jwks-uri: https://www.googleapis.com/oauth2/v3/certs
-    client-ids: ${GOOGLE_CLIENT_IDS:}
-  apple:
-    issuer: https://appleid.apple.com
-    jwks-uri: https://appleid.apple.com/auth/keys
-    client-ids: ${APPLE_CLIENT_IDS:}
+firebase:
+  # 소셜 로그인 검증 대상 Firebase 프로젝트. 비밀이 아니므로 설정값으로 둔다.
+  project-id: gamss-cbdcb
 
 springdoc:
   swagger-ui:

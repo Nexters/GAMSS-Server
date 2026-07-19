@@ -13,12 +13,5 @@ jwt:
   access-token-validity: PT1H
   refresh-token-validity: P14D
 
-oauth:
-  google:
-    issuer: https://accounts.google.com
-    jwks-uri: https://www.googleapis.com/oauth2/v3/certs
-    client-ids: test-google-client-id
-  apple:
-    issuer: https://appleid.apple.com
-    jwks-uri: https://appleid.apple.com/auth/keys
-    client-ids: test-apple-client-id
+firebase:
+  project-id: gamss-test

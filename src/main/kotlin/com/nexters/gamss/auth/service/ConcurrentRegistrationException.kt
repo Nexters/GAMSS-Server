@@ -1,6 +1,6 @@
 package com.nexters.gamss.auth.service
 
-import com.nexters.gamss.auth.oauth.OAuthProvider
+import com.nexters.gamss.auth.social.SocialProvider
 
 /**
  * 동시 최초 로그인으로 같은 소셜 계정이 중복 가입되려다 유니크 제약에 걸렸음을 나타내는 도메인 예외.
@@ -10,6 +10,6 @@ import com.nexters.gamss.auth.oauth.OAuthProvider
  * 조회되어 해소되는, 회복 가능한 경합이다.
  */
 class ConcurrentRegistrationException(
-    provider: OAuthProvider,
+    provider: SocialProvider,
     providerId: String,
 ) : RuntimeException("동시 가입 경합: provider=$provider, providerId=$providerId")
