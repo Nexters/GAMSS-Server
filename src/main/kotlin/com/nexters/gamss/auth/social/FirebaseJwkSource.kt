@@ -14,6 +14,7 @@ import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.security.cert.CertificateFactory
 import java.security.interfaces.RSAPublicKey
+import java.time.Duration
 
 /**
  * Firebase(구글 securetoken) 공개키를 x509 인증서 엔드포인트에서 가져오는 JWKSource.
@@ -24,7 +25,13 @@ import java.security.interfaces.RSAPublicKey
 class FirebaseJwkSource(
     private val certsUri: String = DEFAULT_CERTS_URI,
 ) : JWKSource<SecurityContext> {
-    private val httpClient: HttpClient = HttpClient.newHttpClient()
+    // 외부 API 호출이므로 타임아웃을 건다. refresh()가 @Synchronized 라, 응답이 지연되면
+    // 락을 기다리는 다른 로그인 스레드까지 함께 멈추는 것을 막는다.
+    private val httpClient: HttpClient =
+        HttpClient
+            .newBuilder()
+            .connectTimeout(CONNECT_TIMEOUT)
+            .build()
 
     @Volatile
     private var cached: JWKSet = JWKSet()
@@ -50,7 +57,13 @@ class FirebaseJwkSource(
         if (System.currentTimeMillis() < expiresAtMillis) {
             return cached
         }
-        val response = httpClient.send(HttpRequest.newBuilder(URI(certsUri)).GET().build(), HttpResponse.BodyHandlers.ofString())
+        val request =
+            HttpRequest
+                .newBuilder(URI(certsUri))
+                .timeout(REQUEST_TIMEOUT)
+                .GET()
+                .build()
+        val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
         cached = toJwkSet(response.body())
         expiresAtMillis = System.currentTimeMillis() + ttlMillis(response)
         return cached
@@ -72,6 +85,8 @@ class FirebaseJwkSource(
             "https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com"
         private const val DEFAULT_TTL_SECONDS = 3600L
         private val MAX_AGE_REGEX = Regex("""max-age=(\d+)""")
+        private val CONNECT_TIMEOUT = Duration.ofSeconds(3)
+        private val REQUEST_TIMEOUT = Duration.ofSeconds(5)
 
         /** `{kid: PEM인증서}` JSON 을 JWKSet 으로 변환한다. */
         fun toJwkSet(json: String): JWKSet {
