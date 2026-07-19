@@ -5,8 +5,10 @@ import com.nexters.gamss.global.response.ErrorResponse
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.MethodArgumentNotValidException
+import org.springframework.web.bind.MissingServletRequestParameterException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
 
 @RestControllerAdvice
 class GlobalExceptionHandler {
@@ -30,6 +32,22 @@ class GlobalExceptionHandler {
         return ResponseEntity
             .status(errorCode.status)
             .body(ApiResponse.error(ErrorResponse(errorCode.code, message)))
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException::class)
+    fun handleMissingParameter(e: MissingServletRequestParameterException): ResponseEntity<ApiResponse<Nothing>> {
+        val errorCode = ErrorCode.INVALID_INPUT
+        return ResponseEntity
+            .status(errorCode.status)
+            .body(ApiResponse.error(ErrorResponse(errorCode.code, "${e.parameterName}은(는) 필수입니다.")))
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException::class)
+    fun handleTypeMismatch(e: MethodArgumentTypeMismatchException): ResponseEntity<ApiResponse<Nothing>> {
+        val errorCode = ErrorCode.INVALID_INPUT
+        return ResponseEntity
+            .status(errorCode.status)
+            .body(ApiResponse.error(ErrorResponse(errorCode.code, "${e.name}의 형식이 올바르지 않습니다.")))
     }
 
     @ExceptionHandler(Exception::class)
