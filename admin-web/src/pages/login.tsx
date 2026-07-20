@@ -25,6 +25,8 @@ function GoogleIcon() {
   )
 }
 
+const MOCK_MODE = import.meta.env.VITE_AUTH_MODE === 'mock'
+
 export function LoginPage() {
   const { mutate: login, isLoading } = useLogin()
 
@@ -50,11 +52,13 @@ export function LoginPage() {
               disabled={isLoading}
               onClick={() => login({})}
             >
-              <GoogleIcon />
-              {isLoading ? '로그인 중…' : 'Google 계정으로 로그인'}
+              {!MOCK_MODE && <GoogleIcon />}
+              {isLoading ? '로그인 중…' : MOCK_MODE ? '로컬 관리자로 로그인' : 'Google 계정으로 로그인'}
             </Button>
             <p className="mt-4 text-center text-xs text-muted-foreground">
-              접근이 허용된 이메일만 로그인할 수 있습니다.
+              {MOCK_MODE
+                ? '로컬 개발 모드 — 허용목록 이메일로 로그인합니다.'
+                : '접근이 허용된 이메일만 로그인할 수 있습니다.'}
             </p>
           </CardContent>
         </Card>
