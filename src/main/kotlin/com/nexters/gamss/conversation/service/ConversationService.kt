@@ -36,14 +36,14 @@ class ConversationService(
         if (repliesToMessageId != null) {
             validateReplyTarget(repliesToMessageId, conversation.id)
         }
-        return messageRepository.save(
-            Message(
-                conversationId = conversation.id,
+        val message =
+            conversation.createMessage(
                 senderType = SenderType.USER,
                 content = content,
+                emotionType = null,
                 repliesToMessageId = repliesToMessageId,
-            ),
-        )
+            )
+        return messageRepository.save(message)
     }
 
     /** 답장 대상 메시지가 실제로 해당 채팅방에 존재하는지 확인한다. */

@@ -1,5 +1,6 @@
 package com.nexters.gamss.conversation.domain
 
+import com.nexters.gamss.emotion.domain.EmotionType
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.EntityListeners
@@ -38,4 +39,20 @@ class Conversation(
         protected set
 
     fun isOwnedBy(memberId: Long): Boolean = this.memberId == memberId
+
+    fun createMessage(
+        senderType: SenderType,
+        emotionType: EmotionType?,
+        content: String,
+        repliesToMessageId: Long?,
+    ): Message {
+        this.updatedAt = Instant.now()
+        return Message(
+            conversationId = this.id,
+            senderType = senderType,
+            emotionType = emotionType,
+            content = content,
+            repliesToMessageId = repliesToMessageId,
+        )
+    }
 }
