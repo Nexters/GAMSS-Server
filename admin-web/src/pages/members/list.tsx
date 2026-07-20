@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Suspense, lazy, useState } from 'react'
 import { useList } from '@refinedev/core'
 import type { CrudFilters } from '@refinedev/core'
 import { useNavigate } from 'react-router-dom'
@@ -13,6 +13,9 @@ import { PageHeader } from '@/components/page-header'
 import { StatusBadge } from '@/components/status-badge'
 import { cn } from '@/lib/utils'
 import { formatDateTime } from '@/lib/format'
+
+// 차트(recharts)는 무거워서 지연 로드해 초기·로그인 번들에서 제외한다.
+const MemberStats = lazy(() => import('./member-stats').then((m) => ({ default: m.MemberStats })))
 
 const PAGE_SIZE = 10
 
@@ -60,6 +63,10 @@ export function MemberList() {
           </>
         }
       />
+
+      <Suspense fallback={<div className="h-[380px]" />}>
+        <MemberStats />
+      </Suspense>
 
       <Card className="overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b p-3">
