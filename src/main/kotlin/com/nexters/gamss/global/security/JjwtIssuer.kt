@@ -24,23 +24,28 @@ class JjwtIssuer(
     private val accessTokenValidity = properties.accessTokenValidity
     private val refreshTokenValidity = properties.refreshTokenValidity
 
-    override fun issueAccessToken(memberId: Long): String = build(memberId, TokenType.ACCESS, accessTokenValidity)
+    override fun issueAccessToken(memberId: Long): String = build(memberId.toString(), TokenType.ACCESS, accessTokenValidity)
 
-    override fun issueRefreshToken(memberId: Long): String = build(memberId, TokenType.REFRESH, refreshTokenValidity)
+    override fun issueRefreshToken(memberId: Long): String = build(memberId.toString(), TokenType.REFRESH, refreshTokenValidity)
 
-    override fun parseAccessToken(token: String): Long = parseAs(token, TokenType.ACCESS)
+    // 관리자 토큰은 재발급이 없으므로 access 와 같은 유효기간을 쓰고, 만료 시 재로그인한다.
+    override fun issueAdminToken(email: String): String = build(email, TokenType.ADMIN, accessTokenValidity)
 
-    override fun parseRefreshToken(token: String): Long = parseAs(token, TokenType.REFRESH)
+    override fun parseAccessToken(token: String): Long = parseSubject(token, TokenType.ACCESS).toLong()
+
+    override fun parseRefreshToken(token: String): Long = parseSubject(token, TokenType.REFRESH).toLong()
+
+    override fun parseAdminToken(token: String): String = parseSubject(token, TokenType.ADMIN)
 
     private fun build(
-        memberId: Long,
+        subject: String,
         type: TokenType,
         validity: Duration,
     ): String {
         val now = Instant.now()
         return Jwts
             .builder()
-            .subject(memberId.toString())
+            .subject(subject)
             .claim(TYPE_CLAIM, type.name)
             .issuedAt(Date.from(now))
             .expiration(Date.from(now.plus(validity)))
@@ -48,16 +53,16 @@ class JjwtIssuer(
             .compact()
     }
 
-    private fun parseAs(
+    private fun parseSubject(
         token: String,
         expected: TokenType,
-    ): Long {
+    ): String {
         val claims = parse(token)
         // 종류 클레임이 없는 토큰(구버전)도 여기서 거부된다.
         if (TokenType.from(claims[TYPE_CLAIM] as? String) != expected) {
             throw BusinessException(ErrorCode.INVALID_TOKEN)
         }
-        return claims.subject.toLong()
+        return claims.subject
     }
 
     private fun parse(token: String): Claims =

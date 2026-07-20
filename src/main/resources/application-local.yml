@@ -11,3 +11,7 @@ spring:
 
 jwt:
   secret: local-development-secret-change-me-to-a-long-random-value-0123456789
+
+admin:
+  # 로컬 개발용 관리자 허용목록. 실제 배포는 ADMIN_EMAILS 환경변수로 주입한다.
+  emails: mj04300017@gmail.com
