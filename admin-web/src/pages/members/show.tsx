@@ -37,7 +37,7 @@ export function MemberShow() {
   const member = query.data?.data
   const displayName = member?.nickname ?? member?.email ?? `회원 #${member?.id ?? ''}`
 
-  const { mutate: withdraw, isLoading: withdrawing } = useCustomMutation()
+  const { mutate: withdraw } = useCustomMutation()
   const onWithdraw = () => {
     if (!member) {
       return
@@ -74,7 +74,6 @@ export function MemberShow() {
                     <AlertDialogCancel>취소</AlertDialogCancel>
                     <AlertDialogAction
                       className={cn(buttonVariants({ variant: 'destructive' }))}
-                      disabled={withdrawing}
                       onClick={onWithdraw}
                     >
                       탈퇴 처리

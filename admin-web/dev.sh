@@ -3,6 +3,8 @@
 # 백엔드는 백그라운드(로그 파일), 프론트는 포그라운드. Ctrl+C 하면 백엔드도 함께 종료된다.
 # (MySQL 컨테이너는 데이터 유지를 위해 남겨둔다. 끄려면: docker compose down)
 set -euo pipefail
+# 백그라운드 잡을 독립 프로세스 그룹으로 실행 → 종료 시 그룹째 정리할 수 있다.
+set -m
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -12,9 +14,9 @@ backend_pid=""
 cleanup() {
   echo
   echo "정리 중… 백엔드 종료"
-  [ -n "$backend_pid" ] && kill "$backend_pid" 2>/dev/null || true
-  # gradle 이 띄운 JVM 이 남을 수 있어 8080 점유 프로세스까지 정리한다.
-  lsof -ti:8080 2>/dev/null | xargs kill 2>/dev/null || true
+  # 내가 띄운 백엔드(gradle + 포크된 JVM)만 프로세스 그룹째 종료한다.
+  # 8080을 맹목적으로 정리하지 않아, 무관한 프로세스는 건드리지 않는다.
+  [ -n "$backend_pid" ] && kill -TERM -"$backend_pid" 2>/dev/null || true
   echo "완료. (MySQL 은 유지 — 끄려면: docker compose down)"
 }
 trap cleanup EXIT INT TERM

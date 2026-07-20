@@ -90,6 +90,9 @@ export function MemberStats() {
 
   const { total, active, withdrawn } = stats
   const activeRatio = total > 0 ? Math.round((active / total) * 100) : 0
+  // 회원이 0명이면 비율이 무의미하므로 —로 표시한다(0명인데 "전체의 100%" 같은 모순 방지).
+  const activeHint = total > 0 ? `전체의 ${activeRatio}%` : '—'
+  const withdrawnHint = total > 0 ? `전체의 ${100 - activeRatio}%` : '—'
   const pieData = [
     { name: '활성', value: active, color: ACTIVE_COLOR },
     { name: '탈퇴', value: withdrawn, color: WITHDRAWN_COLOR },
@@ -103,8 +106,8 @@ export function MemberStats() {
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-3">
         <Metric label="전체 회원" value={total.toLocaleString()} />
-        <Metric label="활성 회원" value={active.toLocaleString()} hint={`전체의 ${activeRatio}%`} />
-        <Metric label="탈퇴 회원" value={withdrawn.toLocaleString()} hint={`전체의 ${100 - activeRatio}%`} />
+        <Metric label="활성 회원" value={active.toLocaleString()} hint={activeHint} />
+        <Metric label="탈퇴 회원" value={withdrawn.toLocaleString()} hint={withdrawnHint} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
