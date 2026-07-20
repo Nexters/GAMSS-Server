@@ -22,6 +22,12 @@ data class MessageResponse(
     val content: String,
     @field:Schema(description = "답장 대상 메시지 ID (답장이 아니면 null)", example = "3", nullable = true)
     val repliesToMessageId: Long?,
+    @field:Schema(
+        description = "이 메시지가 속한 원본 일기 메시지 ID (캐릭터 댓글·티키타카에만 존재)",
+        example = "1",
+        nullable = true,
+    )
+    val rootMessageId: Long?,
     @field:Schema(description = "작성 일시")
     val createdAt: Instant,
 ) {
@@ -34,6 +40,7 @@ data class MessageResponse(
                 emotionType = message.emotionType?.name,
                 content = message.content,
                 repliesToMessageId = message.repliesToMessageId,
+                rootMessageId = message.rootMessageId,
                 createdAt = message.createdAt,
             )
     }

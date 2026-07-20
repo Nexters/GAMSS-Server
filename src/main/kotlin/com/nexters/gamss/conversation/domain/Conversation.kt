@@ -45,6 +45,7 @@ class Conversation(
         emotionType: EmotionType?,
         content: String,
         repliesToMessageId: Long?,
+        rootMessageId: Long? = null,
     ): Message {
         this.updatedAt = Instant.now()
         return Message(
@@ -53,6 +54,7 @@ class Conversation(
             emotionType = emotionType,
             content = content,
             repliesToMessageId = repliesToMessageId,
+            rootMessageId = rootMessageId,
         )
     }
 }
