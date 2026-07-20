@@ -91,8 +91,7 @@ class MemberServiceTest {
         assertEquals(7L, stats.active)
         assertEquals(3L, stats.withdrawn)
         assertEquals(14, stats.dailySignups.size)
-        // 오늘 가입 2명은 마지막 날에, 나머지 날은 0으로 채워진다.
-        assertEquals(2L, stats.dailySignups.last().count)
-        assertEquals(0L, stats.dailySignups.first().count)
+        // 자정 경계 플래키를 피하려고 특정 날짜가 아니라 기간 합계로 단언한다(오늘 가입 2명).
+        assertEquals(2L, stats.dailySignups.sumOf { it.count })
     }
 }

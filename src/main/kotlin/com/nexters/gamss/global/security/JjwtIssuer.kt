@@ -31,11 +31,17 @@ class JjwtIssuer(
     // 관리자 토큰은 재발급이 없으므로 access 와 같은 유효기간을 쓰고, 만료 시 재로그인한다.
     override fun issueAdminToken(email: String): String = build(email, TokenType.ADMIN, accessTokenValidity)
 
-    override fun parseAccessToken(token: String): Long = parseSubject(token, TokenType.ACCESS).toLong()
+    override fun parseAccessToken(token: String): Long = parseMemberId(token, TokenType.ACCESS)
 
-    override fun parseRefreshToken(token: String): Long = parseSubject(token, TokenType.REFRESH).toLong()
+    override fun parseRefreshToken(token: String): Long = parseMemberId(token, TokenType.REFRESH)
 
     override fun parseAdminToken(token: String): String = parseSubject(token, TokenType.ADMIN)
+
+    // subject가 숫자가 아니면(변조·구버전 등) 500 대신 INVALID_TOKEN 으로 매핑한다.
+    private fun parseMemberId(
+        token: String,
+        expected: TokenType,
+    ): Long = parseSubject(token, expected).toLongOrNull() ?: throw BusinessException(ErrorCode.INVALID_TOKEN)
 
     private fun build(
         subject: String,
@@ -62,7 +68,8 @@ class JjwtIssuer(
         if (TokenType.from(claims[TYPE_CLAIM] as? String) != expected) {
             throw BusinessException(ErrorCode.INVALID_TOKEN)
         }
-        return claims.subject
+        // subject 클레임이 없는 토큰(플랫폼 타입이라 null 가능)은 인증 실패로 처리한다.
+        return claims.subject ?: throw BusinessException(ErrorCode.INVALID_TOKEN)
     }
 
     private fun parse(token: String): Claims =

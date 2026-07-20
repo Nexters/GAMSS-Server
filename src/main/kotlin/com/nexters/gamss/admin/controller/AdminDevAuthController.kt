@@ -39,6 +39,6 @@ class AdminDevAuthController(
         if (!adminProperties.isAllowed(request.email)) {
             throw BusinessException(ErrorCode.NOT_ADMIN)
         }
-        return ApiResponse.success(AdminTokenResponse(jwtIssuer.issueAdminToken(request.email.trim().lowercase())))
+        return ApiResponse.success(AdminTokenResponse(jwtIssuer.issueAdminToken(adminProperties.normalize(request.email))))
     }
 }

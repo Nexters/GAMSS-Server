@@ -29,6 +29,6 @@ class AdminAuthService(
         if (!adminProperties.isAllowed(email)) {
             throw BusinessException(ErrorCode.NOT_ADMIN)
         }
-        return jwtIssuer.issueAdminToken(email.trim().lowercase())
+        return jwtIssuer.issueAdminToken(adminProperties.normalize(email))
     }
 }

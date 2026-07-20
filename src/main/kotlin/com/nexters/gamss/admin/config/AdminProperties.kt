@@ -12,9 +12,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties
 data class AdminProperties(
     val emails: List<String> = emptyList(),
 ) {
-    private val allowed: Set<String> = emails.map { it.normalizeEmail() }.filter { it.isNotEmpty() }.toSet()
+    private val allowed: Set<String> = emails.map { normalize(it) }.filter { it.isNotEmpty() }.toSet()
 
-    fun isAllowed(email: String): Boolean = email.normalizeEmail() in allowed
+    fun isAllowed(email: String): Boolean = normalize(email) in allowed
 
-    private fun String.normalizeEmail(): String = trim().lowercase()
+    /** 이메일 비교·저장에 쓰는 정규화(공백 제거·소문자). 토큰 발급 등 다른 곳에서도 재사용한다. */
+    fun normalize(email: String): String = email.trim().lowercase()
 }
