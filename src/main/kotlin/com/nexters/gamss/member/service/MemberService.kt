@@ -5,6 +5,8 @@ import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.member.domain.Member
 import com.nexters.gamss.member.domain.Nickname
 import com.nexters.gamss.member.repository.MemberRepository
+import org.springframework.data.domain.Page
+import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -20,6 +22,13 @@ class MemberService(
         memberRepository
             .findById(id)
             .orElseThrow { BusinessException(ErrorCode.MEMBER_NOT_FOUND) }
+
+    // 백오피스 회원 목록 조회. 빈 검색어는 전체 조회로 취급한다.
+    @Transactional(readOnly = true)
+    fun search(
+        keyword: String?,
+        pageable: Pageable,
+    ): Page<Member> = memberRepository.search(keyword?.takeIf { it.isNotBlank() }, pageable)
 
     @Transactional
     fun updateNickname(
