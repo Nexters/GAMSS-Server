@@ -78,7 +78,11 @@ rollback() {
 
   log "이전 태그로 롤백: ${prev_tag}"
   write_env_value IMAGE_TAG "$prev_tag" .env
-  docker compose up -d app
+  # set -e 하에서 up -d 가 실패해도 스크립트를 종료시키지 않고 아래 헬스체크·경고까지 진행한다.
+  if ! docker compose up -d app; then
+    log "롤백 컨테이너 기동 실패 — 서버 수동 확인 필요"
+    return
+  fi
 
   if wait_for_health; then
     log "롤백 후 헬스체크 통과 — 이전 버전으로 서비스 중"
@@ -110,7 +114,14 @@ main() {
   fi
 
   log "컨테이너 기동 (db·nginx는 실행 중이면 유지)"
-  docker compose up -d
+  # set -e 하에서 up -d 가 실패(포트 충돌·자원 부족 등)하면 스크립트가 즉시 종료돼
+  # 아래 헬스체크·자동 롤백이 실행되지 않으므로, pull 과 동일하게 감싸 롤백으로 넘긴다.
+  if ! docker compose up -d; then
+    log "컨테이너 기동 실패"
+    docker compose logs --tail=50 app || true
+    rollback "$prev_tag"
+    exit 1
+  fi
 
   log "헬스체크 대기 (최대 $((HEALTH_RETRIES * HEALTH_INTERVAL))초)"
   if wait_for_health; then

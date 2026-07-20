@@ -26,7 +26,8 @@ concurrency:
 
 permissions:
   contents: read
-  packages: write
+  # 서버에서 이미지를 pull 만 하므로 read 로 충분하다(push 없음).
+  packages: read
 
 jobs:
   rollback:
@@ -77,12 +78,19 @@ jobs:
 
       - name: Rollback Summary
         if: always()
+        # image_tag 는 자유 형식 입력이라 run 스크립트에 직접 보간하면 스크립트 인젝션 위험이 있다.
+        # env 로 받아 셸 변수로 참조한다(위 Validate·Rollback 단계와 동일한 안전 패턴).
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          ACTOR: ${{ github.actor }}
+          STATUS: ${{ job.status }}
         run: |
           {
             echo "### 롤백 결과"
             echo ""
-            echo "- **환경:** ${{ inputs.environment }}"
-            echo "- **되돌린 태그:** ${{ inputs.image_tag }}"
-            echo "- **실행자:** ${{ github.actor }}"
-            echo "- **상태:** ${{ job.status }}"
+            echo "- **환경:** ${ENVIRONMENT}"
+            echo "- **되돌린 태그:** ${IMAGE_TAG}"
+            echo "- **실행자:** ${ACTOR}"
+            echo "- **상태:** ${STATUS}"
           } >> "$GITHUB_STEP_SUMMARY"

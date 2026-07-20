@@ -17,7 +17,8 @@ concurrency:
 
 permissions:
   contents: read
-  packages: write
+  # 기본값은 최소 권한(read). GHCR push 가 필요한 build-and-push job 에만 write 를 부여한다.
+  packages: read
 
 jobs:
   # 테스트·린트가 통과해야 빌드·배포로 넘어간다.
@@ -35,6 +36,10 @@ jobs:
   build-and-push:
     needs: ci
     runs-on: ubuntu-latest
+    # 이 job만 GHCR 에 push 하므로 write 를 여기서만 부여한다.
+    permissions:
+      contents: read
+      packages: write
     outputs:
       image: ${{ steps.meta.outputs.image }}
       tag: ${{ steps.meta.outputs.tag }}
