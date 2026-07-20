@@ -1,0 +1,201 @@
+package com.nexters.gamss.conversation.service
+
+import com.nexters.gamss.conversation.domain.CommentStatus
+import com.nexters.gamss.conversation.domain.Conversation
+import com.nexters.gamss.conversation.domain.Message
+import com.nexters.gamss.conversation.domain.SenderType
+import com.nexters.gamss.conversation.repository.ConversationRepository
+import com.nexters.gamss.conversation.repository.MessageRepository
+import com.nexters.gamss.emotion.domain.EmotionType
+import com.nexters.gamss.global.exception.BusinessException
+import com.nexters.gamss.global.exception.ErrorCode
+import com.nexters.gamss.llm.CharacterSelector
+import com.nexters.gamss.llm.CommentDraft
+import com.nexters.gamss.llm.CommentFeed
+import com.nexters.gamss.llm.CommentFeedValidator
+import com.nexters.gamss.llm.CommentGenerationFailedException
+import com.nexters.gamss.llm.CommentGenerator
+import com.nexters.gamss.llm.EongttungTopicSelector
+import com.nexters.gamss.llm.TikitakaDraft
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
+import java.util.Optional
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+
+class CommentGenerationServiceTest {
+    private val messageRepository = mockk<MessageRepository>()
+    private val conversationRepository = mockk<ConversationRepository>()
+    private val characterSelector = mockk<CharacterSelector>()
+    private val eongttungTopicSelector = mockk<EongttungTopicSelector>()
+    private val commentGenerator = mockk<CommentGenerator>()
+    private val commentFeedValidator = mockk<CommentFeedValidator>()
+    private val commentPersistenceService = mockk<CommentPersistenceService>()
+
+    private val service =
+        CommentGenerationService(
+            messageRepository,
+            conversationRepository,
+            characterSelector,
+            eongttungTopicSelector,
+            commentGenerator,
+            commentFeedValidator,
+            commentPersistenceService,
+        )
+
+    private val characters = listOf(EmotionType.JOY, EmotionType.WARM, EmotionType.GRUMPY)
+    private val tikitakaCount = 3
+
+    private fun rootMessage(): Message = Message(conversationId = 10L, senderType = SenderType.USER, content = "오늘 억울한 일이 있었어")
+
+    private fun feed(): CommentFeed =
+        CommentFeed(
+            comments = characters.map { CommentDraft(it, "댓글-$it") },
+            tikitaka = listOf(TikitakaDraft(EmotionType.JOY, EmotionType.WARM, "티키타카")),
+        )
+
+    private fun stubClaimSuccess() {
+        every {
+            messageRepository.updateCommentStatus(1L, CommentStatus.PENDING, listOf(CommentStatus.NONE, CommentStatus.FAILED), any())
+        } returns 1
+        every { characterSelector.select() } returns characters
+        every { characterSelector.selectTikitakaCount() } returns tikitakaCount
+    }
+
+    @Test
+    fun `선점에 성공하면 LLM을 호출하고 저장한 뒤 DONE을 반환한다`() {
+        val message = rootMessage()
+        every { messageRepository.findById(1L) } returns Optional.of(message)
+        every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
+        stubClaimSuccess()
+        every { commentGenerator.generate("", message.content, characters, tikitakaCount, null) } returns feed()
+        every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } returns Unit
+        val savedMessages =
+            listOf(Message(conversationId = 10L, senderType = SenderType.CHARACTER, emotionType = EmotionType.JOY, content = "댓글"))
+        every { commentPersistenceService.saveFeed(10L, 1L, feed()) } returns savedMessages
+
+        val result = service.generateComments(memberId = 1L, messageId = 1L)
+
+        assertEquals(CommentGenerationOutcome.DONE, result.outcome)
+        assertEquals(savedMessages, result.comments)
+    }
+
+    @Test
+    fun `선점에 실패하고 현재 상태가 PENDING이면 GENERATING을 반환한다`() {
+        val message = rootMessage()
+        every { messageRepository.findById(1L) } returns Optional.of(message)
+        every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
+        every {
+            messageRepository.updateCommentStatus(1L, CommentStatus.PENDING, listOf(CommentStatus.NONE, CommentStatus.FAILED), any())
+        } returns 0
+
+        val result = service.generateComments(memberId = 1L, messageId = 1L)
+
+        assertEquals(CommentGenerationOutcome.GENERATING, result.outcome)
+        verify(exactly = 0) { commentGenerator.generate(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `선점에 실패하고 현재 상태가 DONE이면 기존 댓글을 조회해서 DONE을 반환한다`() {
+        val doneMessage =
+            Message(
+                conversationId = 10L,
+                senderType = SenderType.USER,
+                content = "내용",
+                commentStatus = CommentStatus.DONE,
+            )
+        every { messageRepository.findById(1L) } returnsMany listOf(Optional.of(rootMessage()), Optional.of(doneMessage))
+        every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
+        every {
+            messageRepository.updateCommentStatus(1L, CommentStatus.PENDING, listOf(CommentStatus.NONE, CommentStatus.FAILED), any())
+        } returns 0
+        val existingComments =
+            listOf(Message(conversationId = 10L, senderType = SenderType.CHARACTER, emotionType = EmotionType.JOY, content = "이미 생성됨"))
+        every { messageRepository.findAllByRootMessageIdOrderByIdAsc(1L) } returns existingComments
+
+        val result = service.generateComments(memberId = 1L, messageId = 1L)
+
+        assertEquals(CommentGenerationOutcome.DONE, result.outcome)
+        assertEquals(existingComments, result.comments)
+    }
+
+    @Test
+    fun `LLM 호출이 재시도까지 실패하면 FAILED로 마킹하고 FAILED를 반환한다`() {
+        val message = rootMessage()
+        every { messageRepository.findById(1L) } returns Optional.of(message)
+        every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
+        stubClaimSuccess()
+        every { commentGenerator.generate(any(), any(), any(), any(), any()) } throws CommentGenerationFailedException("LLM 호출 실패")
+        every { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) } returns 1
+
+        val result = service.generateComments(memberId = 1L, messageId = 1L)
+
+        assertEquals(CommentGenerationOutcome.FAILED, result.outcome)
+        verify(exactly = 2) { commentGenerator.generate(any(), any(), any(), any(), any()) }
+        verify(exactly = 1) { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) }
+    }
+
+    @Test
+    fun `엉뚱이가 선택되면 소재를 골라서 넘긴다`() {
+        val message = rootMessage()
+        val charactersWithQuirky = listOf(EmotionType.JOY, EmotionType.QUIRKY)
+        every { messageRepository.findById(1L) } returns Optional.of(message)
+        every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
+        every {
+            messageRepository.updateCommentStatus(1L, CommentStatus.PENDING, listOf(CommentStatus.NONE, CommentStatus.FAILED), any())
+        } returns 1
+        every { characterSelector.select() } returns charactersWithQuirky
+        every { characterSelector.selectTikitakaCount() } returns 1
+        every { eongttungTopicSelector.select() } returns "소재"
+        val quirkyFeed =
+            CommentFeed(
+                comments = charactersWithQuirky.map { CommentDraft(it, "댓글-$it") },
+                tikitaka = listOf(TikitakaDraft(EmotionType.JOY, EmotionType.QUIRKY, "티키타카")),
+            )
+        every { commentGenerator.generate("", message.content, charactersWithQuirky, 1, "소재") } returns quirkyFeed
+        every { commentFeedValidator.validate(quirkyFeed, charactersWithQuirky, 1) } returns Unit
+        every { commentPersistenceService.saveFeed(10L, 1L, quirkyFeed) } returns emptyList()
+
+        val result = service.generateComments(memberId = 1L, messageId = 1L)
+
+        assertEquals(CommentGenerationOutcome.DONE, result.outcome)
+        verify(exactly = 1) { eongttungTopicSelector.select() }
+    }
+
+    @Test
+    fun `존재하지 않는 메시지면 MESSAGE_NOT_FOUND`() {
+        every { messageRepository.findById(99L) } returns Optional.empty()
+
+        val exception = assertFailsWith<BusinessException> { service.generateComments(memberId = 1L, messageId = 99L) }
+
+        assertEquals(ErrorCode.MESSAGE_NOT_FOUND, exception.errorCode)
+    }
+
+    @Test
+    fun `캐릭터 메시지에 댓글 생성을 요청하면 INVALID_COMMENT_TARGET`() {
+        val characterMessage =
+            Message(
+                conversationId = 10L,
+                senderType = SenderType.CHARACTER,
+                emotionType = EmotionType.JOY,
+                content = "캐릭터 댓글",
+            )
+        every { messageRepository.findById(1L) } returns Optional.of(characterMessage)
+
+        val exception = assertFailsWith<BusinessException> { service.generateComments(memberId = 1L, messageId = 1L) }
+
+        assertEquals(ErrorCode.INVALID_COMMENT_TARGET, exception.errorCode)
+    }
+
+    @Test
+    fun `남의 채팅방 메시지면 CONVERSATION_ACCESS_DENIED`() {
+        every { messageRepository.findById(1L) } returns Optional.of(rootMessage())
+        every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 2L))
+
+        val exception = assertFailsWith<BusinessException> { service.generateComments(memberId = 1L, messageId = 1L) }
+
+        assertEquals(ErrorCode.CONVERSATION_ACCESS_DENIED, exception.errorCode)
+    }
+}
