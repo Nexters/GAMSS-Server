@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useList } from '@refinedev/core'
+import type { CrudFilters } from '@refinedev/core'
 import { useNavigate } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, Search, Users } from 'lucide-react'
-import type { Member } from '@/types/member'
+import type { Member, MemberStatus } from '@/types/member'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -10,19 +11,37 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { PageHeader } from '@/components/page-header'
 import { StatusBadge } from '@/components/status-badge'
+import { cn } from '@/lib/utils'
 import { formatDateTime } from '@/lib/format'
 
 const PAGE_SIZE = 10
+
+type StatusTab = 'ALL' | MemberStatus
+
+const STATUS_TABS: { value: StatusTab; label: string }[] = [
+  { value: 'ALL', label: '전체' },
+  { value: 'ACTIVE', label: '활성' },
+  { value: 'WITHDRAWN', label: '탈퇴' },
+]
 
 export function MemberList() {
   const navigate = useNavigate()
   const [current, setCurrent] = useState(1)
   const [search, setSearch] = useState('')
+  const [status, setStatus] = useState<StatusTab>('ALL')
+
+  const filters: CrudFilters = []
+  if (search.trim()) {
+    filters.push({ field: 'q', operator: 'contains', value: search.trim() })
+  }
+  if (status !== 'ALL') {
+    filters.push({ field: 'status', operator: 'eq', value: status })
+  }
 
   const { data, isLoading } = useList<Member>({
     resource: 'members',
     pagination: { current, pageSize: PAGE_SIZE },
-    filters: search.trim() ? [{ field: 'q', operator: 'contains', value: search.trim() }] : [],
+    filters,
   })
 
   const members = data?.data ?? []
@@ -43,7 +62,7 @@ export function MemberList() {
       />
 
       <Card className="overflow-hidden">
-        <div className="border-b p-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b p-3">
           <div className="relative w-full max-w-xs">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -55,6 +74,26 @@ export function MemberList() {
                 setCurrent(1)
               }}
             />
+          </div>
+          <div className="inline-flex items-center rounded-md border bg-muted/40 p-0.5">
+            {STATUS_TABS.map((tab) => (
+              <button
+                key={tab.value}
+                type="button"
+                onClick={() => {
+                  setStatus(tab.value)
+                  setCurrent(1)
+                }}
+                className={cn(
+                  'rounded px-3 py-1 text-xs font-medium transition-colors',
+                  status === tab.value
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
         </div>
 

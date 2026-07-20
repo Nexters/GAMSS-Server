@@ -1,14 +1,26 @@
-import { useShow } from '@refinedev/core'
+import { useCustomMutation, useShow } from '@refinedev/core'
 import { Link } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, UserX } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { Member } from '@/types/member'
 import { Avatar } from '@/components/ui/avatar'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 import { PageHeader } from '@/components/page-header'
 import { StatusBadge } from '@/components/status-badge'
+import { cn } from '@/lib/utils'
 import { formatDateTime } from '@/lib/format'
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -25,17 +37,59 @@ export function MemberShow() {
   const member = query.data?.data
   const displayName = member?.nickname ?? member?.email ?? `회원 #${member?.id ?? ''}`
 
+  const { mutate: withdraw, isLoading: withdrawing } = useCustomMutation()
+  const onWithdraw = () => {
+    if (!member) {
+      return
+    }
+    withdraw(
+      { url: `/api/admin/members/${member.id}/withdraw`, method: 'post', values: {} },
+      { onSuccess: () => query.refetch() },
+    )
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="회원 상세"
         actions={
-          <Button variant="outline" size="sm" asChild>
-            <Link to="/members">
-              <ArrowLeft className="size-4" />
-              목록으로
-            </Link>
-          </Button>
+          <>
+            {member?.status === 'ACTIVE' && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm" className="text-destructive hover:text-destructive">
+                    <UserX className="size-4" />
+                    탈퇴 처리
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>회원을 탈퇴 처리할까요?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      <span className="font-medium text-foreground">{displayName}</span> 회원을 탈퇴 상태로
+                      전환합니다. 이 작업은 되돌릴 수 없습니다.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>취소</AlertDialogCancel>
+                    <AlertDialogAction
+                      className={cn(buttonVariants({ variant: 'destructive' }))}
+                      disabled={withdrawing}
+                      onClick={onWithdraw}
+                    >
+                      탈퇴 처리
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/members">
+                <ArrowLeft className="size-4" />
+                목록으로
+              </Link>
+            </Button>
+          </>
         }
       />
 

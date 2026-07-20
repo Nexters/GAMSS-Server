@@ -29,6 +29,10 @@ export const dataProvider: DataProvider = {
     if (search && typeof search.value === 'string' && search.value.trim()) {
       params.set('search', search.value.trim())
     }
+    const status = filters?.find((f) => 'field' in f && f.field === 'status')
+    if (status && typeof status.value === 'string' && status.value) {
+      params.set('status', status.value)
+    }
 
     const data = await apiFetch<PageResponse<unknown>>(`/api/admin/${resource}?${params.toString()}`)
     return { data: data.content as never, total: data.totalElements }
@@ -36,6 +40,16 @@ export const dataProvider: DataProvider = {
 
   getOne: async ({ resource, id }) => {
     const data = await apiFetch<unknown>(`/api/admin/${resource}/${id}`)
+    return { data: data as never }
+  },
+
+  // 회원 탈퇴 등 관리 액션에 사용한다(useCustomMutation → dataProvider.custom).
+  custom: async ({ url, method, payload, headers }) => {
+    const data = await apiFetch<unknown>(url, {
+      method: (method ?? 'get').toUpperCase(),
+      headers: payload ? { 'Content-Type': 'application/json', ...headers } : headers,
+      body: payload ? JSON.stringify(payload) : undefined,
+    })
     return { data: data as never }
   },
 
