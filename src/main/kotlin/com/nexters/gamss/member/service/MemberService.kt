@@ -10,6 +10,8 @@ import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.LocalDate
+import java.time.ZoneId
 
 @Service
 class MemberService(
@@ -31,6 +33,30 @@ class MemberService(
         status: MemberStatus?,
         pageable: Pageable,
     ): Page<Member> = memberRepository.search(keyword?.takeIf { it.isNotBlank() }, status, pageable)
+
+    // 백오피스 대시보드 통계. 가입 추이는 최근 days 일치를 KST 날짜 기준으로 집계하고 빈 날은 0으로 채운다.
+    @Transactional(readOnly = true)
+    fun getStats(days: Int): MemberStats {
+        val total = memberRepository.count()
+        val active = memberRepository.countByStatus(MemberStatus.ACTIVE)
+        val withdrawn = memberRepository.countByStatus(MemberStatus.WITHDRAWN)
+
+        val zone = ZoneId.of("Asia/Seoul")
+        val today = LocalDate.now(zone)
+        val from = today.minusDays((days - 1).toLong()).atStartOfDay(zone).toInstant()
+        val countsByDate =
+            memberRepository
+                .findCreatedAtsSince(from)
+                .groupingBy { it.atZone(zone).toLocalDate() }
+                .eachCount()
+        val dailySignups =
+            (0 until days).map { offset ->
+                val date = today.minusDays((days - 1 - offset).toLong())
+                DailySignup(date, (countsByDate[date] ?: 0).toLong())
+            }
+
+        return MemberStats(total, active, withdrawn, dailySignups)
+    }
 
     @Transactional
     fun updateNickname(

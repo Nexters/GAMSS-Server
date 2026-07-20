@@ -1,5 +1,6 @@
 package com.nexters.gamss.admin.controller
 
+import com.nexters.gamss.admin.controller.dto.MemberStatsResponse
 import com.nexters.gamss.admin.controller.dto.PageResponse
 import com.nexters.gamss.global.response.ApiResponse
 import com.nexters.gamss.member.controller.dto.MemberResponse
@@ -37,6 +38,15 @@ class AdminMemberController(
         val result = memberService.search(search, status, pageable)
         return ApiResponse.success(PageResponse.from(result, MemberResponse::from))
     }
+
+    @Operation(
+        summary = "회원 통계",
+        description = "대시보드용 집계: 전체·활성·탈퇴 회원 수와 최근 days 일간 일자별 가입 추이(KST).",
+    )
+    @GetMapping("/stats")
+    fun stats(
+        @RequestParam(defaultValue = "14") days: Int,
+    ): ApiResponse<MemberStatsResponse> = ApiResponse.success(MemberStatsResponse.from(memberService.getStats(days)))
 
     @Operation(summary = "회원 상세 조회")
     @GetMapping("/{id}")
