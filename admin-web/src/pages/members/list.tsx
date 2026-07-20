@@ -1,13 +1,15 @@
 import { useState } from 'react'
 import { useList } from '@refinedev/core'
 import { useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, Search } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Search, Users } from 'lucide-react'
 import type { Member } from '@/types/member'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { PageHeader } from '@/components/page-header'
+import { StatusBadge } from '@/components/status-badge'
 import { formatDateTime } from '@/lib/format'
 
 const PAGE_SIZE = 10
@@ -26,18 +28,24 @@ export function MemberList() {
   const members = data?.data ?? []
   const total = data?.total ?? 0
   const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const rangeStart = total === 0 ? 0 : (current - 1) * PAGE_SIZE + 1
+  const rangeEnd = Math.min(current * PAGE_SIZE, total)
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">회원 관리</h1>
-        <p className="mt-1 text-sm text-muted-foreground">가입한 회원을 조회합니다. 총 {total}명.</p>
-      </div>
+      <PageHeader
+        title="회원 관리"
+        description={
+          <>
+            가입한 회원을 조회합니다. 총 <span className="font-medium text-foreground">{total.toLocaleString()}</span>명
+          </>
+        }
+      />
 
-      <Card>
-        <div className="flex items-center justify-between gap-4 border-b p-4">
+      <Card className="overflow-hidden">
+        <div className="border-b p-3">
           <div className="relative w-full max-w-xs">
-            <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               className="pl-8"
               placeholder="이메일·닉네임 검색"
@@ -52,25 +60,47 @@ export function MemberList() {
 
         <Table>
           <TableHeader>
-            <TableRow>
+            <TableRow className="hover:bg-transparent">
               <TableHead className="w-16">ID</TableHead>
               <TableHead>이메일</TableHead>
               <TableHead>닉네임</TableHead>
               <TableHead className="w-28">상태</TableHead>
-              <TableHead className="w-44">가입일</TableHead>
+              <TableHead className="w-48">가입일</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow>
-                <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                  불러오는 중…
-                </TableCell>
-              </TableRow>
+              Array.from({ length: PAGE_SIZE }).map((_, i) => (
+                <TableRow key={i} className="hover:bg-transparent">
+                  <TableCell>
+                    <Skeleton className="h-4 w-6" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-4 w-40" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-4 w-24" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-5 w-12 rounded-full" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-4 w-32" />
+                  </TableCell>
+                </TableRow>
+              ))
             ) : members.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                  회원이 없습니다.
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={5} className="py-16">
+                  <div className="flex flex-col items-center gap-2 text-center">
+                    <div className="flex size-10 items-center justify-center rounded-full bg-muted">
+                      <Users className="size-5 text-muted-foreground" />
+                    </div>
+                    <p className="text-sm font-medium">회원이 없습니다</p>
+                    <p className="text-xs text-muted-foreground">
+                      {search.trim() ? '검색 조건에 맞는 회원이 없습니다.' : '아직 가입한 회원이 없습니다.'}
+                    </p>
+                  </div>
                 </TableCell>
               </TableRow>
             ) : (
@@ -80,19 +110,17 @@ export function MemberList() {
                   className="cursor-pointer"
                   onClick={() => navigate(`/members/${member.id}`)}
                 >
-                  <TableCell className="font-mono text-muted-foreground">{member.id}</TableCell>
-                  <TableCell>{member.email ?? <span className="text-muted-foreground">—</span>}</TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">{member.id}</TableCell>
+                  <TableCell className="font-medium">
+                    {member.email ?? <span className="font-normal text-muted-foreground">—</span>}
+                  </TableCell>
                   <TableCell>
                     {member.nickname ?? <span className="text-muted-foreground">미설정</span>}
                   </TableCell>
                   <TableCell>
-                    {member.status === 'ACTIVE' ? (
-                      <Badge variant="success">활성</Badge>
-                    ) : (
-                      <Badge variant="muted">탈퇴</Badge>
-                    )}
+                    <StatusBadge status={member.status} />
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{formatDateTime(member.createdAt)}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{formatDateTime(member.createdAt)}</TableCell>
                 </TableRow>
               ))
             )}
@@ -100,26 +128,26 @@ export function MemberList() {
         </Table>
 
         <div className="flex items-center justify-between border-t px-4 py-3">
-          <p className="text-sm text-muted-foreground">
-            {total === 0 ? 0 : (current - 1) * PAGE_SIZE + 1}–{Math.min(current * PAGE_SIZE, total)} / {total}
+          <p className="text-xs text-muted-foreground">
+            {total === 0 ? '0개' : `${rangeStart}–${rangeEnd} / ${total.toLocaleString()}`}
           </p>
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="sm"
-              disabled={current <= 1}
+              disabled={current <= 1 || isLoading}
               onClick={() => setCurrent((c) => Math.max(1, c - 1))}
             >
               <ChevronLeft className="size-4" />
               이전
             </Button>
-            <span className="text-sm text-muted-foreground">
+            <span className="min-w-16 text-center text-xs tabular-nums text-muted-foreground">
               {current} / {lastPage}
             </span>
             <Button
               variant="outline"
               size="sm"
-              disabled={current >= lastPage}
+              disabled={current >= lastPage || isLoading}
               onClick={() => setCurrent((c) => Math.min(lastPage, c + 1))}
             >
               다음
