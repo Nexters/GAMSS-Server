@@ -61,14 +61,22 @@ export async function devLoginToken(email: string): Promise<string> {
   return saveToken(body)
 }
 
-/** 토큰 만료(401·403) 시 현재 모드에 맞는 방법으로 재발급한다. */
+// 진행 중인 갱신을 캐싱한다. 여러 요청이 동시에 만료를 겪어도 재발급은 한 번만 하고,
+// 나머지는 같은 Promise를 함께 기다린다(중복 호출·토큰 덮어쓰기 방지).
+let refreshInFlight: Promise<string> | null = null
+
 function refreshToken(): Promise<string> {
-  return MOCK_MODE ? devLoginToken(DEV_ADMIN_EMAIL) : exchangeAdminToken()
+  if (!refreshInFlight) {
+    refreshInFlight = (MOCK_MODE ? devLoginToken(DEV_ADMIN_EMAIL) : exchangeAdminToken()).finally(() => {
+      refreshInFlight = null
+    })
+  }
+  return refreshInFlight
 }
 
 /**
  * 관리자 토큰을 실어 API를 호출하고 ApiResponse의 data를 돌려준다.
- * 토큰이 만료/무효(401·403)면 재발급 후 한 번만 재시도한다.
+ * 토큰 만료(401)면 재발급 후 한 번만 재시도한다. 403(권한 부족)은 재발급해도 소용없어 즉시 실패시킨다.
  */
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const request = (token: string | null) =>
@@ -81,7 +89,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     })
 
   let res = await request(getStoredToken())
-  if (res.status === 401 || res.status === 403) {
+  if (res.status === 401) {
     const refreshed = await refreshToken()
     res = await request(refreshed)
   }

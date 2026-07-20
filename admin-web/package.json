@@ -11,8 +11,6 @@
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.20",
-    "@radix-ui/react-avatar": "^1.2.3",
-    "@radix-ui/react-dropdown-menu": "^2.1.21",
     "@radix-ui/react-slot": "^1.3.0",
     "@refinedev/core": "^4.58.0",
     "@refinedev/react-router-v6": "^4.6.2",

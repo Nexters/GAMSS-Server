@@ -4,13 +4,13 @@ import { BrowserRouter, Outlet, Route, Routes } from 'react-router-dom'
 import { firebaseAuthProvider } from '@/providers/authProvider'
 import { devAuthProvider } from '@/providers/devAuthProvider'
 import { dataProvider } from '@/providers/dataProvider'
-
-// mock(로컬) 모드에서는 Firebase 없이 dev-login 을 쓴다.
-const authProvider = import.meta.env.VITE_AUTH_MODE === 'mock' ? devAuthProvider : firebaseAuthProvider
 import { AdminLayout } from '@/components/layout/AdminLayout'
 import { LoginPage } from '@/pages/login'
 import { MemberList } from '@/pages/members/list'
 import { MemberShow } from '@/pages/members/show'
+
+// mock(로컬) 모드에서는 Firebase 없이 dev-login 을 쓴다.
+const authProvider = import.meta.env.VITE_AUTH_MODE === 'mock' ? devAuthProvider : firebaseAuthProvider
 
 export default function App() {
   return (

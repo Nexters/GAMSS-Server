@@ -1,4 +1,4 @@
-import { Suspense, lazy, useState } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import { useList } from '@refinedev/core'
 import type { CrudFilters } from '@refinedev/core'
 import { useNavigate } from 'react-router-dom'
@@ -30,12 +30,22 @@ const STATUS_TABS: { value: StatusTab; label: string }[] = [
 export function MemberList() {
   const navigate = useNavigate()
   const [current, setCurrent] = useState(1)
-  const [search, setSearch] = useState('')
+  const [search, setSearch] = useState('') // 입력값(즉시 반영)
+  const [query, setQuery] = useState('') // 실제 조회어(디바운스)
   const [status, setStatus] = useState<StatusTab>('ALL')
 
+  // 키 입력마다 API를 때리지 않도록 300ms 디바운스 후에만 조회어를 갱신한다.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setQuery(search.trim())
+      setCurrent(1)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [search])
+
   const filters: CrudFilters = []
-  if (search.trim()) {
-    filters.push({ field: 'q', operator: 'contains', value: search.trim() })
+  if (query) {
+    filters.push({ field: 'q', operator: 'contains', value: query })
   }
   if (status !== 'ALL') {
     filters.push({ field: 'status', operator: 'eq', value: status })
@@ -76,10 +86,7 @@ export function MemberList() {
               className="pl-8"
               placeholder="이메일·닉네임 검색"
               value={search}
-              onChange={(e) => {
-                setSearch(e.target.value)
-                setCurrent(1)
-              }}
+              onChange={(e) => setSearch(e.target.value)}
             />
           </div>
           <div className="inline-flex items-center rounded-md border bg-muted/40 p-0.5">
@@ -144,7 +151,7 @@ export function MemberList() {
                     </div>
                     <p className="text-sm font-medium">회원이 없습니다</p>
                     <p className="text-xs text-muted-foreground">
-                      {search.trim() ? '검색 조건에 맞는 회원이 없습니다.' : '아직 가입한 회원이 없습니다.'}
+                      {query ? '검색 조건에 맞는 회원이 없습니다.' : '아직 가입한 회원이 없습니다.'}
                     </p>
                   </div>
                 </TableCell>
