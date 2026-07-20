@@ -39,12 +39,21 @@ nginx 서비스의 `depends_on`에 `admin`을 추가한다.
 `.github/workflows/image.yml`의 `build-and-push` job에 admin 이미지 빌드 스텝을 하나 더 둔다
 (앱과 같은 태그 규칙, 이미지명만 `-admin` 접미사):
 
+Firebase 웹 설정은 공개값이라 **빌드 시점에 인라인**된다. build-args 로 넘긴다
+(값은 비밀이 아니므로 GitHub Variables 로 두면 된다):
+
 ```yaml
       - name: Build and push admin
         uses: docker/build-push-action@v6
         with:
           context: ./admin-web
           push: true
+          build-args: |
+            VITE_API_BASE_URL=
+            VITE_FIREBASE_API_KEY=${{ vars.VITE_FIREBASE_API_KEY }}
+            VITE_FIREBASE_AUTH_DOMAIN=${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
+            VITE_FIREBASE_PROJECT_ID=${{ vars.VITE_FIREBASE_PROJECT_ID }}
+            VITE_FIREBASE_APP_ID=${{ vars.VITE_FIREBASE_APP_ID }}
           tags: |
             ${{ steps.meta.outputs.image }}-admin:${{ steps.meta.outputs.tag }}
             ${{ steps.meta.outputs.image }}-admin:${{ github.ref_name }}
@@ -52,7 +61,19 @@ nginx 서비스의 `depends_on`에 `admin`을 추가한다.
           cache-to: type=gha,mode=max
 ```
 
-## 5. HTTPS
+`VITE_API_BASE_URL` 은 admin.gamss.kr 에서 상대경로(/api)를 쓰므로 비워둔다.
+
+## 5. 관리자 허용목록(ADMIN_EMAILS) 주입
+
+백엔드(app 서비스)가 읽는 값이다. 로그인한 구글 이메일이 이 목록에 있어야 관리자 토큰이 발급된다.
+비밀은 아니지만, 기존 `.env` 생성 흐름(DB_PASSWORD·JWT_SECRET)에 얹어 CD가 서버 `.env` 에 써주면 된다:
+
+    ADMIN_EMAILS=a@gmail.com,b@gmail.com
+
+app 서비스 environment 에 `ADMIN_EMAILS: ${ADMIN_EMAILS}` 를 추가한다.
+추가/삭제는 값만 고치고 앱을 재시작하면 된다(코드 변경 불필요).
+
+## 6. HTTPS
 
 certbot로 `admin.gamss.kr`(및 `dev-admin`) 인증서 발급 후 443 블록 추가.
 관리자 화면이므로 TLS는 필수. (deployment-todo 참고)

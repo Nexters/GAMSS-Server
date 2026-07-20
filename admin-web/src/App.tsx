@@ -1,8 +1,8 @@
 import { Authenticated, Refine } from '@refinedev/core'
 import routerBindings, { CatchAllNavigate, NavigateToResource } from '@refinedev/react-router-v6'
 import { BrowserRouter, Outlet, Route, Routes } from 'react-router-dom'
-import { mockAuthProvider } from '@/providers/authProvider'
-import { mockDataProvider } from '@/providers/dataProvider'
+import { authProvider } from '@/providers/authProvider'
+import { dataProvider } from '@/providers/dataProvider'
 import { AdminLayout } from '@/components/layout/AdminLayout'
 import { LoginPage } from '@/pages/login'
 import { MemberList } from '@/pages/members/list'
@@ -12,8 +12,8 @@ export default function App() {
   return (
     <BrowserRouter>
       <Refine
-        dataProvider={mockDataProvider}
-        authProvider={mockAuthProvider}
+        dataProvider={dataProvider}
+        authProvider={authProvider}
         routerProvider={routerBindings}
         resources={[{ name: 'members', list: '/members', show: '/members/:id', meta: { label: '회원 관리' } }]}
         options={{ syncWithLocation: true, disableTelemetry: true }}

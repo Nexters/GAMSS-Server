@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useList } from '@refinedev/core'
 import { useNavigate } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, Search } from 'lucide-react'
-import type { Member } from '@/data/members'
+import type { Member } from '@/types/member'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -40,7 +40,7 @@ export function MemberList() {
             <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               className="pl-8"
-              placeholder="ID·이메일·닉네임 검색"
+              placeholder="이메일·닉네임 검색"
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value)

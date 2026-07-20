@@ -1,7 +1,7 @@
 import { useShow } from '@refinedev/core'
 import { Link } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
-import type { Member } from '@/data/members'
+import type { Member } from '@/types/member'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
