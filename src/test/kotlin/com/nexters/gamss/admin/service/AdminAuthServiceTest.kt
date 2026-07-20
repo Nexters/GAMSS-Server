@@ -41,6 +41,16 @@ class AdminAuthServiceTest {
     }
 
     @Test
+    fun `구글이 아닌 제공자면 허용목록에 있어도 NOT_ADMIN 예외를 던진다`() {
+        every { socialTokenVerifier.verify("idtok") } returns
+            SocialUser("uid-1", SocialProvider.APPLE, "admin@gamss.kr")
+
+        val exception = assertFailsWith<BusinessException> { service("admin@gamss.kr").login("idtok") }
+
+        assertEquals(ErrorCode.NOT_ADMIN, exception.errorCode)
+    }
+
+    @Test
     fun `토큰에 이메일이 없으면 NOT_ADMIN 예외를 던진다`() {
         every { socialTokenVerifier.verify("idtok") } returns
             SocialUser("uid-1", SocialProvider.GOOGLE, null)
