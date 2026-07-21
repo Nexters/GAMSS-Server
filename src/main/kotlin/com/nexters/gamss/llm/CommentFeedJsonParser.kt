@@ -2,6 +2,7 @@ package com.nexters.gamss.llm
 
 import com.fasterxml.jackson.annotation.JsonProperty
 import org.springframework.stereotype.Component
+import tools.jackson.core.JacksonException
 import tools.jackson.databind.json.JsonMapper
 
 /**
@@ -17,7 +18,7 @@ class CommentFeedJsonParser(
         val dto =
             try {
                 jsonMapper.readValue(text, CommentFeedDto::class.java)
-            } catch (e: Exception) {
+            } catch (e: JacksonException) {
                 throw CommentGenerationFailedException("LLM 응답 JSON 파싱에 실패했습니다.", e)
             }
 
@@ -30,7 +31,13 @@ class CommentFeedJsonParser(
     ) {
         fun toDomain(): CommentFeed =
             CommentFeed(
-                comments = comments.map { CommentDraft(PromptCharacterId.fromPromptId(it.characterId).emotionType, it.text) },
+                comments =
+                    comments.map {
+                        CommentDraft(
+                            PromptCharacterId.fromPromptId(it.characterId).emotionType,
+                            it.text,
+                        )
+                    },
                 tikitaka =
                     tikitaka.map {
                         TikitakaDraft(
