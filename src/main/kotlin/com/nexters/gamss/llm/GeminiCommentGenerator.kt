@@ -33,7 +33,7 @@ class GeminiCommentGenerator(
         characters: List<EmotionType>,
         tikitakaCount: Int,
         eongttungTopic: String?,
-    ): CommentFeed {
+    ): CommentGenerationOutput {
         val response =
             try {
                 client.models.generateContent(
@@ -49,7 +49,9 @@ class GeminiCommentGenerator(
             response.text()
                 ?: throw CommentGenerationFailedException("LLM 응답이 비어 있습니다.")
 
-        return commentFeedJsonParser.parse(text)
+        val feed = commentFeedJsonParser.parse(text)
+        val usedTokens = response.usageMetadata().flatMap { it.totalTokenCount() }.orElse(0)
+        return CommentGenerationOutput(feed, usedTokens)
     }
 
     private fun buildConfig(): GenerateContentConfig =

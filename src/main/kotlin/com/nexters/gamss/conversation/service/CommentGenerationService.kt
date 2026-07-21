@@ -9,9 +9,9 @@ import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.llm.CharacterSelector
-import com.nexters.gamss.llm.CommentFeed
 import com.nexters.gamss.llm.CommentFeedValidator
 import com.nexters.gamss.llm.CommentGenerationFailedException
+import com.nexters.gamss.llm.CommentGenerationOutput
 import com.nexters.gamss.llm.CommentGenerator
 import com.nexters.gamss.llm.EongttungTopicSelector
 import org.slf4j.LoggerFactory
@@ -53,9 +53,9 @@ class CommentGenerationService(
         }
 
         return try {
-            val feed = generateWithRetry(rootMessage.content)
-            val saved = commentPersistenceService.saveFeed(rootMessage.conversationId, messageId, feed)
-            CommentGenerationResult(CommentGenerationOutcome.DONE, saved)
+            val output = generateWithRetry(rootMessage.content)
+            val saved = commentPersistenceService.saveFeed(rootMessage.conversationId, messageId, output.feed)
+            CommentGenerationResult(CommentGenerationOutcome.DONE, saved, output.usedTokens)
         } catch (e: Exception) {
             if (e is CommentGenerationFailedException) {
                 log.warn("댓글 생성 최종 실패 messageId={}", messageId, e)
@@ -77,7 +77,7 @@ class CommentGenerationService(
     }
 
     /** LLM 호출 + 의미 검증을 하나의 단위로 묶어 최대 [MAX_ATTEMPTS]회 시도한다(DoD: 실패 시 1회 재시도). */
-    private fun generateWithRetry(diaryContent: String): CommentFeed {
+    private fun generateWithRetry(diaryContent: String): CommentGenerationOutput {
         val characters = characterSelector.select()
         val tikitakaCount = characterSelector.selectTikitakaCount()
         val eongttungTopic = if (EmotionType.QUIRKY in characters) eongttungTopicSelector.select() else null
@@ -87,10 +87,10 @@ class CommentGenerationService(
         var lastError: CommentGenerationFailedException? = null
         repeat(MAX_ATTEMPTS) { attempt ->
             try {
-                val feed =
+                val output =
                     commentGenerator.generate(pastSummary, diaryContent, characters, tikitakaCount, eongttungTopic)
-                commentFeedValidator.validate(feed, characters, tikitakaCount)
-                return feed
+                commentFeedValidator.validate(output.feed, characters, tikitakaCount)
+                return output
             } catch (e: CommentGenerationFailedException) {
                 lastError = e
                 log.warn("댓글 생성 {}차 시도 실패: {}", attempt + 1, e.message)

@@ -14,6 +14,7 @@ import com.nexters.gamss.llm.CommentDraft
 import com.nexters.gamss.llm.CommentFeed
 import com.nexters.gamss.llm.CommentFeedValidator
 import com.nexters.gamss.llm.CommentGenerationFailedException
+import com.nexters.gamss.llm.CommentGenerationOutput
 import com.nexters.gamss.llm.CommentGenerator
 import com.nexters.gamss.llm.EongttungTopicSelector
 import com.nexters.gamss.llm.TikitakaDraft
@@ -70,7 +71,9 @@ class CommentGenerationServiceTest {
         every { messageRepository.findById(1L) } returns Optional.of(message)
         every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
         stubClaimSuccess()
-        every { commentGenerator.generate("", message.content, characters, tikitakaCount, null) } returns feed()
+        every {
+            commentGenerator.generate("", message.content, characters, tikitakaCount, null)
+        } returns CommentGenerationOutput(feed(), 123)
         every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } returns Unit
         val savedMessages =
             listOf(Message(conversationId = 10L, senderType = SenderType.CHARACTER, emotionType = EmotionType.JOY, content = "댓글"))
@@ -80,6 +83,7 @@ class CommentGenerationServiceTest {
 
         assertEquals(CommentGenerationOutcome.DONE, result.outcome)
         assertEquals(savedMessages, result.comments)
+        assertEquals(123, result.usedTokens)
     }
 
     @Test
@@ -94,6 +98,7 @@ class CommentGenerationServiceTest {
         val result = service.generateComments(memberId = 1L, messageId = 1L)
 
         assertEquals(CommentGenerationOutcome.GENERATING, result.outcome)
+        assertEquals(null, result.usedTokens)
         verify(exactly = 0) { commentGenerator.generate(any(), any(), any(), any(), any()) }
     }
 
@@ -119,6 +124,7 @@ class CommentGenerationServiceTest {
 
         assertEquals(CommentGenerationOutcome.DONE, result.outcome)
         assertEquals(existingComments, result.comments)
+        assertEquals(null, result.usedTokens)
     }
 
     @Test
@@ -133,6 +139,7 @@ class CommentGenerationServiceTest {
         val result = service.generateComments(memberId = 1L, messageId = 1L)
 
         assertEquals(CommentGenerationOutcome.FAILED, result.outcome)
+        assertEquals(null, result.usedTokens)
         verify(exactly = 2) { commentGenerator.generate(any(), any(), any(), any(), any()) }
         verify(exactly = 1) { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) }
     }
@@ -143,7 +150,7 @@ class CommentGenerationServiceTest {
         every { messageRepository.findById(1L) } returns Optional.of(message)
         every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
         stubClaimSuccess()
-        every { commentGenerator.generate(any(), any(), any(), any(), any()) } returns feed()
+        every { commentGenerator.generate(any(), any(), any(), any(), any()) } returns CommentGenerationOutput(feed(), 123)
         every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } returns Unit
         every { commentPersistenceService.saveFeed(10L, 1L, feed()) } throws RuntimeException("DB 제약조건 위반")
         every { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) } returns 1
@@ -151,6 +158,7 @@ class CommentGenerationServiceTest {
         val result = service.generateComments(memberId = 1L, messageId = 1L)
 
         assertEquals(CommentGenerationOutcome.FAILED, result.outcome)
+        assertEquals(null, result.usedTokens)
         verify(exactly = 1) { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) }
     }
 
@@ -160,7 +168,7 @@ class CommentGenerationServiceTest {
         every { messageRepository.findById(1L) } returns Optional.of(message)
         every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
         stubClaimSuccess()
-        every { commentGenerator.generate(any(), any(), any(), any(), any()) } returns feed()
+        every { commentGenerator.generate(any(), any(), any(), any(), any()) } returns CommentGenerationOutput(feed(), 123)
         every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } returns Unit
         every { commentPersistenceService.saveFeed(10L, 1L, feed()) } throws BusinessException(ErrorCode.CONVERSATION_NOT_FOUND)
         every { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) } returns 1
@@ -188,13 +196,16 @@ class CommentGenerationServiceTest {
                 comments = charactersWithQuirky.map { CommentDraft(it, "댓글-$it") },
                 tikitaka = listOf(TikitakaDraft(EmotionType.JOY, EmotionType.QUIRKY, "티키타카")),
             )
-        every { commentGenerator.generate("", message.content, charactersWithQuirky, 1, "소재") } returns quirkyFeed
+        every {
+            commentGenerator.generate("", message.content, charactersWithQuirky, 1, "소재")
+        } returns CommentGenerationOutput(quirkyFeed, 456)
         every { commentFeedValidator.validate(quirkyFeed, charactersWithQuirky, 1) } returns Unit
         every { commentPersistenceService.saveFeed(10L, 1L, quirkyFeed) } returns emptyList()
 
         val result = service.generateComments(memberId = 1L, messageId = 1L)
 
         assertEquals(CommentGenerationOutcome.DONE, result.outcome)
+        assertEquals(456, result.usedTokens)
         verify(exactly = 1) { eongttungTopicSelector.select() }
     }
 

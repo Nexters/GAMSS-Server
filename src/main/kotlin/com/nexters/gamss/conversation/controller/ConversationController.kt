@@ -136,6 +136,6 @@ class ConversationController(
                 CommentGenerationOutcome.FAILED -> CommentGenerationStatus.FAILED
             }
         val comments = if (result.outcome == CommentGenerationOutcome.DONE) result.comments.map { MessageResponse.from(it) } else null
-        return ApiResponse.success(CommentGenerationResponse(status, comments))
+        return ApiResponse.success(CommentGenerationResponse(status, comments, result.usedTokens))
     }
 }

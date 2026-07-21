@@ -16,5 +16,11 @@ interface CommentGenerator {
         characters: List<EmotionType>,
         tikitakaCount: Int,
         eongttungTopic: String?,
-    ): CommentFeed
+    ): CommentGenerationOutput
 }
+
+/** LLM 호출 1회의 결과. [usedTokens]는 파싱된 [feed]와 별개로 호출 자체의 메타데이터(과금 단위)다. */
+data class CommentGenerationOutput(
+    val feed: CommentFeed,
+    val usedTokens: Int,
+)
