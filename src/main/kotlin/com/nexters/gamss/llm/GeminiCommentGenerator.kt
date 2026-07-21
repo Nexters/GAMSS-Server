@@ -51,6 +51,11 @@ class GeminiCommentGenerator(
             response.text()
                 ?: throw CommentGenerationFailedException("LLM 응답이 비어 있습니다.")
 
+        return parseFeed(text)
+    }
+
+    /** Gemini가 내려준 원시 JSON 텍스트를 [CommentFeed]로 변환한다. [Client] 없이도 단독 테스트 가능하도록 분리했다. */
+    internal fun parseFeed(text: String): CommentFeed {
         val dto =
             try {
                 jsonMapper.readValue(text, GeminiFeedDto::class.java)
