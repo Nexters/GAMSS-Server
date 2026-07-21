@@ -23,8 +23,6 @@ firebase:
   project-id: gamss-cbdcb
 
 conversation:
-  # 서비스상 "하루"가 시작되는 시각 (날짜별 대화 목록 조회 경계)
-  day-start-time: "06:00"
   comment-pending-timeout: PT3M
 
 gemini:

@@ -17,7 +17,6 @@ firebase:
   project-id: gamss-test
 
 conversation:
-  day-start-time: "06:00"
   comment-pending-timeout: PT3M
 
 gemini:

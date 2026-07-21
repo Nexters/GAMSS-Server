@@ -64,8 +64,7 @@ class ConversationController(
     @Operation(
         summary = "날짜별 채팅방 목록 조회",
         description =
-            "서비스상 하루(기본 06:00 ~ 익일 06:00, KST)에 생성된 채팅방 목록을 반환합니다. " +
-                "예: 새벽 2시에 만든 채팅방은 전날 목록에 포함됩니다.\n\n" +
+            "해당 날짜(00:00 ~ 24:00, KST)에 생성된 채팅방 목록을 반환합니다.\n\n" +
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +

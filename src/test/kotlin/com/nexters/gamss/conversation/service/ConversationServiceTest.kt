@@ -1,6 +1,5 @@
 package com.nexters.gamss.conversation.service
 
-import com.nexters.gamss.conversation.config.ConversationProperties
 import com.nexters.gamss.conversation.domain.Conversation
 import com.nexters.gamss.conversation.domain.Message
 import com.nexters.gamss.conversation.domain.SenderType
@@ -14,7 +13,6 @@ import io.mockk.slot
 import io.mockk.verify
 import java.time.Instant
 import java.time.LocalDate
-import java.time.LocalTime
 import java.util.Optional
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -23,8 +21,7 @@ import kotlin.test.assertFailsWith
 class ConversationServiceTest {
     private val conversationRepository = mockk<ConversationRepository>()
     private val messageRepository = mockk<MessageRepository>()
-    private val properties = ConversationProperties(dayStartTime = LocalTime.of(6, 0))
-    private val conversationService = ConversationService(conversationRepository, messageRepository, properties)
+    private val conversationService = ConversationService(conversationRepository, messageRepository)
 
     @Test
     fun `conversationId 없이 저장하면 새 채팅방을 만들어 메시지를 담는다`() {
@@ -128,7 +125,7 @@ class ConversationServiceTest {
     }
 
     @Test
-    fun `날짜 조회는 dayStartTime(06시, KST) 경계로 범위를 계산한다`() {
+    fun `날짜 조회는 KST 달력 날짜(자정~자정)로 범위를 계산한다`() {
         val start = slot<Instant>()
         val end = slot<Instant>()
         every {
@@ -137,9 +134,9 @@ class ConversationServiceTest {
 
         conversationService.getConversations(1L, LocalDate.of(2026, 7, 19))
 
-        // KST 2026-07-19 06:00 = UTC 2026-07-18 21:00
-        assertEquals(Instant.parse("2026-07-18T21:00:00Z"), start.captured)
-        assertEquals(Instant.parse("2026-07-19T21:00:00Z"), end.captured)
+        // KST 2026-07-19 00:00 = UTC 2026-07-18 15:00
+        assertEquals(Instant.parse("2026-07-18T15:00:00Z"), start.captured)
+        assertEquals(Instant.parse("2026-07-19T15:00:00Z"), end.captured)
     }
 
     @Test
