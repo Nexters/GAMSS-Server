@@ -52,6 +52,9 @@ dependencies {
     // API Docs (Swagger)
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.0")
 
+    // Actuator (헬스체크)
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
+
     // LLM — Gemini 공식 SDK (버전은 구현 시 Maven Central에서 최신으로 재확인)
     implementation("com.google.genai:google-genai:1.51.0")
 
@@ -84,6 +87,11 @@ kotlin {
 tasks.withType<Test> {
     useJUnitPlatform()
     finalizedBy(tasks.jacocoTestReport)
+}
+
+// 실행 가능한 boot jar만 사용하므로 일반(plain) jar는 생성하지 않는다.
+tasks.named("jar") {
+    enabled = false
 }
 
 ktlint {

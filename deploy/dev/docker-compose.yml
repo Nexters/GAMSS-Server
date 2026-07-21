@@ -1,0 +1,65 @@
+# GAMSS dev 서버용 (app + MySQL, 한 서버)
+# 필요한 환경변수는 같은 디렉토리 .env 에 정의한다(CD가 GitHub Secrets로 생성):
+#   DB_PASSWORD, DB_ROOT_PASSWORD, JWT_SECRET, IMAGE_TAG
+#
+# 튜닝은 8GB 서버(가비아 Standard 2vCore/8GB) 기준으로 배분했다:
+#   app 힙 3G + 비힙 약 0.8G / MySQL 약 2.5G / OS·Docker 약 0.5G → 여유 약 1.2G
+# 여유분은 스레드 스택용이다. LLM 호출은 응답까지 스레드를 붙잡고 있어서
+# 동시성을 올리려면 스레드를 늘려야 하고, 스레드당 스택이 1MB씩 붙는다.
+services:
+  app:
+    image: ghcr.io/nexters/gamss-server:${IMAGE_TAG:-dev}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      DB_URL: jdbc:mysql://db:3306/gamss
+      DB_USERNAME: gamss
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JAVA_OPTS: -Xms1g -Xmx3g
+    ports:
+      # 루프백에만 바인딩 → 외부 비공개. 배포 스크립트의 헬스체크용이다.
+      # nginx는 이 포트가 아니라 gamss 네트워크로 app:8080 에 직접 붙는다.
+      - "127.0.0.1:8080:8080"
+    networks: [gamss]
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on: [app]
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/conf:/etc/nginx/conf.d:ro
+    networks: [gamss]
+
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --innodb-buffer-pool-size=2G
+    environment:
+      MYSQL_DATABASE: gamss
+      MYSQL_USER: gamss
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [gamss]
+    # 포트 미노출 → 외부 비공개(같은 네트워크의 app만 접속)
+
+volumes:
+  db-data:
+
+networks:
+  gamss:

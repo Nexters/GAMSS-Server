@@ -37,6 +37,7 @@ class SecurityConfig(
         private val PUBLIC_PATHS =
             arrayOf(
                 "/api/auth/**",
+                "/actuator/health",
                 "/swagger-ui/**",
                 "/swagger-ui.html",
                 "/v3/api-docs/**",

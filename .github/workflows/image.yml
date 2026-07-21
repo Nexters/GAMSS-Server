@@ -1,0 +1,161 @@
+name: Build & Deploy
+
+on:
+  push:
+    branches: [dev, prod]
+  workflow_dispatch:
+
+concurrency:
+  # rollback.yml 과 같은 그룹을 써서 한 환경에 배포·롤백이 겹치지 않게 한다.
+  # 둘 다 서버 .env 의 IMAGE_TAG 를 고쳐서, 동시에 돌면 롤백 기준이 꼬인다.
+  #
+  # cancel-in-progress 는 false — SSH로 원격 상태를 바꾸는 중에 취소당하면
+  # .env 만 갱신되고 컨테이너는 그대로인 어정쩡한 상태가 남는다.
+  # 대기 중인 run 은 GitHub가 최신 것만 남기고 정리하므로 밀리지 않는다.
+  group: deploy-${{ github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  # 기본값은 최소 권한(read). GHCR push 가 필요한 build-and-push job 에만 write 를 부여한다.
+  packages: read
+
+jobs:
+  # 테스트·린트가 통과해야 빌드·배포로 넘어간다.
+  # 이미지 태그에 브랜치명을 쓰는데 Docker 태그는 슬래시를 허용하지 않으므로,
+  # 배포 대상 브랜치가 아니면 여기서 멈춘다(이후 job은 needs 로 함께 skip).
+  ci:
+    if: github.ref_name == 'dev' || github.ref_name == 'prod'
+    uses: ./.github/workflows/ci.yml
+    # 워크플로 기본 권한에는 checks·pull-requests 가 없어 테스트 결과 게시가 실패한다.
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
+
+  build-and-push:
+    needs: ci
+    runs-on: ubuntu-latest
+    # 이 job만 GHCR 에 push 하므로 write 를 여기서만 부여한다.
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compute image name and tag
+        id: meta
+        # 이미지 경로: GHCR은 소문자만 허용 (Nexters/GAMSS-Server → nexters/gamss-server)
+        # 태그: 롤백하려면 커밋마다 고유해야 한다 (dev-a1b2c3d)
+        run: |
+          echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          echo "tag=${GITHUB_REF_NAME}-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          # 고유 태그(배포·롤백 기준) + 브랜치 태그(최신 표식)
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
+            ${{ steps.meta.outputs.image }}:${{ github.ref_name }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # dev 브랜치 → dev 환경, prod 브랜치 → prod 환경.
+    # workflow_dispatch로 다른 브랜치에서 실행되는 것도 여기서 막힌다.
+    if: github.ref_name == 'dev' || github.ref_name == 'prod'
+    environment: ${{ github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create .env
+        # compose가 참조하는 시크릿만 채운다. IMAGE_TAG는 서버의 기존 값(롤백 기준)을
+        # 보존해야 하므로 여기서 넣지 않고 배포 스크립트가 갱신한다.
+        run: |
+          cat > .env << 'EOF'
+          DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+          DB_ROOT_PASSWORD=${{ secrets.DB_ROOT_PASSWORD }}
+          JWT_SECRET=${{ secrets.JWT_SECRET }}
+          EOF
+
+      - name: Transfer files via SCP
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          source: "deploy/${{ github.ref_name }}/docker-compose.yml,deploy/nginx/conf/gamss.conf,.github/scripts/deploy-app.sh,.env"
+          target: /tmp/gamss-deploy/
+
+      - name: Deploy
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          ENV_NAME: ${{ github.ref_name }}
+          IMAGE_TAG: ${{ needs.build-and-push.outputs.tag }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          envs: ENV_NAME,IMAGE_TAG,GHCR_USER,GHCR_TOKEN
+          script: |
+            set -e
+            DEPLOY_DIR="${HOME}/app"
+            TMP_DIR="/tmp/gamss-deploy"
+            trap "rm -rf '${TMP_DIR}'; docker logout ghcr.io >/dev/null 2>&1 || true" EXIT
+
+            mkdir -p "${DEPLOY_DIR}/nginx/conf"
+            cp "${TMP_DIR}/deploy/${ENV_NAME}/docker-compose.yml" "${DEPLOY_DIR}/"
+            cp "${TMP_DIR}/deploy/nginx/conf/gamss.conf" "${DEPLOY_DIR}/nginx/conf/"
+            cp "${TMP_DIR}/.github/scripts/deploy-app.sh" "${DEPLOY_DIR}/"
+            chmod +x "${DEPLOY_DIR}/deploy-app.sh"
+
+            # 시크릿은 매번 덮어쓰되, 기존 IMAGE_TAG(롤백 기준)는 살려서 넘긴다
+            NEW_ENV="${TMP_DIR}/.env"
+            OLD_ENV="${DEPLOY_DIR}/.env"
+            if [ -f "${OLD_ENV}" ]; then
+              grep -E '^IMAGE_TAG=' "${OLD_ENV}" >> "${NEW_ENV}" || true
+            fi
+            cp "${NEW_ENV}" "${OLD_ENV}"
+            chmod 600 "${OLD_ENV}"
+
+            # GHCR 패키지는 기본 private — 수명 짧은 GITHUB_TOKEN으로 pull 권한만 얻는다
+            echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USER}" --password-stdin
+
+            "${DEPLOY_DIR}/deploy-app.sh" "${DEPLOY_DIR}" "${IMAGE_TAG}"
+
+      - name: Deployment Summary
+        if: always()
+        run: |
+          {
+            echo "### 배포 결과"
+            echo ""
+            echo "- **환경:** ${{ github.ref_name }}"
+            echo "- **이미지:** ${{ needs.build-and-push.outputs.image }}:${{ needs.build-and-push.outputs.tag }}"
+            echo "- **커밋:** ${{ github.sha }}"
+            echo "- **상태:** ${{ job.status }}"
+          } >> "$GITHUB_STEP_SUMMARY"
