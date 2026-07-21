@@ -32,8 +32,23 @@ services:
     depends_on: [app]
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./nginx/conf:/etc/nginx/conf.d:ro
+      - certbot-www:/var/www/certbot:ro
+      - certbot-conf:/etc/letsencrypt:ro
+    # 갱신된 인증서를 주기적으로 반영한다(무중단 reload). 배포 시에도 reload 되지만 90일 갱신 주기 대비.
+    command: sh -c "while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g 'daemon off;'"
+    networks: [gamss]
+
+  # HTTPS 인증서 발급·자동 갱신. 최초 발급은 서버에서 수동 1회, 이후 12시간마다 갱신 시도.
+  certbot:
+    image: certbot/certbot:latest
+    restart: unless-stopped
+    volumes:
+      - certbot-www:/var/www/certbot
+      - certbot-conf:/etc/letsencrypt
+    entrypoint: sh -c "trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done"
     networks: [gamss]
 
   db:
@@ -60,6 +75,8 @@ services:
 
 volumes:
   db-data:
+  certbot-www: # ACME HTTP-01 챌린지 웹루트 (certbot 작성 → nginx 서빙)
+  certbot-conf: # 발급된 인증서(/etc/letsencrypt). SCP로 안 지워지는 영속 볼륨.
 
 networks:
   gamss:
