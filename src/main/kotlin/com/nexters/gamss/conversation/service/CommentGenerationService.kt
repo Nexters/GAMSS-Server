@@ -53,7 +53,7 @@ class CommentGenerationService(
         }
 
         return try {
-            val feed = generateWithRetry(rootMessage.content) // 체크체크
+            val feed = generateWithRetry(rootMessage.content)
             val saved = commentPersistenceService.saveFeed(rootMessage.conversationId, messageId, feed)
             CommentGenerationResult(CommentGenerationOutcome.DONE, saved)
         } catch (e: CommentGenerationFailedException) {
