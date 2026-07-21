@@ -1,0 +1,13 @@
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/gamss
+    username: gamss
+    password: gamss
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    properties:
+      hibernate:
+        format_sql: true
+
+jwt:
+  secret: local-development-secret-change-me-to-a-long-random-value-0123456789

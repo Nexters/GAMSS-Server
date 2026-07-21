@@ -1,0 +1,16 @@
+# 빌드 산출물 · 캐시
+build/
+.gradle/
+
+# VCS · CI · IDE
+.git/
+.github/
+.idea/
+*.iml
+
+# 로컬 전용 · 문서
+docker-compose.yml
+*.md
+
+# OS
+.DS_Store

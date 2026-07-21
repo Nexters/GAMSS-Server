@@ -1,0 +1,61 @@
+name: 🚧 Refactor
+description: 동작 변경 없는 코드 구조 개선
+title: "[refactor] "
+labels: ["🚧 refactor"]
+body:
+  - type: textarea
+    id: target
+    attributes:
+      label: 대상 코드 / 범위
+      description: 어떤 코드를 리팩터링하나요?
+      placeholder: 예) UserService의 조회 로직
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 현재 문제점
+      description: 지금 코드의 문제 / 개선이 필요한 이유.
+      placeholder: 예) 중복 쿼리로 N+1 발생, 가독성 저하
+    validations:
+      required: true
+
+  - type: textarea
+    id: direction
+    attributes:
+      label: 개선 방향
+      description: 어떻게 바꿀지. (확정 아니어도 됨)
+    validations:
+      required: false
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: ✅ 완료 조건 (DoD)
+      description: 동작 불변 · 테스트 통과 등 검증 조건.
+      value: |
+        - [ ] 기존 동작 변화 없음 (테스트 통과)
+        - [ ]
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 우선순위
+      options:
+        - P0 - 긴급
+        - P1 - 높음
+        - P2 - 보통
+        - P3 - 낮음
+      default: 2
+    validations:
+      required: true
+
+  - type: input
+    id: related
+    attributes:
+      label: 연관 이슈
+      description: 상위 / 하위 / 관련 이슈 번호. 없으면 비워둡니다.
+      placeholder: "예) 관련 #15"

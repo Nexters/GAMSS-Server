@@ -1,0 +1,38 @@
+name: 📖 Docs
+description: 문서 작성 · 수정
+title: "[doc] "
+labels: ["📖 doc"]
+body:
+  - type: textarea
+    id: content
+    attributes:
+      label: 문서 내용
+      description: 어떤 문서를 작성 / 수정하나요?
+      placeholder: 예) README에 로컬 실행 방법 추가
+    validations:
+      required: true
+
+  - type: input
+    id: location
+    attributes:
+      label: 대상 문서 / 위치
+      placeholder: "예) README.md, docs/api.md"
+    validations:
+      required: false
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: ✅ 완료 조건 (DoD)
+      value: |
+        - [ ]
+        - [ ]
+    validations:
+      required: true
+
+  - type: input
+    id: related
+    attributes:
+      label: 연관 이슈
+      description: 상위 / 하위 / 관련 이슈 번호. 없으면 비워둡니다.
+      placeholder: "예) 관련 #15"
