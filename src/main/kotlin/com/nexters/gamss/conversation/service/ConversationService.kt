@@ -1,6 +1,5 @@
 package com.nexters.gamss.conversation.service
 
-import com.nexters.gamss.conversation.config.ConversationProperties
 import com.nexters.gamss.conversation.domain.Conversation
 import com.nexters.gamss.conversation.domain.Message
 import com.nexters.gamss.conversation.domain.SenderType
@@ -17,7 +16,6 @@ import java.time.ZoneId
 class ConversationService(
     private val conversationRepository: ConversationRepository,
     private val messageRepository: MessageRepository,
-    private val properties: ConversationProperties,
 ) {
     /** 사용자 메시지를 저장한다. conversationId가 없으면 새 채팅방을 만들어 담는다. */
     @Transactional
@@ -60,19 +58,14 @@ class ConversationService(
         }
     }
 
-    /** 서비스상 하루(dayStartTime ~ 익일 dayStartTime, KST) 동안 생성된 채팅방 목록을 조회한다. */
+    /** 날짜(KST 달력 자정~자정)에 생성된 채팅방 목록을 조회한다. */
     @Transactional(readOnly = true)
     fun getConversations(
         memberId: Long,
         date: LocalDate,
     ): List<Conversation> {
-        val start = date.atTime(properties.dayStartTime).atZone(ZONE).toInstant()
-        val end =
-            date
-                .plusDays(1)
-                .atTime(properties.dayStartTime)
-                .atZone(ZONE)
-                .toInstant()
+        val start = date.atStartOfDay(ZONE).toInstant()
+        val end = date.plusDays(1).atStartOfDay(ZONE).toInstant()
         return conversationRepository.findAllByMemberIdAndCreatedAtInRange(memberId, start, end)
     }
 

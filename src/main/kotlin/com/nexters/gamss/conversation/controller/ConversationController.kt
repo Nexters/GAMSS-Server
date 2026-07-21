@@ -1,8 +1,13 @@
 package com.nexters.gamss.conversation.controller
 
+import com.nexters.gamss.conversation.controller.dto.CommentGenerationResponse
+import com.nexters.gamss.conversation.controller.dto.CommentGenerationStatus
 import com.nexters.gamss.conversation.controller.dto.ConversationResponse
+import com.nexters.gamss.conversation.controller.dto.GenerateCommentsRequest
 import com.nexters.gamss.conversation.controller.dto.MessageResponse
 import com.nexters.gamss.conversation.controller.dto.SaveMessageRequest
+import com.nexters.gamss.conversation.service.CommentGenerationOutcome
+import com.nexters.gamss.conversation.service.CommentGenerationService
 import com.nexters.gamss.conversation.service.ConversationService
 import com.nexters.gamss.global.response.ApiResponse
 import com.nexters.gamss.global.security.AuthPrincipal
@@ -26,6 +31,7 @@ import java.time.LocalDate
 @RequestMapping("/api/conversations")
 class ConversationController(
     private val conversationService: ConversationService,
+    private val commentGenerationService: CommentGenerationService,
 ) {
     @Operation(
         summary = "감정 기록 저장",
@@ -58,8 +64,7 @@ class ConversationController(
     @Operation(
         summary = "날짜별 채팅방 목록 조회",
         description =
-            "서비스상 하루(기본 06:00 ~ 익일 06:00, KST)에 생성된 채팅방 목록을 반환합니다. " +
-                "예: 새벽 2시에 만든 채팅방은 전날 목록에 포함됩니다.\n\n" +
+            "해당 날짜(00:00 ~ 24:00, KST)에 생성된 채팅방 목록을 반환합니다.\n\n" +
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +
@@ -95,5 +100,41 @@ class ConversationController(
     ): ApiResponse<List<MessageResponse>> {
         val messages = conversationService.getMessages(principal.memberId, conversationId)
         return ApiResponse.success(messages.map { MessageResponse.from(it) })
+    }
+
+    @Operation(
+        summary = "일기(메시지)에 대한 캐릭터 댓글 생성",
+        description =
+            "일기 메시지에 캐릭터 댓글+티키타카 생성을 요청합니다. 멱등한 엔드포인트로, " +
+                "재요청이 곧 결과 조회를 겸합니다 — GENERATING이면 잠시 후 같은 요청을 다시 보내면 됩니다.\n\n" +
+                "**status 값**\n\n" +
+                "| status | 의미 |\n" +
+                "|---|---|\n" +
+                "| GENERATING | 생성 중(직접 트리거했거나 다른 요청이 먼저 선점) |\n" +
+                "| DONE | 생성 완료, comments에 결과 포함 |\n" +
+                "| FAILED | 재시도까지 실패. 다시 요청하면 재시도됨 |\n\n" +
+                "**실패 응답**\n\n" +
+                "| error.code | HTTP | 설명 |\n" +
+                "|---|---|---|\n" +
+                "| UNAUTHORIZED | 401 | 인증 필요 |\n" +
+                "| INVALID_INPUT | 400 | messageId 누락 |\n" +
+                "| MESSAGE_NOT_FOUND | 404 | 존재하지 않는 메시지 |\n" +
+                "| INVALID_COMMENT_TARGET | 400 | 일기(사용자) 메시지가 아님 |\n" +
+                "| CONVERSATION_ACCESS_DENIED | 403 | 본인 채팅방이 아님 |",
+    )
+    @PostMapping("/messages/comments")
+    fun generateComments(
+        @Parameter(hidden = true) @AuthenticationPrincipal principal: AuthPrincipal,
+        @Valid @RequestBody request: GenerateCommentsRequest,
+    ): ApiResponse<CommentGenerationResponse> {
+        val result = commentGenerationService.generateComments(principal.memberId, checkNotNull(request.messageId))
+        val status =
+            when (result.outcome) {
+                CommentGenerationOutcome.GENERATING -> CommentGenerationStatus.GENERATING
+                CommentGenerationOutcome.DONE -> CommentGenerationStatus.DONE
+                CommentGenerationOutcome.FAILED -> CommentGenerationStatus.FAILED
+            }
+        val comments = if (result.outcome == CommentGenerationOutcome.DONE) result.comments.map { MessageResponse.from(it) } else null
+        return ApiResponse.success(CommentGenerationResponse(status, comments, result.usedTokens))
     }
 }

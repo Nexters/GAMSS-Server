@@ -17,6 +17,9 @@ import java.time.Instant
 /**
  * 채팅방 안의 말풍선 하나. 사용자 또는 감정 캐릭터의 발화이며,
  * 특정 메시지에 대한 답장이면 repliesToMessageId로 가리킨다.
+ *
+ * rootMessageId는 이 메시지가 속한 원본 일기(사용자) 메시지를 가리킨다(캐릭터 댓글·티키타카 전용).
+ * repliesToMessageId(직접 답장 대상, 체인 한 단계)와 달리 피드 전체를 한 번에 조회하기 위한 용도다.
  */
 @Entity
 @Table(name = "messages")
@@ -34,6 +37,13 @@ class Message(
     val content: String,
     @Column(name = "replies_to_message_id")
     val repliesToMessageId: Long? = null,
+    @Column(name = "root_message_id")
+    val rootMessageId: Long? = null,
+    @Enumerated(EnumType.STRING)
+    @Column(name = "comment_status", length = 20, nullable = false)
+    val commentStatus: CommentStatus = CommentStatus.NONE,
+    @Column(name = "comment_status_updated_at")
+    val commentStatusUpdatedAt: Instant? = null,
 ) {
     init {
         require((senderType == SenderType.CHARACTER) == (emotionType != null)) {
