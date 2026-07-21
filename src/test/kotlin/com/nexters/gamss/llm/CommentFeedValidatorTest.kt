@@ -41,7 +41,8 @@ class CommentFeedValidatorTest {
 
     @Test
     fun `comments에 요청하지 않은 캐릭터가 섞이면 실패한다`() {
-        val feed = validFeed().copy(comments = validFeed().comments.dropLast(1) + CommentDraft(EmotionType.ANGER, "외부 캐릭터"))
+        val feed =
+            validFeed().copy(comments = validFeed().comments.dropLast(1) + CommentDraft(EmotionType.ANGER, "외부 캐릭터"))
 
         assertFailsWith<CommentGenerationFailedException> { validator.validate(feed, characters, tikitakaCount) }
     }
@@ -49,6 +50,13 @@ class CommentFeedValidatorTest {
     @Test
     fun `tikitaka replyTo가 1라운드에 없는 캐릭터면 실패한다`() {
         val feed = validFeed().copy(tikitaka = listOf(TikitakaDraft(EmotionType.JOY, EmotionType.ANGER, "잘못된 참조")))
+
+        assertFailsWith<CommentGenerationFailedException> { validator.validate(feed, characters, 1) }
+    }
+
+    @Test
+    fun `tikitaka에 1라운드에 없는 캐릭터가 존재하면 실패한다`() {
+        val feed = validFeed().copy(tikitaka = listOf(TikitakaDraft(EmotionType.ANGER, EmotionType.JOY, "잘못된 참조")))
 
         assertFailsWith<CommentGenerationFailedException> { validator.validate(feed, characters, 1) }
     }
