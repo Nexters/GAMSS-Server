@@ -15,3 +15,10 @@ jwt:
 
 firebase:
   project-id: gamss-test
+
+conversation:
+  comment-pending-timeout: PT3M
+
+gemini:
+  api-key: test-gemini-api-key-dummy-value
+  model: gemini-3.1-flash-lite

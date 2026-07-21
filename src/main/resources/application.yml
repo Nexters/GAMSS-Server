@@ -22,6 +22,13 @@ firebase:
   # 소셜 로그인 검증 대상 Firebase 프로젝트. 비밀이 아니므로 설정값으로 둔다.
   project-id: gamss-cbdcb
 
+conversation:
+  comment-pending-timeout: PT3M
+
+gemini:
+  api-key: ${GEMINI_API_KEY}
+  model: gemini-3.1-flash-lite
+
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
