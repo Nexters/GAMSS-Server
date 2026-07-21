@@ -66,5 +66,4 @@ GAMSS-Server/
 - [서비스 기획](https://github.com/Nexters/GAMSS-Server/wiki/서비스-기획)
 - [기술 스택](https://github.com/Nexters/GAMSS-Server/wiki/기술-스택)
 - [백오피스](https://github.com/Nexters/GAMSS-Server/wiki/백오피스)
-- [브랜치 전략](https://github.com/Nexters/GAMSS-Server/wiki/브랜치-전략) · [커밋](https://github.com/Nexters/GAMSS-Server/wiki/커밋-컨벤션) · [PR](https://github.com/Nexters/GAMSS-Server/wiki/PR-컨벤션) · [이슈](https://github.com/Nexters/GAMSS-Server/wiki/이슈-컨벤션)
-  컨벤션
+- [브랜치 전략](https://github.com/Nexters/GAMSS-Server/wiki/브랜치-전략) · [커밋](https://github.com/Nexters/GAMSS-Server/wiki/커밋-컨벤션) · [PR](https://github.com/Nexters/GAMSS-Server/wiki/PR-컨벤션) · [이슈 컨벤션](https://github.com/Nexters/GAMSS-Server/wiki/이슈-컨벤션)
