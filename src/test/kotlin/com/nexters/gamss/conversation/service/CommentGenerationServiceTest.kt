@@ -138,6 +138,40 @@ class CommentGenerationServiceTest {
     }
 
     @Test
+    fun `예상치 못한 예외가 발생하면 FAILED로 마킹하고 FAILED를 반환한다`() {
+        val message = rootMessage()
+        every { messageRepository.findById(1L) } returns Optional.of(message)
+        every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
+        stubClaimSuccess()
+        every { commentGenerator.generate(any(), any(), any(), any(), any()) } returns feed()
+        every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } returns Unit
+        every { commentPersistenceService.saveFeed(10L, 1L, feed()) } throws RuntimeException("DB 제약조건 위반")
+        every { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) } returns 1
+
+        val result = service.generateComments(memberId = 1L, messageId = 1L)
+
+        assertEquals(CommentGenerationOutcome.FAILED, result.outcome)
+        verify(exactly = 1) { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) }
+    }
+
+    @Test
+    fun `BusinessException이 발생하면 FAILED로 전이한 뒤 그대로 다시 던진다`() {
+        val message = rootMessage()
+        every { messageRepository.findById(1L) } returns Optional.of(message)
+        every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
+        stubClaimSuccess()
+        every { commentGenerator.generate(any(), any(), any(), any(), any()) } returns feed()
+        every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } returns Unit
+        every { commentPersistenceService.saveFeed(10L, 1L, feed()) } throws BusinessException(ErrorCode.CONVERSATION_NOT_FOUND)
+        every { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) } returns 1
+
+        val exception = assertFailsWith<BusinessException> { service.generateComments(memberId = 1L, messageId = 1L) }
+
+        assertEquals(ErrorCode.CONVERSATION_NOT_FOUND, exception.errorCode)
+        verify(exactly = 1) { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) }
+    }
+
+    @Test
     fun `엉뚱이가 선택되면 소재를 골라서 넘긴다`() {
         val message = rootMessage()
         val charactersWithQuirky = listOf(EmotionType.JOY, EmotionType.QUIRKY)

@@ -56,14 +56,22 @@ class CommentGenerationService(
             val feed = generateWithRetry(rootMessage.content)
             val saved = commentPersistenceService.saveFeed(rootMessage.conversationId, messageId, feed)
             CommentGenerationResult(CommentGenerationOutcome.DONE, saved)
-        } catch (e: CommentGenerationFailedException) {
-            log.warn("댓글 생성 최종 실패 messageId={}", messageId, e)
+        } catch (e: Exception) {
+            if (e is CommentGenerationFailedException) {
+                log.warn("댓글 생성 최종 실패 messageId={}", messageId, e)
+            } else {
+                log.error("댓글 생성 중 예기치 않은 오류 발생 messageId={}", messageId, e)
+            }
+
             messageRepository.updateCommentStatus(
                 messageId,
                 CommentStatus.FAILED,
                 listOf(CommentStatus.PENDING),
                 Instant.now(),
             )
+
+            // 예상된 비즈니스 예외는 FAILED 전이 후에도 원래 의미(4xx 등)를 유지하도록 다시 던진다.
+            if (e is BusinessException) throw e
             CommentGenerationResult(CommentGenerationOutcome.FAILED)
         }
     }
