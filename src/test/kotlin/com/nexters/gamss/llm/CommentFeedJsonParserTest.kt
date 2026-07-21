@@ -6,15 +6,11 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
-class GeminiCommentGeneratorTest {
-    private val generator =
-        GeminiCommentGenerator(
-            properties = GeminiProperties(apiKey = "test-key", model = "test-model"),
-            jsonMapper = JsonMapper(),
-        )
+class CommentFeedJsonParserTest {
+    private val parser = CommentFeedJsonParser(JsonMapper())
 
     @Test
-    fun `Gemini가 내려준 JSON을 CommentFeed로 정확히 변환한다`() {
+    fun `프롬프트 계약을 따르는 JSON을 CommentFeed로 정확히 변환한다`() {
         val text =
             """
             {
@@ -28,7 +24,7 @@ class GeminiCommentGeneratorTest {
             }
             """.trimIndent()
 
-        val feed = generator.parseFeed(text)
+        val feed = parser.parse(text)
 
         assertEquals(
             CommentFeed(
@@ -49,7 +45,7 @@ class GeminiCommentGeneratorTest {
     @Test
     fun `JSON 형식이 깨지면 CommentGenerationFailedException을 던진다`() {
         assertFailsWith<CommentGenerationFailedException> {
-            generator.parseFeed("이건 JSON이 아니다")
+            parser.parse("이건 JSON이 아니다")
         }
     }
 
@@ -58,7 +54,7 @@ class GeminiCommentGeneratorTest {
         val text = """{"comments": [{"character_id": "unknown", "text": "?"}], "tikitaka": []}"""
 
         assertFailsWith<CommentGenerationFailedException> {
-            generator.parseFeed(text)
+            parser.parse(text)
         }
     }
 }
