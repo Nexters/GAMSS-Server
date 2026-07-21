@@ -40,12 +40,14 @@ interface MessageRepository : JpaRepository<Message, Long> {
     @Transactional
     @Modifying(clearAutomatically = true)
     @Query(
-        "update Message m set m.commentStatus = com.nexters.gamss.conversation.domain.CommentStatus.NONE, " +
+        "update Message m set m.commentStatus = :to, " +
             "m.commentStatusUpdatedAt = null " +
-            "where m.commentStatus = com.nexters.gamss.conversation.domain.CommentStatus.PENDING " +
+            "where m.commentStatus = :from " +
             "and m.commentStatusUpdatedAt < :olderThan",
     )
     fun resetStalePending(
         @Param("olderThan") olderThan: Instant,
+        @Param("to") to: CommentStatus = CommentStatus.NONE,
+        @Param("from") from: CommentStatus = CommentStatus.PENDING,
     ): Int
 }
