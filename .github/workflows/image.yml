@@ -77,6 +77,25 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # 백오피스(admin-web) 정적 SPA 이미지. Firebase 웹 설정은 공개값이라 빌드 시 인라인한다.
+      # (아직 미확보라 VITE_FIREBASE_* 는 비어 있고, 그동안 admin은 "설정 필요" 화면을 띄운다.)
+      - name: Build and push admin
+        uses: docker/build-push-action@v6
+        with:
+          context: ./admin-web
+          push: true
+          build-args: |
+            VITE_API_BASE_URL=
+            VITE_FIREBASE_API_KEY=${{ vars.VITE_FIREBASE_API_KEY }}
+            VITE_FIREBASE_AUTH_DOMAIN=${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
+            VITE_FIREBASE_PROJECT_ID=${{ vars.VITE_FIREBASE_PROJECT_ID }}
+            VITE_FIREBASE_APP_ID=${{ vars.VITE_FIREBASE_APP_ID }}
+          tags: |
+            ${{ steps.meta.outputs.image }}-admin:${{ steps.meta.outputs.tag }}
+            ${{ steps.meta.outputs.image }}-admin:${{ github.ref_name }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
@@ -97,6 +116,7 @@ jobs:
           DB_PASSWORD=${{ secrets.DB_PASSWORD }}
           DB_ROOT_PASSWORD=${{ secrets.DB_ROOT_PASSWORD }}
           JWT_SECRET=${{ secrets.JWT_SECRET }}
+          ADMIN_EMAILS=${{ vars.ADMIN_EMAILS }}
           EOF
 
       - name: Transfer files via SCP
