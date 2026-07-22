@@ -329,5 +329,78 @@ class ConversationControllerIntegrationTest {
             }
     }
 
+    @Test
+    fun `채팅방을 종료하면 200과 status ENDED를 반환한다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val conversation = conversationRepository.save(Conversation(member.id))
+
+        mockMvc
+            .post("/api/conversations/${conversation.id}/end") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.id") { value(conversation.id) }
+                jsonPath("$.data.status") { value("ENDED") }
+            }
+    }
+
+    @Test
+    fun `이미 종료된 채팅방을 다시 종료하면 409를 반환한다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val conversation = conversationRepository.save(Conversation(member.id).apply { end() })
+
+        mockMvc
+            .post("/api/conversations/${conversation.id}/end") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isConflict() }
+                jsonPath("$.error.code") { value("CONVERSATION_ALREADY_ENDED") }
+            }
+    }
+
+    @Test
+    fun `종료된 채팅방에 메시지를 저장하면 409를 반환한다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val conversation = conversationRepository.save(Conversation(member.id).apply { end() })
+
+        mockMvc
+            .post("/api/conversations/messages") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"conversationId":${conversation.id},"content":"종료된 방에 쓰기"}"""
+            }.andExpect {
+                status { isConflict() }
+                jsonPath("$.error.code") { value("CONVERSATION_ENDED") }
+            }
+    }
+
+    @Test
+    fun `남의 채팅방을 종료하면 403을 반환한다`() {
+        val me = memberRepository.save(Member("me@a.com"))
+        val other = memberRepository.save(Member("other@a.com"))
+        val othersConversation = conversationRepository.save(Conversation(other.id))
+
+        mockMvc
+            .post("/api/conversations/${othersConversation.id}/end") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(me))
+            }.andExpect {
+                status { isForbidden() }
+                jsonPath("$.error.code") { value("CONVERSATION_ACCESS_DENIED") }
+            }
+    }
+
+    @Test
+    fun `없는 채팅방을 종료하면 404를 반환한다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+
+        mockMvc
+            .post("/api/conversations/99999/end") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isNotFound() }
+                jsonPath("$.error.code") { value("CONVERSATION_NOT_FOUND") }
+            }
+    }
+
     private fun bearerFor(member: Member): String = "Bearer ${jwtIssuer.issueAccessToken(member.id)}"
 }

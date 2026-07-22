@@ -1,6 +1,7 @@
 package com.nexters.gamss.conversation.service
 
 import com.nexters.gamss.conversation.domain.Conversation
+import com.nexters.gamss.conversation.domain.ConversationStatus
 import com.nexters.gamss.conversation.domain.Message
 import com.nexters.gamss.conversation.domain.SenderType
 import com.nexters.gamss.conversation.repository.ConversationRepository
@@ -160,5 +161,41 @@ class ConversationServiceTest {
             }
 
         assertEquals(ErrorCode.CONVERSATION_ACCESS_DENIED, exception.errorCode)
+    }
+
+    @Test
+    fun `채팅방을 종료하면 상태가 ENDED가 된다`() {
+        val conversation = Conversation(memberId = 1L)
+        every { conversationRepository.findById(10L) } returns Optional.of(conversation)
+
+        val ended = conversationService.endConversation(1L, 10L)
+
+        assertEquals(ConversationStatus.ENDED, ended.status)
+    }
+
+    @Test
+    fun `이미 종료된 채팅방을 다시 종료하면 CONVERSATION_ALREADY_ENDED`() {
+        val conversation = Conversation(memberId = 1L).apply { end() }
+        every { conversationRepository.findById(10L) } returns Optional.of(conversation)
+
+        val exception =
+            assertFailsWith<BusinessException> {
+                conversationService.endConversation(1L, 10L)
+            }
+
+        assertEquals(ErrorCode.CONVERSATION_ALREADY_ENDED, exception.errorCode)
+    }
+
+    @Test
+    fun `종료된 채팅방에 메시지를 저장하면 CONVERSATION_ENDED`() {
+        val conversation = Conversation(memberId = 1L).apply { end() }
+        every { conversationRepository.findById(10L) } returns Optional.of(conversation)
+
+        val exception =
+            assertFailsWith<BusinessException> {
+                conversationService.saveUserMessage(1L, 10L, "종료된 방에 쓰기")
+            }
+
+        assertEquals(ErrorCode.CONVERSATION_ENDED, exception.errorCode)
     }
 }
