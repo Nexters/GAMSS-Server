@@ -8,8 +8,11 @@ import com.nexters.gamss.member.domain.MemberStatus
 import com.nexters.gamss.member.service.MemberService
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
+import jakarta.validation.constraints.Max
+import jakarta.validation.constraints.Min
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Sort
+import org.springframework.validation.annotation.Validated
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
@@ -18,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 
 @Tag(name = "백오피스 회원", description = "관리자용 회원 조회·관리 API (ROLE_ADMIN 필요)")
+@Validated
 @RestController
 @RequestMapping("/api/admin/members")
 class AdminMemberController(
@@ -29,8 +33,8 @@ class AdminMemberController(
     )
     @GetMapping
     fun list(
-        @RequestParam(defaultValue = "0") page: Int,
-        @RequestParam(defaultValue = "20") size: Int,
+        @RequestParam(defaultValue = "0") @Min(0) page: Int,
+        @RequestParam(defaultValue = "20") @Min(1) @Max(MAX_PAGE_SIZE) size: Int,
         @RequestParam(required = false) search: String?,
         @RequestParam(required = false) status: MemberStatus?,
     ): ApiResponse<PageResponse<MemberResponse>> {
@@ -45,7 +49,7 @@ class AdminMemberController(
     )
     @GetMapping("/stats")
     fun stats(
-        @RequestParam(defaultValue = "14") days: Int,
+        @RequestParam(defaultValue = "14") @Min(1) @Max(MAX_STATS_DAYS) days: Int,
     ): ApiResponse<MemberStatsResponse> = ApiResponse.success(MemberStatsResponse.from(memberService.getStats(days)))
 
     @Operation(summary = "회원 상세 조회")
@@ -70,5 +74,11 @@ class AdminMemberController(
     ): ApiResponse<MemberResponse> {
         memberService.withdraw(id)
         return ApiResponse.success(MemberResponse.from(memberService.getById(id)))
+    }
+
+    companion object {
+        // 한 번에 대량 로우를 끌어오지 못하도록 목록·통계 파라미터에 상한을 둔다.
+        private const val MAX_PAGE_SIZE = 100L
+        private const val MAX_STATS_DAYS = 365L
     }
 }
