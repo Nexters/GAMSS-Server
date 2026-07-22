@@ -31,6 +31,7 @@ class ConversationService(
         val conversation =
             conversationId?.let { getOwnedConversation(it, memberId) }
                 ?: conversationRepository.save(Conversation(memberId))
+        conversation.ensureActive()
         if (repliesToMessageId != null) {
             validateReplyTarget(repliesToMessageId, conversation.id)
         }
@@ -42,6 +43,17 @@ class ConversationService(
                 repliesToMessageId = repliesToMessageId,
             )
         return messageRepository.save(message)
+    }
+
+    /** 채팅방을 종료한다. 종료 후에는 사용자 메시지를 추가할 수 없다. */
+    @Transactional
+    fun endConversation(
+        memberId: Long,
+        conversationId: Long,
+    ): Conversation {
+        val conversation = getOwnedConversation(conversationId, memberId)
+        conversation.end()
+        return conversation
     }
 
     /** 답장 대상 메시지가 실제로 해당 채팅방에 존재하는지 확인한다. */

@@ -1,9 +1,11 @@
 package com.nexters.gamss.member.repository
 
 import com.nexters.gamss.member.domain.Member
+import com.nexters.gamss.member.domain.MemberStatus
 import com.nexters.gamss.member.domain.Nickname
 import com.nexters.gamss.support.RepositoryTest
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.data.domain.PageRequest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -34,5 +36,45 @@ class MemberRepositoryTest : RepositoryTest() {
 
         assertTrue(saved.updatedAt.isAfter(firstUpdatedAt))
         assertNotNull(saved.createdAt)
+    }
+
+    @Test
+    fun `검색어로 이메일과 닉네임을 부분 일치 조회한다`() {
+        memberRepository.save(Member("bada@example.com", Nickname("바다")))
+        memberRepository.save(Member("hana@example.com", Nickname("하늘")))
+
+        val byEmail = memberRepository.search("bada", null, PageRequest.of(0, 10))
+        val byNickname = memberRepository.search("하늘", null, PageRequest.of(0, 10))
+
+        assertEquals(1, byEmail.totalElements)
+        assertEquals("bada@example.com", byEmail.content.first().email)
+        assertEquals(1, byNickname.totalElements)
+        val nicknameHit = byNickname.content.first()
+        assertEquals("하늘", nicknameHit.nickname?.value)
+    }
+
+    @Test
+    fun `검색어가 null이면 전체를 조회한다`() {
+        memberRepository.save(Member("a@example.com"))
+        memberRepository.save(Member("b@example.com"))
+
+        val all = memberRepository.search(null, null, PageRequest.of(0, 10))
+
+        assertEquals(2, all.totalElements)
+    }
+
+    @Test
+    fun `상태로 필터링한다`() {
+        memberRepository.save(Member("active@example.com"))
+        val withdrawn = Member("left@example.com").apply { withdraw() }
+        memberRepository.save(withdrawn)
+
+        val actives = memberRepository.search(null, MemberStatus.ACTIVE, PageRequest.of(0, 10))
+        val withdrawns = memberRepository.search(null, MemberStatus.WITHDRAWN, PageRequest.of(0, 10))
+
+        assertEquals(1, actives.totalElements)
+        assertEquals("active@example.com", actives.content.first().email)
+        assertEquals(1, withdrawns.totalElements)
+        assertEquals("left@example.com", withdrawns.content.first().email)
     }
 }

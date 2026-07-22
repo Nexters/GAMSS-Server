@@ -107,7 +107,7 @@ main() {
   write_env_value IMAGE_TAG "$NEW_TAG" .env
 
   log "이미지 pull: ${NEW_TAG}"
-  if ! docker compose pull app; then
+  if ! docker compose pull app admin; then
     write_env_value IMAGE_TAG "${prev_tag}" .env
     log "이미지 pull 실패 — .env를 원복하고 중단한다"
     exit 1

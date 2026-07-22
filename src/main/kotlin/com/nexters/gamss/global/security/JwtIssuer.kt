@@ -11,9 +11,15 @@ interface JwtIssuer {
 
     fun issueRefreshToken(memberId: Long): String
 
+    /** 백오피스 관리자 토큰. subject 는 관리자 이메일이다. */
+    fun issueAdminToken(email: String): String
+
     /** access 토큰이 아니면 INVALID_TOKEN 으로 거부한다. */
     fun parseAccessToken(token: String): Long
 
     /** refresh 토큰이 아니면 INVALID_TOKEN 으로 거부한다. */
     fun parseRefreshToken(token: String): Long
+
+    /** admin 토큰이 아니면 INVALID_TOKEN 으로 거부한다. 관리자 이메일을 돌려준다. */
+    fun parseAdminToken(token: String): String
 }
