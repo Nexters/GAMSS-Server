@@ -33,6 +33,12 @@ enum class ErrorCode(
     // 대화
     CONVERSATION_NOT_FOUND(HttpStatus.NOT_FOUND, "채팅방을 찾을 수 없습니다."),
     CONVERSATION_ACCESS_DENIED(HttpStatus.FORBIDDEN, "본인의 채팅방만 접근할 수 있습니다."),
+    CONVERSATION_ALREADY_ENDED(HttpStatus.CONFLICT, "이미 종료된 채팅방입니다."),
+    CONVERSATION_ENDED(HttpStatus.CONFLICT, "종료된 채팅방에는 메시지를 추가할 수 없습니다."),
+
+    // 댓글 생성
+    MESSAGE_NOT_FOUND(HttpStatus.NOT_FOUND, "메시지를 찾을 수 없습니다."),
+    INVALID_COMMENT_TARGET(HttpStatus.BAD_REQUEST, "일기(사용자) 메시지에만 댓글을 생성할 수 있습니다."),
     ;
 
     val code: String get() = name

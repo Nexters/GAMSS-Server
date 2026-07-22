@@ -52,6 +52,19 @@ dependencies {
     // API Docs (Swagger)
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.0")
 
+    // Actuator (헬스체크)
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
+
+    // LLM — Gemini 공식 SDK (버전은 구현 시 Maven Central에서 최신으로 재확인)
+    implementation("com.google.genai:google-genai:1.51.0")
+
+    // google-genai 내부 구현이 Jackson 2(com.fasterxml.jackson.databind)를 쓰고, 그 jar 안에
+    // META-INF/services에 Jackson2용 KotlinModule 등록이 딸려 있어서(google-genai 쪽 잔재 추정),
+    // 그 클래스가 클래스패스에 없으면 Hibernate의 Jackson JSON 포맷 매퍼 자동 감지(ObjectMapper.findModules())가
+    // ServiceConfigurationError로 죽는다. 우리 앱은 Jackson 3(tools.jackson)만 쓰고 이 모듈 자체는
+    // 안 쓰지만, 그 ServiceLoader 조회를 만족시키기 위해 runtime에만 추가한다.
+    runtimeOnly("com.fasterxml.jackson.module:jackson-module-kotlin:2.21.4")
+
     // Test
     testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
@@ -74,6 +87,11 @@ kotlin {
 tasks.withType<Test> {
     useJUnitPlatform()
     finalizedBy(tasks.jacocoTestReport)
+}
+
+// 실행 가능한 boot jar만 사용하므로 일반(plain) jar는 생성하지 않는다.
+tasks.named("jar") {
+    enabled = false
 }
 
 ktlint {

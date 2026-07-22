@@ -195,13 +195,12 @@ class ConversationControllerIntegrationTest {
     fun `날짜별 채팅방 목록을 조회한다`() {
         val member = memberRepository.save(Member("me@a.com"))
         val conversation = conversationRepository.save(Conversation(member.id))
-        // 서비스상 하루는 06:00에 시작하므로, 지금 시각의 서비스 날짜는 (현재 KST - 6시간)의 날짜다.
-        val serviceDate = LocalDateTime.now(ZoneId.of("Asia/Seoul")).minusHours(6).toLocalDate()
+        val today = LocalDateTime.now(ZoneId.of("Asia/Seoul")).toLocalDate()
 
         mockMvc
             .get("/api/conversations") {
                 header(HttpHeaders.AUTHORIZATION, bearerFor(member))
-                param("date", serviceDate.toString())
+                param("date", today.toString())
             }.andExpect {
                 status { isOk() }
                 jsonPath("$.data.length()") { value(1) }
@@ -211,7 +210,7 @@ class ConversationControllerIntegrationTest {
         mockMvc
             .get("/api/conversations") {
                 header(HttpHeaders.AUTHORIZATION, bearerFor(member))
-                param("date", serviceDate.plusDays(1).toString())
+                param("date", today.plusDays(1).toString())
             }.andExpect {
                 status { isOk() }
                 jsonPath("$.data.length()") { value(0) }
@@ -219,18 +218,34 @@ class ConversationControllerIntegrationTest {
     }
 
     @Test
-    fun `새벽 6시 이전에 만든 채팅방은 전날 목록으로 조회된다`() {
+    fun `자정 정각에 만든 채팅방은 그 날짜로 조회되고, 자정 직전은 전날로 조회된다`() {
         val member = memberRepository.save(Member("me@a.com"))
-        val conversation = conversationRepository.save(Conversation(member.id))
-        // 생성 시각을 KST 2026-07-19 02:00(새벽) = UTC 2026-07-18 17:00 으로 조작한다.
+        val midnight = conversationRepository.save(Conversation(member.id))
+        val justBeforeMidnight = conversationRepository.save(Conversation(member.id))
+        // KST 2026-07-19 00:00:00 = UTC 2026-07-18 15:00:00, KST 2026-07-18 23:59:59 = UTC 2026-07-18 14:59:59.
         // JDBC 직접 INSERT는 Hibernate와 타임존 변환이 달라질 수 있어 JPQL로 수정한다.
         entityManager.flush()
         entityManager
             .createQuery("update Conversation c set c.createdAt = :createdAt where c.id = :id")
-            .setParameter("createdAt", Instant.parse("2026-07-18T17:00:00Z"))
-            .setParameter("id", conversation.id)
+            .setParameter("createdAt", Instant.parse("2026-07-18T15:00:00Z"))
+            .setParameter("id", midnight.id)
+            .executeUpdate()
+        entityManager
+            .createQuery("update Conversation c set c.createdAt = :createdAt where c.id = :id")
+            .setParameter("createdAt", Instant.parse("2026-07-18T14:59:59Z"))
+            .setParameter("id", justBeforeMidnight.id)
             .executeUpdate()
         entityManager.clear()
+
+        mockMvc
+            .get("/api/conversations") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                param("date", "2026-07-19")
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.length()") { value(1) }
+                jsonPath("$.data[0].id") { value(midnight.id) }
+            }
 
         mockMvc
             .get("/api/conversations") {
@@ -239,15 +254,7 @@ class ConversationControllerIntegrationTest {
             }.andExpect {
                 status { isOk() }
                 jsonPath("$.data.length()") { value(1) }
-            }
-
-        mockMvc
-            .get("/api/conversations") {
-                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
-                param("date", "2026-07-19")
-            }.andExpect {
-                status { isOk() }
-                jsonPath("$.data.length()") { value(0) }
+                jsonPath("$.data[0].id") { value(justBeforeMidnight.id) }
             }
     }
 
@@ -319,6 +326,79 @@ class ConversationControllerIntegrationTest {
                 content = """{"content":"내용"}"""
             }.andExpect {
                 status { isUnauthorized() }
+            }
+    }
+
+    @Test
+    fun `채팅방을 종료하면 200과 status ENDED를 반환한다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val conversation = conversationRepository.save(Conversation(member.id))
+
+        mockMvc
+            .post("/api/conversations/${conversation.id}/end") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.id") { value(conversation.id) }
+                jsonPath("$.data.status") { value("ENDED") }
+            }
+    }
+
+    @Test
+    fun `이미 종료된 채팅방을 다시 종료하면 409를 반환한다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val conversation = conversationRepository.save(Conversation(member.id).apply { end() })
+
+        mockMvc
+            .post("/api/conversations/${conversation.id}/end") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isConflict() }
+                jsonPath("$.error.code") { value("CONVERSATION_ALREADY_ENDED") }
+            }
+    }
+
+    @Test
+    fun `종료된 채팅방에 메시지를 저장하면 409를 반환한다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val conversation = conversationRepository.save(Conversation(member.id).apply { end() })
+
+        mockMvc
+            .post("/api/conversations/messages") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"conversationId":${conversation.id},"content":"종료된 방에 쓰기"}"""
+            }.andExpect {
+                status { isConflict() }
+                jsonPath("$.error.code") { value("CONVERSATION_ENDED") }
+            }
+    }
+
+    @Test
+    fun `남의 채팅방을 종료하면 403을 반환한다`() {
+        val me = memberRepository.save(Member("me@a.com"))
+        val other = memberRepository.save(Member("other@a.com"))
+        val othersConversation = conversationRepository.save(Conversation(other.id))
+
+        mockMvc
+            .post("/api/conversations/${othersConversation.id}/end") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(me))
+            }.andExpect {
+                status { isForbidden() }
+                jsonPath("$.error.code") { value("CONVERSATION_ACCESS_DENIED") }
+            }
+    }
+
+    @Test
+    fun `없는 채팅방을 종료하면 404를 반환한다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+
+        mockMvc
+            .post("/api/conversations/99999/end") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isNotFound() }
+                jsonPath("$.error.code") { value("CONVERSATION_NOT_FOUND") }
             }
     }
 

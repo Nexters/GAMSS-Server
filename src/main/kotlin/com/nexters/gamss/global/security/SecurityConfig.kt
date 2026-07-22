@@ -55,6 +55,7 @@ class SecurityConfig(
                 "/api/auth/**",
                 // 관리자 로그인만 공개. /api/admin/** 의 나머지는 ROLE_ADMIN 을 요구한다.
                 "/api/admin/auth/login",
+                "/actuator/health",
                 "/swagger-ui/**",
                 "/swagger-ui.html",
                 "/v3/api-docs/**",
