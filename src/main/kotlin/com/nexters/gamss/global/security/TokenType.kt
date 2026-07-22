@@ -7,6 +7,7 @@ package com.nexters.gamss.global.security
 enum class TokenType {
     ACCESS,
     REFRESH,
+    ADMIN,
     ;
 
     companion object {

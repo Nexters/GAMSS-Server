@@ -82,4 +82,29 @@ class JjwtIssuerTest {
 
         assertEquals(ErrorCode.INVALID_TOKEN, exception.errorCode)
     }
+
+    @Test
+    fun `관리자 토큰을 발급하고 이메일을 파싱한다`() {
+        val token = jwtIssuer.issueAdminToken("admin@gamss.kr")
+
+        assertEquals("admin@gamss.kr", jwtIssuer.parseAdminToken(token))
+    }
+
+    @Test
+    fun `관리자 토큰을 액세스 토큰으로 파싱하면 INVALID_TOKEN 예외를 던진다`() {
+        val adminToken = jwtIssuer.issueAdminToken("admin@gamss.kr")
+
+        val exception = assertFailsWith<BusinessException> { jwtIssuer.parseAccessToken(adminToken) }
+
+        assertEquals(ErrorCode.INVALID_TOKEN, exception.errorCode)
+    }
+
+    @Test
+    fun `액세스 토큰을 관리자 토큰으로 파싱하면 INVALID_TOKEN 예외를 던진다`() {
+        val accessToken = jwtIssuer.issueAccessToken(1L)
+
+        val exception = assertFailsWith<BusinessException> { jwtIssuer.parseAdminToken(accessToken) }
+
+        assertEquals(ErrorCode.INVALID_TOKEN, exception.errorCode)
+    }
 }

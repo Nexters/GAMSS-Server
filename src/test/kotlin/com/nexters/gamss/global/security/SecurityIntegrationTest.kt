@@ -125,4 +125,33 @@ class SecurityIntegrationTest {
                 jsonPath("$.error.code") { value("UNAUTHORIZED") }
             }
     }
+
+    @Test
+    fun `ROLE_ADMIN이 없는 회원 토큰으로 admin API를 호출하면 403과 ACCESS_DENIED를 반환한다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val token = jwtIssuer.issueAccessToken(member.id)
+
+        mockMvc
+            .get("/api/admin/members") {
+                header(HttpHeaders.AUTHORIZATION, "Bearer $token")
+            }.andExpect {
+                status { isForbidden() }
+                jsonPath("$.success") { value(false) }
+                jsonPath("$.error.code") { value("ACCESS_DENIED") }
+            }
+    }
+
+    @Test
+    fun `admin 토큰으로 통계 days 상한을 넘기면 400을 반환한다`() {
+        val token = jwtIssuer.issueAdminToken("admin@gamss.kr")
+
+        mockMvc
+            .get("/api/admin/members/stats") {
+                header(HttpHeaders.AUTHORIZATION, "Bearer $token")
+                param("days", "1000000")
+            }.andExpect {
+                status { isBadRequest() }
+                jsonPath("$.error.code") { value("INVALID_INPUT") }
+            }
+    }
 }

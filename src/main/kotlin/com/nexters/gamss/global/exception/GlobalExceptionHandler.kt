@@ -2,6 +2,7 @@ package com.nexters.gamss.global.exception
 
 import com.nexters.gamss.global.response.ApiResponse
 import com.nexters.gamss.global.response.ErrorResponse
+import jakarta.validation.ConstraintViolationException
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.MethodArgumentNotValidException
@@ -29,6 +30,15 @@ class GlobalExceptionHandler {
             e.bindingResult.fieldErrors
                 .firstOrNull()
                 ?.defaultMessage ?: errorCode.message
+        return ResponseEntity
+            .status(errorCode.status)
+            .body(ApiResponse.error(ErrorResponse(errorCode.code, message)))
+    }
+
+    @ExceptionHandler(ConstraintViolationException::class)
+    fun handleConstraintViolation(e: ConstraintViolationException): ResponseEntity<ApiResponse<Nothing>> {
+        val errorCode = ErrorCode.INVALID_INPUT
+        val message = e.constraintViolations.firstOrNull()?.message ?: errorCode.message
         return ResponseEntity
             .status(errorCode.status)
             .body(ApiResponse.error(ErrorResponse(errorCode.code, message)))
