@@ -83,6 +83,27 @@ class ConversationController(
     }
 
     @Operation(
+        summary = "채팅방 종료",
+        description =
+            "채팅방을 종료 상태로 만듭니다. 종료된 채팅방에는 더 이상 사용자 메시지를 추가할 수 없습니다.\n\n" +
+                "**실패 응답**\n\n" +
+                "| error.code | HTTP | 설명 |\n" +
+                "|---|---|---|\n" +
+                "| UNAUTHORIZED | 401 | 인증 필요 |\n" +
+                "| CONVERSATION_NOT_FOUND | 404 | 존재하지 않는 채팅방 |\n" +
+                "| CONVERSATION_ACCESS_DENIED | 403 | 본인 채팅방이 아님 |\n" +
+                "| CONVERSATION_ALREADY_ENDED | 409 | 이미 종료된 채팅방 |",
+    )
+    @PostMapping("/{conversationId}/end")
+    fun endConversation(
+        @Parameter(hidden = true) @AuthenticationPrincipal principal: AuthPrincipal,
+        @PathVariable conversationId: Long,
+    ): ApiResponse<ConversationResponse> {
+        val conversation = conversationService.endConversation(principal.memberId, conversationId)
+        return ApiResponse.success(ConversationResponse.from(conversation))
+    }
+
+    @Operation(
         summary = "채팅방 메시지 전체 조회",
         description =
             "채팅방의 메시지를 작성순으로 반환합니다.\n\n" +

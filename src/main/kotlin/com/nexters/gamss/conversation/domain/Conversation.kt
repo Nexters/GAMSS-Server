@@ -1,9 +1,13 @@
 package com.nexters.gamss.conversation.domain
 
 import com.nexters.gamss.emotion.domain.EmotionType
+import com.nexters.gamss.global.exception.BusinessException
+import com.nexters.gamss.global.exception.ErrorCode
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.EntityListeners
+import jakarta.persistence.EnumType
+import jakarta.persistence.Enumerated
 import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
@@ -28,6 +32,11 @@ class Conversation(
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long = 0L
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", length = 20, nullable = false)
+    var status: ConversationStatus = ConversationStatus.ACTIVE
+        protected set
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     var createdAt: Instant = Instant.now()
@@ -39,6 +48,21 @@ class Conversation(
         protected set
 
     fun isOwnedBy(memberId: Long): Boolean = this.memberId == memberId
+
+    /** 채팅방을 종료한다. 이미 종료된 방을 다시 종료하면 예외를 던진다. */
+    fun end() {
+        if (status == ConversationStatus.ENDED) {
+            throw BusinessException(ErrorCode.CONVERSATION_ALREADY_ENDED)
+        }
+        status = ConversationStatus.ENDED
+    }
+
+    /** 종료된 채팅방에는 사용자 메시지를 추가할 수 없다. */
+    fun ensureActive() {
+        if (status == ConversationStatus.ENDED) {
+            throw BusinessException(ErrorCode.CONVERSATION_ENDED)
+        }
+    }
 
     fun createMessage(
         senderType: SenderType,
