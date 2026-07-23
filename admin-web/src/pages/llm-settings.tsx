@@ -29,7 +29,10 @@ function SavedFlash({ show }: { show: boolean }) {
 }
 
 export function LlmSettingsPage() {
-  const { data, isLoading } = useCustom<LlmSettings>({ url: '/api/admin/llm-settings', method: 'get' })
+  const { data, isLoading, isError, refetch } = useCustom<LlmSettings>({
+    url: '/api/admin/llm-settings',
+    method: 'get',
+  })
   const { mutate: save, isLoading: saving } = useCustomMutation()
   const settings = data?.data
 
@@ -40,6 +43,7 @@ export function LlmSettingsPage() {
   const [savedModel, setSavedModel] = useState('')
   const [savedPrompt, setSavedPrompt] = useState('')
   const [flash, setFlash] = useState<'model' | 'prompt' | null>(null)
+  const [saveError, setSaveError] = useState<'model' | 'prompt' | null>(null)
   const initialized = useRef(false)
 
   useEffect(() => {
@@ -77,8 +81,10 @@ export function LlmSettingsPage() {
       {
         onSuccess: () => {
           setSavedModel(model)
+          setSaveError((e) => (e === 'model' ? null : e))
           flashSaved('model')
         },
+        onError: () => setSaveError('model'),
       },
     )
   }
@@ -92,8 +98,10 @@ export function LlmSettingsPage() {
       {
         onSuccess: () => {
           setSavedPrompt(prompt)
+          setSaveError((e) => (e === 'prompt' ? null : e))
           flashSaved('prompt')
         },
+        onError: () => setSaveError('prompt'),
       },
     )
   }
@@ -105,7 +113,15 @@ export function LlmSettingsPage() {
         description="모델과 시스템 프롬프트를 수정하면 재배포 없이 다음 댓글 생성부터 반영됩니다."
       />
 
-      {isLoading || !settings ? (
+      {isError && !settings ? (
+        <Card className="flex flex-col items-start gap-3 p-6">
+          <p className="text-sm text-muted-foreground">설정을 불러오지 못했습니다.</p>
+          <Button variant="outline" size="sm" onClick={() => refetch()}>
+            <RotateCcw className="size-4" />
+            다시 시도
+          </Button>
+        </Card>
+      ) : isLoading || !settings ? (
         <Card className="p-6">
           <div className="space-y-6">
             <Skeleton className="h-9 w-full max-w-xs" />
@@ -143,6 +159,7 @@ export function LlmSettingsPage() {
                 저장
               </Button>
               <SavedFlash show={flash === 'model'} />
+              {saveError === 'model' && <span className="text-sm text-destructive">저장에 실패했습니다</span>}
             </div>
             <p className="text-xs text-muted-foreground">
               Gemini API에서 사용 가능한 모델을 자동으로 불러옵니다. 새 모델은 출시되면 목록에 나타납니다.
@@ -182,6 +199,7 @@ export function LlmSettingsPage() {
                 <Save className="size-4" />
                 저장
               </Button>
+              {saveError === 'prompt' && <span className="text-sm text-destructive">저장에 실패했습니다</span>}
             </div>
           </section>
         </Card>
