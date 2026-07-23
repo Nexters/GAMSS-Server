@@ -24,6 +24,7 @@ class GeminiCommentGenerator(
     private val properties: GeminiProperties,
     private val promptProvider: PromptProvider,
     private val commentFeedJsonParser: CommentFeedJsonParser,
+    private val llmSettingsService: LlmSettingsService,
 ) : CommentGenerator {
     private val client: Client by lazy { Client.builder().apiKey(properties.apiKey).build() }
 
@@ -34,12 +35,14 @@ class GeminiCommentGenerator(
         tikitakaCount: Int,
         eongttungTopic: String?,
     ): CommentGenerationOutput {
+        // 운영 중 백오피스에서 바꾼 값을 매 호출 반영한다(재배포 불필요).
+        val settings = llmSettingsService.current()
         val response =
             try {
                 client.models.generateContent(
-                    properties.model,
+                    settings.model,
                     promptProvider.buildUserContent(pastSummary, diaryContent, characters, tikitakaCount, eongttungTopic),
-                    buildConfig(),
+                    buildConfig(settings.systemPrompt),
                 )
             } catch (e: Exception) {
                 throw CommentGenerationFailedException("LLM 호출에 실패했습니다.", e)
@@ -54,10 +57,10 @@ class GeminiCommentGenerator(
         return CommentGenerationOutput(feed, usedTokens)
     }
 
-    private fun buildConfig(): GenerateContentConfig =
+    private fun buildConfig(systemPrompt: String): GenerateContentConfig =
         GenerateContentConfig
             .builder()
-            .systemInstruction(Content.fromParts(Part.fromText(promptProvider.systemPrompt)))
+            .systemInstruction(Content.fromParts(Part.fromText(systemPrompt)))
             .responseMimeType("application/json")
             .responseSchema(commentFeedSchema())
             .build()
