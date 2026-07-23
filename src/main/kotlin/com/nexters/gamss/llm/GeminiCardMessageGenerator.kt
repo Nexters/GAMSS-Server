@@ -54,10 +54,11 @@ class GeminiCardMessageGenerator(
             } catch (e: JacksonException) {
                 throw CardGenerationFailedException("카드 대사 JSON 파싱에 실패했습니다.", e)
             }
-        if (dto.line.isBlank()) {
-            throw CardGenerationFailedException("카드 대사가 비어 있습니다.")
+        val line = dto.line.trim()
+        if (line.isBlank() || line.contains('\n') || line.contains('\r')) {
+            throw CardGenerationFailedException("카드 대사는 비어 있지 않은 한 줄이어야 합니다.")
         }
-        return dto.line
+        return line
     }
 
     private fun buildConfig(): GenerateContentConfig =

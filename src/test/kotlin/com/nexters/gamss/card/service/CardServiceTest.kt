@@ -14,6 +14,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
+import org.springframework.dao.DataIntegrityViolationException
 import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
@@ -40,7 +41,7 @@ class CardServiceTest {
         every { cardRepository.existsByConversationId(CONVERSATION_ID) } returns false
         every { cardMessageGenerator.generate(EmotionType.ANGER, "요약") } returns CardMessageOutput("얘 오늘 건들면 안 됨.", 10)
         val saved = slot<Card>()
-        every { cardRepository.save(capture(saved)) } answers { firstArg() }
+        every { cardRepository.saveAndFlush(capture(saved)) } answers { firstArg() }
 
         service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약")
 
@@ -96,7 +97,19 @@ class CardServiceTest {
         val exception = assertFailsWith<BusinessException> { service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약") }
 
         assertEquals(ErrorCode.CARD_GENERATION_FAILED, exception.errorCode)
-        verify(exactly = 0) { cardRepository.save(any()) }
+        verify(exactly = 0) { cardRepository.saveAndFlush(any()) }
+    }
+
+    @Test
+    fun `동시 요청이 사전 검사를 함께 통과해도 유니크 위반은 CARD_ALREADY_EXISTS로 변환된다`() {
+        every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
+        every { cardRepository.existsByConversationId(CONVERSATION_ID) } returns false
+        every { cardMessageGenerator.generate(any(), any()) } returns CardMessageOutput("대사", 10)
+        every { cardRepository.saveAndFlush(any()) } throws DataIntegrityViolationException("duplicate")
+
+        val exception = assertFailsWith<BusinessException> { service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약") }
+
+        assertEquals(ErrorCode.CARD_ALREADY_EXISTS, exception.errorCode)
     }
 
     @Test

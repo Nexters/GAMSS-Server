@@ -10,6 +10,7 @@ import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.llm.CardGenerationFailedException
 import com.nexters.gamss.llm.CardMessageGenerator
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDate
@@ -26,8 +27,12 @@ class CardService(
     private val conversationRepository: ConversationRepository,
     private val cardMessageGenerator: CardMessageGenerator,
 ) {
-    /** 종료된 대화에 대해 대표 감정 캐릭터의 한 줄 대사를 생성해 카드를 저장한다. */
-    @Transactional
+    /**
+     * 종료된 대화에 대해 대표 감정 캐릭터의 한 줄 대사를 생성해 카드를 저장한다.
+     * 외부 LLM 호출이 DB 커넥션을 오래 점유하지 않도록 이 메서드는 트랜잭션으로 감싸지 않는다 —
+     * 조회·검사는 각 리포지토리 호출 단위 트랜잭션으로 처리하고, 최종 저장은 conversation_id
+     * 유니크 제약으로 동시 생성의 원자성을 보장한다(사전 검사를 함께 통과한 경쟁 요청은 저장에서 걸러짐).
+     */
     fun createCard(
         memberId: Long,
         conversationId: Long,
@@ -56,7 +61,11 @@ class CardService(
                 message = output.message,
                 conversationCreatedAt = conversation.createdAt,
             )
-        return cardRepository.save(card)
+        return try {
+            cardRepository.saveAndFlush(card)
+        } catch (e: DataIntegrityViolationException) {
+            throw BusinessException(ErrorCode.CARD_ALREADY_EXISTS, e.message)
+        }
     }
 
     /** 날짜(KST 자정~자정)에 속한 카드를 조회한다. */
