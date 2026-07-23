@@ -45,23 +45,36 @@ class AdminAccountServiceTest {
     fun `목록은 부트스트랩과 DB를 합쳐 보여준다`() {
         every { repository.findAllByOrderByCreatedAtAsc() } returns listOf(AdminAccount("db@gamss.kr", "adder@gamss.kr"))
 
-        val result = service.list()
+        val result = service.list("me@gamss.kr")
 
         assertEquals(2, result.size)
         assertEquals(AdminAccountSource.ENV, result[0].source)
         assertEquals("boot@gamss.kr", result[0].email)
         assertEquals(AdminAccountSource.DB, result[1].source)
         assertEquals("db@gamss.kr", result[1].email)
+        assertTrue(result[1].removable)
     }
 
     @Test
-    fun `DB에도 있는 부트스트랩 이메일은 목록에서 중복되지 않는다`() {
+    fun `DB에도 있는 부트스트랩 이메일은 ENV로만 표시된다`() {
         every { repository.findAllByOrderByCreatedAtAsc() } returns listOf(AdminAccount("boot@gamss.kr", null))
 
-        val result = service.list()
+        val result = service.list("me@gamss.kr")
 
         assertEquals(1, result.size)
-        assertEquals(AdminAccountSource.DB, result[0].source)
+        assertEquals(AdminAccountSource.ENV, result[0].source)
+        assertFalse(result[0].removable)
+    }
+
+    @Test
+    fun `본인 계정은 삭제 불가로 표시된다`() {
+        every { repository.findAllByOrderByCreatedAtAsc() } returns listOf(AdminAccount("me@gamss.kr", null))
+
+        val result = service.list("Me@Gamss.kr")
+
+        val dbEntry = result.first { it.source == AdminAccountSource.DB }
+        assertEquals("me@gamss.kr", dbEntry.email)
+        assertFalse(dbEntry.removable)
     }
 
     @Test

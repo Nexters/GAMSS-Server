@@ -33,8 +33,10 @@ class AdminAccountController(
         description = "허용 관리자를 반환합니다. ENV 부트스트랩(삭제 불가)과 DB 관리 항목을 함께 보여줍니다.",
     )
     @GetMapping
-    fun list(): ApiResponse<List<AdminAccountResponse>> =
-        ApiResponse.success(adminAccountService.list().map { AdminAccountResponse.from(it) })
+    fun list(
+        @Parameter(hidden = true) @AuthenticationPrincipal principal: AdminPrincipal,
+    ): ApiResponse<List<AdminAccountResponse>> =
+        ApiResponse.success(adminAccountService.list(principal.email).map { AdminAccountResponse.from(it) })
 
     @Operation(
         summary = "관리자 추가",
@@ -52,7 +54,8 @@ class AdminAccountController(
         @Valid @RequestBody request: AddAdminAccountRequest,
     ): ApiResponse<AdminAccountResponse> {
         val account = adminAccountService.add(checkNotNull(request.email), principal.email)
-        return ApiResponse.success(AdminAccountResponse.from(AdminAccountEntry.db(account)))
+        // 방금 추가한 계정은 남을 추가한 것이라(본인은 이미 허용돼 추가 불가) 삭제 가능하다.
+        return ApiResponse.success(AdminAccountResponse.from(AdminAccountEntry.db(account, removable = true)))
     }
 
     @Operation(

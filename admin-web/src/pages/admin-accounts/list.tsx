@@ -175,7 +175,12 @@ export function AdminAccountList() {
                       {account.removable && account.id !== null && (
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-muted-foreground hover:text-destructive"
+                              aria-label={`${account.email} 관리자 삭제`}
+                            >
                               <Trash2 className="size-4" />
                             </Button>
                           </AlertDialogTrigger>

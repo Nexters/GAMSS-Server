@@ -1,7 +1,6 @@
 package com.nexters.gamss.admin.controller.dto
 
 import com.nexters.gamss.admin.service.AdminAccountEntry
-import com.nexters.gamss.admin.service.AdminAccountSource
 import io.swagger.v3.oas.annotations.media.Schema
 import java.time.Instant
 
@@ -12,7 +11,7 @@ data class AdminAccountResponse(
     val email: String,
     @field:Schema(description = "출처", example = "DB", allowableValues = ["ENV", "DB"])
     val source: String,
-    @field:Schema(description = "UI에서 삭제 가능한지(ENV 부트스트랩은 false)", example = "true")
+    @field:Schema(description = "UI에서 삭제 가능한지(ENV 부트스트랩·본인 계정은 false)", example = "true")
     val removable: Boolean,
     @field:Schema(description = "이 관리자를 추가한 관리자 이메일(ENV·초기값은 null)", example = "admin@gamss.kr")
     val addedByEmail: String?,
@@ -25,7 +24,7 @@ data class AdminAccountResponse(
                 id = entry.id,
                 email = entry.email,
                 source = entry.source.name,
-                removable = entry.source == AdminAccountSource.DB,
+                removable = entry.removable,
                 addedByEmail = entry.createdByEmail,
                 createdAt = entry.createdAt,
             )
