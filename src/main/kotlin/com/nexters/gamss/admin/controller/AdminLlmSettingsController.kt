@@ -23,7 +23,11 @@ class AdminLlmSettingsController(
     @GetMapping
     fun get(): ApiResponse<LlmSettingsResponse> =
         ApiResponse.success(
-            LlmSettingsResponse.of(llmSettingsService.current(), llmSettingsService.availableModels()),
+            LlmSettingsResponse.of(
+                llmSettingsService.current(),
+                llmSettingsService.defaults(),
+                llmSettingsService.availableModels(),
+            ),
         )
 
     @Operation(
@@ -41,7 +45,11 @@ class AdminLlmSettingsController(
     ): ApiResponse<LlmSettingsResponse> {
         llmSettingsService.update(request.model, request.systemPrompt)
         return ApiResponse.success(
-            LlmSettingsResponse.of(llmSettingsService.current(), llmSettingsService.availableModels()),
+            LlmSettingsResponse.of(
+                llmSettingsService.current(),
+                llmSettingsService.defaults(),
+                llmSettingsService.availableModels(),
+            ),
         )
     }
 }

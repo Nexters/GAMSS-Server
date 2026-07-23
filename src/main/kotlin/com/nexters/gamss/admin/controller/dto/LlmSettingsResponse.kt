@@ -10,11 +10,23 @@ data class LlmSettingsResponse(
     val systemPrompt: String,
     @field:Schema(description = "선택 가능한 모델 목록(Gemini API에서 동적 조회)")
     val availableModels: List<String>,
+    @field:Schema(description = "코드 기본값 모델(기본값으로 복원용)")
+    val defaultModel: String,
+    @field:Schema(description = "코드 기본값 시스템 프롬프트(기본값으로 복원용)")
+    val defaultSystemPrompt: String,
 ) {
     companion object {
         fun of(
-            view: LlmSettingsView,
+            current: LlmSettingsView,
+            defaults: LlmSettingsView,
             availableModels: List<String>,
-        ): LlmSettingsResponse = LlmSettingsResponse(view.model, view.systemPrompt, availableModels)
+        ): LlmSettingsResponse =
+            LlmSettingsResponse(
+                model = current.model,
+                systemPrompt = current.systemPrompt,
+                availableModels = availableModels,
+                defaultModel = defaults.model,
+                defaultSystemPrompt = defaults.systemPrompt,
+            )
     }
 }

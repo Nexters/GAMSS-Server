@@ -30,6 +30,9 @@ class LlmSettingsService(
 
     fun availableModels(): List<String> = modelCatalog.availableModels()
 
+    /** 코드 기본값(DB로 덮이기 전 원래 값). "기본값으로 복원"에 쓴다. */
+    fun defaults(): LlmSettingsView = LlmSettingsView(geminiProperties.model, promptProvider.systemPrompt)
+
     @Transactional
     fun update(
         model: String,
