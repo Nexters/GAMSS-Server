@@ -1,6 +1,7 @@
 package com.nexters.gamss.admin.service
 
 import com.nexters.gamss.admin.config.AdminProperties
+import com.nexters.gamss.admin.repository.AdminAccountRepository
 import com.nexters.gamss.auth.social.SocialProvider
 import com.nexters.gamss.auth.social.SocialTokenVerifier
 import com.nexters.gamss.auth.social.SocialUser
@@ -17,7 +18,13 @@ class AdminAuthServiceTest {
     private val socialTokenVerifier = mockk<SocialTokenVerifier>()
     private val jwtIssuer = mockk<JwtIssuer>()
 
-    private fun service(vararg emails: String) = AdminAuthService(socialTokenVerifier, AdminProperties(emails.toList()), jwtIssuer)
+    private fun service(vararg emails: String): AdminAuthService {
+        val properties = AdminProperties(emails.toList())
+        val accountRepository = mockk<AdminAccountRepository>()
+        every { accountRepository.existsByEmail(any()) } returns false
+        val accountService = AdminAccountService(accountRepository, properties)
+        return AdminAuthService(socialTokenVerifier, properties, accountService, jwtIssuer)
+    }
 
     @Test
     fun `허용목록에 있는 이메일이면 관리자 토큰을 발급한다`() {

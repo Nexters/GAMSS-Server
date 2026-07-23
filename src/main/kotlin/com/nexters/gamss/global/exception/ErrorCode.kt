@@ -39,6 +39,11 @@ enum class ErrorCode(
     // 댓글 생성
     MESSAGE_NOT_FOUND(HttpStatus.NOT_FOUND, "메시지를 찾을 수 없습니다."),
     INVALID_COMMENT_TARGET(HttpStatus.BAD_REQUEST, "일기(사용자) 메시지에만 댓글을 생성할 수 있습니다."),
+
+    // 백오피스 관리자
+    ADMIN_ACCOUNT_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 등록된 관리자입니다."),
+    ADMIN_ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "관리자를 찾을 수 없습니다."),
+    CANNOT_REMOVE_SELF(HttpStatus.CONFLICT, "자기 자신은 관리자에서 삭제할 수 없습니다."),
     ;
 
     val code: String get() = name
