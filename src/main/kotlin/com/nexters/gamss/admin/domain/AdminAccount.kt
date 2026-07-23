@@ -27,6 +27,9 @@ class AdminAccount(
 ) {
     init {
         require(email.isNotBlank()) { "관리자 이메일은 비어 있을 수 없습니다." }
+        // 이메일은 정규화(공백 제거·소문자)된 값만 저장한다 — unique 제약·isAllowed 조회가 정규화를 전제하므로,
+        // 정규화되지 않은 값이 들어오면 저장 전에 막는다(정규화 자체는 호출 측이 수행).
+        require(email == email.trim().lowercase()) { "관리자 이메일은 정규화(공백 제거·소문자)된 값이어야 합니다." }
     }
 
     @Id
