@@ -1,5 +1,6 @@
 package com.nexters.gamss.card.controller
 
+import com.nexters.gamss.card.controller.dto.CardCalendarResponse
 import com.nexters.gamss.card.controller.dto.CardResponse
 import com.nexters.gamss.card.controller.dto.CreateCardRequest
 import com.nexters.gamss.card.service.CardService
@@ -81,7 +82,8 @@ class CardController(
     @Operation(
         summary = "월별 카드 조회(캘린더)",
         description =
-            "해당 월(대화 생성일 기준, KST)에 속한 카드 목록을 반환합니다.\n\n" +
+            "해당 월(대화 생성일 기준, KST)의 날짜별 대표 감정 목록만 반환합니다(캘린더 표시용). " +
+                "대사·요약 등 상세는 날짜를 눌러 날짜별 조회로 확인합니다.\n\n" +
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +
@@ -94,8 +96,8 @@ class CardController(
         @Parameter(description = "조회할 월 (yyyy-MM)", example = "2026-07")
         @RequestParam
         @DateTimeFormat(pattern = "yyyy-MM") yearMonth: YearMonth,
-    ): ApiResponse<List<CardResponse>> {
+    ): ApiResponse<List<CardCalendarResponse>> {
         val cards = cardService.getCardsByMonth(principal.memberId, yearMonth)
-        return ApiResponse.success(cards.map { CardResponse.from(it) })
+        return ApiResponse.success(CardCalendarResponse.listFrom(cards))
     }
 }
