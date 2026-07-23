@@ -35,6 +35,12 @@ class Card(
     @Column(name = "conversation_created_at", nullable = false)
     val conversationCreatedAt: Instant,
 ) {
+    init {
+        require(summary.isNotBlank()) { "카드 요약은 비어 있을 수 없습니다." }
+        require(message.isNotBlank()) { "카드 대사는 비어 있을 수 없습니다." }
+        require('\n' !in message && '\r' !in message) { "카드 대사는 한 줄이어야 합니다." }
+    }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long = 0L
