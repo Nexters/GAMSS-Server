@@ -7,7 +7,6 @@ import com.nexters.gamss.conversation.controller.dto.GenerateCommentsRequest
 import com.nexters.gamss.conversation.controller.dto.MessageResponse
 import com.nexters.gamss.conversation.controller.dto.ReplyGenerationResponse
 import com.nexters.gamss.conversation.controller.dto.SaveMessageRequest
-import com.nexters.gamss.conversation.domain.Message
 import com.nexters.gamss.conversation.service.CommentGenerationOutcome
 import com.nexters.gamss.conversation.service.CommentGenerationService
 import com.nexters.gamss.conversation.service.ConversationService

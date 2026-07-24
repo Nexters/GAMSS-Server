@@ -1,6 +1,5 @@
 package com.nexters.gamss.conversation.service
 
-import com.nexters.gamss.conversation.controller.dto.MessageResponse
 import com.nexters.gamss.conversation.domain.CommentStatus
 import com.nexters.gamss.conversation.domain.Message
 import com.nexters.gamss.conversation.domain.SenderType
