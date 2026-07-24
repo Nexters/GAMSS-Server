@@ -325,6 +325,23 @@ class CommentGenerationServiceTest {
     }
 
     @Test
+    fun `답글 선점에 실패했는데 상태는 DONE이고 답글을 찾을 수 없으면 FAILED를 반환한다`() {
+        every { messageRepository.findById(1L) } returns Optional.of(userReplyMessage(commentStatus = CommentStatus.DONE))
+        every { messageRepository.findById(2L) } returns Optional.of(characterMessage())
+        every { messageRepository.findById(3L) } returns Optional.of(diaryMessage())
+        every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
+        every {
+            messageRepository.updateCommentStatus(1L, CommentStatus.PENDING, listOf(CommentStatus.NONE, CommentStatus.FAILED), any())
+        } returns 0
+        every { messageRepository.findByRepliesToMessageId(1L) } returns null
+
+        val result = service.generateReplyComment(memberId = 1L, messageId = 1L)
+
+        assertEquals(CommentGenerationOutcome.FAILED, result.outcome)
+        assertEquals(null, result.message)
+    }
+
+    @Test
     fun `답글 LLM 호출이 재시도까지 실패하면 FAILED로 마킹하고 FAILED를 반환한다`() {
         every { messageRepository.findById(1L) } returns Optional.of(userReplyMessage())
         every { messageRepository.findById(2L) } returns Optional.of(characterMessage())

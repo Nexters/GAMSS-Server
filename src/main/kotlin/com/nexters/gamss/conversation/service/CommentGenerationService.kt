@@ -212,10 +212,13 @@ class CommentGenerationService(
                 .orElseThrow { BusinessException(ErrorCode.MESSAGE_NOT_FOUND) }
         return when (message.commentStatus) {
             CommentStatus.DONE -> {
-                ReplyGenerationResult(
-                    CommentGenerationOutcome.DONE,
-                    messageRepository.findByRepliesToMessageId(messageId),
-                )
+                val reply = messageRepository.findByRepliesToMessageId(messageId)
+                if (reply == null) {
+                    log.error("commentStatus는 DONE인데 답글 메시지를 찾을 수 없습니다. messageId={}", messageId)
+                    ReplyGenerationResult(CommentGenerationOutcome.FAILED)
+                } else {
+                    ReplyGenerationResult(CommentGenerationOutcome.DONE, reply)
+                }
             }
 
             else -> {
