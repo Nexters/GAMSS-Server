@@ -17,6 +17,7 @@ import com.nexters.gamss.llm.CommentGenerationFailedException
 import com.nexters.gamss.llm.CommentGenerationOutput
 import com.nexters.gamss.llm.CommentGenerator
 import com.nexters.gamss.llm.EongttungTopicSelector
+import com.nexters.gamss.llm.ReplyGenerationOutput
 import com.nexters.gamss.llm.TikitakaDraft
 import io.mockk.every
 import io.mockk.mockk
@@ -50,6 +51,26 @@ class CommentGenerationServiceTest {
     private val tikitakaCount = 3
 
     private fun rootMessage(): Message = Message(conversationId = 10L, senderType = SenderType.USER, content = "오늘 억울한 일이 있었어")
+
+    private fun userReplyMessage(commentStatus: CommentStatus = CommentStatus.NONE): Message =
+        Message(
+            conversationId = 10L,
+            senderType = SenderType.USER,
+            content = "그건 좀 아니지 않아?",
+            repliesToMessageId = 2L,
+            commentStatus = commentStatus,
+        )
+
+    private fun characterMessage(): Message =
+        Message(
+            conversationId = 10L,
+            senderType = SenderType.CHARACTER,
+            emotionType = EmotionType.JOY,
+            content = "오늘 진짜 잘했다!",
+            rootMessageId = 3L,
+        )
+
+    private fun diaryMessage(): Message = Message(conversationId = 10L, senderType = SenderType.USER, content = "오늘 있었던 일")
 
     private fun feed(): CommentFeed =
         CommentFeed(
@@ -242,5 +263,106 @@ class CommentGenerationServiceTest {
         val exception = assertFailsWith<BusinessException> { service.generateComments(memberId = 1L, messageId = 1L) }
 
         assertEquals(ErrorCode.CONVERSATION_ACCESS_DENIED, exception.errorCode)
+    }
+
+    @Test
+    fun `답글 선점에 성공하면 LLM을 호출하고 저장한 뒤 DONE을 반환한다`() {
+        every { messageRepository.findById(1L) } returns Optional.of(userReplyMessage())
+        every { messageRepository.findById(2L) } returns Optional.of(characterMessage())
+        every { messageRepository.findById(3L) } returns Optional.of(diaryMessage())
+        every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
+        every {
+            messageRepository.updateCommentStatus(1L, CommentStatus.PENDING, listOf(CommentStatus.NONE, CommentStatus.FAILED), any())
+        } returns 1
+        every {
+            commentGenerator.generateReply(diaryMessage().content, "gippeum", characterMessage().content, userReplyMessage().content)
+        } returns ReplyGenerationOutput("그치! 잘했어!", 77)
+        every { commentFeedValidator.validateReply("그치! 잘했어!") } returns Unit
+        val savedReply =
+            Message(conversationId = 10L, senderType = SenderType.CHARACTER, emotionType = EmotionType.JOY, content = "그치! 잘했어!")
+        every { commentPersistenceService.saveReply(10L, 0L, 1L, EmotionType.JOY, "그치! 잘했어!") } returns savedReply
+
+        val result = service.generateReplyComment(memberId = 1L, messageId = 1L)
+
+        assertEquals(CommentGenerationOutcome.DONE, result.outcome)
+        assertEquals(savedReply, result.message)
+        assertEquals(77, result.usedTokens)
+    }
+
+    @Test
+    fun `답글 선점에 실패하고 현재 상태가 PENDING이면 GENERATING을 반환한다`() {
+        every { messageRepository.findById(1L) } returns Optional.of(userReplyMessage())
+        every { messageRepository.findById(2L) } returns Optional.of(characterMessage())
+        every { messageRepository.findById(3L) } returns Optional.of(diaryMessage())
+        every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
+        every {
+            messageRepository.updateCommentStatus(1L, CommentStatus.PENDING, listOf(CommentStatus.NONE, CommentStatus.FAILED), any())
+        } returns 0
+
+        val result = service.generateReplyComment(memberId = 1L, messageId = 1L)
+
+        assertEquals(CommentGenerationOutcome.GENERATING, result.outcome)
+        verify(exactly = 0) { commentGenerator.generateReply(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `답글 선점에 실패하고 현재 상태가 DONE이면 기존 답글을 조회해서 DONE을 반환한다`() {
+        every { messageRepository.findById(1L) } returns Optional.of(userReplyMessage(commentStatus = CommentStatus.DONE))
+        every { messageRepository.findById(2L) } returns Optional.of(characterMessage())
+        every { messageRepository.findById(3L) } returns Optional.of(diaryMessage())
+        every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
+        every {
+            messageRepository.updateCommentStatus(1L, CommentStatus.PENDING, listOf(CommentStatus.NONE, CommentStatus.FAILED), any())
+        } returns 0
+        val existingReply =
+            Message(conversationId = 10L, senderType = SenderType.CHARACTER, emotionType = EmotionType.JOY, content = "이미 생성됨")
+        every { messageRepository.findByRepliesToMessageId(1L) } returns existingReply
+
+        val result = service.generateReplyComment(memberId = 1L, messageId = 1L)
+
+        assertEquals(CommentGenerationOutcome.DONE, result.outcome)
+        assertEquals(existingReply, result.message)
+    }
+
+    @Test
+    fun `답글 LLM 호출이 재시도까지 실패하면 FAILED로 마킹하고 FAILED를 반환한다`() {
+        every { messageRepository.findById(1L) } returns Optional.of(userReplyMessage())
+        every { messageRepository.findById(2L) } returns Optional.of(characterMessage())
+        every { messageRepository.findById(3L) } returns Optional.of(diaryMessage())
+        every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
+        every {
+            messageRepository.updateCommentStatus(1L, CommentStatus.PENDING, listOf(CommentStatus.NONE, CommentStatus.FAILED), any())
+        } returns 1
+        every { commentGenerator.generateReply(any(), any(), any(), any()) } throws CommentGenerationFailedException("LLM 호출 실패")
+        every { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) } returns 1
+
+        val result = service.generateReplyComment(memberId = 1L, messageId = 1L)
+
+        assertEquals(CommentGenerationOutcome.FAILED, result.outcome)
+        verify(exactly = 2) { commentGenerator.generateReply(any(), any(), any(), any()) }
+        verify(exactly = 1) { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) }
+    }
+
+    @Test
+    fun `답글 대상이 캐릭터 메시지가 아니면 INVALID_COMMENT_TARGET`() {
+        val nonCharacterTarget = Message(conversationId = 10L, senderType = SenderType.USER, content = "다른 유저 메시지")
+        every { messageRepository.findById(1L) } returns Optional.of(userReplyMessage())
+        every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
+        every { messageRepository.findById(2L) } returns Optional.of(nonCharacterTarget)
+
+        val exception = assertFailsWith<BusinessException> { service.generateReplyComment(memberId = 1L, messageId = 1L) }
+
+        assertEquals(ErrorCode.INVALID_COMMENT_TARGET, exception.errorCode)
+    }
+
+    @Test
+    fun `답글이 아닌 메시지로 답글 생성을 요청하면 INVALID_COMMENT_TARGET`() {
+        val notAReply = Message(conversationId = 10L, senderType = SenderType.USER, content = "그냥 메시지", repliesToMessageId = null)
+        every { messageRepository.findById(1L) } returns Optional.of(notAReply)
+        every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
+
+        val exception = assertFailsWith<BusinessException> { service.generateReplyComment(memberId = 1L, messageId = 1L) }
+
+        assertEquals(ErrorCode.INVALID_COMMENT_TARGET, exception.errorCode)
     }
 }

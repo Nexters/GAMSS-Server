@@ -4,7 +4,7 @@ import org.springframework.stereotype.Component
 import tools.jackson.core.JacksonException
 import tools.jackson.databind.json.JsonMapper
 
-/** [PromptProvider.replyPrompt]가 정의한 출력 계약(`{"text": "..."}`)을 파싱한다. */
+/** [PromptProvider.replyPrompt]가 정의한 출력 형식대로(`{"text": "..."}`) 파싱한다. */
 @Component
 class ReplyJsonParser(
     private val jsonMapper: JsonMapper,

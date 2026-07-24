@@ -1,5 +1,6 @@
 package com.nexters.gamss.conversation.service
 
+import com.nexters.gamss.conversation.controller.dto.MessageResponse
 import com.nexters.gamss.conversation.domain.CommentStatus
 import com.nexters.gamss.conversation.domain.Message
 import com.nexters.gamss.conversation.domain.SenderType
@@ -14,6 +15,8 @@ import com.nexters.gamss.llm.CommentGenerationFailedException
 import com.nexters.gamss.llm.CommentGenerationOutput
 import com.nexters.gamss.llm.CommentGenerator
 import com.nexters.gamss.llm.EongttungTopicSelector
+import com.nexters.gamss.llm.PromptCharacterId
+import com.nexters.gamss.llm.ReplyGenerationOutput
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.time.Instant
@@ -76,6 +79,91 @@ class CommentGenerationService(
         }
     }
 
+    fun generateReplyComment(
+        memberId: Long,
+        messageId: Long,
+    ): ReplyGenerationResult {
+        val userReplyMessage = getOwnedRootMessage(memberId, messageId)
+        val characterMessage =
+            messageRepository
+                .findById(userReplyMessage.repliesToMessageId ?: throw BusinessException(ErrorCode.INVALID_COMMENT_TARGET))
+                .orElseThrow { BusinessException(ErrorCode.MESSAGE_NOT_FOUND) }
+        if (characterMessage.senderType != SenderType.CHARACTER) {
+            throw BusinessException(ErrorCode.INVALID_COMMENT_TARGET)
+        }
+        val diaryMessage =
+            messageRepository
+                .findById(characterMessage.rootMessageId ?: throw BusinessException(ErrorCode.INVALID_COMMENT_TARGET))
+                .orElseThrow { BusinessException(ErrorCode.MESSAGE_NOT_FOUND) }
+
+        val claimed =
+            messageRepository.updateCommentStatus(
+                messageId,
+                CommentStatus.PENDING,
+                listOf(CommentStatus.NONE, CommentStatus.FAILED),
+                Instant.now(),
+            )
+        if (claimed == 0) {
+            return currentReplyStatusResult(messageId)
+        }
+
+        return try {
+            val output = generateReplyWithRetry(diaryMessage.content, characterMessage, userReplyMessage.content)
+            val saved =
+                commentPersistenceService.saveReply(
+                    conversationId = userReplyMessage.conversationId,
+                    rootMessageId = diaryMessage.id,
+                    repliesToMessageId = messageId,
+                    characterId = characterMessage.emotionType!!,
+                    text = output.text,
+                )
+            ReplyGenerationResult(CommentGenerationOutcome.DONE, saved, output.usedTokens)
+        } catch (e: Exception) {
+            if (e is CommentGenerationFailedException) {
+                log.warn("답글 생성 최종 실패 messageId={}", messageId, e)
+            } else {
+                log.error("답글 생성 중 예기치 않은 오류 발생 messageId={}", messageId, e)
+            }
+
+            messageRepository.updateCommentStatus(
+                messageId,
+                CommentStatus.FAILED,
+                listOf(CommentStatus.PENDING),
+                Instant.now(),
+            )
+
+            // 예상된 비즈니스 예외는 FAILED 전이 후에도 원래 의미(4xx 등)를 유지하도록 다시 던진다.
+            if (e is BusinessException) throw e
+            ReplyGenerationResult(CommentGenerationOutcome.FAILED)
+        }
+    }
+
+    /** LLM 호출 + 의미 검증을 하나의 단위로 묶어 최대 [MAX_ATTEMPTS]회 시도한다(DoD: 실패 시 1회 재시도). */
+    private fun generateReplyWithRetry(
+        diaryContent: String,
+        characterMessage: Message,
+        userReply: String,
+    ): ReplyGenerationOutput {
+        var lastError: CommentGenerationFailedException? = null
+        repeat(MAX_ATTEMPTS) { attempt ->
+            try {
+                val output =
+                    commentGenerator.generateReply(
+                        diaryContent,
+                        PromptCharacterId.of(characterMessage.emotionType!!).promptId,
+                        characterMessage.content,
+                        userReply,
+                    )
+                commentFeedValidator.validateReply(output.text)
+                return output
+            } catch (e: CommentGenerationFailedException) {
+                lastError = e
+                log.warn("답글 생성 {}차 시도 실패: {}", attempt + 1, e.message)
+            }
+        }
+        throw checkNotNull(lastError)
+    }
+
     /** LLM 호출 + 의미 검증을 하나의 단위로 묶어 최대 [MAX_ATTEMPTS]회 시도한다(DoD: 실패 시 1회 재시도). */
     private fun generateWithRetry(diaryContent: String): CommentGenerationOutput {
         val characters = characterSelector.select()
@@ -114,6 +202,25 @@ class CommentGenerationService(
 
             else -> {
                 CommentGenerationResult(CommentGenerationOutcome.GENERATING)
+            }
+        }
+    }
+
+    private fun currentReplyStatusResult(messageId: Long): ReplyGenerationResult {
+        val message =
+            messageRepository
+                .findById(messageId)
+                .orElseThrow { BusinessException(ErrorCode.MESSAGE_NOT_FOUND) }
+        return when (message.commentStatus) {
+            CommentStatus.DONE -> {
+                ReplyGenerationResult(
+                    CommentGenerationOutcome.DONE,
+                    messageRepository.findByRepliesToMessageId(messageId),
+                )
+            }
+
+            else -> {
+                ReplyGenerationResult(CommentGenerationOutcome.GENERATING)
             }
         }
     }
