@@ -16,6 +16,9 @@ data class AdminProperties(
 
     fun isAllowed(email: String): Boolean = normalize(email) in allowed
 
+    /** 환경(ENV)으로 고정된 부트스트랩 허용 이메일. UI로는 지울 수 없는 break-glass 목록이다. */
+    fun bootstrapEmails(): Set<String> = allowed
+
     /** 이메일 비교·저장에 쓰는 정규화(공백 제거·소문자). 토큰 발급 등 다른 곳에서도 재사용한다. */
     fun normalize(email: String): String = email.trim().lowercase()
 }

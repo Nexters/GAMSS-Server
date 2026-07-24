@@ -5,6 +5,7 @@ import com.nexters.gamss.global.response.ErrorResponse
 import jakarta.validation.ConstraintViolationException
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
+import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.MissingServletRequestParameterException
 import org.springframework.web.bind.annotation.ExceptionHandler
@@ -58,6 +59,15 @@ class GlobalExceptionHandler {
         return ResponseEntity
             .status(errorCode.status)
             .body(ApiResponse.error(ErrorResponse(errorCode.code, "${e.name}의 형식이 올바르지 않습니다.")))
+    }
+
+    // 요청 본문(JSON) 파싱 실패 — 잘못된 enum 값, 깨진 JSON 등. 클라이언트 오류이므로 400으로 응답한다.
+    @ExceptionHandler(HttpMessageNotReadableException::class)
+    fun handleNotReadable(e: HttpMessageNotReadableException): ResponseEntity<ApiResponse<Nothing>> {
+        val errorCode = ErrorCode.INVALID_INPUT
+        return ResponseEntity
+            .status(errorCode.status)
+            .body(ApiResponse.error(ErrorResponse(errorCode.code, "요청 본문의 형식이 올바르지 않습니다.")))
     }
 
     @ExceptionHandler(Exception::class)
