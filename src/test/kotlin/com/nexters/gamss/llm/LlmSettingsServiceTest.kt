@@ -27,6 +27,16 @@ class LlmSettingsServiceTest {
     }
 
     @Test
+    fun `REPLY 타입은 DB에 값이 없으면 답글용 코드 기본값을 반환한다`() {
+        every { repository.findByPromptType(PromptType.REPLY) } returns null
+
+        val current = service.current(PromptType.REPLY)
+
+        assertEquals("gemini-3.1-flash-lite", current.model)
+        assertEquals(promptProvider.replyPrompt, current.systemPrompt)
+    }
+
+    @Test
     fun `DB에 값이 있으면 그 값을 반환한다`() {
         every { repository.findByPromptType(PromptType.COMMENT) } returns
             LlmSettings(PromptType.COMMENT, "gemini-2.5-flash", "커스텀 프롬프트")
