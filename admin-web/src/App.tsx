@@ -8,6 +8,7 @@ import { AdminLayout } from '@/components/layout/AdminLayout'
 import { LoginPage } from '@/pages/login'
 import { MemberList } from '@/pages/members/list'
 import { MemberShow } from '@/pages/members/show'
+import { LlmSettingsPage } from '@/pages/llm-settings'
 
 // mock(로컬) 모드에서는 Firebase 없이 dev-login 을 쓴다.
 const authProvider = import.meta.env.VITE_AUTH_MODE === 'mock' ? devAuthProvider : firebaseAuthProvider
@@ -33,6 +34,7 @@ export default function App() {
             <Route index element={<NavigateToResource resource="members" />} />
             <Route path="/members" element={<MemberList />} />
             <Route path="/members/:id" element={<MemberShow />} />
+            <Route path="/llm-settings" element={<LlmSettingsPage />} />
           </Route>
 
           <Route
