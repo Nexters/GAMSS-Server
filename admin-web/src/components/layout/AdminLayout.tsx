@@ -1,6 +1,6 @@
 import { useGetIdentity, useLogout } from '@refinedev/core'
 import { Link, Outlet, useLocation } from 'react-router-dom'
-import { LayoutDashboard, LogOut, ShieldCheck, Users } from 'lucide-react'
+import { LayoutDashboard, LogOut, ShieldCheck, Sparkles, Users } from 'lucide-react'
 import { Avatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -18,6 +18,7 @@ const NAV: NavItem[] = [
   { label: '대시보드', to: '/dashboard', icon: LayoutDashboard, disabled: true },
   { label: '회원 관리', to: '/members', icon: Users },
   { label: '관리자 관리', to: '/admin-accounts', icon: ShieldCheck },
+  { label: 'LLM 설정', to: '/llm-settings', icon: Sparkles },
 ]
 
 interface Identity {
@@ -35,6 +36,9 @@ function sectionOf(pathname: string): string {
   }
   if (pathname.startsWith('/dashboard')) {
     return '대시보드'
+  }
+  if (pathname.startsWith('/llm-settings')) {
+    return 'LLM 설정'
   }
   return ''
 }
