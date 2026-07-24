@@ -22,6 +22,7 @@ import com.nexters.gamss.llm.TikitakaDraft
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import org.springframework.test.util.ReflectionTestUtils
 import java.util.Optional
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -61,6 +62,8 @@ class CommentGenerationServiceTest {
             commentStatus = commentStatus,
         )
 
+    // id는 characterMessage(2L)/diaryMessage(3L)에 명시적으로 다르게 부여한다 — 둘 다 기본값(0)이면
+    // rootMessageId에 잘못된 쪽의 id가 들어가도 테스트가 못 잡아낸다(둘 다 0이라 우연히 통과).
     private fun characterMessage(): Message =
         Message(
             conversationId = 10L,
@@ -68,9 +71,11 @@ class CommentGenerationServiceTest {
             emotionType = EmotionType.JOY,
             content = "오늘 진짜 잘했다!",
             rootMessageId = 3L,
-        )
+        ).also { ReflectionTestUtils.setField(it, "id", 2L) }
 
-    private fun diaryMessage(): Message = Message(conversationId = 10L, senderType = SenderType.USER, content = "오늘 있었던 일")
+    private fun diaryMessage(): Message =
+        Message(conversationId = 10L, senderType = SenderType.USER, content = "오늘 있었던 일")
+            .also { ReflectionTestUtils.setField(it, "id", 3L) }
 
     private fun feed(): CommentFeed =
         CommentFeed(
@@ -280,7 +285,7 @@ class CommentGenerationServiceTest {
         every { commentFeedValidator.validateReply("그치! 잘했어!") } returns Unit
         val savedReply =
             Message(conversationId = 10L, senderType = SenderType.CHARACTER, emotionType = EmotionType.JOY, content = "그치! 잘했어!")
-        every { commentPersistenceService.saveReply(10L, 0L, 1L, EmotionType.JOY, "그치! 잘했어!") } returns savedReply
+        every { commentPersistenceService.saveReply(10L, 3L, 1L, EmotionType.JOY, "그치! 잘했어!") } returns savedReply
 
         val result = service.generateReplyComment(memberId = 1L, messageId = 1L)
 
