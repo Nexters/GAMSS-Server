@@ -5,7 +5,9 @@ import com.nexters.gamss.conversation.controller.dto.CommentGenerationStatus
 import com.nexters.gamss.conversation.controller.dto.ConversationResponse
 import com.nexters.gamss.conversation.controller.dto.GenerateCommentsRequest
 import com.nexters.gamss.conversation.controller.dto.MessageResponse
+import com.nexters.gamss.conversation.controller.dto.ReplyGenerationResponse
 import com.nexters.gamss.conversation.controller.dto.SaveMessageRequest
+import com.nexters.gamss.conversation.domain.Message
 import com.nexters.gamss.conversation.service.CommentGenerationOutcome
 import com.nexters.gamss.conversation.service.CommentGenerationService
 import com.nexters.gamss.conversation.service.ConversationService
@@ -157,5 +159,40 @@ class ConversationController(
             }
         val comments = if (result.outcome == CommentGenerationOutcome.DONE) result.comments.map { MessageResponse.from(it) } else null
         return ApiResponse.success(CommentGenerationResponse(status, comments, result.usedTokens))
+    }
+
+    @Operation(
+        summary = "캐릭터 댓글에 대한 답글 생성",
+        description =
+            "유저가 캐릭터 댓글에 단 답글(messageId)에 그 캐릭터가 다시 응답하도록 요청합니다. 멱등한 엔드포인트로, " +
+                "재요청이 곧 결과 조회를 겸합니다 — GENERATING이면 잠시 후 같은 요청을 다시 보내면 됩니다.\n\n" +
+                "**status 값**\n\n" +
+                "| status | 의미 |\n" +
+                "|---|---|\n" +
+                "| GENERATING | 생성 중(직접 트리거했거나 다른 요청이 먼저 선점) |\n" +
+                "| DONE | 생성 완료, comment에 결과 포함 |\n" +
+                "| FAILED | 재시도까지 실패. 다시 요청하면 재시도됨 |\n\n" +
+                "**실패 응답**\n\n" +
+                "| error.code | HTTP | 설명 |\n" +
+                "|---|---|---|\n" +
+                "| UNAUTHORIZED | 401 | 인증 필요 |\n" +
+                "| MESSAGE_NOT_FOUND | 404 | 존재하지 않는 메시지 |\n" +
+                "| INVALID_COMMENT_TARGET | 400 | 유저 답글이 아니거나, 답글 대상이 캐릭터 댓글이 아님 |\n" +
+                "| CONVERSATION_ACCESS_DENIED | 403 | 본인 채팅방이 아님 |",
+    )
+    @PostMapping("/messages/comments/{messageId}")
+    fun generateReplyComments(
+        @Parameter(hidden = true) @AuthenticationPrincipal principal: AuthPrincipal,
+        @PathVariable messageId: Long,
+    ): ApiResponse<ReplyGenerationResponse> {
+        val result = commentGenerationService.generateReplyComment(principal.memberId, messageId)
+        val status =
+            when (result.outcome) {
+                CommentGenerationOutcome.GENERATING -> CommentGenerationStatus.GENERATING
+                CommentGenerationOutcome.DONE -> CommentGenerationStatus.DONE
+                CommentGenerationOutcome.FAILED -> CommentGenerationStatus.FAILED
+            }
+        val comment = if (result.outcome == CommentGenerationOutcome.DONE) MessageResponse.from(result.message!!) else null
+        return ApiResponse.success(ReplyGenerationResponse(status, comment, result.usedTokens))
     }
 }
