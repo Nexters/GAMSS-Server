@@ -177,6 +177,7 @@ class ConversationController(
                 "| UNAUTHORIZED | 401 | 인증 필요 |\n" +
                 "| MESSAGE_NOT_FOUND | 404 | 존재하지 않는 메시지 |\n" +
                 "| INVALID_COMMENT_TARGET | 400 | 유저 답글이 아니거나, 답글 대상이 캐릭터 댓글이 아님 |\n" +
+                "| CONVERSATION_NOT_FOUND | 404 | 존재하지 않는 채팅방 |\n" +
                 "| CONVERSATION_ACCESS_DENIED | 403 | 본인 채팅방이 아님 |",
     )
     @PostMapping("/messages/comments/{messageId}")
