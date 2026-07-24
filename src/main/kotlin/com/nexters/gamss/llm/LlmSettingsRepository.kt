@@ -2,4 +2,6 @@ package com.nexters.gamss.llm
 
 import org.springframework.data.jpa.repository.JpaRepository
 
-interface LlmSettingsRepository : JpaRepository<LlmSettings, Long>
+interface LlmSettingsRepository : JpaRepository<LlmSettings, Long> {
+    fun findByPromptType(promptType: PromptType): LlmSettings?
+}

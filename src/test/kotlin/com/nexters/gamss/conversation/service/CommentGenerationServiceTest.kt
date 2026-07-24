@@ -72,7 +72,7 @@ class CommentGenerationServiceTest {
         every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
         stubClaimSuccess()
         every {
-            commentGenerator.generate("", message.content, characters, tikitakaCount, null)
+            commentGenerator.generateComment("", message.content, characters, tikitakaCount, null)
         } returns CommentGenerationOutput(feed(), 123)
         every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } returns Unit
         val savedMessages =
@@ -99,7 +99,7 @@ class CommentGenerationServiceTest {
 
         assertEquals(CommentGenerationOutcome.GENERATING, result.outcome)
         assertEquals(null, result.usedTokens)
-        verify(exactly = 0) { commentGenerator.generate(any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { commentGenerator.generateComment(any(), any(), any(), any(), any()) }
     }
 
     @Test
@@ -133,14 +133,14 @@ class CommentGenerationServiceTest {
         every { messageRepository.findById(1L) } returns Optional.of(message)
         every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
         stubClaimSuccess()
-        every { commentGenerator.generate(any(), any(), any(), any(), any()) } throws CommentGenerationFailedException("LLM 호출 실패")
+        every { commentGenerator.generateComment(any(), any(), any(), any(), any()) } throws CommentGenerationFailedException("LLM 호출 실패")
         every { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) } returns 1
 
         val result = service.generateComments(memberId = 1L, messageId = 1L)
 
         assertEquals(CommentGenerationOutcome.FAILED, result.outcome)
         assertEquals(null, result.usedTokens)
-        verify(exactly = 2) { commentGenerator.generate(any(), any(), any(), any(), any()) }
+        verify(exactly = 2) { commentGenerator.generateComment(any(), any(), any(), any(), any()) }
         verify(exactly = 1) { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) }
     }
 
@@ -150,7 +150,7 @@ class CommentGenerationServiceTest {
         every { messageRepository.findById(1L) } returns Optional.of(message)
         every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
         stubClaimSuccess()
-        every { commentGenerator.generate(any(), any(), any(), any(), any()) } returns CommentGenerationOutput(feed(), 123)
+        every { commentGenerator.generateComment(any(), any(), any(), any(), any()) } returns CommentGenerationOutput(feed(), 123)
         every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } returns Unit
         every { commentPersistenceService.saveFeed(10L, 1L, feed()) } throws RuntimeException("DB 제약조건 위반")
         every { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) } returns 1
@@ -168,7 +168,7 @@ class CommentGenerationServiceTest {
         every { messageRepository.findById(1L) } returns Optional.of(message)
         every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
         stubClaimSuccess()
-        every { commentGenerator.generate(any(), any(), any(), any(), any()) } returns CommentGenerationOutput(feed(), 123)
+        every { commentGenerator.generateComment(any(), any(), any(), any(), any()) } returns CommentGenerationOutput(feed(), 123)
         every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } returns Unit
         every { commentPersistenceService.saveFeed(10L, 1L, feed()) } throws BusinessException(ErrorCode.CONVERSATION_NOT_FOUND)
         every { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) } returns 1
@@ -197,7 +197,7 @@ class CommentGenerationServiceTest {
                 tikitaka = listOf(TikitakaDraft(EmotionType.JOY, EmotionType.QUIRKY, "티키타카")),
             )
         every {
-            commentGenerator.generate("", message.content, charactersWithQuirky, 1, "소재")
+            commentGenerator.generateComment("", message.content, charactersWithQuirky, 1, "소재")
         } returns CommentGenerationOutput(quirkyFeed, 456)
         every { commentFeedValidator.validate(quirkyFeed, charactersWithQuirky, 1) } returns Unit
         every { commentPersistenceService.saveFeed(10L, 1L, quirkyFeed) } returns emptyList()

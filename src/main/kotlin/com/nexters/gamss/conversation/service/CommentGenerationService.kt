@@ -88,7 +88,7 @@ class CommentGenerationService(
         repeat(MAX_ATTEMPTS) { attempt ->
             try {
                 val output =
-                    commentGenerator.generate(pastSummary, diaryContent, characters, tikitakaCount, eongttungTopic)
+                    commentGenerator.generateComment(pastSummary, diaryContent, characters, tikitakaCount, eongttungTopic)
                 commentFeedValidator.validate(output.feed, characters, tikitakaCount)
                 return output
             } catch (e: CommentGenerationFailedException) {
