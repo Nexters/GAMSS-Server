@@ -3,6 +3,7 @@ package com.nexters.gamss.global.exception
 import io.mockk.every
 import io.mockk.mockk
 import org.springframework.http.HttpStatus
+import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.validation.BindingResult
 import org.springframework.web.bind.MethodArgumentNotValidException
 import kotlin.test.Test
@@ -40,6 +41,14 @@ class GlobalExceptionHandlerTest {
         every { bindingResult.fieldErrors } returns emptyList()
 
         val response = handler.handleValidation(exception)
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.statusCode)
+        assertEquals("INVALID_INPUT", response.body!!.error!!.code)
+    }
+
+    @Test
+    fun `본문 파싱 실패는 400 INVALID_INPUT 으로 변환한다`() {
+        val response = handler.handleNotReadable(mockk<HttpMessageNotReadableException>())
 
         assertEquals(HttpStatus.BAD_REQUEST, response.statusCode)
         assertEquals("INVALID_INPUT", response.body!!.error!!.code)
