@@ -44,6 +44,11 @@ enum class ErrorCode(
     // 카드
     CARD_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 카드가 생성된 채팅방입니다."),
     CARD_GENERATION_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "카드 대사 생성에 실패했습니다. 잠시 후 다시 시도해주세요."),
+
+    // 백오피스 관리자
+    ADMIN_ACCOUNT_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 등록된 관리자입니다."),
+    ADMIN_ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "관리자를 찾을 수 없습니다."),
+    CANNOT_REMOVE_SELF(HttpStatus.CONFLICT, "자기 자신은 관리자에서 삭제할 수 없습니다."),
     ;
 
     val code: String get() = name
