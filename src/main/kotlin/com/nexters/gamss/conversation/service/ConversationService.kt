@@ -29,7 +29,7 @@ class ConversationService(
             throw BusinessException(ErrorCode.INVALID_INPUT, "새 채팅방을 만들면서 답장할 수 없습니다.")
         }
         val conversation =
-            conversationId?.let { getOwnedConversation(it, memberId) }
+            conversationId?.let { getOwnedConversationForUpdate(it, memberId) }
                 ?: conversationRepository.save(Conversation(memberId))
         conversation.ensureActive()
         if (repliesToMessageId != null) {
@@ -51,7 +51,7 @@ class ConversationService(
         memberId: Long,
         conversationId: Long,
     ): Conversation {
-        val conversation = getOwnedConversation(conversationId, memberId)
+        val conversation = getOwnedConversationForUpdate(conversationId, memberId)
         conversation.end()
         return conversation
     }
@@ -62,7 +62,7 @@ class ConversationService(
         memberId: Long,
         conversationId: Long,
     ): Conversation {
-        val conversation = getOwnedConversation(conversationId, memberId)
+        val conversation = getOwnedConversationForUpdate(conversationId, memberId)
         conversation.delete()
         return conversation
     }
@@ -109,6 +109,25 @@ class ConversationService(
         val conversation =
             conversationRepository
                 .findById(conversationId)
+                .orElseThrow { BusinessException(ErrorCode.CONVERSATION_NOT_FOUND) }
+        if (!conversation.isOwnedBy(memberId)) {
+            throw BusinessException(ErrorCode.CONVERSATION_ACCESS_DENIED)
+        }
+        return conversation
+    }
+
+    /**
+     * 상태를 바꾸는 요청(메시지 저장·종료·삭제)에서 쓴다. 행 잠금을 걸어, 동시에 들어온 다른 상태
+     * 변경 요청이 이 트랜잭션이 끝날 때까지 대기하게 만든다 — 그래야 삭제 이후 작업 차단 계약이
+     * "ACTIVE로 읽고 나서 뒤늦게 삭제가 커밋되는" 경합으로 깨지지 않는다.
+     */
+    private fun getOwnedConversationForUpdate(
+        conversationId: Long,
+        memberId: Long,
+    ): Conversation {
+        val conversation =
+            conversationRepository
+                .findByIdForUpdate(conversationId)
                 .orElseThrow { BusinessException(ErrorCode.CONVERSATION_NOT_FOUND) }
         if (!conversation.isOwnedBy(memberId)) {
             throw BusinessException(ErrorCode.CONVERSATION_ACCESS_DENIED)
