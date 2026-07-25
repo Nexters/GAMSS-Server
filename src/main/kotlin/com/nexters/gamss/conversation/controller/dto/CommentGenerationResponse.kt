@@ -2,12 +2,6 @@ package com.nexters.gamss.conversation.controller.dto
 
 import io.swagger.v3.oas.annotations.media.Schema
 
-enum class CommentGenerationStatus {
-    GENERATING,
-    DONE,
-    FAILED,
-}
-
 data class CommentGenerationResponse(
     @field:Schema(description = "댓글 생성 상태. 재요청 시 결과 조회를 겸한다")
     val status: CommentGenerationStatus,
