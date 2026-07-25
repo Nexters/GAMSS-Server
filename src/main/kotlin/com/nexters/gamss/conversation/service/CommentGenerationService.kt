@@ -8,7 +8,7 @@ import com.nexters.gamss.conversation.repository.MessageRepository
 import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
-import com.nexters.gamss.llm.generation.CommentGenerationFailedException
+import com.nexters.gamss.llm.error.CommentGenerationFailedException
 import com.nexters.gamss.llm.generation.CommentGenerationOutput
 import com.nexters.gamss.llm.generation.CommentGenerator
 import com.nexters.gamss.llm.generation.ReplyGenerationOutput

@@ -1,5 +1,5 @@
 package com.nexters.gamss.llm.parsing
-import com.nexters.gamss.llm.generation.CommentGenerationFailedException
+import com.nexters.gamss.llm.error.CommentGenerationFailedException
 import org.springframework.stereotype.Component
 import tools.jackson.core.JacksonException
 import tools.jackson.databind.json.JsonMapper

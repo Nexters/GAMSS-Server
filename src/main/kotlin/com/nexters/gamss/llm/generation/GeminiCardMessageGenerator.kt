@@ -5,6 +5,8 @@ import com.google.genai.types.GenerateContentConfig
 import com.google.genai.types.Part
 import com.google.genai.types.Schema
 import com.nexters.gamss.emotion.domain.EmotionType
+import com.nexters.gamss.llm.config.GeminiProperties
+import com.nexters.gamss.llm.error.CardGenerationFailedException
 import com.nexters.gamss.llm.prompt.PromptProvider
 import com.nexters.gamss.llm.prompt.PromptType
 import com.nexters.gamss.llm.settings.SystemPromptResolver
@@ -14,7 +16,7 @@ import tools.jackson.databind.json.JsonMapper
 
 /**
  * Gemini 공식 SDK(google-genai)로 카드 한 줄 대사를 생성하는 [CardMessageGenerator] 구현체.
- * SDK 타입이 이 클래스 밖으로 새어나가지 않는다. 모델·시스템 프롬프트는 [LlmSettingsService]가
+ * SDK 타입이 이 클래스 밖으로 새어나가지 않는다. 모델·시스템 프롬프트는 [SystemPromptResolver]가
  * 공통 프롬프트 + 카드 프롬프트로 조립한 값을 쓰므로(백오피스에서 편집 가능), 이 클래스는 그 계약을
  * SDK 호출에 실어 나르는 역할만 한다.
  */

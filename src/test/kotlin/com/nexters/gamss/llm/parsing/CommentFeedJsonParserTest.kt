@@ -1,6 +1,6 @@
 package com.nexters.gamss.llm.parsing
 import com.nexters.gamss.emotion.domain.EmotionType
-import com.nexters.gamss.llm.generation.CommentGenerationFailedException
+import com.nexters.gamss.llm.error.CommentGenerationFailedException
 import tools.jackson.databind.json.JsonMapper
 import kotlin.test.Test
 import kotlin.test.assertEquals

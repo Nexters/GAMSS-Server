@@ -2,8 +2,8 @@ package com.nexters.gamss.llm.settings
 
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
-import com.nexters.gamss.llm.generation.GeminiModelCatalog
-import com.nexters.gamss.llm.generation.GeminiProperties
+import com.nexters.gamss.llm.config.GeminiModelCatalog
+import com.nexters.gamss.llm.config.GeminiProperties
 import com.nexters.gamss.llm.prompt.PromptProvider
 import com.nexters.gamss.llm.prompt.PromptType
 import org.springframework.stereotype.Service

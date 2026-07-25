@@ -5,6 +5,8 @@ import com.google.genai.types.GenerateContentConfig
 import com.google.genai.types.Part
 import com.google.genai.types.Schema
 import com.nexters.gamss.emotion.domain.EmotionType
+import com.nexters.gamss.llm.config.GeminiProperties
+import com.nexters.gamss.llm.error.CommentGenerationFailedException
 import com.nexters.gamss.llm.parsing.CommentFeedJsonParser
 import com.nexters.gamss.llm.parsing.ReplyJsonParser
 import com.nexters.gamss.llm.prompt.PromptCharacterId
