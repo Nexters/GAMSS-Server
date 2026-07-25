@@ -8,14 +8,14 @@ import com.nexters.gamss.conversation.repository.MessageRepository
 import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
-import com.nexters.gamss.llm.CharacterSelector
-import com.nexters.gamss.llm.CommentFeedValidator
-import com.nexters.gamss.llm.CommentGenerationFailedException
-import com.nexters.gamss.llm.CommentGenerationOutput
-import com.nexters.gamss.llm.CommentGenerator
-import com.nexters.gamss.llm.EongttungTopicSelector
-import com.nexters.gamss.llm.PromptCharacterId
-import com.nexters.gamss.llm.ReplyGenerationOutput
+import com.nexters.gamss.llm.error.CommentGenerationFailedException
+import com.nexters.gamss.llm.generation.CommentGenerationOutput
+import com.nexters.gamss.llm.generation.CommentGenerator
+import com.nexters.gamss.llm.generation.ReplyGenerationOutput
+import com.nexters.gamss.llm.parsing.CommentFeedValidator
+import com.nexters.gamss.llm.prompt.PromptCharacterId
+import com.nexters.gamss.llm.selection.CharacterSelector
+import com.nexters.gamss.llm.selection.EongttungTopicSelector
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.time.Instant
@@ -59,11 +59,7 @@ class CommentGenerationService(
             val saved = commentPersistenceService.saveFeed(rootMessage.conversationId, messageId, output.feed)
             CommentGenerationResult(CommentGenerationOutcome.DONE, saved, output.usedTokens)
         } catch (e: Exception) {
-            if (e is CommentGenerationFailedException) {
-                log.warn("댓글 생성 최종 실패 messageId={}", messageId, e)
-            } else {
-                log.error("댓글 생성 중 예기치 않은 오류 발생 messageId={}", messageId, e)
-            }
+            logGenerationFailure("댓글 생성", messageId, e)
 
             messageRepository.updateCommentStatus(
                 messageId,
@@ -118,11 +114,7 @@ class CommentGenerationService(
                 )
             ReplyGenerationResult(CommentGenerationOutcome.DONE, saved, output.usedTokens)
         } catch (e: Exception) {
-            if (e is CommentGenerationFailedException) {
-                log.warn("답글 생성 최종 실패 messageId={}", messageId, e)
-            } else {
-                log.error("답글 생성 중 예기치 않은 오류 발생 messageId={}", messageId, e)
-            }
+            logGenerationFailure("답글 생성", messageId, e)
 
             messageRepository.updateCommentStatus(
                 messageId,
@@ -210,21 +202,29 @@ class CommentGenerationService(
             messageRepository
                 .findById(messageId)
                 .orElseThrow { BusinessException(ErrorCode.MESSAGE_NOT_FOUND) }
-        return when (message.commentStatus) {
-            CommentStatus.DONE -> {
-                val reply = messageRepository.findByRepliesToMessageId(messageId)
-                if (reply == null) {
-                    log.error("commentStatus는 DONE인데 답글 메시지를 찾을 수 없습니다. messageId={}", messageId)
-                    ReplyGenerationResult(CommentGenerationOutcome.FAILED)
-                } else {
-                    ReplyGenerationResult(CommentGenerationOutcome.DONE, reply)
-                }
-            }
-
-            else -> {
-                ReplyGenerationResult(CommentGenerationOutcome.GENERATING)
-            }
+        if (message.commentStatus != CommentStatus.DONE) {
+            return ReplyGenerationResult(CommentGenerationOutcome.GENERATING)
         }
+        val reply =
+            messageRepository.findByRepliesToMessageId(messageId)
+                ?: run {
+                    log.error("commentStatus는 DONE인데 답글 메시지를 찾을 수 없습니다. messageId={}", messageId)
+                    return ReplyGenerationResult(CommentGenerationOutcome.FAILED)
+                }
+        return ReplyGenerationResult(CommentGenerationOutcome.DONE, reply)
+    }
+
+    // 생성 실패 로그: 예상된 실패(재시도 소진)는 warn, 예기치 않은 오류는 error로 남긴다.
+    private fun logGenerationFailure(
+        action: String,
+        messageId: Long,
+        e: Exception,
+    ) {
+        if (e is CommentGenerationFailedException) {
+            log.warn("{} 최종 실패 messageId={}", action, messageId, e)
+            return
+        }
+        log.error("{} 중 예기치 않은 오류 발생 messageId={}", action, messageId, e)
     }
 
     private fun getOwnedRootMessage(

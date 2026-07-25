@@ -7,9 +7,9 @@ import com.nexters.gamss.conversation.repository.ConversationRepository
 import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
-import com.nexters.gamss.llm.CardGenerationFailedException
-import com.nexters.gamss.llm.CardMessageGenerator
-import com.nexters.gamss.llm.CardMessageOutput
+import com.nexters.gamss.llm.error.CardGenerationFailedException
+import com.nexters.gamss.llm.generation.CardMessageGenerator
+import com.nexters.gamss.llm.generation.CardMessageOutput
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot

@@ -8,6 +8,10 @@ spring:
     properties:
       hibernate:
         format_sql: true
+  flyway:
+    # 로컬 전용: 검증 실패 시 자동 clean+재적용(LocalFlywayConfig)을 위해 clean을 허용한다.
+    # 배포(dev/prod) 프로필엔 이 설정이 없어 clean이 기본값(금지)이다.
+    clean-disabled: false
 
 jwt:
   secret: local-development-secret-change-me-to-a-long-random-value-0123456789
