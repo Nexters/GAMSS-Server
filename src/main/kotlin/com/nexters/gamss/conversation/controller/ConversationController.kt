@@ -7,7 +7,8 @@ import com.nexters.gamss.conversation.controller.dto.GenerateCommentsRequest
 import com.nexters.gamss.conversation.controller.dto.MessageResponse
 import com.nexters.gamss.conversation.controller.dto.ReplyGenerationResponse
 import com.nexters.gamss.conversation.controller.dto.SaveMessageRequest
-import com.nexters.gamss.conversation.service.CommentGenerationOutcome
+import com.nexters.gamss.conversation.controller.dto.SaveMessageResponse
+import com.nexters.gamss.conversation.controller.dto.toResponseStatus
 import com.nexters.gamss.conversation.service.CommentGenerationService
 import com.nexters.gamss.conversation.service.ConversationService
 import com.nexters.gamss.global.response.ApiResponse
@@ -35,10 +36,14 @@ class ConversationController(
     private val commentGenerationService: CommentGenerationService,
 ) {
     @Operation(
-        summary = "감정 기록 저장",
+        summary = "감정 기록 저장 + 캐릭터 댓글·답글 생성",
         description =
-            "사용자 메시지를 저장합니다. conversationId가 없으면 새 채팅방을 만들고, " +
+            "사용자 메시지를 저장하고, 같은 요청 안에서 캐릭터 댓글(일기) 또는 재응답(답글) 생성까지 동기로 " +
+                "처리해 함께 반환합니다(폴링 불필요). conversationId가 없으면 새 채팅방을 만들고, " +
                 "있으면 해당 채팅방에 이어서 저장합니다. 응답의 conversationId로 대화를 이어갈 수 있습니다.\n\n" +
+                "LLM 생성이 재시도(최대 2회) 끝에 실패해도 저장은 유지됩니다 — 이 경우 commentStatus=FAILED, " +
+                "comments는 빈 리스트로 반환되며, 실패한 메시지는 `/messages/comments`류 엔드포인트로 " +
+                "재시도할 수 있습니다.\n\n" +
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +
@@ -51,7 +56,7 @@ class ConversationController(
     fun saveMessage(
         @Parameter(hidden = true) @AuthenticationPrincipal principal: AuthPrincipal,
         @Valid @RequestBody request: SaveMessageRequest,
-    ): ApiResponse<MessageResponse> {
+    ): ApiResponse<SaveMessageResponse> {
         val message =
             conversationService.saveUserMessage(
                 memberId = principal.memberId,
@@ -59,7 +64,13 @@ class ConversationController(
                 content = request.content,
                 repliesToMessageId = request.repliesToMessageId,
             )
-        return ApiResponse.success(MessageResponse.from(message))
+        val response =
+            if (request.repliesToMessageId == null) {
+                SaveMessageResponse.from(message, commentGenerationService.generateComments(principal.memberId, message.id))
+            } else {
+                SaveMessageResponse.from(message, commentGenerationService.generateReplyComment(principal.memberId, message.id))
+            }
+        return ApiResponse.success(response)
     }
 
     @Operation(
@@ -125,9 +136,11 @@ class ConversationController(
     }
 
     @Operation(
-        summary = "일기(메시지)에 대한 캐릭터 댓글 생성",
+        summary = "일기(메시지)에 대한 캐릭터 댓글 생성 (실패 후 수동 재시도용)",
         description =
-            "일기 메시지에 캐릭터 댓글+티키타카 생성을 요청합니다. 멱등한 엔드포인트로, " +
+            "`POST /messages`가 저장과 함께 이 생성을 동기로 처리하므로, 평상시에는 이 엔드포인트를 " +
+                "따로 호출할 필요가 없습니다. `POST /messages` 응답이 commentStatus=FAILED였을 때 같은 " +
+                "messageId로 재시도하는 용도로 남아 있습니다. 멱등한 엔드포인트로, " +
                 "재요청이 곧 결과 조회를 겸합니다 — GENERATING이면 잠시 후 같은 요청을 다시 보내면 됩니다.\n\n" +
                 "**status 값**\n\n" +
                 "| status | 의미 |\n" +
@@ -150,20 +163,17 @@ class ConversationController(
         @Valid @RequestBody request: GenerateCommentsRequest,
     ): ApiResponse<CommentGenerationResponse> {
         val result = commentGenerationService.generateComments(principal.memberId, checkNotNull(request.messageId))
-        val status =
-            when (result.outcome) {
-                CommentGenerationOutcome.GENERATING -> CommentGenerationStatus.GENERATING
-                CommentGenerationOutcome.DONE -> CommentGenerationStatus.DONE
-                CommentGenerationOutcome.FAILED -> CommentGenerationStatus.FAILED
-            }
-        val comments = if (result.outcome == CommentGenerationOutcome.DONE) result.comments.map { MessageResponse.from(it) } else null
+        val status = result.outcome.toResponseStatus()
+        val comments = if (status == CommentGenerationStatus.DONE) result.comments.map { MessageResponse.from(it) } else null
         return ApiResponse.success(CommentGenerationResponse(status, comments, result.usedTokens))
     }
 
     @Operation(
-        summary = "캐릭터 댓글에 대한 답글 생성",
+        summary = "캐릭터 댓글에 대한 답글 생성 (실패 후 수동 재시도용)",
         description =
-            "유저가 캐릭터 댓글에 단 답글(messageId)에 그 캐릭터가 다시 응답하도록 요청합니다. 멱등한 엔드포인트로, " +
+            "`POST /messages`가 답글 저장과 함께 이 생성을 동기로 처리하므로, 평상시에는 이 엔드포인트를 " +
+                "따로 호출할 필요가 없습니다. `POST /messages` 응답이 commentStatus=FAILED였을 때 같은 " +
+                "messageId(유저 답글)로 재시도하는 용도로 남아 있습니다. 멱등한 엔드포인트로, " +
                 "재요청이 곧 결과 조회를 겸합니다 — GENERATING이면 잠시 후 같은 요청을 다시 보내면 됩니다.\n\n" +
                 "**status 값**\n\n" +
                 "| status | 의미 |\n" +
@@ -186,13 +196,8 @@ class ConversationController(
         @PathVariable messageId: Long,
     ): ApiResponse<ReplyGenerationResponse> {
         val result = commentGenerationService.generateReplyComment(principal.memberId, messageId)
-        val status =
-            when (result.outcome) {
-                CommentGenerationOutcome.GENERATING -> CommentGenerationStatus.GENERATING
-                CommentGenerationOutcome.DONE -> CommentGenerationStatus.DONE
-                CommentGenerationOutcome.FAILED -> CommentGenerationStatus.FAILED
-            }
-        val comment = if (result.outcome == CommentGenerationOutcome.DONE) MessageResponse.from(result.message!!) else null
+        val status = result.outcome.toResponseStatus()
+        val comment = if (status == CommentGenerationStatus.DONE) MessageResponse.from(result.message!!) else null
         return ApiResponse.success(ReplyGenerationResponse(status, comment, result.usedTokens))
     }
 }

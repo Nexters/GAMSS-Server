@@ -5,12 +5,17 @@ import com.nexters.gamss.conversation.domain.Message
 import com.nexters.gamss.conversation.domain.SenderType
 import com.nexters.gamss.conversation.repository.ConversationRepository
 import com.nexters.gamss.conversation.repository.MessageRepository
+import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.global.security.JwtIssuer
+import com.nexters.gamss.llm.generation.CommentGenerator
 import com.nexters.gamss.member.domain.Member
 import com.nexters.gamss.member.repository.MemberRepository
+import com.nexters.gamss.support.FakeCommentGenerator
+import com.nexters.gamss.support.FakeCommentGeneratorConfig
 import com.nexters.gamss.support.TestcontainersConfig
 import jakarta.persistence.EntityManager
 import jakarta.persistence.PersistenceContext
+import org.hamcrest.Matchers.greaterThan
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -32,7 +37,7 @@ import java.time.ZoneId
 import kotlin.test.assertEquals
 
 @SpringBootTest
-@Import(TestcontainersConfig::class)
+@Import(TestcontainersConfig::class, FakeCommentGeneratorConfig::class)
 @Transactional
 class ConversationControllerIntegrationTest {
     @Autowired
@@ -50,6 +55,9 @@ class ConversationControllerIntegrationTest {
     @Autowired
     private lateinit var jwtIssuer: JwtIssuer
 
+    @Autowired
+    private lateinit var commentGenerator: CommentGenerator
+
     @PersistenceContext
     private lateinit var entityManager: EntityManager
 
@@ -57,6 +65,7 @@ class ConversationControllerIntegrationTest {
 
     @BeforeEach
     fun setUp() {
+        (commentGenerator as FakeCommentGenerator).shouldFail = false
         mockMvc =
             MockMvcBuilders
                 .webAppContextSetup(context)
@@ -75,9 +84,9 @@ class ConversationControllerIntegrationTest {
                 content = """{"content":"오늘 억울한 일이 있었어"}"""
             }.andExpect {
                 status { isOk() }
-                jsonPath("$.data.conversationId") { isNumber() }
-                jsonPath("$.data.senderType") { value("USER") }
-                jsonPath("$.data.content") { value("오늘 억울한 일이 있었어") }
+                jsonPath("$.data.message.conversationId") { isNumber() }
+                jsonPath("$.data.message.senderType") { value("USER") }
+                jsonPath("$.data.message.content") { value("오늘 억울한 일이 있었어") }
             }
 
         assertEquals(1, conversationRepository.count())
@@ -95,11 +104,15 @@ class ConversationControllerIntegrationTest {
                 content = """{"conversationId":${conversation.id},"content":"이어서 쓰는 말"}"""
             }.andExpect {
                 status { isOk() }
-                jsonPath("$.data.conversationId") { value(conversation.id) }
+                jsonPath("$.data.message.conversationId") { value(conversation.id) }
             }
 
         assertEquals(1, conversationRepository.count())
-        assertEquals(1, messageRepository.findAllByConversationIdOrderByIdAsc(conversation.id).size)
+        // 저장과 함께 캐릭터 댓글 생성까지 동기로 처리되므로, 유저 메시지 1건 외에 생성된 댓글도 함께 저장된다.
+        assertEquals(
+            1,
+            messageRepository.findAllByConversationIdOrderByIdAsc(conversation.id).count { it.senderType == SenderType.USER },
+        )
     }
 
     @Test
@@ -151,12 +164,20 @@ class ConversationControllerIntegrationTest {
     }
 
     @Test
-    fun `같은 채팅방의 메시지에 답장하면 응답에 답장 대상이 담긴다`() {
+    fun `캐릭터 댓글에 답장하면 응답에 답장 대상이 담긴다`() {
         val member = memberRepository.save(Member("me@a.com"))
         val conversation = conversationRepository.save(Conversation(member.id))
+        val diary =
+            messageRepository.save(Message(conversationId = conversation.id, senderType = SenderType.USER, content = "원본"))
         val target =
             messageRepository.save(
-                Message(conversationId = conversation.id, senderType = SenderType.USER, content = "원본"),
+                Message(
+                    conversationId = conversation.id,
+                    senderType = SenderType.CHARACTER,
+                    emotionType = EmotionType.JOY,
+                    content = "댓글",
+                    rootMessageId = diary.id,
+                ),
             )
 
         mockMvc
@@ -166,7 +187,7 @@ class ConversationControllerIntegrationTest {
                 content = """{"conversationId":${conversation.id},"content":"답장","repliesToMessageId":${target.id}}"""
             }.andExpect {
                 status { isOk() }
-                jsonPath("$.data.repliesToMessageId") { value(target.id) }
+                jsonPath("$.data.message.repliesToMessageId") { value(target.id) }
             }
     }
 
@@ -189,6 +210,96 @@ class ConversationControllerIntegrationTest {
                 status { isBadRequest() }
                 jsonPath("$.error.code") { value("INVALID_INPUT") }
             }
+    }
+
+    @Test
+    fun `캐릭터 메시지가 아닌 대상에 답장하면 400을 반환하고 저장되지 않는다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val conversation = conversationRepository.save(Conversation(member.id))
+        val diary =
+            messageRepository.save(Message(conversationId = conversation.id, senderType = SenderType.USER, content = "원본"))
+
+        mockMvc
+            .post("/api/conversations/messages") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"conversationId":${conversation.id},"content":"답장","repliesToMessageId":${diary.id}}"""
+            }.andExpect {
+                status { isBadRequest() }
+                jsonPath("$.error.code") { value("INVALID_INPUT") }
+            }
+
+        assertEquals(1, messageRepository.findAllByConversationIdOrderByIdAsc(conversation.id).size)
+    }
+
+    @Test
+    fun `일기를 저장하면 같은 요청 안에서 캐릭터 댓글까지 생성되어 함께 반환된다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+
+        mockMvc
+            .post("/api/conversations/messages") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"content":"오늘 억울한 일이 있었어"}"""
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.commentStatus") { value("DONE") }
+                jsonPath("$.data.comments.length()") { value(greaterThan(0)) }
+                jsonPath("$.data.usedTokens") { value(10) }
+            }
+    }
+
+    @Test
+    fun `답글을 저장하면 같은 요청 안에서 캐릭터 재응답까지 생성되어 함께 반환된다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val conversation = conversationRepository.save(Conversation(member.id))
+        val diary =
+            messageRepository.save(Message(conversationId = conversation.id, senderType = SenderType.USER, content = "일기"))
+        val characterComment =
+            messageRepository.save(
+                Message(
+                    conversationId = conversation.id,
+                    senderType = SenderType.CHARACTER,
+                    emotionType = EmotionType.JOY,
+                    content = "잘했다!",
+                    rootMessageId = diary.id,
+                ),
+            )
+
+        mockMvc
+            .post("/api/conversations/messages") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content =
+                    """{"conversationId":${conversation.id},"content":"고마워","repliesToMessageId":${characterComment.id}}"""
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.commentStatus") { value("DONE") }
+                jsonPath("$.data.comments.length()") { value(1) }
+                jsonPath("$.data.comments[0].content") { value("재응답 텍스트") }
+                jsonPath("$.data.usedTokens") { value(5) }
+            }
+    }
+
+    @Test
+    fun `LLM 생성이 재시도까지 실패해도 저장은 유지되고 commentStatus=FAILED로 구분된다`() {
+        (commentGenerator as FakeCommentGenerator).shouldFail = true
+        val member = memberRepository.save(Member("me@a.com"))
+
+        mockMvc
+            .post("/api/conversations/messages") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"content":"오늘 억울한 일이 있었어"}"""
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.message.content") { value("오늘 억울한 일이 있었어") }
+                jsonPath("$.data.commentStatus") { value("FAILED") }
+                jsonPath("$.data.comments.length()") { value(0) }
+            }
+
+        val conversationId = conversationRepository.findAll().first().id
+        assertEquals(1, messageRepository.findAllByConversationIdOrderByIdAsc(conversationId).size)
     }
 
     @Test
