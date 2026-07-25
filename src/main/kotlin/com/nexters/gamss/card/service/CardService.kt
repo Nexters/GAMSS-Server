@@ -8,8 +8,8 @@ import com.nexters.gamss.conversation.repository.ConversationRepository
 import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
-import com.nexters.gamss.llm.CardGenerationFailedException
-import com.nexters.gamss.llm.CardMessageGenerator
+import com.nexters.gamss.llm.generation.CardGenerationFailedException
+import com.nexters.gamss.llm.generation.CardMessageGenerator
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional

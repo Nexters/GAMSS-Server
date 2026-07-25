@@ -3,8 +3,8 @@ package com.nexters.gamss.admin.controller
 import com.nexters.gamss.admin.controller.dto.LlmSettingsResponse
 import com.nexters.gamss.admin.controller.dto.UpdateLlmSettingsRequest
 import com.nexters.gamss.global.response.ApiResponse
-import com.nexters.gamss.llm.LlmSettingsService
-import com.nexters.gamss.llm.PromptType
+import com.nexters.gamss.llm.prompt.PromptType
+import com.nexters.gamss.llm.settings.LlmSettingsService
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.tags.Tag

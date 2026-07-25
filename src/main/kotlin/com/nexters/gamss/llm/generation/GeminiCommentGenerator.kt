@@ -1,11 +1,16 @@
-package com.nexters.gamss.llm
-
+package com.nexters.gamss.llm.generation
 import com.google.genai.Client
 import com.google.genai.types.Content
 import com.google.genai.types.GenerateContentConfig
 import com.google.genai.types.Part
 import com.google.genai.types.Schema
 import com.nexters.gamss.emotion.domain.EmotionType
+import com.nexters.gamss.llm.parsing.CommentFeedJsonParser
+import com.nexters.gamss.llm.parsing.ReplyJsonParser
+import com.nexters.gamss.llm.prompt.PromptCharacterId
+import com.nexters.gamss.llm.prompt.PromptProvider
+import com.nexters.gamss.llm.prompt.PromptType
+import com.nexters.gamss.llm.settings.SystemPromptResolver
 import org.springframework.stereotype.Component
 
 /**

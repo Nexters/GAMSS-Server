@@ -1,5 +1,5 @@
-package com.nexters.gamss.llm
-
+package com.nexters.gamss.llm.settings
+import com.nexters.gamss.llm.prompt.PromptType
 import io.mockk.every
 import io.mockk.mockk
 import kotlin.test.Test

@@ -1,6 +1,6 @@
-package com.nexters.gamss.llm
-
+package com.nexters.gamss.llm.prompt
 import com.nexters.gamss.emotion.domain.EmotionType
+import com.nexters.gamss.llm.generation.CommentGenerationFailedException
 
 /**
  * 프롬프트가 실제로 쓰는 로마자 캐릭터 id(gippeum, dajeong...) <-> 내부 [EmotionType] 매핑.

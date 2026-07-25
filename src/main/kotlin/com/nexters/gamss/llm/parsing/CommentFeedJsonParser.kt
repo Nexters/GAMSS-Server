@@ -1,6 +1,7 @@
-package com.nexters.gamss.llm
-
+package com.nexters.gamss.llm.parsing
 import com.fasterxml.jackson.annotation.JsonProperty
+import com.nexters.gamss.llm.generation.CommentGenerationFailedException
+import com.nexters.gamss.llm.prompt.PromptCharacterId
 import org.springframework.stereotype.Component
 import tools.jackson.core.JacksonException
 import tools.jackson.databind.json.JsonMapper

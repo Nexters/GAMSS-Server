@@ -1,4 +1,4 @@
-package com.nexters.gamss.llm
+package com.nexters.gamss.llm.prompt
 
 import com.nexters.gamss.emotion.domain.EmotionType
 import org.springframework.stereotype.Component

@@ -1,5 +1,5 @@
-package com.nexters.gamss.llm
-
+package com.nexters.gamss.llm.settings
+import com.nexters.gamss.llm.prompt.PromptType
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.EntityListeners

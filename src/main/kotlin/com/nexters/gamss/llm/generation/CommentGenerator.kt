@@ -1,6 +1,6 @@
-package com.nexters.gamss.llm
-
+package com.nexters.gamss.llm.generation
 import com.nexters.gamss.emotion.domain.EmotionType
+import com.nexters.gamss.llm.parsing.CommentFeed
 
 /**
  * 일기 내용과 이번 생성 조건(등장 캐릭터·티키타카 개수·엉뚱이 소재)으로 댓글 피드를 생성하거나,

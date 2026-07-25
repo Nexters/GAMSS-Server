@@ -1,4 +1,4 @@
-package com.nexters.gamss.llm
+package com.nexters.gamss.llm.generation
 
 import org.springframework.boot.context.properties.ConfigurationProperties
 

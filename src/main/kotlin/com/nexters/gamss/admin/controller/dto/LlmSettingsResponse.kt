@@ -1,7 +1,7 @@
 package com.nexters.gamss.admin.controller.dto
 
-import com.nexters.gamss.llm.LlmSettingsView
-import com.nexters.gamss.llm.PromptType
+import com.nexters.gamss.llm.prompt.PromptType
+import com.nexters.gamss.llm.settings.LlmSettingsView
 import io.swagger.v3.oas.annotations.media.Schema
 
 data class LlmSettingsResponse(

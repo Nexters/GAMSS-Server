@@ -1,4 +1,4 @@
-package com.nexters.gamss.llm
+package com.nexters.gamss.llm.prompt
 
 /**
  * [LlmSettings] 한 행이 어떤 용도의 프롬프트 설정인지 구분한다. 행 생성 후 바뀌지 않는다.

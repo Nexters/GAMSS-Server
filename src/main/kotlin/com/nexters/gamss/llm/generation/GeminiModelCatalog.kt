@@ -1,4 +1,4 @@
-package com.nexters.gamss.llm
+package com.nexters.gamss.llm.generation
 
 import com.google.genai.Client
 import com.google.genai.types.ListModelsConfig

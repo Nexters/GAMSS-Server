@@ -1,4 +1,4 @@
-package com.nexters.gamss.llm
+package com.nexters.gamss.llm.selection
 
 import org.springframework.stereotype.Component
 import kotlin.random.Random
