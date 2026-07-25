@@ -4,6 +4,7 @@ import com.nexters.gamss.admin.controller.dto.LlmSettingsResponse
 import com.nexters.gamss.admin.controller.dto.UpdateLlmSettingsRequest
 import com.nexters.gamss.global.response.ApiResponse
 import com.nexters.gamss.llm.LlmSettingsService
+import com.nexters.gamss.llm.PromptType
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
@@ -24,8 +25,8 @@ class AdminLlmSettingsController(
     fun get(): ApiResponse<LlmSettingsResponse> =
         ApiResponse.success(
             LlmSettingsResponse.of(
-                llmSettingsService.current(),
-                llmSettingsService.defaults(),
+                llmSettingsService.current(PromptType.COMMENT),
+                llmSettingsService.defaults(PromptType.COMMENT),
                 llmSettingsService.availableModels(),
             ),
         )
@@ -43,11 +44,11 @@ class AdminLlmSettingsController(
     fun update(
         @Valid @RequestBody request: UpdateLlmSettingsRequest,
     ): ApiResponse<LlmSettingsResponse> {
-        llmSettingsService.update(request.model, request.systemPrompt)
+        llmSettingsService.update(PromptType.COMMENT, request.model, request.systemPrompt)
         return ApiResponse.success(
             LlmSettingsResponse.of(
-                llmSettingsService.current(),
-                llmSettingsService.defaults(),
+                llmSettingsService.current(PromptType.COMMENT),
+                llmSettingsService.defaults(PromptType.COMMENT),
                 llmSettingsService.availableModels(),
             ),
         )

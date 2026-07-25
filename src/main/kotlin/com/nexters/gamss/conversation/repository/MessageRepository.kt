@@ -15,6 +15,9 @@ interface MessageRepository : JpaRepository<Message, Long> {
     /** 특정 일기(root) 메시지에 달린 캐릭터 댓글·티키타카 전체를 작성순으로 조회한다. */
     fun findAllByRootMessageIdOrderByIdAsc(rootMessageId: Long): List<Message>
 
+    /** [repliesToMessageId]에 캐릭터가 재응답한 메시지를 찾는다(답글 1개당 캐릭터 응답 최대 1개). */
+    fun findByRepliesToMessageId(repliesToMessageId: Long): Message?
+
     /**
      * [messageId]의 commentStatus가 [fromAny] 중 하나일 때만 [to]로 원자적으로 바꾼다.
      * 영향받은 행 수(0 또는 1)로 선점 성공 여부를 판단한다 — check-then-act 레이스 없이

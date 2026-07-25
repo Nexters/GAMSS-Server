@@ -40,6 +40,10 @@ class CommentFeedValidator {
         }
     }
 
+    fun validateReply(text: String) {
+        fail(text.isBlank()) { "답글 내용이 비어 있습니다." }
+    }
+
     private inline fun fail(
         condition: Boolean,
         lazyMessage: () -> String,
