@@ -49,6 +49,20 @@ class LlmSettingsService(
     @Transactional(readOnly = true)
     fun currentPrompt(promptType: PromptType): String = row(promptType)?.systemPrompt ?: promptProvider.defaultPrompt(promptType)
 
+    /**
+     * COMMON 행을 한 번만 읽어 앱 전체 모델 + 공통 프롬프트를 함께 돌려준다.
+     * 모델·공통 프롬프트가 같은 COMMON 행에서 나오므로, [SystemPromptResolver]가 조립할 때
+     * COMMON 행을 중복 조회하지 않게 한다.
+     */
+    @Transactional(readOnly = true)
+    fun currentCommonView(): LlmSettingsView {
+        val common = row(PromptType.COMMON)
+        return LlmSettingsView(
+            common?.model ?: geminiProperties.model,
+            common?.systemPrompt ?: promptProvider.defaultPrompt(PromptType.COMMON),
+        )
+    }
+
     fun defaultPrompt(promptType: PromptType): String = promptProvider.defaultPrompt(promptType)
 
     @Transactional

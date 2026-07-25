@@ -13,12 +13,11 @@ class SystemPromptResolver(
 ) {
     /** 생성기가 쓸 모델·시스템 프롬프트. COMMON을 넘기면 조립 없이 공통 프롬프트만 돌려준다. */
     fun resolve(promptType: PromptType): LlmSettingsView {
-        val model = llmSettingsService.currentModel()
-        val common = llmSettingsService.currentPrompt(PromptType.COMMON)
+        val base = llmSettingsService.currentCommonView()
         if (promptType == PromptType.COMMON) {
-            return LlmSettingsView(model, common)
+            return base
         }
         val typePrompt = llmSettingsService.currentPrompt(promptType)
-        return LlmSettingsView(model, "$common\n\n$typePrompt")
+        return LlmSettingsView(base.model, "${base.systemPrompt}\n\n$typePrompt")
     }
 }
