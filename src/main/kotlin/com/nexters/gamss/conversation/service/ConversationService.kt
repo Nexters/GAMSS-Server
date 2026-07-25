@@ -56,6 +56,17 @@ class ConversationService(
         return conversation
     }
 
+    /** 채팅방을 삭제한다. 삭제 후에는 채팅방 목록·메시지 조회에 나타나지 않는다. */
+    @Transactional
+    fun deleteConversation(
+        memberId: Long,
+        conversationId: Long,
+    ): Conversation {
+        val conversation = getOwnedConversation(conversationId, memberId)
+        conversation.delete()
+        return conversation
+    }
+
     /** 답장 대상 메시지가 실제로 해당 채팅방에 존재하는지 확인한다. */
     private fun validateReplyTarget(
         repliesToMessageId: Long,
@@ -86,7 +97,8 @@ class ConversationService(
         memberId: Long,
         conversationId: Long,
     ): List<Message> {
-        getOwnedConversation(conversationId, memberId)
+        val conversation = getOwnedConversation(conversationId, memberId)
+        conversation.ensureNotDeleted()
         return messageRepository.findAllByConversationIdOrderByIdAsc(conversationId)
     }
 

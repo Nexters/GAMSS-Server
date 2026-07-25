@@ -18,6 +18,7 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
@@ -93,7 +94,8 @@ class ConversationController(
                 "| UNAUTHORIZED | 401 | 인증 필요 |\n" +
                 "| CONVERSATION_NOT_FOUND | 404 | 존재하지 않는 채팅방 |\n" +
                 "| CONVERSATION_ACCESS_DENIED | 403 | 본인 채팅방이 아님 |\n" +
-                "| CONVERSATION_ALREADY_ENDED | 409 | 이미 종료된 채팅방 |",
+                "| CONVERSATION_ALREADY_ENDED | 409 | 이미 종료된 채팅방 |\n" +
+                "| CONVERSATION_ALREADY_DELETED | 409 | 삭제된 채팅방 |",
     )
     @PostMapping("/{conversationId}/end")
     fun endConversation(
@@ -113,7 +115,8 @@ class ConversationController(
                 "|---|---|---|\n" +
                 "| UNAUTHORIZED | 401 | 인증 필요 |\n" +
                 "| CONVERSATION_NOT_FOUND | 404 | 존재하지 않는 채팅방 |\n" +
-                "| CONVERSATION_ACCESS_DENIED | 403 | 본인 채팅방이 아님 |",
+                "| CONVERSATION_ACCESS_DENIED | 403 | 본인 채팅방이 아님 |\n" +
+                "| CONVERSATION_ALREADY_DELETED | 409 | 삭제된 채팅방 |",
     )
     @GetMapping("/{conversationId}/messages")
     fun getMessages(
@@ -156,7 +159,8 @@ class ConversationController(
                 CommentGenerationOutcome.DONE -> CommentGenerationStatus.DONE
                 CommentGenerationOutcome.FAILED -> CommentGenerationStatus.FAILED
             }
-        val comments = if (result.outcome == CommentGenerationOutcome.DONE) result.comments.map { MessageResponse.from(it) } else null
+        val comments =
+            if (result.outcome == CommentGenerationOutcome.DONE) result.comments.map { MessageResponse.from(it) } else null
         return ApiResponse.success(CommentGenerationResponse(status, comments, result.usedTokens))
     }
 
@@ -192,7 +196,30 @@ class ConversationController(
                 CommentGenerationOutcome.DONE -> CommentGenerationStatus.DONE
                 CommentGenerationOutcome.FAILED -> CommentGenerationStatus.FAILED
             }
-        val comment = if (result.outcome == CommentGenerationOutcome.DONE) MessageResponse.from(result.message!!) else null
+        val comment =
+            if (result.outcome == CommentGenerationOutcome.DONE) MessageResponse.from(result.message!!) else null
         return ApiResponse.success(ReplyGenerationResponse(status, comment, result.usedTokens))
+    }
+
+    @Operation(
+        summary = "채팅방 삭제",
+        description =
+            "채팅방을 삭제합니다. 종료 여부와 무관하게 삭제할 수 있으며, 삭제된 채팅방은 목록 조회·메시지 조회·메시지 추가·종료 등 " +
+                "어떤 요청에도 더 이상 응할 수 없습니다.\n\n" +
+                "**실패 응답**\n\n" +
+                "| error.code | HTTP | 설명 |\n" +
+                "|---|---|---|\n" +
+                "| UNAUTHORIZED | 401 | 인증 필요 |\n" +
+                "| CONVERSATION_NOT_FOUND | 404 | 존재하지 않는 채팅방 |\n" +
+                "| CONVERSATION_ACCESS_DENIED | 403 | 본인 채팅방이 아님 |\n" +
+                "| CONVERSATION_ALREADY_DELETED | 409 | 이미 삭제된 채팅방 |",
+    )
+    @DeleteMapping("/{conversationId}")
+    fun deleteConversation(
+        @Parameter(hidden = true) @AuthenticationPrincipal principal: AuthPrincipal,
+        @PathVariable conversationId: Long,
+    ): ApiResponse<ConversationResponse> {
+        val conversation = conversationService.deleteConversation(principal.memberId, conversationId)
+        return ApiResponse.success(ConversationResponse.from(conversation))
     }
 }
