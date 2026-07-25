@@ -46,7 +46,8 @@ class ConversationController(
                 "| UNAUTHORIZED | 401 | 인증 필요 |\n" +
                 "| INVALID_INPUT | 400 | content 누락·140자 초과, 또는 잘못된 답장 대상 |\n" +
                 "| CONVERSATION_NOT_FOUND | 404 | 존재하지 않는 채팅방 |\n" +
-                "| CONVERSATION_ACCESS_DENIED | 403 | 본인 채팅방이 아님 |",
+                "| CONVERSATION_ACCESS_DENIED | 403 | 본인 채팅방이 아님 |\n" +
+                "| CONVERSATION_ALREADY_DELETED | 409 | 삭제된 채팅방 |",
     )
     @PostMapping("/messages")
     fun saveMessage(
