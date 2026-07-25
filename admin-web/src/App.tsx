@@ -8,6 +8,8 @@ import { AdminLayout } from '@/components/layout/AdminLayout'
 import { LoginPage } from '@/pages/login'
 import { MemberList } from '@/pages/members/list'
 import { MemberShow } from '@/pages/members/show'
+import { AdminAccountList } from '@/pages/admin-accounts/list'
+import { LlmSettingsPage } from '@/pages/llm-settings'
 
 // mock(로컬) 모드에서는 Firebase 없이 dev-login 을 쓴다.
 const authProvider = import.meta.env.VITE_AUTH_MODE === 'mock' ? devAuthProvider : firebaseAuthProvider
@@ -19,7 +21,10 @@ export default function App() {
         dataProvider={dataProvider}
         authProvider={authProvider}
         routerProvider={routerBindings}
-        resources={[{ name: 'members', list: '/members', show: '/members/:id', meta: { label: '회원 관리' } }]}
+        resources={[
+          { name: 'members', list: '/members', show: '/members/:id', meta: { label: '회원 관리' } },
+          { name: 'admin-accounts', list: '/admin-accounts', meta: { label: '관리자 관리' } },
+        ]}
         options={{ syncWithLocation: true, disableTelemetry: true }}
       >
         <Routes>
@@ -33,6 +38,8 @@ export default function App() {
             <Route index element={<NavigateToResource resource="members" />} />
             <Route path="/members" element={<MemberList />} />
             <Route path="/members/:id" element={<MemberShow />} />
+            <Route path="/admin-accounts" element={<AdminAccountList />} />
+            <Route path="/llm-settings" element={<LlmSettingsPage />} />
           </Route>
 
           <Route

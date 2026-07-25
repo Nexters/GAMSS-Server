@@ -5,6 +5,7 @@ import com.nexters.gamss.conversation.domain.Message
 import com.nexters.gamss.conversation.domain.SenderType
 import com.nexters.gamss.conversation.repository.ConversationRepository
 import com.nexters.gamss.conversation.repository.MessageRepository
+import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.global.security.JwtIssuer
 import com.nexters.gamss.member.domain.Member
 import com.nexters.gamss.member.repository.MemberRepository
@@ -20,6 +21,7 @@ import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.delete
 import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
@@ -399,6 +401,194 @@ class ConversationControllerIntegrationTest {
             }.andExpect {
                 status { isNotFound() }
                 jsonPath("$.error.code") { value("CONVERSATION_NOT_FOUND") }
+            }
+    }
+
+    @Test
+    fun `채팅방을 삭제하면 200과 status DELETED를 반환한다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val conversation = conversationRepository.save(Conversation(member.id))
+
+        mockMvc
+            .delete("/api/conversations/${conversation.id}") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.id") { value(conversation.id) }
+                jsonPath("$.data.status") { value("DELETED") }
+            }
+    }
+
+    @Test
+    fun `종료된 채팅방도 삭제할 수 있다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val conversation = conversationRepository.save(Conversation(member.id).apply { end() })
+
+        mockMvc
+            .delete("/api/conversations/${conversation.id}") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.status") { value("DELETED") }
+            }
+    }
+
+    @Test
+    fun `이미 삭제된 채팅방을 다시 삭제하면 409를 반환한다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val conversation = conversationRepository.save(Conversation(member.id).apply { delete() })
+
+        mockMvc
+            .delete("/api/conversations/${conversation.id}") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isConflict() }
+                jsonPath("$.error.code") { value("CONVERSATION_ALREADY_DELETED") }
+            }
+    }
+
+    @Test
+    fun `남의 채팅방을 삭제하면 403을 반환한다`() {
+        val me = memberRepository.save(Member("me@a.com"))
+        val other = memberRepository.save(Member("other@a.com"))
+        val othersConversation = conversationRepository.save(Conversation(other.id))
+
+        mockMvc
+            .delete("/api/conversations/${othersConversation.id}") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(me))
+            }.andExpect {
+                status { isForbidden() }
+                jsonPath("$.error.code") { value("CONVERSATION_ACCESS_DENIED") }
+            }
+    }
+
+    @Test
+    fun `없는 채팅방을 삭제하면 404를 반환한다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+
+        mockMvc
+            .delete("/api/conversations/99999") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isNotFound() }
+                jsonPath("$.error.code") { value("CONVERSATION_NOT_FOUND") }
+            }
+    }
+
+    @Test
+    fun `삭제된 채팅방을 종료하면 409를 반환한다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val conversation = conversationRepository.save(Conversation(member.id).apply { delete() })
+
+        mockMvc
+            .post("/api/conversations/${conversation.id}/end") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isConflict() }
+                jsonPath("$.error.code") { value("CONVERSATION_ALREADY_DELETED") }
+            }
+    }
+
+    @Test
+    fun `삭제된 채팅방에 메시지를 저장하면 409를 반환한다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val conversation = conversationRepository.save(Conversation(member.id).apply { delete() })
+
+        mockMvc
+            .post("/api/conversations/messages") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"conversationId":${conversation.id},"content":"삭제된 방에 쓰기"}"""
+            }.andExpect {
+                status { isConflict() }
+                jsonPath("$.error.code") { value("CONVERSATION_ALREADY_DELETED") }
+            }
+    }
+
+    @Test
+    fun `삭제된 채팅방 메시지를 조회하면 409를 반환한다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val conversation = conversationRepository.save(Conversation(member.id).apply { delete() })
+
+        mockMvc
+            .get("/api/conversations/${conversation.id}/messages") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isConflict() }
+                jsonPath("$.error.code") { value("CONVERSATION_ALREADY_DELETED") }
+            }
+    }
+
+    @Test
+    fun `삭제된 채팅방의 메시지에 댓글 생성을 요청하면 409를 반환한다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val conversation = conversationRepository.save(Conversation(member.id))
+        val diary =
+            messageRepository.save(
+                Message(conversationId = conversation.id, senderType = SenderType.USER, content = "삭제 전에 쓴 일기"),
+            )
+        conversationRepository.save(conversation.apply { delete() })
+
+        mockMvc
+            .post("/api/conversations/messages/comments") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"messageId":${diary.id}}"""
+            }.andExpect {
+                status { isConflict() }
+                jsonPath("$.error.code") { value("CONVERSATION_ALREADY_DELETED") }
+            }
+    }
+
+    @Test
+    fun `삭제된 채팅방의 답글에 재응답 생성을 요청하면 409를 반환한다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val conversation = conversationRepository.save(Conversation(member.id))
+        val diary =
+            messageRepository.save(Message(conversationId = conversation.id, senderType = SenderType.USER, content = "일기"))
+        val characterComment =
+            messageRepository.save(
+                Message(
+                    conversationId = conversation.id,
+                    senderType = SenderType.CHARACTER,
+                    emotionType = EmotionType.JOY,
+                    content = "댓글",
+                    rootMessageId = diary.id,
+                ),
+            )
+        val reply =
+            messageRepository.save(
+                Message(
+                    conversationId = conversation.id,
+                    senderType = SenderType.USER,
+                    content = "답장",
+                    repliesToMessageId = characterComment.id,
+                ),
+            )
+        conversationRepository.save(conversation.apply { delete() })
+
+        mockMvc
+            .post("/api/conversations/messages/comments/${reply.id}") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isConflict() }
+                jsonPath("$.error.code") { value("CONVERSATION_ALREADY_DELETED") }
+            }
+    }
+
+    @Test
+    fun `삭제된 채팅방은 날짜별 목록 조회에 나타나지 않는다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        conversationRepository.save(Conversation(member.id).apply { delete() })
+        val today = LocalDateTime.now(ZoneId.of("Asia/Seoul")).toLocalDate()
+
+        mockMvc
+            .get("/api/conversations") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                param("date", today.toString())
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.length()") { value(0) }
             }
     }
 

@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service
 class AdminAuthService(
     private val socialTokenVerifier: SocialTokenVerifier,
     private val adminProperties: AdminProperties,
+    private val adminAccountService: AdminAccountService,
     private val jwtIssuer: JwtIssuer,
 ) {
     fun login(idToken: String): String {
@@ -26,7 +27,8 @@ class AdminAuthService(
             throw BusinessException(ErrorCode.NOT_ADMIN)
         }
         val email = user.email ?: throw BusinessException(ErrorCode.NOT_ADMIN)
-        if (!adminProperties.isAllowed(email)) {
+        // 허용 판정은 ENV 부트스트랩 ∪ DB. 백오피스에서 추가한 관리자는 재배포 없이 즉시 로그인된다.
+        if (!adminAccountService.isAllowed(email)) {
             throw BusinessException(ErrorCode.NOT_ADMIN)
         }
         return jwtIssuer.issueAdminToken(adminProperties.normalize(email))

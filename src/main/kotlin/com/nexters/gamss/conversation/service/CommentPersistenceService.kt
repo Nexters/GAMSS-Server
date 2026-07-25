@@ -8,7 +8,7 @@ import com.nexters.gamss.conversation.repository.MessageRepository
 import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
-import com.nexters.gamss.llm.CommentFeed
+import com.nexters.gamss.llm.parsing.CommentFeed
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
@@ -78,5 +78,42 @@ class CommentPersistenceService(
         check(updated == 1) { "댓글 저장 중 상태 전이가 실패했습니다. rootMessageId=$rootMessageId" }
 
         return savedComments + savedTikitaka
+    }
+
+    /** 유저의 답글([repliesToMessageId])에 캐릭터([characterId])가 다시 응답한 메시지 1개를 저장한다. */
+    @Transactional
+    fun saveReply(
+        conversationId: Long,
+        rootMessageId: Long,
+        repliesToMessageId: Long,
+        characterId: EmotionType,
+        text: String,
+    ): Message {
+        val conversation =
+            conversationRepository
+                .findById(conversationId)
+                .orElseThrow { BusinessException(ErrorCode.CONVERSATION_NOT_FOUND) }
+
+        val saved =
+            messageRepository.save(
+                conversation.createMessage(
+                    senderType = SenderType.CHARACTER,
+                    emotionType = characterId,
+                    content = text,
+                    repliesToMessageId = repliesToMessageId,
+                    rootMessageId = rootMessageId,
+                ),
+            )
+
+        val updated =
+            messageRepository.updateCommentStatus(
+                repliesToMessageId,
+                CommentStatus.DONE,
+                listOf(CommentStatus.PENDING),
+                Instant.now(),
+            )
+        check(updated == 1) { "답글 저장 중 상태 전이가 실패했습니다. repliesToMessageId=$repliesToMessageId" }
+
+        return saved
     }
 }

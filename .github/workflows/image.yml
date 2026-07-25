@@ -116,6 +116,7 @@ jobs:
           DB_PASSWORD=${{ secrets.DB_PASSWORD }}
           DB_ROOT_PASSWORD=${{ secrets.DB_ROOT_PASSWORD }}
           JWT_SECRET=${{ secrets.JWT_SECRET }}
+          GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
           ADMIN_EMAILS=${{ vars.ADMIN_EMAILS }}
           EOF
 
