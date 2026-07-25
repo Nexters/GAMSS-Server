@@ -40,7 +40,7 @@ class ConversationServiceTest {
     @Test
     fun `conversationId가 있으면 기존 채팅방에 이어서 저장한다`() {
         val conversation = Conversation(memberId = 1L)
-        every { conversationRepository.findById(10L) } returns Optional.of(conversation)
+        every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
         every { messageRepository.save(any()) } answers { firstArg() }
 
         conversationService.saveUserMessage(1L, 10L, "이어서 쓰는 말")
@@ -51,7 +51,7 @@ class ConversationServiceTest {
 
     @Test
     fun `없는 채팅방에 저장하면 CONVERSATION_NOT_FOUND`() {
-        every { conversationRepository.findById(99L) } returns Optional.empty()
+        every { conversationRepository.findByIdForUpdate(99L) } returns Optional.empty()
 
         val exception =
             assertFailsWith<BusinessException> {
@@ -64,7 +64,7 @@ class ConversationServiceTest {
     @Test
     fun `남의 채팅방에 저장하면 CONVERSATION_ACCESS_DENIED`() {
         val conversation = Conversation(memberId = 2L)
-        every { conversationRepository.findById(10L) } returns Optional.of(conversation)
+        every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
 
         val exception =
             assertFailsWith<BusinessException> {
@@ -84,7 +84,7 @@ class ConversationServiceTest {
                 emotionType = EmotionType.JOY,
                 content = "댓글",
             )
-        every { conversationRepository.findById(10L) } returns Optional.of(conversation)
+        every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
         every { messageRepository.findById(3L) } returns Optional.of(target)
         every { messageRepository.save(any()) } answers { firstArg() }
 
@@ -97,7 +97,7 @@ class ConversationServiceTest {
     fun `캐릭터 메시지가 아닌 대상에 답장하면 INVALID_INPUT`() {
         val conversation = Conversation(memberId = 1L)
         val target = Message(conversationId = 10L, senderType = SenderType.USER, content = "다른 유저 메시지 아님, 같은 방의 일기")
-        every { conversationRepository.findById(10L) } returns Optional.of(conversation)
+        every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
         every { messageRepository.findById(3L) } returns Optional.of(target)
 
         val exception =
@@ -122,7 +122,7 @@ class ConversationServiceTest {
     @Test
     fun `없는 메시지에 답장하면 INVALID_INPUT`() {
         val conversation = Conversation(memberId = 1L)
-        every { conversationRepository.findById(10L) } returns Optional.of(conversation)
+        every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
         every { messageRepository.findById(99L) } returns Optional.empty()
 
         val exception =
@@ -137,7 +137,7 @@ class ConversationServiceTest {
     fun `다른 채팅방의 메시지에 답장하면 INVALID_INPUT`() {
         val conversation = Conversation(memberId = 1L)
         val other = Message(conversationId = 999L, senderType = SenderType.USER, content = "딴 방 메시지")
-        every { conversationRepository.findById(10L) } returns Optional.of(conversation)
+        every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
         every { messageRepository.findById(3L) } returns Optional.of(other)
 
         val exception =
@@ -189,7 +189,7 @@ class ConversationServiceTest {
     @Test
     fun `채팅방을 종료하면 상태가 ENDED가 된다`() {
         val conversation = Conversation(memberId = 1L)
-        every { conversationRepository.findById(10L) } returns Optional.of(conversation)
+        every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
 
         val ended = conversationService.endConversation(1L, 10L)
 
@@ -199,7 +199,7 @@ class ConversationServiceTest {
     @Test
     fun `이미 종료된 채팅방을 다시 종료하면 CONVERSATION_ALREADY_ENDED`() {
         val conversation = Conversation(memberId = 1L).apply { end() }
-        every { conversationRepository.findById(10L) } returns Optional.of(conversation)
+        every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
 
         val exception =
             assertFailsWith<BusinessException> {
@@ -212,7 +212,7 @@ class ConversationServiceTest {
     @Test
     fun `종료된 채팅방에 메시지를 저장하면 CONVERSATION_ENDED`() {
         val conversation = Conversation(memberId = 1L).apply { end() }
-        every { conversationRepository.findById(10L) } returns Optional.of(conversation)
+        every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
 
         val exception =
             assertFailsWith<BusinessException> {
@@ -220,5 +220,90 @@ class ConversationServiceTest {
             }
 
         assertEquals(ErrorCode.CONVERSATION_ENDED, exception.errorCode)
+    }
+
+    @Test
+    fun `채팅방을 삭제하면 상태가 DELETED가 된다`() {
+        val conversation = Conversation(memberId = 1L)
+        every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
+
+        val deleted = conversationService.deleteConversation(1L, 10L)
+
+        assertEquals(ConversationStatus.DELETED, deleted.status)
+    }
+
+    @Test
+    fun `종료된 채팅방도 삭제할 수 있다`() {
+        val conversation = Conversation(memberId = 1L).apply { end() }
+        every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
+
+        val deleted = conversationService.deleteConversation(1L, 10L)
+
+        assertEquals(ConversationStatus.DELETED, deleted.status)
+    }
+
+    @Test
+    fun `이미 삭제된 채팅방을 다시 삭제하면 CONVERSATION_ALREADY_DELETED`() {
+        val conversation = Conversation(memberId = 1L).apply { delete() }
+        every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
+
+        val exception =
+            assertFailsWith<BusinessException> {
+                conversationService.deleteConversation(1L, 10L)
+            }
+
+        assertEquals(ErrorCode.CONVERSATION_ALREADY_DELETED, exception.errorCode)
+    }
+
+    @Test
+    fun `남의 채팅방을 삭제하면 CONVERSATION_ACCESS_DENIED`() {
+        val conversation = Conversation(memberId = 2L)
+        every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
+
+        val exception =
+            assertFailsWith<BusinessException> {
+                conversationService.deleteConversation(1L, 10L)
+            }
+
+        assertEquals(ErrorCode.CONVERSATION_ACCESS_DENIED, exception.errorCode)
+    }
+
+    @Test
+    fun `삭제된 채팅방을 종료하면 CONVERSATION_ALREADY_DELETED`() {
+        val conversation = Conversation(memberId = 1L).apply { delete() }
+        every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
+
+        val exception =
+            assertFailsWith<BusinessException> {
+                conversationService.endConversation(1L, 10L)
+            }
+
+        assertEquals(ErrorCode.CONVERSATION_ALREADY_DELETED, exception.errorCode)
+    }
+
+    @Test
+    fun `삭제된 채팅방에 메시지를 저장하면 CONVERSATION_ALREADY_DELETED`() {
+        val conversation = Conversation(memberId = 1L).apply { delete() }
+        every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
+
+        val exception =
+            assertFailsWith<BusinessException> {
+                conversationService.saveUserMessage(1L, 10L, "삭제된 방에 쓰기")
+            }
+
+        assertEquals(ErrorCode.CONVERSATION_ALREADY_DELETED, exception.errorCode)
+    }
+
+    @Test
+    fun `삭제된 채팅방 메시지를 조회하면 CONVERSATION_ALREADY_DELETED`() {
+        val conversation = Conversation(memberId = 1L).apply { delete() }
+        every { conversationRepository.findById(10L) } returns Optional.of(conversation)
+
+        val exception =
+            assertFailsWith<BusinessException> {
+                conversationService.getMessages(1L, 10L)
+            }
+
+        assertEquals(ErrorCode.CONVERSATION_ALREADY_DELETED, exception.errorCode)
     }
 }
