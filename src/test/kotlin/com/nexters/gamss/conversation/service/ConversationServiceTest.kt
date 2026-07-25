@@ -198,4 +198,89 @@ class ConversationServiceTest {
 
         assertEquals(ErrorCode.CONVERSATION_ENDED, exception.errorCode)
     }
+
+    @Test
+    fun `채팅방을 삭제하면 상태가 DELETED가 된다`() {
+        val conversation = Conversation(memberId = 1L)
+        every { conversationRepository.findById(10L) } returns Optional.of(conversation)
+
+        val deleted = conversationService.deleteConversation(1L, 10L)
+
+        assertEquals(ConversationStatus.DELETED, deleted.status)
+    }
+
+    @Test
+    fun `종료된 채팅방도 삭제할 수 있다`() {
+        val conversation = Conversation(memberId = 1L).apply { end() }
+        every { conversationRepository.findById(10L) } returns Optional.of(conversation)
+
+        val deleted = conversationService.deleteConversation(1L, 10L)
+
+        assertEquals(ConversationStatus.DELETED, deleted.status)
+    }
+
+    @Test
+    fun `이미 삭제된 채팅방을 다시 삭제하면 CONVERSATION_ALREADY_DELETED`() {
+        val conversation = Conversation(memberId = 1L).apply { delete() }
+        every { conversationRepository.findById(10L) } returns Optional.of(conversation)
+
+        val exception =
+            assertFailsWith<BusinessException> {
+                conversationService.deleteConversation(1L, 10L)
+            }
+
+        assertEquals(ErrorCode.CONVERSATION_ALREADY_DELETED, exception.errorCode)
+    }
+
+    @Test
+    fun `남의 채팅방을 삭제하면 CONVERSATION_ACCESS_DENIED`() {
+        val conversation = Conversation(memberId = 2L)
+        every { conversationRepository.findById(10L) } returns Optional.of(conversation)
+
+        val exception =
+            assertFailsWith<BusinessException> {
+                conversationService.deleteConversation(1L, 10L)
+            }
+
+        assertEquals(ErrorCode.CONVERSATION_ACCESS_DENIED, exception.errorCode)
+    }
+
+    @Test
+    fun `삭제된 채팅방을 종료하면 CONVERSATION_ALREADY_DELETED`() {
+        val conversation = Conversation(memberId = 1L).apply { delete() }
+        every { conversationRepository.findById(10L) } returns Optional.of(conversation)
+
+        val exception =
+            assertFailsWith<BusinessException> {
+                conversationService.endConversation(1L, 10L)
+            }
+
+        assertEquals(ErrorCode.CONVERSATION_ALREADY_DELETED, exception.errorCode)
+    }
+
+    @Test
+    fun `삭제된 채팅방에 메시지를 저장하면 CONVERSATION_ALREADY_DELETED`() {
+        val conversation = Conversation(memberId = 1L).apply { delete() }
+        every { conversationRepository.findById(10L) } returns Optional.of(conversation)
+
+        val exception =
+            assertFailsWith<BusinessException> {
+                conversationService.saveUserMessage(1L, 10L, "삭제된 방에 쓰기")
+            }
+
+        assertEquals(ErrorCode.CONVERSATION_ALREADY_DELETED, exception.errorCode)
+    }
+
+    @Test
+    fun `삭제된 채팅방 메시지를 조회하면 CONVERSATION_ALREADY_DELETED`() {
+        val conversation = Conversation(memberId = 1L).apply { delete() }
+        every { conversationRepository.findById(10L) } returns Optional.of(conversation)
+
+        val exception =
+            assertFailsWith<BusinessException> {
+                conversationService.getMessages(1L, 10L)
+            }
+
+        assertEquals(ErrorCode.CONVERSATION_ALREADY_DELETED, exception.errorCode)
+    }
 }
