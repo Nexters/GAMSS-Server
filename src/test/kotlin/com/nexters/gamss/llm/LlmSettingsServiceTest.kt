@@ -86,4 +86,51 @@ class LlmSettingsServiceTest {
 
         assertEquals(ErrorCode.INVALID_INPUT, exception.errorCode)
     }
+
+    @Test
+    fun `forGeneration은 공통 프롬프트와 타입 프롬프트를 조립한다`() {
+        every { repository.findByPromptType(PromptType.COMMON) } returns LlmSettings(PromptType.COMMON, "gemini-3.1-flash-lite", "공통규칙")
+        every { repository.findByPromptType(PromptType.CARD) } returns LlmSettings(PromptType.CARD, "gemini-2.5-flash", "카드규칙")
+
+        val generation = service.forGeneration(PromptType.CARD)
+
+        assertEquals("gemini-2.5-flash", generation.model)
+        assertEquals("공통규칙\n\n카드규칙", generation.systemPrompt)
+    }
+
+    @Test
+    fun `forGeneration에 COMMON을 넘기면 공통 프롬프트만 반환한다`() {
+        every { repository.findByPromptType(PromptType.COMMON) } returns null
+
+        val generation = service.forGeneration(PromptType.COMMON)
+
+        assertEquals(promptProvider.commonPrompt, generation.systemPrompt)
+    }
+
+    @Test
+    fun `COMMON은 모델 없이 프롬프트만 저장한다`() {
+        every { repository.findByPromptType(PromptType.COMMON) } returns null
+        every { repository.save(any()) } answers { firstArg() }
+
+        service.update(PromptType.COMMON, null, "새 공통 프롬프트")
+
+        verify(exactly = 1) { repository.save(any()) }
+        verify(exactly = 0) { modelCatalog.availableModels() }
+    }
+
+    @Test
+    fun `COMMON 외 타입은 모델이 없으면 INVALID_INPUT`() {
+        val exception = assertFailsWith<BusinessException> { service.update(PromptType.CARD, null, "p") }
+
+        assertEquals(ErrorCode.INVALID_INPUT, exception.errorCode)
+    }
+
+    @Test
+    fun `CARD 타입은 DB에 값이 없으면 카드용 코드 기본값을 반환한다`() {
+        every { repository.findByPromptType(PromptType.CARD) } returns null
+
+        val current = service.current(PromptType.CARD)
+
+        assertEquals(promptProvider.cardPrompt, current.systemPrompt)
+    }
 }

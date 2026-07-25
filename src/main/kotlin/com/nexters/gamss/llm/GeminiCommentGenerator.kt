@@ -40,7 +40,7 @@ class GeminiCommentGenerator(
             try {
                 // 운영 중 백오피스에서 바꾼 값을 매 호출 반영한다(재배포 불필요).
                 // 설정 조회(DB) 실패도 여기서 잡아 재시도·FAILED 계약을 유지한다(500·PENDING 고착 방지).
-                val settings = llmSettingsService.current(PromptType.COMMENT)
+                val settings = llmSettingsService.forGeneration(PromptType.COMMENT)
                 client.models.generateContent(
                     settings.model,
                     promptProvider.buildUserContent(pastSummary, diaryContent, characters, tikitakaCount, eongttungTopic),
@@ -67,7 +67,7 @@ class GeminiCommentGenerator(
     ): ReplyGenerationOutput {
         val response =
             try {
-                val settings = llmSettingsService.current(PromptType.REPLY)
+                val settings = llmSettingsService.forGeneration(PromptType.REPLY)
                 client.models.generateContent(
                     settings.model,
                     promptProvider.buildReplyUserContent(diaryContent, characterId, characterComment, userReply),
