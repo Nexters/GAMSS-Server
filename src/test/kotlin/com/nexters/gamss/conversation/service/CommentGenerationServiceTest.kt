@@ -271,6 +271,18 @@ class CommentGenerationServiceTest {
     }
 
     @Test
+    fun `삭제된 채팅방의 메시지면 댓글 생성 없이 CONVERSATION_ALREADY_DELETED`() {
+        every { messageRepository.findById(1L) } returns Optional.of(rootMessage())
+        every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L).apply { delete() })
+
+        val exception = assertFailsWith<BusinessException> { service.generateComments(memberId = 1L, messageId = 1L) }
+
+        assertEquals(ErrorCode.CONVERSATION_ALREADY_DELETED, exception.errorCode)
+        verify(exactly = 0) { messageRepository.updateCommentStatus(any(), any(), any(), any()) }
+        verify(exactly = 0) { commentGenerator.generateComment(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
     fun `답글 선점에 성공하면 LLM을 호출하고 저장한 뒤 DONE을 반환한다`() {
         every { messageRepository.findById(1L) } returns Optional.of(userReplyMessage())
         every { messageRepository.findById(2L) } returns Optional.of(characterMessage())
@@ -386,5 +398,17 @@ class CommentGenerationServiceTest {
         val exception = assertFailsWith<BusinessException> { service.generateReplyComment(memberId = 1L, messageId = 1L) }
 
         assertEquals(ErrorCode.INVALID_COMMENT_TARGET, exception.errorCode)
+    }
+
+    @Test
+    fun `삭제된 채팅방의 답글이면 재응답 생성 없이 CONVERSATION_ALREADY_DELETED`() {
+        every { messageRepository.findById(1L) } returns Optional.of(userReplyMessage())
+        every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L).apply { delete() })
+
+        val exception = assertFailsWith<BusinessException> { service.generateReplyComment(memberId = 1L, messageId = 1L) }
+
+        assertEquals(ErrorCode.CONVERSATION_ALREADY_DELETED, exception.errorCode)
+        verify(exactly = 0) { messageRepository.updateCommentStatus(any(), any(), any(), any()) }
+        verify(exactly = 0) { commentGenerator.generateReply(any(), any(), any(), any()) }
     }
 }

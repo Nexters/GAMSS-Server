@@ -146,7 +146,8 @@ class ConversationController(
                 "| INVALID_INPUT | 400 | messageId 누락 |\n" +
                 "| MESSAGE_NOT_FOUND | 404 | 존재하지 않는 메시지 |\n" +
                 "| INVALID_COMMENT_TARGET | 400 | 일기(사용자) 메시지가 아님 |\n" +
-                "| CONVERSATION_ACCESS_DENIED | 403 | 본인 채팅방이 아님 |",
+                "| CONVERSATION_ACCESS_DENIED | 403 | 본인 채팅방이 아님 |\n" +
+                "| CONVERSATION_ALREADY_DELETED | 409 | 삭제된 채팅방 |",
     )
     @PostMapping("/messages/comments")
     fun generateComments(
@@ -183,7 +184,8 @@ class ConversationController(
                 "| MESSAGE_NOT_FOUND | 404 | 존재하지 않는 메시지 |\n" +
                 "| INVALID_COMMENT_TARGET | 400 | 유저 답글이 아니거나, 답글 대상이 캐릭터 댓글이 아님 |\n" +
                 "| CONVERSATION_NOT_FOUND | 404 | 존재하지 않는 채팅방 |\n" +
-                "| CONVERSATION_ACCESS_DENIED | 403 | 본인 채팅방이 아님 |",
+                "| CONVERSATION_ACCESS_DENIED | 403 | 본인 채팅방이 아님 |\n" +
+                "| CONVERSATION_ALREADY_DELETED | 409 | 삭제된 채팅방 |",
     )
     @PostMapping("/messages/comments/{messageId}")
     fun generateReplyComments(
