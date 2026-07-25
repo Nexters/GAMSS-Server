@@ -20,7 +20,7 @@ import tools.jackson.databind.json.JsonMapper
 class GeminiCardMessageGenerator(
     private val properties: GeminiProperties,
     private val promptProvider: PromptProvider,
-    private val llmSettingsService: LlmSettingsService,
+    private val systemPromptResolver: SystemPromptResolver,
     private val jsonMapper: JsonMapper,
 ) : CardMessageGenerator {
     private val client: Client by lazy { Client.builder().apiKey(properties.apiKey).build() }
@@ -33,7 +33,7 @@ class GeminiCardMessageGenerator(
             try {
                 // 운영 중 백오피스에서 바꾼 값(공통 + 카드)을 매 호출 조립·반영한다(재배포 불필요).
                 // 설정 조회(DB) 실패도 여기서 잡아 재시도 계약을 유지한다.
-                val settings = llmSettingsService.forGeneration(PromptType.CARD)
+                val settings = systemPromptResolver.resolve(PromptType.CARD)
                 client.models.generateContent(
                     settings.model,
                     promptProvider.buildCardUserContent(emotion, summary),

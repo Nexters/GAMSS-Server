@@ -16,6 +16,15 @@ class PromptProvider {
     val replyPrompt: String = REPLY_PROMPT
     val cardPrompt: String = CARD_PROMPT
 
+    /** 타입별 코드 기본 프롬프트. 타입↔프롬프트 매핑은 프롬프트를 소유한 여기서 관리한다(단일 정의 지점). */
+    fun defaultPrompt(promptType: PromptType): String =
+        when (promptType) {
+            PromptType.COMMON -> commonPrompt
+            PromptType.COMMENT -> commentPrompt
+            PromptType.REPLY -> replyPrompt
+            PromptType.CARD -> cardPrompt
+        }
+
     fun buildUserContent(
         pastSummary: String,
         diaryContent: String,

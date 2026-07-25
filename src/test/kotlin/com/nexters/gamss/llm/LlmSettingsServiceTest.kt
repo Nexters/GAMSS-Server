@@ -88,26 +88,6 @@ class LlmSettingsServiceTest {
     }
 
     @Test
-    fun `forGeneration은 공통 프롬프트와 타입 프롬프트를 조립한다`() {
-        every { repository.findByPromptType(PromptType.COMMON) } returns LlmSettings(PromptType.COMMON, "gemini-3.1-flash-lite", "공통규칙")
-        every { repository.findByPromptType(PromptType.CARD) } returns LlmSettings(PromptType.CARD, "gemini-2.5-flash", "카드규칙")
-
-        val generation = service.forGeneration(PromptType.CARD)
-
-        assertEquals("gemini-2.5-flash", generation.model)
-        assertEquals("공통규칙\n\n카드규칙", generation.systemPrompt)
-    }
-
-    @Test
-    fun `forGeneration에 COMMON을 넘기면 공통 프롬프트만 반환한다`() {
-        every { repository.findByPromptType(PromptType.COMMON) } returns null
-
-        val generation = service.forGeneration(PromptType.COMMON)
-
-        assertEquals(promptProvider.commonPrompt, generation.systemPrompt)
-    }
-
-    @Test
     fun `COMMON은 모델 없이 프롬프트만 저장한다`() {
         every { repository.findByPromptType(PromptType.COMMON) } returns null
         every { repository.save(any()) } answers { firstArg() }
