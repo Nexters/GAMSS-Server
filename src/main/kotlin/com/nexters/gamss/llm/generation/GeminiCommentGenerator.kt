@@ -2,6 +2,7 @@ package com.nexters.gamss.llm.generation
 import com.google.genai.Client
 import com.google.genai.types.Content
 import com.google.genai.types.GenerateContentConfig
+import com.google.genai.types.HttpOptions
 import com.google.genai.types.Part
 import com.google.genai.types.Schema
 import com.nexters.gamss.emotion.domain.EmotionType
@@ -102,6 +103,7 @@ class GeminiCommentGenerator(
             .systemInstruction(Content.fromParts(Part.fromText(systemPrompt)))
             .responseMimeType("application/json")
             .responseSchema(schema)
+            .httpOptions(HttpOptions.builder().timeout(properties.requestTimeout.toMillis().toInt()))
             .build()
 
     private fun replySchema(): Schema =

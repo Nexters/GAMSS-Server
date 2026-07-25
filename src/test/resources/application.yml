@@ -22,3 +22,4 @@ conversation:
 gemini:
   api-key: test-gemini-api-key-dummy-value
   model: gemini-3.1-flash-lite
+  request-timeout: PT30S
