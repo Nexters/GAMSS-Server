@@ -1,4 +1,5 @@
 package com.nexters.gamss.llm.settings
+
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.llm.generation.GeminiModelCatalog
@@ -19,101 +20,100 @@ class LlmSettingsServiceTest {
     private val modelCatalog = mockk<GeminiModelCatalog>()
     private val service = LlmSettingsService(repository, geminiProperties, promptProvider, modelCatalog)
 
+    // ── 모델 ──
+
     @Test
-    fun `DB에 값이 없으면 코드 기본값을 반환한다`() {
-        every { repository.findByPromptType(PromptType.COMMENT) } returns null
+    fun `COMMON 행이 없으면 코드 기본 모델을 반환한다`() {
+        every { repository.findByPromptType(PromptType.COMMON) } returns null
 
-        val current = service.current(PromptType.COMMENT)
-
-        assertEquals("gemini-3.1-flash-lite", current.model)
-        assertEquals(promptProvider.commentPrompt, current.systemPrompt)
+        assertEquals("gemini-3.1-flash-lite", service.currentModel())
     }
 
     @Test
-    fun `REPLY 타입은 DB에 값이 없으면 답글용 코드 기본값을 반환한다`() {
-        every { repository.findByPromptType(PromptType.REPLY) } returns null
+    fun `COMMON 행이 있으면 그 모델을 반환한다`() {
+        every { repository.findByPromptType(PromptType.COMMON) } returns LlmSettings(PromptType.COMMON, "gemini-2.5-flash", "공통P")
 
-        val current = service.current(PromptType.REPLY)
-
-        assertEquals("gemini-3.1-flash-lite", current.model)
-        assertEquals(promptProvider.replyPrompt, current.systemPrompt)
+        assertEquals("gemini-2.5-flash", service.currentModel())
     }
 
     @Test
-    fun `DB에 값이 있으면 그 값을 반환한다`() {
-        every { repository.findByPromptType(PromptType.COMMENT) } returns
-            LlmSettings(PromptType.COMMENT, "gemini-2.5-flash", "커스텀 프롬프트")
-
-        val current = service.current(PromptType.COMMENT)
-
-        assertEquals("gemini-2.5-flash", current.model)
-        assertEquals("커스텀 프롬프트", current.systemPrompt)
-    }
-
-    @Test
-    fun `설정이 없으면 새로 저장한다`() {
+    fun `모델 수정 시 COMMON 행이 없으면 새로 저장한다`() {
         every { modelCatalog.availableModels() } returns listOf("gemini-2.5-flash")
-        every { repository.findByPromptType(PromptType.COMMENT) } returns null
+        every { repository.findByPromptType(PromptType.COMMON) } returns null
         every { repository.save(any()) } answers { firstArg() }
 
-        service.update(PromptType.COMMENT, "gemini-2.5-flash", "새 프롬프트")
+        service.updateModel("gemini-2.5-flash")
 
         verify(exactly = 1) { repository.save(any()) }
     }
 
     @Test
-    fun `설정이 있으면 기존 행을 갱신한다`() {
-        val row = LlmSettings(PromptType.COMMENT, "gemini-3.1-flash-lite", "old")
+    fun `모델 수정 시 COMMON 행이 있으면 모델만 갱신하고 공통 프롬프트는 보존한다`() {
+        val row = LlmSettings(PromptType.COMMON, "gemini-3.1-flash-lite", "공통 프롬프트")
         every { modelCatalog.availableModels() } returns listOf("gemini-2.5-flash")
-        every { repository.findByPromptType(PromptType.COMMENT) } returns row
+        every { repository.findByPromptType(PromptType.COMMON) } returns row
 
-        service.update(PromptType.COMMENT, "gemini-2.5-flash", "new")
+        service.updateModel("gemini-2.5-flash")
 
         assertEquals("gemini-2.5-flash", row.model)
-        assertEquals("new", row.systemPrompt)
+        assertEquals("공통 프롬프트", row.systemPrompt)
         verify(exactly = 0) { repository.save(any()) }
     }
 
     @Test
-    fun `gemini 접두사가 아니면 INVALID_INPUT`() {
-        val exception = assertFailsWith<BusinessException> { service.update(PromptType.COMMENT, "gpt-4", "p") }
+    fun `gemini 접두사가 아닌 모델은 INVALID_INPUT`() {
+        val exception = assertFailsWith<BusinessException> { service.updateModel("gpt-4") }
 
         assertEquals(ErrorCode.INVALID_INPUT, exception.errorCode)
     }
 
     @Test
-    fun `카탈로그에 없는 모델이면 INVALID_INPUT`() {
+    fun `카탈로그에 없는 모델은 INVALID_INPUT`() {
         every { modelCatalog.availableModels() } returns listOf("gemini-2.5-flash")
 
-        val exception = assertFailsWith<BusinessException> { service.update(PromptType.COMMENT, "gemini-9.9-ultra", "p") }
+        val exception = assertFailsWith<BusinessException> { service.updateModel("gemini-9.9-ultra") }
 
         assertEquals(ErrorCode.INVALID_INPUT, exception.errorCode)
     }
 
+    // ── 프롬프트 ──
+
     @Test
-    fun `COMMON은 모델 없이 프롬프트만 저장한다`() {
+    fun `프롬프트가 DB에 없으면 타입별 코드 기본값을 반환한다`() {
+        every { repository.findByPromptType(PromptType.COMMENT) } returns null
+        every { repository.findByPromptType(PromptType.CARD) } returns null
+
+        assertEquals(promptProvider.commentPrompt, service.currentPrompt(PromptType.COMMENT))
+        assertEquals(promptProvider.cardPrompt, service.currentPrompt(PromptType.CARD))
+    }
+
+    @Test
+    fun `프롬프트가 DB에 있으면 그 값을 반환한다`() {
+        every { repository.findByPromptType(PromptType.REPLY) } returns LlmSettings(PromptType.REPLY, "gemini-2.5-flash", "커스텀 답글")
+
+        assertEquals("커스텀 답글", service.currentPrompt(PromptType.REPLY))
+    }
+
+    @Test
+    fun `프롬프트 수정 시 행이 없으면 새로 저장한다`() {
+        every { repository.findByPromptType(PromptType.CARD) } returns null
         every { repository.findByPromptType(PromptType.COMMON) } returns null
         every { repository.save(any()) } answers { firstArg() }
 
-        service.update(PromptType.COMMON, null, "새 공통 프롬프트")
+        service.updatePrompt(PromptType.CARD, "새 카드 프롬프트")
 
         verify(exactly = 1) { repository.save(any()) }
-        verify(exactly = 0) { modelCatalog.availableModels() }
     }
 
     @Test
-    fun `COMMON 외 타입은 모델이 없으면 INVALID_INPUT`() {
-        val exception = assertFailsWith<BusinessException> { service.update(PromptType.CARD, null, "p") }
+    fun `프롬프트 수정 시 행이 있으면 프롬프트만 갱신하고 모델은 보존한다`() {
+        val row = LlmSettings(PromptType.COMMENT, "gemini-2.5-flash", "old")
+        every { repository.findByPromptType(PromptType.COMMENT) } returns row
 
-        assertEquals(ErrorCode.INVALID_INPUT, exception.errorCode)
-    }
+        service.updatePrompt(PromptType.COMMENT, "new")
 
-    @Test
-    fun `CARD 타입은 DB에 값이 없으면 카드용 코드 기본값을 반환한다`() {
-        every { repository.findByPromptType(PromptType.CARD) } returns null
-
-        val current = service.current(PromptType.CARD)
-
-        assertEquals(promptProvider.cardPrompt, current.systemPrompt)
+        assertEquals("new", row.systemPrompt)
+        assertEquals("gemini-2.5-flash", row.model)
+        verify(exactly = 0) { repository.save(any()) }
     }
 }

@@ -1,4 +1,5 @@
 package com.nexters.gamss.llm.settings
+
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.llm.generation.GeminiModelCatalog
@@ -9,11 +10,12 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
 /**
- * LLM 생성 설정(모델·시스템 프롬프트)의 타입별 조회·수정. [PromptType]별로 독립된 행을 가진다.
- * DB에 값이 있으면 그것을, 없으면 코드 기본값(GeminiProperties.model / PromptProvider의 타입별 프롬프트)을 쓴다.
+ * LLM 생성 설정 조회·수정. 두 종류를 관리한다:
+ * - **모델**: 앱 전체 단일 설정(댓글·답글·카드가 같은 모델 사용). 물리적으로는 [PromptType.COMMON] 행에 저장한다.
+ * - **프롬프트**: [PromptType]별 원본(백오피스 편집 단위). 생성기가 쓰는 조립본(COMMON + 타입)은 [SystemPromptResolver]가 만든다.
  *
- * 여기서 다루는 프롬프트는 그 타입의 **원본**이다(백오피스 편집 단위). 생성기가 쓰는 조립본(COMMON + 타입)은
- * [SystemPromptResolver]가 만든다 — 설정 CRUD와 조립 책임을 분리한다.
+ * DB에 값이 없으면 코드 기본값(GeminiProperties.model / PromptProvider의 타입별 프롬프트)을 쓴다.
+ * 선택 가능한 모델은 [GeminiModelCatalog]가 Gemini API에서 동적으로 가져온다(신모델 자동 노출).
  */
 @Service
 class LlmSettingsService(
@@ -22,57 +24,51 @@ class LlmSettingsService(
     private val promptProvider: PromptProvider,
     private val modelCatalog: GeminiModelCatalog,
 ) {
-    /** 특정 타입의 원본 설정(백오피스 편집·조회용, 조립 전). */
+    // ── 모델(앱 전체 단일). COMMON 행의 model 컬럼에 저장한다. ──
+
     @Transactional(readOnly = true)
-    fun current(promptType: PromptType): LlmSettingsView {
-        val row = row(promptType)
-        return LlmSettingsView(
-            model = row?.model ?: geminiProperties.model,
-            systemPrompt = row?.systemPrompt ?: promptProvider.defaultPrompt(promptType),
-        )
-    }
+    fun currentModel(): String = row(PromptType.COMMON)?.model ?: geminiProperties.model
+
+    fun defaultModel(): String = geminiProperties.model
 
     fun availableModels(): List<String> = modelCatalog.availableModels()
 
-    /** 코드 기본값(DB로 덮이기 전 원래 값). "기본값으로 복원"에 쓴다. */
-    fun defaults(promptType: PromptType): LlmSettingsView =
-        LlmSettingsView(geminiProperties.model, promptProvider.defaultPrompt(promptType))
-
     @Transactional
-    fun update(
-        promptType: PromptType,
-        model: String?,
-        systemPrompt: String,
-    ) {
-        val resolvedModel = resolveModel(promptType, model)
-        val existing = row(promptType)
-        if (existing != null) {
-            existing.update(resolvedModel, systemPrompt)
+    fun updateModel(model: String) {
+        validateModel(model)
+        val row = row(PromptType.COMMON)
+        if (row != null) {
+            row.update(model, row.systemPrompt)
             return
         }
-        repository.save(LlmSettings(promptType, resolvedModel, systemPrompt))
+        repository.save(LlmSettings(PromptType.COMMON, model, promptProvider.defaultPrompt(PromptType.COMMON)))
     }
 
-    // 모델을 쓰지 않는 타입(COMMON)은 코드 기본 모델을 자리표시자로 저장한다(생성엔 안 쓰임).
-    // 그 외 타입은 모델이 필수이고 형식·목록 검증을 거친다.
-    private fun resolveModel(
+    // ── 프롬프트(타입별 원본). ──
+
+    @Transactional(readOnly = true)
+    fun currentPrompt(promptType: PromptType): String = row(promptType)?.systemPrompt ?: promptProvider.defaultPrompt(promptType)
+
+    fun defaultPrompt(promptType: PromptType): String = promptProvider.defaultPrompt(promptType)
+
+    @Transactional
+    fun updatePrompt(
         promptType: PromptType,
-        model: String?,
-    ): String {
-        if (!promptType.usesModel) {
-            return geminiProperties.model
+        systemPrompt: String,
+    ) {
+        val row = row(promptType)
+        if (row != null) {
+            row.update(row.model, systemPrompt)
+            return
         }
-        if (model.isNullOrBlank()) {
-            throw BusinessException(ErrorCode.INVALID_INPUT, "model은 필수입니다.")
-        }
-        validateModel(model)
-        return model
+        // 새 행의 model 컬럼: COMMON이면 곧 전체 모델, 그 외 타입은 안 쓰이는 자리표시자다.
+        repository.save(LlmSettings(promptType, currentModel(), systemPrompt))
     }
 
     // 기본 형식은 항상 검증하고, 카탈로그 조회가 성공한 경우엔 목록 소속까지 강제한다.
     // (API 장애로 목록이 비면 저장을 막지 않는다 — 형식만 통과하면 허용.)
     private fun validateModel(model: String) {
-        if (!model.startsWith(GEMINI_PREFIX)) {
+        if (model.isBlank() || !model.startsWith(GEMINI_PREFIX)) {
             throw BusinessException(ErrorCode.INVALID_INPUT, "유효하지 않은 모델입니다: $model")
         }
         val available = modelCatalog.availableModels()

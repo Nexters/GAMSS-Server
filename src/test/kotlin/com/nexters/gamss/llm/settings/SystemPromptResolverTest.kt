@@ -1,4 +1,5 @@
 package com.nexters.gamss.llm.settings
+
 import com.nexters.gamss.llm.prompt.PromptType
 import io.mockk.every
 import io.mockk.mockk
@@ -10,9 +11,10 @@ class SystemPromptResolverTest {
     private val resolver = SystemPromptResolver(llmSettingsService)
 
     @Test
-    fun `공통 프롬프트와 타입 프롬프트를 조립한다`() {
-        every { llmSettingsService.current(PromptType.COMMON) } returns LlmSettingsView("m", "공통규칙")
-        every { llmSettingsService.current(PromptType.CARD) } returns LlmSettingsView("gemini-2.5-flash", "카드규칙")
+    fun `단일 모델과 공통+타입 조립 프롬프트를 돌려준다`() {
+        every { llmSettingsService.currentModel() } returns "gemini-2.5-flash"
+        every { llmSettingsService.currentPrompt(PromptType.COMMON) } returns "공통규칙"
+        every { llmSettingsService.currentPrompt(PromptType.CARD) } returns "카드규칙"
 
         val result = resolver.resolve(PromptType.CARD)
 
@@ -22,7 +24,8 @@ class SystemPromptResolverTest {
 
     @Test
     fun `COMMON을 넘기면 조립 없이 공통 프롬프트만 반환한다`() {
-        every { llmSettingsService.current(PromptType.COMMON) } returns LlmSettingsView("m", "공통규칙")
+        every { llmSettingsService.currentModel() } returns "m"
+        every { llmSettingsService.currentPrompt(PromptType.COMMON) } returns "공통규칙"
 
         val result = resolver.resolve(PromptType.COMMON)
 
