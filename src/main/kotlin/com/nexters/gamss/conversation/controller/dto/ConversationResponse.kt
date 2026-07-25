@@ -7,7 +7,7 @@ import java.time.Instant
 data class ConversationResponse(
     @field:Schema(description = "채팅방 ID", example = "1")
     val id: Long,
-    @field:Schema(description = "채팅방 상태", example = "ACTIVE", allowableValues = ["ACTIVE", "ENDED"])
+    @field:Schema(description = "채팅방 상태", example = "ACTIVE", allowableValues = ["ACTIVE", "ENDED", "DELETED"])
     val status: String,
     @field:Schema(description = "생성 일시")
     val createdAt: Instant,

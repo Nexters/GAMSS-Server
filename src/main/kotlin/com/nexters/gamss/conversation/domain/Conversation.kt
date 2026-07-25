@@ -49,18 +49,33 @@ class Conversation(
 
     fun isOwnedBy(memberId: Long): Boolean = this.memberId == memberId
 
-    /** 채팅방을 종료한다. 이미 종료된 방을 다시 종료하면 예외를 던진다. */
+    /** 채팅방을 종료한다. 삭제된 방이거나 이미 종료된 방을 다시 종료하면 예외를 던진다. */
     fun end() {
+        ensureNotDeleted()
         if (status == ConversationStatus.ENDED) {
             throw BusinessException(ErrorCode.CONVERSATION_ALREADY_ENDED)
         }
         status = ConversationStatus.ENDED
     }
 
+    /** 채팅방을 삭제한다. 이미 삭제된 방을 다시 삭제하면 예외를 던진다. */
+    fun delete() {
+        ensureNotDeleted()
+        status = ConversationStatus.DELETED
+    }
+
     /** 종료된 채팅방에는 사용자 메시지를 추가할 수 없다. */
     fun ensureActive() {
+        ensureNotDeleted()
         if (status == ConversationStatus.ENDED) {
             throw BusinessException(ErrorCode.CONVERSATION_ENDED)
+        }
+    }
+
+    /** 삭제된 채팅방은 조회·종료·메시지 추가 등 어떤 작업도 할 수 없다. */
+    fun ensureNotDeleted() {
+        if (status == ConversationStatus.DELETED) {
+            throw BusinessException(ErrorCode.CONVERSATION_ALREADY_DELETED)
         }
     }
 

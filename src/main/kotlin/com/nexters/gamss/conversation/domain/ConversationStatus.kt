@@ -6,4 +6,5 @@ package com.nexters.gamss.conversation.domain
 enum class ConversationStatus {
     ACTIVE,
     ENDED,
+    DELETED,
 }

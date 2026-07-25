@@ -245,6 +245,7 @@ class CommentGenerationService(
         if (!conversation.isOwnedBy(memberId)) {
             throw BusinessException(ErrorCode.CONVERSATION_ACCESS_DENIED)
         }
+        conversation.ensureNotDeleted()
         return message
     }
 
