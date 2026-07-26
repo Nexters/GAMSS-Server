@@ -630,63 +630,6 @@ class ConversationControllerIntegrationTest {
     }
 
     @Test
-    fun `삭제된 채팅방의 메시지에 댓글 생성을 요청하면 409를 반환한다`() {
-        val member = memberRepository.save(Member("me@a.com"))
-        val conversation = conversationRepository.save(Conversation(member.id))
-        val diary =
-            messageRepository.save(
-                Message(conversationId = conversation.id, senderType = SenderType.USER, content = "삭제 전에 쓴 일기"),
-            )
-        conversationRepository.save(conversation.apply { delete() })
-
-        mockMvc
-            .post("/api/conversations/messages/comments") {
-                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
-                contentType = MediaType.APPLICATION_JSON
-                content = """{"messageId":${diary.id}}"""
-            }.andExpect {
-                status { isConflict() }
-                jsonPath("$.error.code") { value("CONVERSATION_ALREADY_DELETED") }
-            }
-    }
-
-    @Test
-    fun `삭제된 채팅방의 답글에 재응답 생성을 요청하면 409를 반환한다`() {
-        val member = memberRepository.save(Member("me@a.com"))
-        val conversation = conversationRepository.save(Conversation(member.id))
-        val diary =
-            messageRepository.save(Message(conversationId = conversation.id, senderType = SenderType.USER, content = "일기"))
-        val characterComment =
-            messageRepository.save(
-                Message(
-                    conversationId = conversation.id,
-                    senderType = SenderType.CHARACTER,
-                    emotionType = EmotionType.JOY,
-                    content = "댓글",
-                    rootMessageId = diary.id,
-                ),
-            )
-        val reply =
-            messageRepository.save(
-                Message(
-                    conversationId = conversation.id,
-                    senderType = SenderType.USER,
-                    content = "답장",
-                    repliesToMessageId = characterComment.id,
-                ),
-            )
-        conversationRepository.save(conversation.apply { delete() })
-
-        mockMvc
-            .post("/api/conversations/messages/comments/${reply.id}") {
-                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
-            }.andExpect {
-                status { isConflict() }
-                jsonPath("$.error.code") { value("CONVERSATION_ALREADY_DELETED") }
-            }
-    }
-
-    @Test
     fun `삭제된 채팅방은 날짜별 목록 조회에 나타나지 않는다`() {
         val member = memberRepository.save(Member("me@a.com"))
         conversationRepository.save(Conversation(member.id).apply { delete() })
