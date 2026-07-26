@@ -390,6 +390,43 @@ class CommentGenerationServiceTest {
     }
 
     @Test
+    fun `답글 대상이 다른 채팅방의 메시지면 INVALID_COMMENT_TARGET`() {
+        val characterMessageInOtherConversation =
+            Message(
+                conversationId = 20L,
+                senderType = SenderType.CHARACTER,
+                emotionType = EmotionType.JOY,
+                content = "다른 채팅방의 댓글",
+                rootMessageId = 3L,
+            )
+        every { messageRepository.findById(1L) } returns Optional.of(userReplyMessage())
+        every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
+        every { messageRepository.findById(2L) } returns Optional.of(characterMessageInOtherConversation)
+
+        val exception = assertFailsWith<BusinessException> { service.generateReplyComment(memberId = 1L, messageId = 1L) }
+
+        assertEquals(ErrorCode.INVALID_COMMENT_TARGET, exception.errorCode)
+        verify(exactly = 0) { messageRepository.findById(3L) }
+        verify(exactly = 0) { commentGenerator.generateReply(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `답글의 원본 일기가 다른 채팅방의 메시지면 INVALID_COMMENT_TARGET`() {
+        val diaryMessageInOtherConversation =
+            Message(conversationId = 20L, senderType = SenderType.USER, content = "다른 채팅방의 일기")
+        every { messageRepository.findById(1L) } returns Optional.of(userReplyMessage())
+        every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
+        every { messageRepository.findById(2L) } returns Optional.of(characterMessage())
+        every { messageRepository.findById(3L) } returns Optional.of(diaryMessageInOtherConversation)
+
+        val exception = assertFailsWith<BusinessException> { service.generateReplyComment(memberId = 1L, messageId = 1L) }
+
+        assertEquals(ErrorCode.INVALID_COMMENT_TARGET, exception.errorCode)
+        verify(exactly = 0) { messageRepository.updateCommentStatus(any(), any(), any(), any()) }
+        verify(exactly = 0) { commentGenerator.generateReply(any(), any(), any(), any()) }
+    }
+
+    @Test
     fun `답글이 아닌 메시지로 답글 생성을 요청하면 INVALID_COMMENT_TARGET`() {
         val notAReply = Message(conversationId = 10L, senderType = SenderType.USER, content = "그냥 메시지", repliesToMessageId = null)
         every { messageRepository.findById(1L) } returns Optional.of(notAReply)

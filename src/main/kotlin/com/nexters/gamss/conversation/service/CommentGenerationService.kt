@@ -112,6 +112,7 @@ class CommentGenerationService(
             messageRepository
                 .findById(userReplyMessage.repliesToMessageId ?: throw BusinessException(ErrorCode.INVALID_COMMENT_TARGET))
                 .orElseThrow { BusinessException(ErrorCode.MESSAGE_NOT_FOUND) }
+                .also { ensureSameConversation(it, userReplyMessage.conversationId) }
         if (characterMessage.senderType != SenderType.CHARACTER) {
             throw BusinessException(ErrorCode.INVALID_COMMENT_TARGET)
         }
@@ -119,6 +120,7 @@ class CommentGenerationService(
             messageRepository
                 .findById(characterMessage.rootMessageId ?: throw BusinessException(ErrorCode.INVALID_COMMENT_TARGET))
                 .orElseThrow { BusinessException(ErrorCode.MESSAGE_NOT_FOUND) }
+                .also { ensureSameConversation(it, userReplyMessage.conversationId) }
 
         val claimed =
             messageRepository.updateCommentStatus(
@@ -276,6 +278,15 @@ class CommentGenerationService(
         }
         conversation.ensureNotDeleted()
         return message
+    }
+
+    private fun ensureSameConversation(
+        message: Message,
+        conversationId: Long,
+    ) {
+        if (message.conversationId != conversationId) {
+            throw BusinessException(ErrorCode.INVALID_COMMENT_TARGET)
+        }
     }
 
     companion object {
