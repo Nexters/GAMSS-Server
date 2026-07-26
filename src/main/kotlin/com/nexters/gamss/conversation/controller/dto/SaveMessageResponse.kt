@@ -2,8 +2,7 @@ package com.nexters.gamss.conversation.controller.dto
 
 import com.nexters.gamss.conversation.domain.Message
 import com.nexters.gamss.conversation.service.CommentGenerationOutcome
-import com.nexters.gamss.conversation.service.CommentGenerationResult
-import com.nexters.gamss.conversation.service.ReplyGenerationResult
+import com.nexters.gamss.conversation.service.GenerationResult
 import io.swagger.v3.oas.annotations.media.Schema
 
 /**
@@ -26,32 +25,16 @@ data class SaveMessageResponse(
     companion object {
         fun from(
             message: Message,
-            result: CommentGenerationResult,
+            result: GenerationResult,
         ): SaveMessageResponse {
             check(result.outcome != CommentGenerationOutcome.GENERATING) {
-                "방금 저장한 메시지(id=${message.id})의 댓글 생성이 GENERATING을 반환했습니다 — " +
+                "방금 저장한 메시지(id=${message.id})의 생성이 GENERATING을 반환했습니다 — " +
                     "새로 만든 메시지는 항상 CAS 선점에 성공해야 하는데 선점 경쟁이 발생했습니다."
             }
             return SaveMessageResponse(
                 message = MessageResponse.from(message),
                 commentStatus = result.outcome.toResponseStatus(),
-                comments = result.comments.map { MessageResponse.from(it) },
-                usedTokens = result.usedTokens,
-            )
-        }
-
-        fun from(
-            message: Message,
-            result: ReplyGenerationResult,
-        ): SaveMessageResponse {
-            check(result.outcome != CommentGenerationOutcome.GENERATING) {
-                "방금 저장한 답글(id=${message.id})의 재응답 생성이 GENERATING을 반환했습니다 — " +
-                    "새로 만든 메시지는 항상 CAS 선점에 성공해야 하는데 선점 경쟁이 발생했습니다."
-            }
-            return SaveMessageResponse(
-                message = MessageResponse.from(message),
-                commentStatus = result.outcome.toResponseStatus(),
-                comments = listOfNotNull(result.message).map { MessageResponse.from(it) },
+                comments = result.messages.map { MessageResponse.from(it) },
                 usedTokens = result.usedTokens,
             )
         }

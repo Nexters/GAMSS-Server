@@ -108,7 +108,7 @@ class CommentGenerationServiceTest {
         val result = service.generateComments(memberId = 1L, messageId = 1L)
 
         assertEquals(CommentGenerationOutcome.DONE, result.outcome)
-        assertEquals(savedMessages, result.comments)
+        assertEquals(savedMessages, result.messages)
         assertEquals(123, result.usedTokens)
     }
 
@@ -149,7 +149,7 @@ class CommentGenerationServiceTest {
         val result = service.generateComments(memberId = 1L, messageId = 1L)
 
         assertEquals(CommentGenerationOutcome.DONE, result.outcome)
-        assertEquals(existingComments, result.comments)
+        assertEquals(existingComments, result.messages)
         assertEquals(null, result.usedTokens)
     }
 
@@ -302,7 +302,7 @@ class CommentGenerationServiceTest {
         val result = service.generateReplyComment(memberId = 1L, messageId = 1L)
 
         assertEquals(CommentGenerationOutcome.DONE, result.outcome)
-        assertEquals(savedReply, result.message)
+        assertEquals(listOf(savedReply), result.messages)
         assertEquals(77, result.usedTokens)
     }
 
@@ -338,7 +338,7 @@ class CommentGenerationServiceTest {
         val result = service.generateReplyComment(memberId = 1L, messageId = 1L)
 
         assertEquals(CommentGenerationOutcome.DONE, result.outcome)
-        assertEquals(existingReply, result.message)
+        assertEquals(listOf(existingReply), result.messages)
     }
 
     @Test
@@ -355,7 +355,7 @@ class CommentGenerationServiceTest {
         val result = service.generateReplyComment(memberId = 1L, messageId = 1L)
 
         assertEquals(CommentGenerationOutcome.FAILED, result.outcome)
-        assertEquals(null, result.message)
+        assertEquals(emptyList<Message>(), result.messages)
     }
 
     @Test
@@ -410,5 +410,54 @@ class CommentGenerationServiceTest {
         assertEquals(ErrorCode.CONVERSATION_ALREADY_DELETED, exception.errorCode)
         verify(exactly = 0) { messageRepository.updateCommentStatus(any(), any(), any(), any()) }
         verify(exactly = 0) { commentGenerator.generateReply(any(), any(), any(), any()) }
+    }
+
+    // generateFor는 저장 직후 호출되는 진입점이라 소유권 조회 없이 message 자체로 라우팅한다
+    // (CommentGenerationService.getOwnedRootMessage를 타지 않음). 선점·재시도·저장 로직 자체는
+    // generateComments/generateReplyComment와 같은 내부 메서드를 공유하므로, 여기서는 라우팅이
+    // 올바른 쪽으로 가는지만 확인하고 나머지 경로(FAILED, 재시도 등)는 위 테스트들이 이미 커버한다.
+
+    @Test
+    fun `repliesToMessageId가 없으면 generateFor가 댓글 생성으로 라우팅한다`() {
+        val message = rootMessage().also { ReflectionTestUtils.setField(it, "id", 1L) }
+        stubClaimSuccess()
+        every {
+            commentGenerator.generateComment("", message.content, characters, tikitakaCount, null)
+        } returns CommentGenerationOutput(feed(), 123)
+        every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } returns Unit
+        val savedMessages =
+            listOf(Message(conversationId = 10L, senderType = SenderType.CHARACTER, emotionType = EmotionType.JOY, content = "댓글"))
+        every { commentPersistenceService.saveFeed(10L, 1L, feed()) } returns savedMessages
+
+        val result = service.generateFor(message)
+
+        assertEquals(CommentGenerationOutcome.DONE, result.outcome)
+        assertEquals(savedMessages, result.messages)
+        assertEquals(123, result.usedTokens)
+        verify(exactly = 0) { commentGenerator.generateReply(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `repliesToMessageId가 있으면 generateFor가 재응답 생성으로 라우팅한다`() {
+        val reply = userReplyMessage().also { ReflectionTestUtils.setField(it, "id", 1L) }
+        every { messageRepository.findById(2L) } returns Optional.of(characterMessage())
+        every { messageRepository.findById(3L) } returns Optional.of(diaryMessage())
+        every {
+            messageRepository.updateCommentStatus(1L, CommentStatus.PENDING, listOf(CommentStatus.NONE, CommentStatus.FAILED), any())
+        } returns 1
+        every {
+            commentGenerator.generateReply(diaryMessage().content, "gippeum", characterMessage().content, reply.content)
+        } returns ReplyGenerationOutput("그치! 잘했어!", 77)
+        every { commentFeedValidator.validateReply("그치! 잘했어!") } returns Unit
+        val savedReply =
+            Message(conversationId = 10L, senderType = SenderType.CHARACTER, emotionType = EmotionType.JOY, content = "그치! 잘했어!")
+        every { commentPersistenceService.saveReply(10L, 3L, 1L, EmotionType.JOY, "그치! 잘했어!") } returns savedReply
+
+        val result = service.generateFor(reply)
+
+        assertEquals(CommentGenerationOutcome.DONE, result.outcome)
+        assertEquals(listOf(savedReply), result.messages)
+        assertEquals(77, result.usedTokens)
+        verify(exactly = 0) { commentGenerator.generateComment(any(), any(), any(), any(), any()) }
     }
 }
