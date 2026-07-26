@@ -11,6 +11,7 @@ import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.llm.error.CommentGenerationFailedException
 import com.nexters.gamss.llm.generation.CommentGenerationOutput
 import com.nexters.gamss.llm.generation.CommentGenerator
+import com.nexters.gamss.llm.generation.LlmRetryPolicy
 import com.nexters.gamss.llm.generation.ReplyGenerationOutput
 import com.nexters.gamss.llm.parsing.CommentFeedValidator
 import com.nexters.gamss.llm.prompt.PromptCharacterId
@@ -160,14 +161,14 @@ class CommentGenerationService(
         }
     }
 
-    /** LLM 호출 + 의미 검증을 하나의 단위로 묶어 최대 [MAX_ATTEMPTS]회 시도한다(DoD: 실패 시 1회 재시도). */
+    /** LLM 호출 + 의미 검증을 하나의 단위로 묶어 최대 [LlmRetryPolicy.MAX_ATTEMPTS]회 시도한다. */
     private fun generateReplyWithRetry(
         diaryContent: String,
         characterMessage: Message,
         userReply: String,
     ): ReplyGenerationOutput {
         var lastError: CommentGenerationFailedException? = null
-        repeat(MAX_ATTEMPTS) { attempt ->
+        repeat(LlmRetryPolicy.MAX_ATTEMPTS) { attempt ->
             try {
                 val output =
                     commentGenerator.generateReply(
@@ -186,7 +187,7 @@ class CommentGenerationService(
         throw checkNotNull(lastError)
     }
 
-    /** LLM 호출 + 의미 검증을 하나의 단위로 묶어 최대 [MAX_ATTEMPTS]회 시도한다(DoD: 실패 시 1회 재시도). */
+    /** LLM 호출 + 의미 검증을 하나의 단위로 묶어 최대 [LlmRetryPolicy.MAX_ATTEMPTS]회 시도한다. */
     private fun generateWithRetry(diaryContent: String): CommentGenerationOutput {
         val characters = characterSelector.select()
         val tikitakaCount = characterSelector.selectTikitakaCount()
@@ -195,7 +196,7 @@ class CommentGenerationService(
         val pastSummary = ""
 
         var lastError: CommentGenerationFailedException? = null
-        repeat(MAX_ATTEMPTS) { attempt ->
+        repeat(LlmRetryPolicy.MAX_ATTEMPTS) { attempt ->
             try {
                 val output =
                     commentGenerator.generateComment(pastSummary, diaryContent, characters, tikitakaCount, eongttungTopic)
@@ -287,9 +288,5 @@ class CommentGenerationService(
         if (message.conversationId != conversationId) {
             throw BusinessException(ErrorCode.INVALID_COMMENT_TARGET)
         }
-    }
-
-    companion object {
-        private const val MAX_ATTEMPTS = 2
     }
 }

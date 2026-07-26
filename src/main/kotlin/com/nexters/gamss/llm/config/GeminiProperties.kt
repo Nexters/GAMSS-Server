@@ -1,5 +1,6 @@
 package com.nexters.gamss.llm.config
 
+import com.nexters.gamss.llm.generation.LlmRetryPolicy
 import org.springframework.boot.context.properties.ConfigurationProperties
 import java.time.Duration
 
@@ -8,7 +9,7 @@ data class GeminiProperties(
     val apiKey: String,
     val model: String,
     /** LLM 호출 1회당 타임아웃. 저장+생성을 한 요청으로 묶은 뒤 nginx proxy_read_timeout(120s)이
-     * 하드 리밋이 되므로, 재시도 최대 2회를 감안해도 그 안에 들어오도록 명시적으로 제한한다. */
+     * 하드 리밋이 되므로, [LlmRetryPolicy]의 전체 재시도 시간을 그보다 짧게 제한한다. */
     val requestTimeout: Duration,
 ) {
     /**
@@ -23,4 +24,14 @@ data class GeminiProperties(
                     "gemini.request-timeout은 1..${Int.MAX_VALUE}ms 범위여야 합니다: $requestTimeout"
                 }
             }.toInt()
+
+    init {
+        val totalTimeoutMillis = LlmRetryPolicy.totalTimeoutMillis(requestTimeoutMillis)
+        require(totalTimeoutMillis < LlmRetryPolicy.TOTAL_TIMEOUT_BUDGET_MILLIS) {
+            "gemini.request-timeout의 최대 재시도 시간이 " +
+                "${LlmRetryPolicy.TOTAL_TIMEOUT_BUDGET_MILLIS}ms 미만이어야 합니다 " +
+                "(attempts=${LlmRetryPolicy.MAX_ATTEMPTS}, " +
+                "backoff=${LlmRetryPolicy.RETRY_BACKOFF_MILLIS}ms): $requestTimeout"
+        }
+    }
 }

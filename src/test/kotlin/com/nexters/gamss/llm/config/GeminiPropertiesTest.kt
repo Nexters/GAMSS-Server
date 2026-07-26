@@ -1,5 +1,6 @@
 package com.nexters.gamss.llm.config
 
+import com.nexters.gamss.llm.generation.LlmRetryPolicy
 import java.time.Duration
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -50,11 +51,22 @@ class GeminiPropertiesTest {
     }
 
     @Test
-    fun `타임아웃이 Int 밀리초 범위의 최댓값이면 통과한다`() {
-        val properties =
-            GeminiProperties(apiKey = "key", model = "model", requestTimeout = Duration.ofMillis(Int.MAX_VALUE.toLong()))
+    fun `전체 재시도 시간이 프록시 budget과 같으면 예외`() {
+        val perAttemptTimeoutMillis =
+            LlmRetryPolicy.TOTAL_TIMEOUT_BUDGET_MILLIS / LlmRetryPolicy.MAX_ATTEMPTS
 
-        assertEquals(Int.MAX_VALUE.toLong(), properties.requestTimeout.toMillis())
-        assertEquals(Int.MAX_VALUE, properties.requestTimeoutMillis)
+        assertFailsWith<IllegalArgumentException> {
+            GeminiProperties(apiKey = "key", model = "model", requestTimeout = Duration.ofMillis(perAttemptTimeoutMillis))
+        }
+    }
+
+    @Test
+    fun `전체 재시도 시간이 프록시 budget보다 작으면 통과한다`() {
+        val perAttemptTimeoutMillis =
+            LlmRetryPolicy.TOTAL_TIMEOUT_BUDGET_MILLIS / LlmRetryPolicy.MAX_ATTEMPTS - 1
+        val properties =
+            GeminiProperties(apiKey = "key", model = "model", requestTimeout = Duration.ofMillis(perAttemptTimeoutMillis))
+
+        assertEquals(perAttemptTimeoutMillis.toInt(), properties.requestTimeoutMillis)
     }
 }
