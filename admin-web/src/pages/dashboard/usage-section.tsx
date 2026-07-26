@@ -167,11 +167,13 @@ export function UsageSection() {
               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">데이터 없음</div>
             )}
           </div>
-          <div className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs">
+          <div className="mt-2 grid grid-cols-3 gap-x-2 gap-y-1 text-xs">
             {emotionData.map((d) => (
-              <span key={d.name} className="flex items-center gap-1.5">
-                <span className="size-2 rounded-full" style={{ background: d.color }} />
-                {d.name} {d.value.toLocaleString()}
+              <span key={d.name} className="flex min-w-0 items-center gap-1.5">
+                <span className="size-2 shrink-0 rounded-full" style={{ background: d.color }} />
+                <span className="truncate">
+                  {d.name} {d.value.toLocaleString()}
+                </span>
               </span>
             ))}
           </div>
