@@ -161,6 +161,16 @@ class CommentGenerationService(
             } catch (e: CommentGenerationFailedException) {
                 lastError = e
                 log.warn("답글 생성 {}차 시도 실패: {}", attempt + 1, e.message)
+            } catch (e: Exception) {
+                // 재시도 대상이 아닌 예외: 실패로 기록한 뒤 즉시 던진다(재시도하지 않음).
+                generationLogRecorder.record(
+                    type = GenerationType.REPLY,
+                    success = false,
+                    attemptCount = attempt + 1,
+                    latencyMs = System.currentTimeMillis() - startedAt,
+                    failureReason = failureReasonOf(e),
+                )
+                throw e
             }
         }
         generationLogRecorder.record(
@@ -174,7 +184,7 @@ class CommentGenerationService(
     }
 
     /** 생성 로그의 실패 원인 요약. 근본 원인(예외 cause)의 클래스명을 우선 쓰고, 없으면 예외 자체의 클래스명을 쓴다. */
-    private fun failureReasonOf(error: CommentGenerationFailedException?): String? {
+    private fun failureReasonOf(error: Throwable?): String? {
         if (error == null) {
             return null
         }
@@ -207,6 +217,16 @@ class CommentGenerationService(
             } catch (e: CommentGenerationFailedException) {
                 lastError = e
                 log.warn("댓글 생성 {}차 시도 실패: {}", attempt + 1, e.message)
+            } catch (e: Exception) {
+                // 재시도 대상이 아닌 예외: 실패로 기록한 뒤 즉시 던진다(재시도하지 않음).
+                generationLogRecorder.record(
+                    type = GenerationType.COMMENT,
+                    success = false,
+                    attemptCount = attempt + 1,
+                    latencyMs = System.currentTimeMillis() - startedAt,
+                    failureReason = failureReasonOf(e),
+                )
+                throw e
             }
         }
         generationLogRecorder.record(

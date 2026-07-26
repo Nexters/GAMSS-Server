@@ -16,6 +16,7 @@ import { MessagesSquare, Sparkles, UserPlus, Users } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { MetricCard } from '@/components/metric-card'
+import { SectionError, SeriesTooltip, shortDate } from './chart-shared'
 
 interface EmotionCount {
   emotion: string
@@ -56,11 +57,6 @@ const CONVERSATION_COLOR = '#18181b'
 const CARD_COLOR = '#10b981'
 const MESSAGE_COLOR = '#c4b5fd'
 
-function short(date: string): string {
-  const [, month, day] = date.split('-')
-  return `${Number(month)}/${Number(day)}`
-}
-
 function EmotionTooltip(props: { active?: boolean; payload?: { name?: string; value?: number }[] }) {
   if (!props.active || !props.payload?.length) {
     return null
@@ -74,29 +70,12 @@ function EmotionTooltip(props: { active?: boolean; payload?: { name?: string; va
   )
 }
 
-function ActivityTooltip(props: {
-  active?: boolean
-  payload?: { name?: string; value?: number; color?: string }[]
-  label?: string
-}) {
-  if (!props.active || !props.payload?.length) {
-    return null
-  }
-  return (
-    <div className="rounded-md border bg-background px-2.5 py-1.5 text-xs shadow-sm">
-      <p className="mb-1 font-medium">{props.label}</p>
-      {props.payload.map((p) => (
-        <p key={p.name} className="flex items-center gap-1.5 text-muted-foreground">
-          <span className="size-2 rounded-full" style={{ background: p.color }} />
-          {p.name} {p.value ?? 0}
-        </p>
-      ))}
-    </div>
-  )
-}
-
 export function UsageSection() {
-  const { data, isLoading } = useCustom<UsageStats>({ url: '/api/admin/dashboard/usage', method: 'get' })
+  const { data, isLoading, isError, refetch } = useCustom<UsageStats>({ url: '/api/admin/dashboard/usage', method: 'get' })
+
+  if (isError && !data?.data) {
+    return <SectionError onRetry={() => refetch()} />
+  }
 
   if (isLoading) {
     return (
@@ -126,7 +105,7 @@ export function UsageSection() {
   }))
   const hasEmotion = emotionData.some((e) => e.value > 0)
   const trend = stats.dailyActivity.map((d) => ({
-    label: short(d.date),
+    label: shortDate(d.date),
     conversations: d.conversations,
     messages: d.messages,
     cards: d.cards,
@@ -168,8 +147,9 @@ export function UsageSection() {
             )}
           </div>
           <div className="mt-2 grid grid-cols-3 gap-x-2 gap-y-1 text-xs">
-            {emotionData.map((d) => (
-              <span key={d.name} className="flex min-w-0 items-center gap-1.5">
+            {hasEmotion &&
+              emotionData.map((d) => (
+                <span key={d.name} className="flex min-w-0 items-center gap-1.5">
                 <span className="size-2 shrink-0 rounded-full" style={{ background: d.color }} />
                 <span className="truncate">
                   {d.name} {d.value.toLocaleString()}
@@ -197,7 +177,7 @@ export function UsageSection() {
                 <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#a1a1aa' }} minTickGap={16} />
                 <YAxis yAxisId="left" allowDecimals={false} tickLine={false} axisLine={false} width={28} tick={{ fontSize: 11, fill: '#a1a1aa' }} />
                 <YAxis yAxisId="right" orientation="right" allowDecimals={false} tickLine={false} axisLine={false} width={32} tick={{ fontSize: 11, fill: '#c4b5fd' }} />
-                <Tooltip content={<ActivityTooltip />} cursor={{ stroke: 'hsl(var(--border))' }} />
+                <Tooltip content={<SeriesTooltip />} cursor={{ stroke: 'hsl(var(--border))' }} />
                 <Area yAxisId="right" type="monotone" dataKey="messages" name="메시지" stroke={MESSAGE_COLOR} strokeWidth={2} fill="url(#messageFill)" />
                 <Line yAxisId="left" type="monotone" dataKey="conversations" name="대화" stroke={CONVERSATION_COLOR} strokeWidth={2} dot={false} />
                 <Line yAxisId="left" type="monotone" dataKey="cards" name="카드" stroke={CARD_COLOR} strokeWidth={2} dot={false} />

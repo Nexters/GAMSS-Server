@@ -10,6 +10,7 @@ import com.nexters.gamss.monitoring.repository.GenerationLogRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
+import java.time.LocalDate
 import kotlin.math.ceil
 import kotlin.math.roundToLong
 
@@ -25,7 +26,8 @@ class QualityStatsService(
 ) {
     @Transactional(readOnly = true)
     fun getQualityStats(days: Int): QualityStatsResponse {
-        val since = KstDashboardDates.sinceDaysAgo(days)
+        val today = KstDashboardDates.today()
+        val since = KstDashboardDates.daysAgoStart(today, days)
         val logs = generationLogRepository.findAllSince(since)
 
         val total = logs.size.toLong()
@@ -45,16 +47,17 @@ class QualityStatsService(
             p95LatencyMs = percentile(latencies, P95),
             totalTokens = logs.sumOf { (it.usedTokens ?: 0).toLong() },
             stuckPending = messageRepository.countByCommentStatusOlderThan(CommentStatus.PENDING, stuckBefore),
-            dailyGeneration = buildDailyGeneration(days, logs),
+            dailyGeneration = buildDailyGeneration(today, days, logs),
         )
     }
 
     private fun buildDailyGeneration(
+        today: LocalDate,
         days: Int,
         logs: List<GenerationLog>,
     ): List<DailyGenerationResponse> {
         val logsByDate = logs.groupBy { KstDashboardDates.dateOf(it.createdAt) }
-        return KstDashboardDates.dateAxis(days).map { date ->
+        return KstDashboardDates.dateAxis(today, days).map { date ->
             val dayLogs = logsByDate[date].orEmpty()
             DailyGenerationResponse(
                 date = date,

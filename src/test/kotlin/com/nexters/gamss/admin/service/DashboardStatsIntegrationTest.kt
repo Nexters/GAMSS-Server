@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import java.time.Instant
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 /**
  * 대시보드 집계 쿼리(조인·group by·프로젝션·앱단 백분위)를 실제 MySQL 로 검증한다.
@@ -117,5 +118,15 @@ class DashboardStatsIntegrationTest : RepositoryTest() {
         assertEquals(200, quality.p95LatencyMs)
         assertEquals(10, quality.totalTokens)
         assertEquals(0, quality.stuckPending)
+    }
+
+    @Test
+    fun `데이터가 없으면 평균·비율은 null이다`() {
+        val usage = usageStatsService.getUsageStats(14)
+        assertNull(usage.avgMessagesPerUser, "활동 유저가 없으면 유저당 평균은 null")
+
+        val quality = qualityStatsService.getQualityStats(14)
+        assertNull(quality.successRate, "생성이 없으면 성공률은 null")
+        assertNull(quality.retryRate, "생성이 없으면 재시도율은 null")
     }
 }

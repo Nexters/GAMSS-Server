@@ -27,10 +27,11 @@ class UsageStatsService(
 ) {
     @Transactional(readOnly = true)
     fun getUsageStats(days: Int): UsageStatsResponse {
-        val todayStart = KstDashboardDates.startOfToday()
-        val todayEnd = KstDashboardDates.startOfTomorrow()
-        val since = KstDashboardDates.sinceDaysAgo(days)
-        val weekStart = KstDashboardDates.sinceDaysAgo(WEEK_DAYS)
+        val today = KstDashboardDates.today()
+        val todayStart = KstDashboardDates.startOfDay(today)
+        val todayEnd = KstDashboardDates.startOfNextDay(today)
+        val since = KstDashboardDates.daysAgoStart(today, days)
+        val weekStart = KstDashboardDates.daysAgoStart(today, WEEK_DAYS)
 
         val emotionDistribution = cardRepository.countByEmotionSince(since).map(EmotionCountResponse::from)
 
@@ -46,7 +47,7 @@ class UsageStatsService(
             dau = dau,
             wau = messageRepository.countActiveMembersBetween(SenderType.USER, weekStart, todayEnd),
             emotionDistribution = emotionDistribution,
-            dailyActivity = buildDailyActivity(days, since),
+            dailyActivity = buildDailyActivity(today, days, since),
         )
     }
 
@@ -62,13 +63,14 @@ class UsageStatsService(
     }
 
     private fun buildDailyActivity(
+        today: LocalDate,
         days: Int,
         since: Instant,
     ): List<DailyActivityResponse> {
         val conversationsByDate = bucketByDate(conversationRepository.findCreatedAtsSince(since))
         val messagesByDate = bucketByDate(messageRepository.findCreatedAtsSince(since))
         val cardsByDate = bucketByDate(cardRepository.findCreatedAtsSince(since))
-        return KstDashboardDates.dateAxis(days).map { date ->
+        return KstDashboardDates.dateAxis(today, days).map { date ->
             DailyActivityResponse(
                 date = date,
                 conversations = conversationsByDate[date] ?: 0,

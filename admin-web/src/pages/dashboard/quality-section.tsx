@@ -4,6 +4,7 @@ import { AlertTriangle, Coins, Gauge, RefreshCw } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { MetricCard } from '@/components/metric-card'
+import { SectionError, SeriesTooltip, shortDate } from './chart-shared'
 
 interface DailyGeneration {
   date: string
@@ -42,34 +43,12 @@ function percent(value: number | null): string {
   return `${value}%`
 }
 
-function short(date: string): string {
-  const [, month, day] = date.split('-')
-  return `${Number(month)}/${Number(day)}`
-}
-
-function GenerationTooltip(props: {
-  active?: boolean
-  payload?: { name?: string; value?: number; color?: string }[]
-  label?: string
-}) {
-  if (!props.active || !props.payload?.length) {
-    return null
-  }
-  return (
-    <div className="rounded-md border bg-background px-2.5 py-1.5 text-xs shadow-sm">
-      <p className="mb-1 font-medium">{props.label}</p>
-      {props.payload.map((p) => (
-        <p key={p.name} className="flex items-center gap-1.5 text-muted-foreground">
-          <span className="size-2 rounded-full" style={{ background: p.color }} />
-          {p.name} {p.value ?? 0}
-        </p>
-      ))}
-    </div>
-  )
-}
-
 export function QualitySection() {
-  const { data, isLoading } = useCustom<QualityStats>({ url: '/api/admin/dashboard/quality', method: 'get' })
+  const { data, isLoading, isError, refetch } = useCustom<QualityStats>({ url: '/api/admin/dashboard/quality', method: 'get' })
+
+  if (isError && !data?.data) {
+    return <SectionError onRetry={() => refetch()} />
+  }
 
   if (isLoading) {
     return (
@@ -91,7 +70,7 @@ export function QualitySection() {
 
   const successTone = stats.successRate === null ? 'default' : stats.successRate < 90 ? 'danger' : 'success'
   const pendingTone = stats.stuckPending > 0 ? 'danger' : 'default'
-  const trend = stats.dailyGeneration.map((d) => ({ label: short(d.date), success: d.success, failed: d.failed }))
+  const trend = stats.dailyGeneration.map((d) => ({ label: shortDate(d.date), success: d.success, failed: d.failed }))
 
   return (
     <div className="space-y-4">
@@ -137,7 +116,7 @@ export function QualitySection() {
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
               <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#a1a1aa' }} minTickGap={16} />
               <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={28} tick={{ fontSize: 11, fill: '#a1a1aa' }} />
-              <Tooltip content={<GenerationTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }} />
+              <Tooltip content={<SeriesTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }} />
               <Bar dataKey="success" name="성공" stackId="gen" fill={SUCCESS_COLOR} radius={[0, 0, 0, 0]} />
               <Bar dataKey="failed" name="실패" stackId="gen" fill={FAILED_COLOR} radius={[2, 2, 0, 0]} />
             </BarChart>
