@@ -103,7 +103,7 @@ class GeminiCommentGenerator(
             .systemInstruction(Content.fromParts(Part.fromText(systemPrompt)))
             .responseMimeType("application/json")
             .responseSchema(schema)
-            .httpOptions(HttpOptions.builder().timeout(properties.requestTimeout.toMillis().toInt()))
+            .httpOptions(HttpOptions.builder().timeout(properties.requestTimeoutMillis))
             .build()
 
     private fun replySchema(): Schema =

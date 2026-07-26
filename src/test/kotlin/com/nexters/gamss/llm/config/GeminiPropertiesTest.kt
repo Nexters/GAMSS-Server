@@ -11,6 +11,7 @@ class GeminiPropertiesTest {
         val properties = GeminiProperties(apiKey = "key", model = "model", requestTimeout = Duration.ofSeconds(30))
 
         assertEquals(Duration.ofSeconds(30), properties.requestTimeout)
+        assertEquals(30_000, properties.requestTimeoutMillis)
     }
 
     @Test
@@ -28,6 +29,20 @@ class GeminiPropertiesTest {
     }
 
     @Test
+    fun `타임아웃이 1밀리초 미만의 양수면 예외`() {
+        assertFailsWith<IllegalArgumentException> {
+            GeminiProperties(apiKey = "key", model = "model", requestTimeout = Duration.ofNanos(1))
+        }
+    }
+
+    @Test
+    fun `타임아웃이 1밀리초면 통과한다`() {
+        val properties = GeminiProperties(apiKey = "key", model = "model", requestTimeout = Duration.ofMillis(1))
+
+        assertEquals(1, properties.requestTimeoutMillis)
+    }
+
+    @Test
     fun `타임아웃이 Int 밀리초 범위를 넘으면 예외`() {
         assertFailsWith<IllegalArgumentException> {
             GeminiProperties(apiKey = "key", model = "model", requestTimeout = Duration.ofMillis(Int.MAX_VALUE.toLong() + 1))
@@ -40,5 +55,6 @@ class GeminiPropertiesTest {
             GeminiProperties(apiKey = "key", model = "model", requestTimeout = Duration.ofMillis(Int.MAX_VALUE.toLong()))
 
         assertEquals(Int.MAX_VALUE.toLong(), properties.requestTimeout.toMillis())
+        assertEquals(Int.MAX_VALUE, properties.requestTimeoutMillis)
     }
 }
