@@ -79,6 +79,12 @@ class ConversationService(
         if (target.conversationId != conversationId) {
             throw BusinessException(ErrorCode.INVALID_INPUT, "답장 대상 메시지가 해당 채팅방에 없습니다.")
         }
+        // 캐릭터 메시지가 아닌 대상으로 답장을 저장해버리면, 저장 직후 이어지는 재응답 생성이
+        // INVALID_COMMENT_TARGET으로 실패해도 저장 자체는 이미 커밋되어 되돌릴 수 없다 — 저장 시점에
+        // 미리 막아 "응답은 에러인데 실제로는 저장된" 상태가 생기지 않게 한다.
+        if (target.senderType != SenderType.CHARACTER) {
+            throw BusinessException(ErrorCode.INVALID_INPUT, "캐릭터 댓글에만 답장할 수 있습니다.")
+        }
     }
 
     /** 날짜(KST 달력 자정~자정)에 생성된 채팅방 목록을 조회한다. */

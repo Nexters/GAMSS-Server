@@ -6,6 +6,7 @@ import com.nexters.gamss.conversation.domain.Message
 import com.nexters.gamss.conversation.domain.SenderType
 import com.nexters.gamss.conversation.repository.ConversationRepository
 import com.nexters.gamss.conversation.repository.MessageRepository
+import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import io.mockk.every
@@ -74,9 +75,15 @@ class ConversationServiceTest {
     }
 
     @Test
-    fun `같은 채팅방의 메시지에 답장으로 저장한다`() {
+    fun `같은 채팅방의 캐릭터 댓글에 답장으로 저장한다`() {
         val conversation = Conversation(memberId = 1L)
-        val target = Message(conversationId = 0L, senderType = SenderType.USER, content = "원본")
+        val target =
+            Message(
+                conversationId = 0L,
+                senderType = SenderType.CHARACTER,
+                emotionType = EmotionType.JOY,
+                content = "댓글",
+            )
         every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
         every { messageRepository.findById(3L) } returns Optional.of(target)
         every { messageRepository.save(any()) } answers { firstArg() }
@@ -84,6 +91,22 @@ class ConversationServiceTest {
         val message = conversationService.saveUserMessage(1L, 10L, "답장이야", repliesToMessageId = 3L)
 
         assertEquals(3L, message.repliesToMessageId)
+    }
+
+    @Test
+    fun `캐릭터 메시지가 아닌 대상에 답장하면 INVALID_INPUT`() {
+        val conversation = Conversation(memberId = 1L)
+        val target = Message(conversationId = 10L, senderType = SenderType.USER, content = "다른 유저 메시지 아님, 같은 방의 일기")
+        every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
+        every { messageRepository.findById(3L) } returns Optional.of(target)
+
+        val exception =
+            assertFailsWith<BusinessException> {
+                conversationService.saveUserMessage(1L, 10L, "답장이야", repliesToMessageId = 3L)
+            }
+
+        assertEquals(ErrorCode.INVALID_INPUT, exception.errorCode)
+        verify(exactly = 0) { messageRepository.save(any()) }
     }
 
     @Test
