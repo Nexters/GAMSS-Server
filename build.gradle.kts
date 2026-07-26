@@ -115,3 +115,18 @@ tasks.jacocoTestReport {
         },
     )
 }
+
+// Docker 이미지 빌드의 레이어 캐싱용 태스크. 컴파일·런타임·테스트 classpath 의존성을 미리 모두
+// 내려받아, 소스와 분리된 Docker 레이어에 캐시되게 한다(build.gradle 이 그대로면 재다운로드 없음).
+// configuration cache 호환: 해석 대상 FileCollection 을 설정 시점에 캡처하고, 실행 시점엔
+// project/configurations 를 참조하지 않는다. lenient 로 개별 해석 실패가 빌드를 깨지 않게 한다.
+tasks.register("resolveDependencies") {
+    val classpaths =
+        configurations
+            .filter { it.isCanBeResolved }
+            .map { it.incoming.artifactView { isLenient = true }.files }
+    inputs.files(classpaths)
+    doLast {
+        classpaths.forEach { it.count() }
+    }
+}
