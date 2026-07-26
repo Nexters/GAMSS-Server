@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
 import java.time.LocalDate
+import kotlin.math.roundToLong
 
 /**
  * 대시보드 '사용량 / 도입' 집계(SRP: 사용량 지표만 담당). 오늘 KPI는 카운트 쿼리로, 일별 추이는
@@ -33,18 +34,31 @@ class UsageStatsService(
 
         val emotionDistribution = cardRepository.countByEmotionSince(since).map(EmotionCountResponse::from)
 
+        val todayUserMessages = messageRepository.countBySenderTypeCreatedBetween(SenderType.USER, todayStart, todayEnd)
+        val dau = messageRepository.countActiveMembersBetween(SenderType.USER, todayStart, todayEnd)
+
         return UsageStatsResponse(
             todayConversations = conversationRepository.countCreatedBetween(todayStart, todayEnd),
-            todayUserMessages = messageRepository.countBySenderTypeCreatedBetween(SenderType.USER, todayStart, todayEnd),
-            todayCharacterMessages =
-                messageRepository.countBySenderTypeCreatedBetween(SenderType.CHARACTER, todayStart, todayEnd),
+            todayUserMessages = todayUserMessages,
+            avgMessagesPerUser = averageOrNull(todayUserMessages, dau),
             todayCards = cardRepository.countCreatedBetween(todayStart, todayEnd),
             todaySignups = memberRepository.countCreatedBetween(todayStart, todayEnd),
-            dau = messageRepository.countActiveMembersBetween(SenderType.USER, todayStart, todayEnd),
+            dau = dau,
             wau = messageRepository.countActiveMembersBetween(SenderType.USER, weekStart, todayEnd),
             emotionDistribution = emotionDistribution,
             dailyActivity = buildDailyActivity(days, since),
         )
+    }
+
+    /** [total] 발화를 [users] 명이 나눠 보낸 1인당 평균. 활동 유저가 없으면 무의미하므로 null. 소수 첫째 자리 반올림. */
+    private fun averageOrNull(
+        total: Long,
+        users: Long,
+    ): Double? {
+        if (users == 0L) {
+            return null
+        }
+        return (total * 10.0 / users).roundToLong() / 10.0
     }
 
     private fun buildDailyActivity(

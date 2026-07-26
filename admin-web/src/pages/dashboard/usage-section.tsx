@@ -33,7 +33,7 @@ interface DailyActivity {
 interface UsageStats {
   todayConversations: number
   todayUserMessages: number
-  todayCharacterMessages: number
+  avgMessagesPerUser: number | null
   todayCards: number
   todaySignups: number
   dau: number
@@ -137,9 +137,9 @@ export function UsageSection() {
       <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
         <MetricCard label="오늘 대화" value={stats.todayConversations.toLocaleString()} icon={<MessagesSquare className="size-4" />} />
         <MetricCard
-          label="오늘 메시지"
-          value={(stats.todayUserMessages + stats.todayCharacterMessages).toLocaleString()}
-          hint={`유저 ${stats.todayUserMessages.toLocaleString()} · 캐릭터 ${stats.todayCharacterMessages.toLocaleString()}`}
+          label="유저당 평균 메시지"
+          value={stats.avgMessagesPerUser === null ? '—' : stats.avgMessagesPerUser.toFixed(1)}
+          hint={`유저발화 ${stats.todayUserMessages.toLocaleString()} ÷ 유저 ${stats.dau.toLocaleString()}`}
         />
         <MetricCard label="오늘 카드" value={stats.todayCards.toLocaleString()} icon={<Sparkles className="size-4" />} />
         <MetricCard label="오늘 가입" value={stats.todaySignups.toLocaleString()} icon={<UserPlus className="size-4" />} />

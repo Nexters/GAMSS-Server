@@ -67,7 +67,8 @@ class DashboardStatsIntegrationTest : RepositoryTest() {
 
         assertEquals(1, usage.todayConversations)
         assertEquals(1, usage.todayUserMessages)
-        assertEquals(2, usage.todayCharacterMessages)
+        // 유저 1명이 유저 메시지 1개 → 유저당 평균 1.0
+        assertEquals(1.0, usage.avgMessagesPerUser)
         assertEquals(1, usage.todayCards)
         assertEquals(1, usage.todaySignups)
         assertEquals(1, usage.dau)

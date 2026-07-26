@@ -6,10 +6,10 @@ import io.swagger.v3.oas.annotations.media.Schema
 data class UsageStatsResponse(
     @field:Schema(description = "오늘 시작된 대화 수", example = "8")
     val todayConversations: Long,
-    @field:Schema(description = "오늘 작성된 메시지 수(유저)", example = "37")
+    @field:Schema(description = "오늘 유저가 보낸 메시지 수", example = "37")
     val todayUserMessages: Long,
-    @field:Schema(description = "오늘 작성된 메시지 수(캐릭터)", example = "112")
-    val todayCharacterMessages: Long,
+    @field:Schema(description = "오늘 활동 유저 1명당 평균 유저 메시지 수(= 오늘 유저 메시지 / DAU). 활동 유저 없으면 null", example = "4.6", nullable = true)
+    val avgMessagesPerUser: Double?,
     @field:Schema(description = "오늘 생성된 카드 수", example = "5")
     val todayCards: Long,
     @field:Schema(description = "오늘 신규 가입 수", example = "3")
