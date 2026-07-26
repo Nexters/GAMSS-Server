@@ -34,7 +34,8 @@ jobs:
       pull-requests: write
 
   # 이미지 이름·태그를 한 번만 계산해 빌드·배포 job 이 공유한다(단일 출처).
-  # ci·빌드와 병렬로 돌며, 테스트 게이트는 deploy 가 ci 를 needs 로 잡아 유지한다.
+  # ci 와 병렬로 시작하고(둘 다 의존 없음), 빌드 job 은 이 meta 를 기다린 뒤 시작한다.
+  # 테스트 게이트는 deploy 가 ci 를 needs 로 잡아 유지한다.
   meta:
     if: github.ref_name == 'dev' || github.ref_name == 'prod'
     runs-on: ubuntu-latest
