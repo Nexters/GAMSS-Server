@@ -15,7 +15,7 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
-  { label: '대시보드', to: '/dashboard', icon: LayoutDashboard, disabled: true },
+  { label: '대시보드', to: '/dashboard', icon: LayoutDashboard },
   { label: '회원 관리', to: '/members', icon: Users },
   { label: '관리자 관리', to: '/admin-accounts', icon: ShieldCheck },
   { label: 'LLM 설정', to: '/llm-settings', icon: Sparkles },

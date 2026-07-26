@@ -16,6 +16,8 @@ import com.nexters.gamss.llm.parsing.CommentFeedValidator
 import com.nexters.gamss.llm.prompt.PromptCharacterId
 import com.nexters.gamss.llm.selection.CharacterSelector
 import com.nexters.gamss.llm.selection.EongttungTopicSelector
+import com.nexters.gamss.monitoring.domain.GenerationType
+import com.nexters.gamss.monitoring.service.GenerationLogRecorder
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.time.Instant
@@ -34,6 +36,7 @@ class CommentGenerationService(
     private val commentGenerator: CommentGenerator,
     private val commentFeedValidator: CommentFeedValidator,
     private val commentPersistenceService: CommentPersistenceService,
+    private val generationLogRecorder: GenerationLogRecorder,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -135,6 +138,7 @@ class CommentGenerationService(
         characterMessage: Message,
         userReply: String,
     ): ReplyGenerationOutput {
+        val startedAt = System.currentTimeMillis()
         var lastError: CommentGenerationFailedException? = null
         repeat(MAX_ATTEMPTS) { attempt ->
             try {
@@ -146,13 +150,35 @@ class CommentGenerationService(
                         userReply,
                     )
                 commentFeedValidator.validateReply(output.text)
+                generationLogRecorder.record(
+                    type = GenerationType.REPLY,
+                    success = true,
+                    attemptCount = attempt + 1,
+                    latencyMs = System.currentTimeMillis() - startedAt,
+                    usedTokens = output.usedTokens,
+                )
                 return output
             } catch (e: CommentGenerationFailedException) {
                 lastError = e
                 log.warn("답글 생성 {}차 시도 실패: {}", attempt + 1, e.message)
             }
         }
+        generationLogRecorder.record(
+            type = GenerationType.REPLY,
+            success = false,
+            attemptCount = MAX_ATTEMPTS,
+            latencyMs = System.currentTimeMillis() - startedAt,
+            failureReason = failureReasonOf(lastError),
+        )
         throw checkNotNull(lastError)
+    }
+
+    /** 생성 로그의 실패 원인 요약. 근본 원인(예외 cause)의 클래스명을 우선 쓰고, 없으면 예외 자체의 클래스명을 쓴다. */
+    private fun failureReasonOf(error: CommentGenerationFailedException?): String? {
+        if (error == null) {
+            return null
+        }
+        return (error.cause ?: error).javaClass.simpleName
     }
 
     /** LLM 호출 + 의미 검증을 하나의 단위로 묶어 최대 [MAX_ATTEMPTS]회 시도한다(DoD: 실패 시 1회 재시도). */
@@ -163,18 +189,33 @@ class CommentGenerationService(
         // TODO: 프론트에서 과거 요약을 내려주기 전까지는 항상 빈 값으로 호출한다.
         val pastSummary = ""
 
+        val startedAt = System.currentTimeMillis()
         var lastError: CommentGenerationFailedException? = null
         repeat(MAX_ATTEMPTS) { attempt ->
             try {
                 val output =
                     commentGenerator.generateComment(pastSummary, diaryContent, characters, tikitakaCount, eongttungTopic)
                 commentFeedValidator.validate(output.feed, characters, tikitakaCount)
+                generationLogRecorder.record(
+                    type = GenerationType.COMMENT,
+                    success = true,
+                    attemptCount = attempt + 1,
+                    latencyMs = System.currentTimeMillis() - startedAt,
+                    usedTokens = output.usedTokens,
+                )
                 return output
             } catch (e: CommentGenerationFailedException) {
                 lastError = e
                 log.warn("댓글 생성 {}차 시도 실패: {}", attempt + 1, e.message)
             }
         }
+        generationLogRecorder.record(
+            type = GenerationType.COMMENT,
+            success = false,
+            attemptCount = MAX_ATTEMPTS,
+            latencyMs = System.currentTimeMillis() - startedAt,
+            failureReason = failureReasonOf(lastError),
+        )
         throw checkNotNull(lastError)
     }
 

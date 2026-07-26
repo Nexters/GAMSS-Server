@@ -34,4 +34,17 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
     fun findByIdForUpdate(
         @Param("id") id: Long,
     ): Optional<Conversation>
+
+    /** [from, to) 사이 생성된 대화방 수. 대시보드의 '오늘 시작한 대화' KPI. */
+    @Query("select count(c) from Conversation c where c.createdAt >= :from and c.createdAt < :to")
+    fun countCreatedBetween(
+        @Param("from") from: Instant,
+        @Param("to") to: Instant,
+    ): Long
+
+    /** [from] 이후 생성된 대화방의 생성시각. 대시보드 일별 추이 집계용(앱에서 KST 날짜로 묶는다). */
+    @Query("select c.createdAt from Conversation c where c.createdAt >= :from")
+    fun findCreatedAtsSince(
+        @Param("from") from: Instant,
+    ): List<Instant>
 }

@@ -29,4 +29,26 @@ interface CardRepository : JpaRepository<Card, Long> {
         @Param("end") end: Instant,
         @Param("excludedStatus") excludedStatus: ConversationStatus = ConversationStatus.DELETED,
     ): List<Card>
+
+    /** [from, to) 사이(대화 생성시간 기준) 카드 수. 대시보드의 '오늘 카드 수' KPI. */
+    @Query("select count(c) from Card c where c.conversationCreatedAt >= :from and c.conversationCreatedAt < :to")
+    fun countCreatedBetween(
+        @Param("from") from: Instant,
+        @Param("to") to: Instant,
+    ): Long
+
+    /** [from] 이후 카드의 감정별 개수. 대시보드 감정 분포. */
+    @Query(
+        "select c.emotion as emotion, count(c) as count from Card c " +
+            "where c.conversationCreatedAt >= :from group by c.emotion",
+    )
+    fun countByEmotionSince(
+        @Param("from") from: Instant,
+    ): List<EmotionCountProjection>
+
+    /** [from] 이후 카드의 생성시각(대화 생성 기준). 대시보드 일별 카드 추이 집계용(앱에서 KST 날짜로 묶는다). */
+    @Query("select c.conversationCreatedAt from Card c where c.conversationCreatedAt >= :from")
+    fun findCreatedAtsSince(
+        @Param("from") from: Instant,
+    ): List<Instant>
 }
