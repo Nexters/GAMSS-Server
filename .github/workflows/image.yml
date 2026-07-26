@@ -34,7 +34,7 @@ jobs:
       pull-requests: write
 
   # 이미지 이름·태그를 한 번만 계산해 빌드·배포 job 이 공유한다(단일 출처).
-  # ci 와 병렬로 돌지만, 실제 빌드는 ci 통과(테스트 게이트)까지 기다리므로 게이트는 유지된다.
+  # ci·빌드와 병렬로 돌며, 테스트 게이트는 deploy 가 ci 를 needs 로 잡아 유지한다.
   meta:
     if: github.ref_name == 'dev' || github.ref_name == 'prod'
     runs-on: ubuntu-latest
@@ -51,8 +51,10 @@ jobs:
           echo "tag=${GITHUB_REF_NAME}-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
   # 백엔드 이미지. admin 빌드와 병렬로 돈다(서로 독립).
+  # ci(테스트)에 의존하지 않고 meta 직후 시작 — Docker 안에서 자체 컴파일하므로 ci 산출물이 필요 없다.
+  # 테스트 게이트는 deploy 가 ci 를 needs 로 잡아 유지한다(테스트 실패 시 배포는 안 되고 이미지만 남는다).
   build-backend:
-    needs: [ci, meta]
+    needs: [meta]
     runs-on: ubuntu-latest
     # 이 job만 GHCR 에 push 하므로 write 를 여기서만 부여한다.
     permissions:
@@ -60,20 +62,20 @@ jobs:
       packages: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: true
@@ -88,27 +90,27 @@ jobs:
   # 백오피스(admin-web) 정적 SPA 이미지. Firebase 웹 설정은 공개값이라 빌드 시 인라인한다.
   # (아직 미확보라 VITE_FIREBASE_* 는 비어 있고, 그동안 admin은 "설정 필요" 화면을 띄운다.)
   build-admin:
-    needs: [ci, meta]
+    needs: [meta]
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push admin
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./admin-web
           push: true
@@ -125,7 +127,8 @@ jobs:
           cache-to: type=gha,mode=max,scope=admin
 
   deploy:
-    needs: [meta, build-backend, build-admin]
+    # ci 를 needs 에 포함해 테스트 게이트를 유지한다 — 빌드는 ci 와 병렬로 돌지만, 배포는 테스트 통과 후에만 진행된다.
+    needs: [ci, meta, build-backend, build-admin]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # dev 브랜치 → dev 환경, prod 브랜치 → prod 환경.
@@ -134,7 +137,7 @@ jobs:
     environment: ${{ github.ref_name }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Create .env
         # compose가 참조하는 시크릿만 채운다. IMAGE_TAG는 서버의 기존 값(롤백 기준)을
@@ -149,7 +152,7 @@ jobs:
           EOF
 
       - name: Transfer files via SCP
-        uses: appleboy/scp-action@v0.1.7
+        uses: appleboy/scp-action@v1.0.0
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USERNAME }}
@@ -159,7 +162,7 @@ jobs:
           target: /tmp/gamss-deploy/
 
       - name: Deploy
-        uses: appleboy/ssh-action@v1.2.0
+        uses: appleboy/ssh-action@v1.2.5
         env:
           ENV_NAME: ${{ github.ref_name }}
           IMAGE_TAG: ${{ needs.meta.outputs.tag }}
