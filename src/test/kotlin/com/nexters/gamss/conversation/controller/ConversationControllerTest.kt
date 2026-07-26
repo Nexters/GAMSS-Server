@@ -107,6 +107,23 @@ class ConversationControllerTest {
     }
 
     @Test
+    fun `답글 생성이 실패해도 저장 결과는 유지되고 commentStatus=FAILED, comments는 빈 리스트로 반환된다`() {
+        val saved = message(id = 8L, repliesToMessageId = 5L)
+        every {
+            conversationService.saveUserMessage(memberId = 1L, conversationId = 10L, content = "답장", repliesToMessageId = 5L)
+        } returns saved
+        every { commentGenerationService.generateReplyComment(1L, 8L) } returns ReplyGenerationResult(CommentGenerationOutcome.FAILED)
+
+        val response =
+            controller.saveMessage(principal, SaveMessageRequest(conversationId = 10L, content = "답장", repliesToMessageId = 5L))
+
+        assertEquals(8L, response.data!!.message.id)
+        assertEquals("FAILED", response.data!!.commentStatus.name)
+        assertTrue(response.data!!.comments.isEmpty())
+        assertEquals(null, response.data!!.usedTokens)
+    }
+
+    @Test
     fun `방금 저장한 메시지의 댓글 생성이 GENERATING을 반환하면 예외를 던진다`() {
         val saved = message(id = 5L)
         every {
