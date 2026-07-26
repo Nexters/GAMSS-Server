@@ -9,13 +9,15 @@ import com.nexters.gamss.llm.prompt.PromptType
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import java.time.Duration
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class LlmSettingsServiceTest {
     private val repository = mockk<LlmSettingsRepository>()
-    private val geminiProperties = GeminiProperties(apiKey = "k", model = "gemini-3.1-flash-lite")
+    private val geminiProperties =
+        GeminiProperties(apiKey = "k", model = "gemini-3.1-flash-lite", requestTimeout = Duration.ofSeconds(30))
     private val promptProvider = PromptProvider()
     private val modelCatalog = mockk<GeminiModelCatalog>()
     private val service = LlmSettingsService(repository, geminiProperties, promptProvider, modelCatalog)

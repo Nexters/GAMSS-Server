@@ -11,6 +11,7 @@ import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.llm.error.CommentGenerationFailedException
 import com.nexters.gamss.llm.generation.CommentGenerationOutput
 import com.nexters.gamss.llm.generation.CommentGenerator
+import com.nexters.gamss.llm.generation.LlmRetryPolicy
 import com.nexters.gamss.llm.generation.ReplyGenerationOutput
 import com.nexters.gamss.llm.parsing.CommentFeedValidator
 import com.nexters.gamss.llm.prompt.PromptCharacterId
@@ -40,12 +41,42 @@ class CommentGenerationService(
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
+    /**
+     * 저장 직후 같은 요청 안에서 곧바로 생성까지 처리하는 진입점이다. [message]는 방금 저장돼
+     * memberId 소유·채팅방 활성 상태가 이미 보장된 값이라(같은 요청의 saveUserMessage가 검증함)
+     * [getOwnedRootMessage]의 소유권·삭제 여부 재확인을 생략한다. 답장 여부는 message 스스로 아는
+     * 정보([Message.repliesToMessageId])라, 어떤 생성 흐름을 탈지는 호출자(컨트롤러)가 아니라
+     * 여기서 정한다.
+     */
+    fun generateFor(message: Message): GenerationResult {
+        if (message.repliesToMessageId == null) {
+            return generateCommentsInternal(message, message.id)
+        }
+        return generateReplyInternal(message, message.id)
+    }
+
+    /** 실패 후 수동 재시도용(멱등). [messageId]가 본인 소유의 일기(사용자) 메시지인지 새로 검증한다. */
     fun generateComments(
         memberId: Long,
         messageId: Long,
-    ): CommentGenerationResult {
+    ): GenerationResult {
         val rootMessage = getOwnedRootMessage(memberId, messageId)
+        return generateCommentsInternal(rootMessage, messageId)
+    }
 
+    /** 실패 후 수동 재시도용(멱등). [messageId]가 본인 소유의 답글(사용자) 메시지인지 새로 검증한다. */
+    fun generateReplyComment(
+        memberId: Long,
+        messageId: Long,
+    ): GenerationResult {
+        val userReplyMessage = getOwnedRootMessage(memberId, messageId)
+        return generateReplyInternal(userReplyMessage, messageId)
+    }
+
+    private fun generateCommentsInternal(
+        rootMessage: Message,
+        messageId: Long,
+    ): GenerationResult {
         val claimed =
             messageRepository.updateCommentStatus(
                 messageId,
@@ -60,7 +91,7 @@ class CommentGenerationService(
         return try {
             val output = generateWithRetry(rootMessage.content)
             val saved = commentPersistenceService.saveFeed(rootMessage.conversationId, messageId, output.feed)
-            CommentGenerationResult(CommentGenerationOutcome.DONE, saved, output.usedTokens)
+            GenerationResult(CommentGenerationOutcome.DONE, saved, output.usedTokens)
         } catch (e: Exception) {
             logGenerationFailure("댓글 생성", messageId, e)
 
@@ -73,19 +104,19 @@ class CommentGenerationService(
 
             // 예상된 비즈니스 예외는 FAILED 전이 후에도 원래 의미(4xx 등)를 유지하도록 다시 던진다.
             if (e is BusinessException) throw e
-            CommentGenerationResult(CommentGenerationOutcome.FAILED)
+            GenerationResult(CommentGenerationOutcome.FAILED)
         }
     }
 
-    fun generateReplyComment(
-        memberId: Long,
+    private fun generateReplyInternal(
+        userReplyMessage: Message,
         messageId: Long,
-    ): ReplyGenerationResult {
-        val userReplyMessage = getOwnedRootMessage(memberId, messageId)
+    ): GenerationResult {
         val characterMessage =
             messageRepository
                 .findById(userReplyMessage.repliesToMessageId ?: throw BusinessException(ErrorCode.INVALID_COMMENT_TARGET))
                 .orElseThrow { BusinessException(ErrorCode.MESSAGE_NOT_FOUND) }
+                .also { ensureSameConversation(it, userReplyMessage.conversationId) }
         if (characterMessage.senderType != SenderType.CHARACTER) {
             throw BusinessException(ErrorCode.INVALID_COMMENT_TARGET)
         }
@@ -93,6 +124,7 @@ class CommentGenerationService(
             messageRepository
                 .findById(characterMessage.rootMessageId ?: throw BusinessException(ErrorCode.INVALID_COMMENT_TARGET))
                 .orElseThrow { BusinessException(ErrorCode.MESSAGE_NOT_FOUND) }
+                .also { ensureSameConversation(it, userReplyMessage.conversationId) }
 
         val claimed =
             messageRepository.updateCommentStatus(
@@ -115,7 +147,7 @@ class CommentGenerationService(
                     characterId = characterMessage.emotionType!!,
                     text = output.text,
                 )
-            ReplyGenerationResult(CommentGenerationOutcome.DONE, saved, output.usedTokens)
+            GenerationResult(CommentGenerationOutcome.DONE, listOf(saved), output.usedTokens)
         } catch (e: Exception) {
             logGenerationFailure("답글 생성", messageId, e)
 
@@ -128,11 +160,11 @@ class CommentGenerationService(
 
             // 예상된 비즈니스 예외는 FAILED 전이 후에도 원래 의미(4xx 등)를 유지하도록 다시 던진다.
             if (e is BusinessException) throw e
-            ReplyGenerationResult(CommentGenerationOutcome.FAILED)
+            GenerationResult(CommentGenerationOutcome.FAILED)
         }
     }
 
-    /** LLM 호출 + 의미 검증을 하나의 단위로 묶어 최대 [MAX_ATTEMPTS]회 시도한다(DoD: 실패 시 1회 재시도). */
+    /** LLM 호출 + 의미 검증을 하나의 단위로 묶어 최대 [LlmRetryPolicy.MAX_ATTEMPTS]회 시도한다. */
     private fun generateReplyWithRetry(
         diaryContent: String,
         characterMessage: Message,
@@ -140,7 +172,7 @@ class CommentGenerationService(
     ): ReplyGenerationOutput {
         val startedAt = System.currentTimeMillis()
         var lastError: CommentGenerationFailedException? = null
-        repeat(MAX_ATTEMPTS) { attempt ->
+        repeat(LlmRetryPolicy.MAX_ATTEMPTS) { attempt ->
             try {
                 val output =
                     commentGenerator.generateReply(
@@ -176,7 +208,7 @@ class CommentGenerationService(
         generationLogRecorder.record(
             type = GenerationType.REPLY,
             success = false,
-            attemptCount = MAX_ATTEMPTS,
+            attemptCount = LlmRetryPolicy.MAX_ATTEMPTS,
             latencyMs = System.currentTimeMillis() - startedAt,
             failureReason = failureReasonOf(lastError),
         )
@@ -191,7 +223,7 @@ class CommentGenerationService(
         return (error.cause ?: error).javaClass.simpleName
     }
 
-    /** LLM 호출 + 의미 검증을 하나의 단위로 묶어 최대 [MAX_ATTEMPTS]회 시도한다(DoD: 실패 시 1회 재시도). */
+    /** LLM 호출 + 의미 검증을 하나의 단위로 묶어 최대 [LlmRetryPolicy.MAX_ATTEMPTS]회 시도한다. */
     private fun generateWithRetry(diaryContent: String): CommentGenerationOutput {
         val characters = characterSelector.select()
         val tikitakaCount = characterSelector.selectTikitakaCount()
@@ -201,7 +233,7 @@ class CommentGenerationService(
 
         val startedAt = System.currentTimeMillis()
         var lastError: CommentGenerationFailedException? = null
-        repeat(MAX_ATTEMPTS) { attempt ->
+        repeat(LlmRetryPolicy.MAX_ATTEMPTS) { attempt ->
             try {
                 val output =
                     commentGenerator.generateComment(pastSummary, diaryContent, characters, tikitakaCount, eongttungTopic)
@@ -232,47 +264,47 @@ class CommentGenerationService(
         generationLogRecorder.record(
             type = GenerationType.COMMENT,
             success = false,
-            attemptCount = MAX_ATTEMPTS,
+            attemptCount = LlmRetryPolicy.MAX_ATTEMPTS,
             latencyMs = System.currentTimeMillis() - startedAt,
             failureReason = failureReasonOf(lastError),
         )
         throw checkNotNull(lastError)
     }
 
-    private fun currentStatusResult(messageId: Long): CommentGenerationResult {
+    private fun currentStatusResult(messageId: Long): GenerationResult {
         val message =
             messageRepository
                 .findById(messageId)
                 .orElseThrow { BusinessException(ErrorCode.MESSAGE_NOT_FOUND) }
         return when (message.commentStatus) {
             CommentStatus.DONE -> {
-                CommentGenerationResult(
+                GenerationResult(
                     CommentGenerationOutcome.DONE,
                     messageRepository.findAllByRootMessageIdOrderByIdAsc(messageId),
                 )
             }
 
             else -> {
-                CommentGenerationResult(CommentGenerationOutcome.GENERATING)
+                GenerationResult(CommentGenerationOutcome.GENERATING)
             }
         }
     }
 
-    private fun currentReplyStatusResult(messageId: Long): ReplyGenerationResult {
+    private fun currentReplyStatusResult(messageId: Long): GenerationResult {
         val message =
             messageRepository
                 .findById(messageId)
                 .orElseThrow { BusinessException(ErrorCode.MESSAGE_NOT_FOUND) }
         if (message.commentStatus != CommentStatus.DONE) {
-            return ReplyGenerationResult(CommentGenerationOutcome.GENERATING)
+            return GenerationResult(CommentGenerationOutcome.GENERATING)
         }
         val reply =
             messageRepository.findByRepliesToMessageId(messageId)
                 ?: run {
                     log.error("commentStatus는 DONE인데 답글 메시지를 찾을 수 없습니다. messageId={}", messageId)
-                    return ReplyGenerationResult(CommentGenerationOutcome.FAILED)
+                    return GenerationResult(CommentGenerationOutcome.FAILED)
                 }
-        return ReplyGenerationResult(CommentGenerationOutcome.DONE, reply)
+        return GenerationResult(CommentGenerationOutcome.DONE, listOf(reply))
     }
 
     // 생성 실패 로그: 예상된 실패(재시도 소진)는 warn, 예기치 않은 오류는 error로 남긴다.
@@ -310,7 +342,12 @@ class CommentGenerationService(
         return message
     }
 
-    companion object {
-        private const val MAX_ATTEMPTS = 2
+    private fun ensureSameConversation(
+        message: Message,
+        conversationId: Long,
+    ) {
+        if (message.conversationId != conversationId) {
+            throw BusinessException(ErrorCode.INVALID_COMMENT_TARGET)
+        }
     }
 }
