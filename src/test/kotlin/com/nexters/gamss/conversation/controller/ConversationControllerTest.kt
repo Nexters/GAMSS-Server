@@ -16,6 +16,7 @@ import io.mockk.verify
 import org.springframework.test.util.ReflectionTestUtils
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 /**
@@ -103,5 +104,31 @@ class ConversationControllerTest {
         assertEquals("FAILED", response.data!!.commentStatus.name)
         assertTrue(response.data!!.comments.isEmpty())
         assertEquals(null, response.data!!.usedTokens)
+    }
+
+    @Test
+    fun `방금 저장한 메시지의 댓글 생성이 GENERATING을 반환하면 예외를 던진다`() {
+        val saved = message(id = 5L)
+        every {
+            conversationService.saveUserMessage(memberId = 1L, conversationId = null, content = "오늘 있었던 일", repliesToMessageId = null)
+        } returns saved
+        every { commentGenerationService.generateComments(1L, 5L) } returns CommentGenerationResult(CommentGenerationOutcome.GENERATING)
+
+        assertFailsWith<IllegalStateException> {
+            controller.saveMessage(principal, SaveMessageRequest(content = "오늘 있었던 일"))
+        }
+    }
+
+    @Test
+    fun `방금 저장한 답글의 재응답 생성이 GENERATING을 반환하면 예외를 던진다`() {
+        val saved = message(id = 8L, repliesToMessageId = 5L)
+        every {
+            conversationService.saveUserMessage(memberId = 1L, conversationId = 10L, content = "답장", repliesToMessageId = 5L)
+        } returns saved
+        every { commentGenerationService.generateReplyComment(1L, 8L) } returns ReplyGenerationResult(CommentGenerationOutcome.GENERATING)
+
+        assertFailsWith<IllegalStateException> {
+            controller.saveMessage(principal, SaveMessageRequest(conversationId = 10L, content = "답장", repliesToMessageId = 5L))
+        }
     }
 }
