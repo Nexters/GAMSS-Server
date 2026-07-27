@@ -27,6 +27,7 @@ import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfig
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.delete
 import org.springframework.test.web.servlet.get
+import org.springframework.test.web.servlet.patch
 import org.springframework.test.web.servlet.post
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
@@ -36,6 +37,7 @@ import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 @SpringBootTest
 @Import(TestcontainersConfig::class, FakeCommentGeneratorConfig::class)
@@ -699,6 +701,117 @@ class ConversationControllerIntegrationTest {
             }.andExpect {
                 status { isOk() }
                 jsonPath("$.data.length()") { value(0) }
+            }
+    }
+
+    @Test
+    fun `새로 만든 채팅방의 제목은 null이다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val conversation = conversationRepository.save(Conversation(member.id))
+
+        assertNull(conversationRepository.findById(conversation.id).get().title)
+    }
+
+    @Test
+    fun `제목을 지정하면 응답과 저장소에 반영된다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val conversation = conversationRepository.save(Conversation(member.id))
+
+        mockMvc
+            .patch("/api/conversations/${conversation.id}/title") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"title":"비 오는 날의 짜증"}"""
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.id") { value(conversation.id) }
+                jsonPath("$.data.title") { value("비 오는 날의 짜증") }
+            }
+
+        assertEquals(
+            "비 오는 날의 짜증",
+            conversationRepository
+                .findById(conversation.id)
+                .get()
+                .title
+                ?.value,
+        )
+    }
+
+    @Test
+    fun `제목을 여러 번 수정할 수 있다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val conversation = conversationRepository.save(Conversation(member.id))
+
+        fun patchTitle(title: String) =
+            mockMvc.patch("/api/conversations/${conversation.id}/title") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"title":"$title"}"""
+            }
+
+        patchTitle("첫 제목").andExpect { status { isOk() } }
+        patchTitle("바꾼 제목").andExpect {
+            status { isOk() }
+            jsonPath("$.data.title") { value("바꾼 제목") }
+        }
+
+        assertEquals(
+            "바꾼 제목",
+            conversationRepository
+                .findById(conversation.id)
+                .get()
+                .title
+                ?.value,
+        )
+    }
+
+    @Test
+    fun `제목이 100자를 넘으면 INVALID_CONVERSATION_TITLE`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val conversation = conversationRepository.save(Conversation(member.id))
+
+        mockMvc
+            .patch("/api/conversations/${conversation.id}/title") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"title":"${"가".repeat(101)}"}"""
+            }.andExpect {
+                status { isBadRequest() }
+                jsonPath("$.error.code") { value("INVALID_CONVERSATION_TITLE") }
+            }
+    }
+
+    @Test
+    fun `남의 채팅방 제목을 수정하면 403을 반환한다`() {
+        val me = memberRepository.save(Member("me@a.com"))
+        val other = memberRepository.save(Member("other@a.com"))
+        val othersConversation = conversationRepository.save(Conversation(other.id))
+
+        mockMvc
+            .patch("/api/conversations/${othersConversation.id}/title") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(me))
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"title":"침입"}"""
+            }.andExpect {
+                status { isForbidden() }
+                jsonPath("$.error.code") { value("CONVERSATION_ACCESS_DENIED") }
+            }
+    }
+
+    @Test
+    fun `삭제된 채팅방 제목을 수정하면 409를 반환한다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val conversation = conversationRepository.save(Conversation(member.id).apply { delete() })
+
+        mockMvc
+            .patch("/api/conversations/${conversation.id}/title") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"title":"바꿔보자"}"""
+            }.andExpect {
+                status { isConflict() }
+                jsonPath("$.error.code") { value("CONVERSATION_ALREADY_DELETED") }
             }
     }
 

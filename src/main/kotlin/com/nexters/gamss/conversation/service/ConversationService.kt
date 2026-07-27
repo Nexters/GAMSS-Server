@@ -1,6 +1,7 @@
 package com.nexters.gamss.conversation.service
 
 import com.nexters.gamss.conversation.domain.Conversation
+import com.nexters.gamss.conversation.domain.ConversationTitle
 import com.nexters.gamss.conversation.domain.Message
 import com.nexters.gamss.conversation.domain.SenderType
 import com.nexters.gamss.conversation.repository.ConversationRepository
@@ -64,6 +65,18 @@ class ConversationService(
     ): Conversation {
         val conversation = getOwnedConversationForUpdate(conversationId, memberId)
         conversation.delete()
+        return conversation
+    }
+
+    /** 채팅방 제목을 지정·변경한다. 여러 번 호출할 수 있다. 삭제된 방은 변경할 수 없다. */
+    @Transactional
+    fun updateTitle(
+        memberId: Long,
+        conversationId: Long,
+        title: String,
+    ): Conversation {
+        val conversation = getOwnedConversation(conversationId, memberId)
+        conversation.rename(ConversationTitle(title))
         return conversation
     }
 
