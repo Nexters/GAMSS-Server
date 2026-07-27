@@ -8,6 +8,7 @@ import com.nexters.gamss.conversation.controller.dto.MessageResponse
 import com.nexters.gamss.conversation.controller.dto.ReplyGenerationResponse
 import com.nexters.gamss.conversation.controller.dto.SaveMessageRequest
 import com.nexters.gamss.conversation.controller.dto.SaveMessageResponse
+import com.nexters.gamss.conversation.controller.dto.UpdateConversationTitleRequest
 import com.nexters.gamss.conversation.controller.dto.toResponseStatus
 import com.nexters.gamss.conversation.service.CommentGenerationService
 import com.nexters.gamss.conversation.service.ConversationService
@@ -21,6 +22,7 @@ import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
@@ -110,6 +112,30 @@ class ConversationController(
         @PathVariable conversationId: Long,
     ): ApiResponse<ConversationResponse> {
         val conversation = conversationService.endConversation(principal.memberId, conversationId)
+        return ApiResponse.success(ConversationResponse.from(conversation))
+    }
+
+    @Operation(
+        summary = "채팅방 제목 지정/수정",
+        description =
+            "채팅방 제목을 지정하거나 변경합니다. 첫 생성 시 제목은 없으며(null), 이 API로 여러 번 수정할 수 있습니다.\n\n" +
+                "**실패 응답**\n\n" +
+                "| error.code | HTTP | 설명 |\n" +
+                "|---|---|---|\n" +
+                "| UNAUTHORIZED | 401 | 인증 필요 |\n" +
+                "| INVALID_INPUT | 400 | title 누락 |\n" +
+                "| INVALID_CONVERSATION_TITLE | 400 | 제목이 비어 있거나 100자 초과 |\n" +
+                "| CONVERSATION_NOT_FOUND | 404 | 존재하지 않는 채팅방 |\n" +
+                "| CONVERSATION_ACCESS_DENIED | 403 | 본인 채팅방이 아님 |\n" +
+                "| CONVERSATION_ALREADY_DELETED | 409 | 삭제된 채팅방 |",
+    )
+    @PatchMapping("/{conversationId}/title")
+    fun updateTitle(
+        @Parameter(hidden = true) @AuthenticationPrincipal principal: AuthPrincipal,
+        @PathVariable conversationId: Long,
+        @Valid @RequestBody request: UpdateConversationTitleRequest,
+    ): ApiResponse<ConversationResponse> {
+        val conversation = conversationService.updateTitle(principal.memberId, conversationId, request.title)
         return ApiResponse.success(ConversationResponse.from(conversation))
     }
 

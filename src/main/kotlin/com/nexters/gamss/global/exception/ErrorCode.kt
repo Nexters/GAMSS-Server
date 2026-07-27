@@ -37,6 +37,7 @@ enum class ErrorCode(
     CONVERSATION_ALREADY_DELETED(HttpStatus.CONFLICT, "이미 삭제된 채팅방입니다."),
     CONVERSATION_ENDED(HttpStatus.CONFLICT, "종료된 채팅방에는 메시지를 추가할 수 없습니다."),
     CONVERSATION_NOT_ENDED(HttpStatus.CONFLICT, "종료된 채팅방에만 카드를 만들 수 있습니다."),
+    INVALID_CONVERSATION_TITLE(HttpStatus.BAD_REQUEST, "사용할 수 없는 채팅방 제목입니다."),
 
     // 댓글 생성
     MESSAGE_NOT_FOUND(HttpStatus.NOT_FOUND, "메시지를 찾을 수 없습니다."),
