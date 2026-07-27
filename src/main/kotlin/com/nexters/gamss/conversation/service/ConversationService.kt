@@ -68,14 +68,18 @@ class ConversationService(
         return conversation
     }
 
-    /** 채팅방 제목을 지정·변경한다. 여러 번 호출할 수 있다. 삭제된 방은 변경할 수 없다. */
+    /**
+     * 채팅방 제목을 지정·변경한다. 여러 번 호출할 수 있다. 삭제된 방은 변경할 수 없다.
+     * 제목도 상태를 바꾸는 요청이라 행 잠금([getOwnedConversationForUpdate])을 쓴다 — 잠금 없이
+     * stale 상태로 읽으면 동시 삭제가 flush 로 되살아나거나(모든 컬럼 UPDATE) 삭제된 방의 제목이 바뀔 수 있다.
+     */
     @Transactional
     fun updateTitle(
         memberId: Long,
         conversationId: Long,
         title: String,
     ): Conversation {
-        val conversation = getOwnedConversation(conversationId, memberId)
+        val conversation = getOwnedConversationForUpdate(conversationId, memberId)
         conversation.rename(ConversationTitle(title))
         return conversation
     }

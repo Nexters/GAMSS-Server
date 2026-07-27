@@ -783,6 +783,22 @@ class ConversationControllerIntegrationTest {
     }
 
     @Test
+    fun `공백만 있는 제목이면 INVALID_CONVERSATION_TITLE`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val conversation = conversationRepository.save(Conversation(member.id))
+
+        mockMvc
+            .patch("/api/conversations/${conversation.id}/title") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"title":"   "}"""
+            }.andExpect {
+                status { isBadRequest() }
+                jsonPath("$.error.code") { value("INVALID_CONVERSATION_TITLE") }
+            }
+    }
+
+    @Test
     fun `남의 채팅방 제목을 수정하면 403을 반환한다`() {
         val me = memberRepository.save(Member("me@a.com"))
         val other = memberRepository.save(Member("other@a.com"))
