@@ -19,6 +19,7 @@ import com.nexters.gamss.llm.parsing.CommentFeedValidator
 import com.nexters.gamss.llm.parsing.TikitakaDraft
 import com.nexters.gamss.llm.selection.CharacterSelector
 import com.nexters.gamss.llm.selection.EongttungTopicSelector
+import com.nexters.gamss.monitoring.service.GenerationLogRecorder
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -36,6 +37,7 @@ class CommentGenerationServiceTest {
     private val commentGenerator = mockk<CommentGenerator>()
     private val commentFeedValidator = mockk<CommentFeedValidator>()
     private val commentPersistenceService = mockk<CommentPersistenceService>()
+    private val generationLogRecorder = mockk<GenerationLogRecorder>(relaxed = true)
 
     private val service =
         CommentGenerationService(
@@ -46,6 +48,7 @@ class CommentGenerationServiceTest {
             commentGenerator,
             commentFeedValidator,
             commentPersistenceService,
+            generationLogRecorder,
         )
 
     private val characters = listOf(EmotionType.JOY, EmotionType.WARM, EmotionType.GRUMPY)
