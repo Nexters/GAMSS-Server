@@ -18,6 +18,13 @@ interface MemberRepository : JpaRepository<Member, Long> {
         @Param("from") from: Instant,
     ): List<Instant>
 
+    /** [from, to) 사이 가입 수. 대시보드의 '오늘 신규 가입' KPI. */
+    @Query("select count(m) from Member m where m.createdAt >= :from and m.createdAt < :to")
+    fun countCreatedBetween(
+        @Param("from") from: Instant,
+        @Param("to") to: Instant,
+    ): Long
+
     /**
      * 백오피스 회원 검색. keyword 가 null 이면 전체를, 있으면 이메일·닉네임 부분 일치로 조회한다.
      * status 가 null 이면 모든 상태를, 있으면 해당 상태만 조회한다.
