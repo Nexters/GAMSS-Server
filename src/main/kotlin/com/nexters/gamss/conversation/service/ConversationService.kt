@@ -1,6 +1,7 @@
 package com.nexters.gamss.conversation.service
 
 import com.nexters.gamss.conversation.domain.Conversation
+import com.nexters.gamss.conversation.domain.ConversationTitle
 import com.nexters.gamss.conversation.domain.Message
 import com.nexters.gamss.conversation.domain.SenderType
 import com.nexters.gamss.conversation.repository.ConversationRepository
@@ -67,6 +68,22 @@ class ConversationService(
         return conversation
     }
 
+    /**
+     * 채팅방 제목을 지정·변경한다. 여러 번 호출할 수 있다. 삭제된 방은 변경할 수 없다.
+     * 제목도 상태를 바꾸는 요청이라 행 잠금([getOwnedConversationForUpdate])을 쓴다 — 잠금 없이
+     * stale 상태로 읽으면 동시 삭제가 flush 로 되살아나거나(모든 컬럼 UPDATE) 삭제된 방의 제목이 바뀔 수 있다.
+     */
+    @Transactional
+    fun updateTitle(
+        memberId: Long,
+        conversationId: Long,
+        title: String,
+    ): Conversation {
+        val conversation = getOwnedConversationForUpdate(conversationId, memberId)
+        conversation.rename(ConversationTitle(title))
+        return conversation
+    }
+
     /** 답장 대상 메시지가 실제로 해당 채팅방에 존재하는지 확인한다. */
     private fun validateReplyTarget(
         repliesToMessageId: Long,
@@ -78,6 +95,12 @@ class ConversationService(
                 .orElseThrow { BusinessException(ErrorCode.INVALID_INPUT, "답장 대상 메시지를 찾을 수 없습니다.") }
         if (target.conversationId != conversationId) {
             throw BusinessException(ErrorCode.INVALID_INPUT, "답장 대상 메시지가 해당 채팅방에 없습니다.")
+        }
+        // 캐릭터 메시지가 아닌 대상으로 답장을 저장해버리면, 저장 직후 이어지는 재응답 생성이
+        // INVALID_COMMENT_TARGET으로 실패해도 저장 자체는 이미 커밋되어 되돌릴 수 없다 — 저장 시점에
+        // 미리 막아 "응답은 에러인데 실제로는 저장된" 상태가 생기지 않게 한다.
+        if (target.senderType != SenderType.CHARACTER) {
+            throw BusinessException(ErrorCode.INVALID_INPUT, "캐릭터 댓글에만 답장할 수 있습니다.")
         }
     }
 

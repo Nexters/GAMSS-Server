@@ -17,7 +17,7 @@ concurrency:
 
 permissions:
   contents: read
-  # 기본값은 최소 권한(read). GHCR push 가 필요한 build-and-push job 에만 write 를 부여한다.
+  # 기본값은 최소 권한(read). GHCR push 가 필요한 build-backend·build-admin job 에만 write 를 부여한다.
   packages: read
 
 jobs:
@@ -33,20 +33,15 @@ jobs:
       checks: write
       pull-requests: write
 
-  build-and-push:
-    needs: ci
+  # 이미지 이름·태그를 한 번만 계산해 빌드·배포 job 이 공유한다(단일 출처).
+  # ci 와 병렬로 시작하지만, 빌드는 ci 통과까지 기다리므로(needs) 테스트 게이트는 유지된다.
+  meta:
+    if: github.ref_name == 'dev' || github.ref_name == 'prod'
     runs-on: ubuntu-latest
-    # 이 job만 GHCR 에 push 하므로 write 를 여기서만 부여한다.
-    permissions:
-      contents: read
-      packages: write
     outputs:
       image: ${{ steps.meta.outputs.image }}
       tag: ${{ steps.meta.outputs.tag }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Compute image name and tag
         id: meta
         # 이미지 경로: GHCR은 소문자만 허용 (Nexters/GAMSS-Server → nexters/gamss-server)
@@ -55,32 +50,66 @@ jobs:
           echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
           echo "tag=${GITHUB_REF_NAME}-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
+  # 백엔드 이미지. admin 빌드와 병렬로 돈다(서로 독립).
+  # ci(테스트) 통과 후 빌드해야 테스트 안 된 이미지가 GHCR에 올라가 롤백 시 오배포되는 걸 막는다.
+  build-backend:
+    needs: [ci, meta]
+    runs-on: ubuntu-latest
+    # 이 job만 GHCR 에 push 하므로 write 를 여기서만 부여한다.
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: true
           # 고유 태그(배포·롤백 기준) + 브랜치 태그(최신 표식)
           tags: |
-            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
-            ${{ steps.meta.outputs.image }}:${{ github.ref_name }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            ${{ needs.meta.outputs.image }}:${{ needs.meta.outputs.tag }}
+            ${{ needs.meta.outputs.image }}:${{ github.ref_name }}
+          # 백엔드·admin 캐시가 서로 덮어쓰지 않도록 scope 분리
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
 
-      # 백오피스(admin-web) 정적 SPA 이미지. Firebase 웹 설정은 공개값이라 빌드 시 인라인한다.
-      # (아직 미확보라 VITE_FIREBASE_* 는 비어 있고, 그동안 admin은 "설정 필요" 화면을 띄운다.)
+  # 백오피스(admin-web) 정적 SPA 이미지. Firebase 웹 설정은 공개값이라 빌드 시 인라인한다.
+  # (아직 미확보라 VITE_FIREBASE_* 는 비어 있고, 그동안 admin은 "설정 필요" 화면을 띄운다.)
+  build-admin:
+    needs: [ci, meta]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build and push admin
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./admin-web
           push: true
@@ -91,13 +120,13 @@ jobs:
             VITE_FIREBASE_PROJECT_ID=${{ vars.VITE_FIREBASE_PROJECT_ID }}
             VITE_FIREBASE_APP_ID=${{ vars.VITE_FIREBASE_APP_ID }}
           tags: |
-            ${{ steps.meta.outputs.image }}-admin:${{ steps.meta.outputs.tag }}
-            ${{ steps.meta.outputs.image }}-admin:${{ github.ref_name }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            ${{ needs.meta.outputs.image }}-admin:${{ needs.meta.outputs.tag }}
+            ${{ needs.meta.outputs.image }}-admin:${{ github.ref_name }}
+          cache-from: type=gha,scope=admin
+          cache-to: type=gha,mode=max,scope=admin
 
   deploy:
-    needs: build-and-push
+    needs: [meta, build-backend, build-admin]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # dev 브랜치 → dev 환경, prod 브랜치 → prod 환경.
@@ -106,7 +135,7 @@ jobs:
     environment: ${{ github.ref_name }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Create .env
         # compose가 참조하는 시크릿만 채운다. IMAGE_TAG는 서버의 기존 값(롤백 기준)을
@@ -121,7 +150,7 @@ jobs:
           EOF
 
       - name: Transfer files via SCP
-        uses: appleboy/scp-action@v0.1.7
+        uses: appleboy/scp-action@v1.0.0
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USERNAME }}
@@ -131,10 +160,10 @@ jobs:
           target: /tmp/gamss-deploy/
 
       - name: Deploy
-        uses: appleboy/ssh-action@v1.2.0
+        uses: appleboy/ssh-action@v1.2.5
         env:
           ENV_NAME: ${{ github.ref_name }}
-          IMAGE_TAG: ${{ needs.build-and-push.outputs.tag }}
+          IMAGE_TAG: ${{ needs.meta.outputs.tag }}
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -176,7 +205,7 @@ jobs:
             echo "### 배포 결과"
             echo ""
             echo "- **환경:** ${{ github.ref_name }}"
-            echo "- **이미지:** ${{ needs.build-and-push.outputs.image }}:${{ needs.build-and-push.outputs.tag }}"
+            echo "- **이미지:** ${{ needs.meta.outputs.image }}:${{ needs.meta.outputs.tag }}"
             echo "- **커밋:** ${{ github.sha }}"
             echo "- **상태:** ${{ job.status }}"
           } >> "$GITHUB_STEP_SUMMARY"

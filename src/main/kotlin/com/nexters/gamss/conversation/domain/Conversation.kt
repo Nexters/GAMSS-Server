@@ -4,6 +4,7 @@ import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import jakarta.persistence.Column
+import jakarta.persistence.Embedded
 import jakarta.persistence.Entity
 import jakarta.persistence.EntityListeners
 import jakarta.persistence.EnumType
@@ -31,6 +32,10 @@ class Conversation(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long = 0L
+
+    @Embedded
+    var title: ConversationTitle? = null
+        protected set
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 20, nullable = false)
@@ -62,6 +67,12 @@ class Conversation(
     fun delete() {
         ensureNotDeleted()
         status = ConversationStatus.DELETED
+    }
+
+    /** 채팅방 제목을 지정·변경한다. 여러 번 호출할 수 있으며, 삭제된 방은 변경할 수 없다. */
+    fun rename(title: ConversationTitle) {
+        ensureNotDeleted()
+        this.title = title
     }
 
     /** 종료된 채팅방에는 사용자 메시지를 추가할 수 없다. */
