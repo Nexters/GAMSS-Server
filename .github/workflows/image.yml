@@ -156,7 +156,7 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT }}
-          source: "deploy/${{ github.ref_name }}/docker-compose.yml,deploy/nginx/conf/gamss.conf,.github/scripts/deploy-app.sh,.env"
+          source: "deploy/${{ github.ref_name }}/docker-compose.yml,deploy/nginx/conf/gamss.conf,deploy/nginx/conf/.htpasswd,.github/scripts/deploy-app.sh,.env"
           target: /tmp/gamss-deploy/
 
       - name: Deploy
@@ -181,6 +181,7 @@ jobs:
             mkdir -p "${DEPLOY_DIR}/nginx/conf"
             cp "${TMP_DIR}/deploy/${ENV_NAME}/docker-compose.yml" "${DEPLOY_DIR}/"
             cp "${TMP_DIR}/deploy/nginx/conf/gamss.conf" "${DEPLOY_DIR}/nginx/conf/"
+            cp "${TMP_DIR}/deploy/nginx/conf/.htpasswd" "${DEPLOY_DIR}/nginx/conf/"
             cp "${TMP_DIR}/.github/scripts/deploy-app.sh" "${DEPLOY_DIR}/"
             chmod +x "${DEPLOY_DIR}/deploy-app.sh"
 
