@@ -149,6 +149,16 @@ jobs:
           ADMIN_EMAILS=${{ vars.ADMIN_EMAILS }}
           EOF
 
+      - name: Create nginx .htpasswd
+        # 스웨거 Basic Auth 계정(user:해시)은 레포에 커밋하지 않고 시크릿(SWAGGER_HTPASSWD)에서
+        # 이 위치에 생성한다 — 아래 SCP source·서버 복사 경로가 이 파일을 그대로 집어간다.
+        # 해시에 '$'가 들어가므로 heredoc 대신 env + printf 로 그대로 기록한다.
+        env:
+          SWAGGER_HTPASSWD: ${{ secrets.SWAGGER_HTPASSWD }}
+        run: |
+          mkdir -p deploy/nginx/conf
+          printf '%s\n' "$SWAGGER_HTPASSWD" > deploy/nginx/conf/.htpasswd
+
       - name: Transfer files via SCP
         uses: appleboy/scp-action@v1.0.0
         with:
