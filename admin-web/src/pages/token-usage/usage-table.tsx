@@ -19,10 +19,16 @@ interface ConversationUsage {
   cardCreated: boolean
   totalTokens: number
   cachedTokens: number
+  estimatedCostUsd: number
 }
 
 const PAGE_SIZE = 20
-const COLUMN_COUNT = 10
+const COLUMN_COUNT = 11
+
+// 대시보드 '예상 비용'과 동일한 USD 표기($x.xx~xxxx).
+function formatUsd(value: number): string {
+  return `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`
+}
 
 const STATUS_META: Record<ConversationUsage['status'], { label: string; variant: 'secondary' | 'success' | 'muted' }> = {
   ACTIVE: { label: '진행중', variant: 'secondary' },
@@ -49,7 +55,7 @@ export function UsageTable() {
       <div className="border-b px-4 py-3">
         <p className="text-sm font-medium">대화방별 사용량</p>
         <p className="text-xs text-muted-foreground">
-          모든 대화방(prod·dev)의 메시지 수·카드 생성 여부·소비 토큰을 최신순으로 봅니다. 대화방 귀속 정보가 없던 이전 기록의 토큰은 집계되지 않습니다.
+          모든 대화방(prod·dev)의 메시지 수·카드 생성 여부·소비 토큰·예상 비용(USD)을 최신순으로 봅니다. 대화방 귀속 정보가 없던 이전 기록의 토큰은 집계되지 않습니다.
         </p>
       </div>
 
@@ -66,6 +72,7 @@ export function UsageTable() {
               <TableHead className="w-20 text-center">카드</TableHead>
               <TableHead className="w-28 text-right">총 토큰</TableHead>
               <TableHead className="w-28 text-right">캐시 토큰</TableHead>
+              <TableHead className="w-28 text-right">비용(USD)</TableHead>
               <TableHead className="w-44">생성일</TableHead>
             </TableRow>
           </TableHeader>
@@ -117,6 +124,13 @@ export function UsageTable() {
                     <TableCell className="text-right font-medium tabular-nums">{row.totalTokens.toLocaleString()}</TableCell>
                     <TableCell className="text-right tabular-nums text-muted-foreground">
                       {row.cachedTokens.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-right font-medium tabular-nums">
+                      {row.estimatedCostUsd > 0 ? (
+                        formatUsd(row.estimatedCostUsd)
+                      ) : (
+                        <span className="font-normal text-muted-foreground">—</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">{formatDateTime(row.createdAt)}</TableCell>
                   </TableRow>
