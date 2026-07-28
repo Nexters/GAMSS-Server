@@ -4,12 +4,14 @@ import com.nexters.gamss.card.repository.CardRepository
 import com.nexters.gamss.conversation.domain.SenderType
 import com.nexters.gamss.conversation.repository.ConversationRepository
 import com.nexters.gamss.conversation.repository.MessageRepository
+import com.nexters.gamss.llm.config.GeminiPricing
 import com.nexters.gamss.monitoring.repository.GenerationLogRepository
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import kotlin.math.roundToLong
 
 /**
  * 백오피스 '대화방별 사용량' 페이지 집계. prod·dev 구분 없이 모든 대화방을 최신순으로 페이지네이션하고,
@@ -21,6 +23,7 @@ class ConversationUsageService(
     private val messageRepository: MessageRepository,
     private val cardRepository: CardRepository,
     private val generationLogRepository: GenerationLogRepository,
+    private val geminiPricing: GeminiPricing,
 ) {
     @Transactional(readOnly = true)
     fun getUsage(pageable: Pageable): Page<ConversationUsage> {
@@ -39,17 +42,24 @@ class ConversationUsageService(
             }
         }
 
-        val totalTokens = mutableMapOf<Long, Long>()
-        val cachedTokens = mutableMapOf<Long, Long>()
-        generationLogRepository.sumTokensForConversations(ids).forEach {
-            totalTokens[it.conversationId] = it.totalTokens
-            cachedTokens[it.conversationId] = it.cachedTokens
-        }
+        // 대시보드처럼 생성 로그 행을 받아 대화방별로 그룹핑한다. 토큰(총량·캐시)은 단순 합,
+        // 비용은 모델별 단가라 행마다 요금표로 계산해 더한다(QualityStatsService 와 동일한 costUsd).
+        val logsByConversation = generationLogRepository.findByConversationIdIn(ids).groupBy { it.conversationId }
 
         val cardConversationIds = cardRepository.findConversationIdsIn(ids).toSet()
 
         val rows =
             page.content.map { conversation ->
+                val logs = logsByConversation[conversation.id].orEmpty()
+                val rawCost =
+                    logs.sumOf {
+                        geminiPricing.costUsd(
+                            it.model,
+                            it.inputTokens ?: 0,
+                            it.cachedTokens ?: 0,
+                            it.outputTokens ?: 0,
+                        )
+                    }
                 ConversationUsage(
                     conversationId = conversation.id,
                     memberId = conversation.memberId,
@@ -59,8 +69,9 @@ class ConversationUsageService(
                     userMessageCount = userCounts[conversation.id] ?: 0,
                     characterMessageCount = characterCounts[conversation.id] ?: 0,
                     cardCreated = conversation.id in cardConversationIds,
-                    totalTokens = totalTokens[conversation.id] ?: 0,
-                    cachedTokens = cachedTokens[conversation.id] ?: 0,
+                    totalTokens = logs.sumOf { (it.usedTokens ?: 0).toLong() },
+                    cachedTokens = logs.sumOf { (it.cachedTokens ?: 0).toLong() },
+                    estimatedCostUsd = (rawCost * 10000).roundToLong() / 10000.0,
                 )
             }
         return PageImpl(rows, pageable, page.totalElements)

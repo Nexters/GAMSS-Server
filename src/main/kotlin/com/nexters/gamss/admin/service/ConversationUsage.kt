@@ -18,4 +18,6 @@ data class ConversationUsage(
     val cardCreated: Boolean,
     val totalTokens: Long,
     val cachedTokens: Long,
+    /** 이 대화방에서 소비된 토큰의 예상 비용(USD). 모델별 요금표로 계산. */
+    val estimatedCostUsd: Double,
 )

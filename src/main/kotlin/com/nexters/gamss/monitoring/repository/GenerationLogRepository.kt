@@ -27,15 +27,8 @@ interface GenerationLogRepository : JpaRepository<GenerationLog, Long> {
     ): Long
 
     /**
-     * 여러 대화방의 토큰(총량·캐시) 합계를 한 번에 집계한다(백오피스 대화방 사용량 페이지).
-     * 값이 없는 행은 SUM에서 제외되고, conversation_id가 NULL인 과거 로그는 어느 대화방에도 잡히지 않는다.
+     * 여러 대화방의 생성 로그를 한 번에 조회한다(백오피스 대화방 사용량·비용 페이지). 대시보드처럼 행을
+     * 그대로 받아 앱단에서 대화방별 토큰 합·비용(모델별 단가)을 계산한다. conversation_id가 NULL인 과거 로그는 제외된다.
      */
-    @Query(
-        "select g.conversationId as conversationId, " +
-            "coalesce(sum(g.usedTokens), 0) as totalTokens, coalesce(sum(g.cachedTokens), 0) as cachedTokens " +
-            "from GenerationLog g where g.conversationId in :conversationIds group by g.conversationId",
-    )
-    fun sumTokensForConversations(
-        @Param("conversationIds") conversationIds: Collection<Long>,
-    ): List<ConversationTokenProjection>
+    fun findByConversationIdIn(conversationIds: Collection<Long>): List<GenerationLog>
 }

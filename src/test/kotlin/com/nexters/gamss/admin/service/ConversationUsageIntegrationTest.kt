@@ -39,12 +39,12 @@ class ConversationUsageIntegrationTest : RepositoryTest() {
     @Autowired private lateinit var generationLogRepository: GenerationLogRepository
 
     @Test
-    fun `대화방별 메시지 수·카드 여부·토큰 합을 집계한다`() {
+    fun `대화방별 메시지 수·카드 여부·토큰 합·비용을 집계한다`() {
         val member = memberRepository.save(Member())
         val withCard = conversationRepository.save(Conversation(memberId = member.id))
         val withoutCard = conversationRepository.save(Conversation(memberId = member.id))
 
-        // withCard: 유저 2, 캐릭터 3, 카드 O, 토큰(총 5500, 캐시 3000) + (총 500) = 6000 / 캐시 3000
+        // withCard: 유저 2, 캐릭터 3, 카드 O. 토큰·비용은 아래 두 로그 합.
         messageRepository.save(Message(conversationId = withCard.id, senderType = SenderType.USER, content = "일기"))
         messageRepository.save(Message(conversationId = withCard.id, senderType = SenderType.USER, content = "답장"))
         repeat(3) {
@@ -67,8 +67,10 @@ class ConversationUsageIntegrationTest : RepositoryTest() {
                 conversationCreatedAt = Instant.now(),
             ),
         )
-        saveLog(memberId = member.id, conversationId = withCard.id, used = 5500, cached = 3000)
-        saveLog(memberId = member.id, conversationId = withCard.id, used = 500, cached = 0)
+        // 총 토큰 7000 / 캐시 3000 / 비용 = row1(2000×0.25 + 3000×0.025 + 1000×1.50)/1e6 + row2(1000×0.25)/1e6
+        //        = 0.002075 + 0.00025 = 0.002325 → 4자리 반올림 0.0023
+        saveLog(conversationId = withCard.id, input = 5000, cached = 3000, output = 1000)
+        saveLog(conversationId = withCard.id, input = 1000, cached = 0, output = 0)
 
         // withoutCard: 유저 1, 캐릭터 0, 카드 X, 토큰 없음
         messageRepository.save(Message(conversationId = withoutCard.id, senderType = SenderType.USER, content = "일기만"))
@@ -82,8 +84,9 @@ class ConversationUsageIntegrationTest : RepositoryTest() {
         assertEquals(2, a.userMessageCount)
         assertEquals(3, a.characterMessageCount)
         assertTrue(a.cardCreated)
-        assertEquals(6000, a.totalTokens)
+        assertEquals(7000, a.totalTokens)
         assertEquals(3000, a.cachedTokens)
+        assertEquals(0.0023, a.estimatedCostUsd, 1e-9)
 
         val b = byId.getValue(withoutCard.id)
         assertEquals(1, b.userMessageCount)
@@ -91,26 +94,27 @@ class ConversationUsageIntegrationTest : RepositoryTest() {
         assertFalse(b.cardCreated)
         assertEquals(0, b.totalTokens)
         assertEquals(0, b.cachedTokens)
+        assertEquals(0.0, b.estimatedCostUsd, 1e-9)
     }
 
     private fun saveLog(
-        memberId: Long,
         conversationId: Long,
-        used: Int,
+        input: Int,
         cached: Int,
+        output: Int,
     ) {
         generationLogRepository.save(
             GenerationLog(
                 generationType = GenerationType.COMMENT,
                 model = "gemini-3.1-flash-lite",
-                memberId = memberId,
                 conversationId = conversationId,
                 success = true,
                 attemptCount = 1,
-                usedTokens = used,
+                // usedTokens(총 토큰) = 입력 + 출력. cached 는 input 의 부분집합.
+                usedTokens = input + output,
                 cachedTokens = cached,
-                inputTokens = used - cached,
-                outputTokens = 0,
+                inputTokens = input,
+                outputTokens = output,
                 latencyMs = 100,
                 createdAt = Instant.now(),
             ),
