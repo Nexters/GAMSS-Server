@@ -12,4 +12,30 @@ interface GenerationLogRepository : JpaRepository<GenerationLog, Long> {
     fun findAllSince(
         @Param("from") from: Instant,
     ): List<GenerationLog>
+
+    /**
+     * [memberId]가 [since] 이후 소비한 총 토큰(used_tokens 합). 유저별 일일 상한 판정에 쓴다.
+     * 성공·실패 무관하게 실제 과금된 토큰을 모두 세며(실패도 호출됐으면 과금됨), 값이 없는 행은 SUM에서 제외된다.
+     */
+    @Query(
+        "select coalesce(sum(g.usedTokens), 0) from GenerationLog g " +
+            "where g.memberId = :memberId and g.createdAt >= :since",
+    )
+    fun sumUsedTokensByMemberSince(
+        @Param("memberId") memberId: Long,
+        @Param("since") since: Instant,
+    ): Long
+
+    /**
+     * 여러 대화방의 토큰(총량·캐시) 합계를 한 번에 집계한다(백오피스 대화방 사용량 페이지).
+     * 값이 없는 행은 SUM에서 제외되고, conversation_id가 NULL인 과거 로그는 어느 대화방에도 잡히지 않는다.
+     */
+    @Query(
+        "select g.conversationId as conversationId, " +
+            "coalesce(sum(g.usedTokens), 0) as totalTokens, coalesce(sum(g.cachedTokens), 0) as cachedTokens " +
+            "from GenerationLog g where g.conversationId in :conversationIds group by g.conversationId",
+    )
+    fun sumTokensForConversations(
+        @Param("conversationIds") conversationIds: Collection<Long>,
+    ): List<ConversationTokenProjection>
 }
