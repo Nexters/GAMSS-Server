@@ -59,6 +59,10 @@ class CardService(
                     success = false,
                     attemptCount = 1,
                     latencyMs = System.currentTimeMillis() - startedAt,
+                    usedTokens = e.usedTokens,
+                    cachedTokens = e.cachedTokens,
+                    inputTokens = e.inputTokens,
+                    outputTokens = e.outputTokens,
                     failureReason = (e.cause ?: e).javaClass.simpleName,
                 )
                 throw BusinessException(ErrorCode.CARD_GENERATION_FAILED, e.message)

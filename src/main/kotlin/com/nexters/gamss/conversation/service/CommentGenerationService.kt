@@ -181,7 +181,19 @@ class CommentGenerationService(
                         characterMessage.content,
                         userReply,
                     )
-                commentFeedValidator.validateReply(output.text)
+                try {
+                    commentFeedValidator.validateReply(output.text)
+                } catch (e: CommentGenerationFailedException) {
+                    // 검증은 통과 못 했어도 호출은 됐으니, 실패 로그에 실제 과금 토큰이 남도록 실어 던진다.
+                    throw CommentGenerationFailedException(
+                        e.message ?: "답글 검증 실패",
+                        e.cause,
+                        output.usedTokens,
+                        output.cachedTokens,
+                        output.inputTokens,
+                        output.outputTokens,
+                    )
+                }
                 generationLogRecorder.record(
                     type = GenerationType.REPLY,
                     success = true,
@@ -213,6 +225,10 @@ class CommentGenerationService(
             success = false,
             attemptCount = LlmRetryPolicy.MAX_ATTEMPTS,
             latencyMs = System.currentTimeMillis() - startedAt,
+            usedTokens = lastError?.usedTokens,
+            cachedTokens = lastError?.cachedTokens,
+            inputTokens = lastError?.inputTokens,
+            outputTokens = lastError?.outputTokens,
             failureReason = failureReasonOf(lastError),
         )
         throw checkNotNull(lastError)
@@ -240,7 +256,19 @@ class CommentGenerationService(
             try {
                 val output =
                     commentGenerator.generateComment(pastSummary, diaryContent, characters, tikitakaCount, eongttungTopic)
-                commentFeedValidator.validate(output.feed, characters, tikitakaCount)
+                try {
+                    commentFeedValidator.validate(output.feed, characters, tikitakaCount)
+                } catch (e: CommentGenerationFailedException) {
+                    // 검증은 통과 못 했어도 호출은 됐으니, 실패 로그에 실제 과금 토큰이 남도록 실어 던진다.
+                    throw CommentGenerationFailedException(
+                        e.message ?: "댓글 검증 실패",
+                        e.cause,
+                        output.usedTokens,
+                        output.cachedTokens,
+                        output.inputTokens,
+                        output.outputTokens,
+                    )
+                }
                 generationLogRecorder.record(
                     type = GenerationType.COMMENT,
                     success = true,
@@ -272,6 +300,10 @@ class CommentGenerationService(
             success = false,
             attemptCount = LlmRetryPolicy.MAX_ATTEMPTS,
             latencyMs = System.currentTimeMillis() - startedAt,
+            usedTokens = lastError?.usedTokens,
+            cachedTokens = lastError?.cachedTokens,
+            inputTokens = lastError?.inputTokens,
+            outputTokens = lastError?.outputTokens,
             failureReason = failureReasonOf(lastError),
         )
         throw checkNotNull(lastError)

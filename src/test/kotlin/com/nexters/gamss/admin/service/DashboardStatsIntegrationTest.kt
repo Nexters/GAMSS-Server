@@ -136,5 +136,8 @@ class DashboardStatsIntegrationTest : RepositoryTest() {
         val quality = qualityStatsService.getQualityStats(14)
         assertNull(quality.successRate, "생성이 없으면 성공률은 null")
         assertNull(quality.retryRate, "생성이 없으면 재시도율은 null")
+        assertEquals(0, quality.cachedTokens, "생성이 없으면 캐시 토큰은 0")
+        assertNull(quality.cacheHitRate, "입력 토큰이 없으면 캐시 적중률은 null")
+        assertEquals(0.0, quality.estimatedCostUsd, "생성이 없으면 예상 비용은 0")
     }
 }
