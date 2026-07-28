@@ -24,6 +24,7 @@ interface QualityStats {
   totalTokens: number
   cachedTokens: number
   cacheHitRate: number | null
+  estimatedCostUsd: number
   stuckPending: number
   dailyGeneration: DailyGeneration[]
 }
@@ -55,8 +56,8 @@ export function QualitySection() {
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {Array.from({ length: 8 }).map((_, i) => (
+        <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-5">
+          {Array.from({ length: 10 }).map((_, i) => (
             <Skeleton key={i} className="h-[92px]" />
           ))}
         </div>
@@ -76,7 +77,7 @@ export function QualitySection() {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-5">
         <MetricCard
           label="생성 성공률"
           value={percent(stats.successRate)}
@@ -104,10 +105,16 @@ export function QualitySection() {
         <MetricCard label="평균 지연" value={latency(stats.avgLatencyMs)} icon={<Gauge className="size-4" />} />
         <MetricCard label="p95 지연" value={latency(stats.p95LatencyMs)} hint="상위 5% 대기시간" />
         <MetricCard
-          label="토큰 사용량"
-          value={stats.totalTokens.toLocaleString()}
-          hint={stats.cacheHitRate === null ? '최근 기간 누적' : `캐시 적중 ${stats.cacheHitRate}% (${stats.cachedTokens.toLocaleString()})`}
+          label="예상 비용"
+          value={`$${stats.estimatedCostUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`}
+          hint="최근 기간 누적(캐시 반영)"
           icon={<Coins className="size-4" />}
+        />
+        <MetricCard label="총 토큰" value={stats.totalTokens.toLocaleString()} hint="처리된 전체 토큰(입력+출력)" />
+        <MetricCard
+          label="캐시 토큰"
+          value={stats.cachedTokens.toLocaleString()}
+          hint={stats.cacheHitRate === null ? '캐시 적중 없음' : `입력의 ${stats.cacheHitRate}% 적중(할인 과금)`}
         />
         <MetricCard label="총 생성 요청" value={stats.totalGenerations.toLocaleString()} hint="최근 기간" />
       </div>

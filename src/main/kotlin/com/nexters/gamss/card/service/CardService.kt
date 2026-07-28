@@ -70,6 +70,8 @@ class CardService(
             latencyMs = System.currentTimeMillis() - startedAt,
             usedTokens = output.usedTokens,
             cachedTokens = output.cachedTokens,
+            inputTokens = output.inputTokens,
+            outputTokens = output.outputTokens,
         )
         val card =
             Card(

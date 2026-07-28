@@ -30,6 +30,10 @@ class GenerationLog(
     val usedTokens: Int? = null,
     @Column(name = "cached_tokens")
     val cachedTokens: Int? = null,
+    @Column(name = "input_tokens")
+    val inputTokens: Int? = null,
+    @Column(name = "output_tokens")
+    val outputTokens: Int? = null,
     @Column(name = "latency_ms", nullable = false)
     val latencyMs: Long,
     @Column(name = "failure_reason", length = 255)

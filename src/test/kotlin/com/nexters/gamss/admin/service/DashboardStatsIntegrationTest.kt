@@ -86,11 +86,13 @@ class DashboardStatsIntegrationTest : RepositoryTest() {
         generationLogRepository.save(
             GenerationLog(
                 generationType = GenerationType.COMMENT,
-                model = "gemini-test",
+                model = "gemini-3.1-flash-lite",
                 success = true,
                 attemptCount = 1,
-                usedTokens = 10,
-                cachedTokens = 6,
+                usedTokens = 5500,
+                cachedTokens = 3000,
+                inputTokens = 5000,
+                outputTokens = 500,
                 latencyMs = 100,
                 createdAt = now,
             ),
@@ -117,9 +119,12 @@ class DashboardStatsIntegrationTest : RepositoryTest() {
         assertEquals(50.0, quality.retryRate)
         assertEquals(150, quality.avgLatencyMs)
         assertEquals(200, quality.p95LatencyMs)
-        assertEquals(10, quality.totalTokens)
-        assertEquals(6, quality.cachedTokens)
+        assertEquals(5500, quality.totalTokens)
+        assertEquals(3000, quality.cachedTokens)
+        // 적중률 = 캐시(3000) / 입력(5000) = 60.0
         assertEquals(60.0, quality.cacheHitRate)
+        // 비용 = 비캐시입력(2000)×0.25 + 캐시(3000)×0.025 + 출력(500)×1.5 (per 1M) = 0.001325 → 0.0013
+        assertEquals(0.0013, quality.estimatedCostUsd)
         assertEquals(0, quality.stuckPending)
     }
 

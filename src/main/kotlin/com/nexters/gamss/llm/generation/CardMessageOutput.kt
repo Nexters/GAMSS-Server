@@ -5,4 +5,6 @@ data class CardMessageOutput(
     val message: String,
     val usedTokens: Int,
     val cachedTokens: Int,
+    val inputTokens: Int = 0,
+    val outputTokens: Int = 0,
 )
