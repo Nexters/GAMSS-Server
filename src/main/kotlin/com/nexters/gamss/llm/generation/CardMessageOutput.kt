@@ -4,4 +4,5 @@ package com.nexters.gamss.llm.generation
 data class CardMessageOutput(
     val message: String,
     val usedTokens: Int,
+    val cachedTokens: Int,
 )

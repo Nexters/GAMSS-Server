@@ -10,6 +10,8 @@ import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.llm.error.CardGenerationFailedException
 import com.nexters.gamss.llm.generation.CardMessageGenerator
+import com.nexters.gamss.monitoring.domain.GenerationType
+import com.nexters.gamss.monitoring.service.GenerationLogRecorder
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -26,6 +28,7 @@ class CardService(
     private val cardRepository: CardRepository,
     private val conversationRepository: ConversationRepository,
     private val cardMessageGenerator: CardMessageGenerator,
+    private val generationLogRecorder: GenerationLogRecorder,
 ) {
     /**
      * 종료된 대화에 대해 대표 감정 캐릭터의 한 줄 대사를 생성해 카드를 저장한다.
@@ -46,12 +49,28 @@ class CardService(
         if (cardRepository.existsByConversationId(conversationId)) {
             throw BusinessException(ErrorCode.CARD_ALREADY_EXISTS)
         }
+        val startedAt = System.currentTimeMillis()
         val output =
             try {
                 cardMessageGenerator.generate(emotion, summary)
             } catch (e: CardGenerationFailedException) {
+                generationLogRecorder.record(
+                    type = GenerationType.CARD,
+                    success = false,
+                    attemptCount = 1,
+                    latencyMs = System.currentTimeMillis() - startedAt,
+                    failureReason = (e.cause ?: e).javaClass.simpleName,
+                )
                 throw BusinessException(ErrorCode.CARD_GENERATION_FAILED, e.message)
             }
+        generationLogRecorder.record(
+            type = GenerationType.CARD,
+            success = true,
+            attemptCount = 1,
+            latencyMs = System.currentTimeMillis() - startedAt,
+            usedTokens = output.usedTokens,
+            cachedTokens = output.cachedTokens,
+        )
         val card =
             Card(
                 memberId = memberId,

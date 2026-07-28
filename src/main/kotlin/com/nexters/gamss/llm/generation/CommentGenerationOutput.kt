@@ -6,4 +6,5 @@ import com.nexters.gamss.llm.parsing.CommentFeed
 data class CommentGenerationOutput(
     val feed: CommentFeed,
     val usedTokens: Int,
+    val cachedTokens: Int,
 )

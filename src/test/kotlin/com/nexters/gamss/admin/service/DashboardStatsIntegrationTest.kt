@@ -90,6 +90,7 @@ class DashboardStatsIntegrationTest : RepositoryTest() {
                 success = true,
                 attemptCount = 1,
                 usedTokens = 10,
+                cachedTokens = 6,
                 latencyMs = 100,
                 createdAt = now,
             ),
@@ -117,6 +118,8 @@ class DashboardStatsIntegrationTest : RepositoryTest() {
         assertEquals(150, quality.avgLatencyMs)
         assertEquals(200, quality.p95LatencyMs)
         assertEquals(10, quality.totalTokens)
+        assertEquals(6, quality.cachedTokens)
+        assertEquals(60.0, quality.cacheHitRate)
         assertEquals(0, quality.stuckPending)
     }
 

@@ -188,6 +188,7 @@ class CommentGenerationService(
                     attemptCount = attempt + 1,
                     latencyMs = System.currentTimeMillis() - startedAt,
                     usedTokens = output.usedTokens,
+                    cachedTokens = output.cachedTokens,
                 )
                 return output
             } catch (e: CommentGenerationFailedException) {
@@ -244,6 +245,7 @@ class CommentGenerationService(
                     attemptCount = attempt + 1,
                     latencyMs = System.currentTimeMillis() - startedAt,
                     usedTokens = output.usedTokens,
+                    cachedTokens = output.cachedTokens,
                 )
                 return output
             } catch (e: CommentGenerationFailedException) {

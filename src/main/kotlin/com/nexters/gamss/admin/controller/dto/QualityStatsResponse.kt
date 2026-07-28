@@ -20,8 +20,12 @@ data class QualityStatsResponse(
     val avgLatencyMs: Long,
     @field:Schema(description = "p95 생성 지연(ms)", example = "5300")
     val p95LatencyMs: Long,
-    @field:Schema(description = "누적 토큰 사용량(최근 기간)", example = "184320")
+    @field:Schema(description = "누적 토큰 사용량(총합, 캐싱과 무관하게 처리된 전체 토큰)", example = "184320")
     val totalTokens: Long,
+    @field:Schema(description = "그중 컨텍스트 캐시로 처리돼 할인 과금된 토큰", example = "120500")
+    val cachedTokens: Long,
+    @field:Schema(description = "캐시 적중률(%). 총 토큰 대비 캐시 토큰 비율. 총 토큰이 0이면 null", example = "65.4", nullable = true)
+    val cacheHitRate: Double?,
     @field:Schema(description = "막힌 PENDING(고아 생성) 수 — 즉시 대응 필요 신호", example = "0")
     val stuckPending: Long,
     @field:Schema(description = "일별 생성 성공/실패 추이(오래된 날 → 오늘)")

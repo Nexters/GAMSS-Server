@@ -25,6 +25,7 @@ class GenerationLogRecorder(
         attemptCount: Int,
         latencyMs: Long,
         usedTokens: Int? = null,
+        cachedTokens: Int? = null,
         failureReason: String? = null,
     ) {
         runCatching {
@@ -35,6 +36,7 @@ class GenerationLogRecorder(
                     success = success,
                     attemptCount = attemptCount,
                     usedTokens = usedTokens,
+                    cachedTokens = cachedTokens,
                     latencyMs = latencyMs,
                     failureReason = failureReason?.take(MAX_REASON_LENGTH),
                     createdAt = Instant.now(),

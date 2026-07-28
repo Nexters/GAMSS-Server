@@ -35,6 +35,8 @@ class QualityStatsService(
         val retried = logs.count { it.attemptCount > 1 }.toLong()
         val latencies = logs.map { it.latencyMs }.sorted()
         val stuckBefore = Instant.now().minus(conversationProperties.commentPendingTimeout)
+        val totalTokens = logs.sumOf { (it.usedTokens ?: 0).toLong() }
+        val cachedTokens = logs.sumOf { (it.cachedTokens ?: 0).toLong() }
 
         return QualityStatsResponse(
             totalGenerations = total,
@@ -45,7 +47,9 @@ class QualityStatsService(
             retryRate = percentageOrNull(retried, total),
             avgLatencyMs = if (latencies.isEmpty()) 0 else latencies.average().roundToLong(),
             p95LatencyMs = percentile(latencies, P95),
-            totalTokens = logs.sumOf { (it.usedTokens ?: 0).toLong() },
+            totalTokens = totalTokens,
+            cachedTokens = cachedTokens,
+            cacheHitRate = percentageOrNull(cachedTokens, totalTokens),
             stuckPending = messageRepository.countByCommentStatusOlderThan(CommentStatus.PENDING, stuckBefore),
             dailyGeneration = buildDailyGeneration(today, days, logs),
         )

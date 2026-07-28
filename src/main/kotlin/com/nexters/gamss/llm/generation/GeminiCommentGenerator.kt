@@ -64,7 +64,8 @@ class GeminiCommentGenerator(
 
         val feed = commentFeedJsonParser.parse(text)
         val usedTokens = response.usageMetadata().flatMap { it.totalTokenCount() }.orElse(0)
-        return CommentGenerationOutput(feed, usedTokens)
+        val cachedTokens = response.usageMetadata().flatMap { it.cachedContentTokenCount() }.orElse(0)
+        return CommentGenerationOutput(feed, usedTokens, cachedTokens)
     }
 
     override fun generateReply(
@@ -91,7 +92,8 @@ class GeminiCommentGenerator(
 
         val replyText = replyJsonParser.parse(text)
         val usedTokens = response.usageMetadata().flatMap { it.totalTokenCount() }.orElse(0)
-        return ReplyGenerationOutput(replyText, usedTokens)
+        val cachedTokens = response.usageMetadata().flatMap { it.cachedContentTokenCount() }.orElse(0)
+        return ReplyGenerationOutput(replyText, usedTokens, cachedTokens)
     }
 
     private fun buildConfig(

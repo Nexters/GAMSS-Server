@@ -22,6 +22,8 @@ interface QualityStats {
   avgLatencyMs: number
   p95LatencyMs: number
   totalTokens: number
+  cachedTokens: number
+  cacheHitRate: number | null
   stuckPending: number
   dailyGeneration: DailyGeneration[]
 }
@@ -101,7 +103,12 @@ export function QualitySection() {
         />
         <MetricCard label="평균 지연" value={latency(stats.avgLatencyMs)} icon={<Gauge className="size-4" />} />
         <MetricCard label="p95 지연" value={latency(stats.p95LatencyMs)} hint="상위 5% 대기시간" />
-        <MetricCard label="토큰 사용량" value={stats.totalTokens.toLocaleString()} hint="최근 기간 누적" icon={<Coins className="size-4" />} />
+        <MetricCard
+          label="토큰 사용량"
+          value={stats.totalTokens.toLocaleString()}
+          hint={stats.cacheHitRate === null ? '최근 기간 누적' : `캐시 적중 ${stats.cacheHitRate}% (${stats.cachedTokens.toLocaleString()})`}
+          icon={<Coins className="size-4" />}
+        />
         <MetricCard label="총 생성 요청" value={stats.totalGenerations.toLocaleString()} hint="최근 기간" />
       </div>
 

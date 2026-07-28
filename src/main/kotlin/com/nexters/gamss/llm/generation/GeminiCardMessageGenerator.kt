@@ -53,7 +53,8 @@ class GeminiCardMessageGenerator(
 
         val message = parseLine(text)
         val usedTokens = response.usageMetadata().flatMap { it.totalTokenCount() }.orElse(0)
-        return CardMessageOutput(message, usedTokens)
+        val cachedTokens = response.usageMetadata().flatMap { it.cachedContentTokenCount() }.orElse(0)
+        return CardMessageOutput(message, usedTokens, cachedTokens)
     }
 
     private fun parseLine(text: String): String {

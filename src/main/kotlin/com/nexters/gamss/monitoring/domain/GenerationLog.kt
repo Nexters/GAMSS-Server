@@ -28,6 +28,8 @@ class GenerationLog(
     val attemptCount: Int,
     @Column(name = "used_tokens")
     val usedTokens: Int? = null,
+    @Column(name = "cached_tokens")
+    val cachedTokens: Int? = null,
     @Column(name = "latency_ms", nullable = false)
     val latencyMs: Long,
     @Column(name = "failure_reason", length = 255)

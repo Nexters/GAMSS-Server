@@ -102,7 +102,7 @@ class CommentGenerationServiceTest {
         stubClaimSuccess()
         every {
             commentGenerator.generateComment("", message.content, characters, tikitakaCount, null)
-        } returns CommentGenerationOutput(feed(), 123)
+        } returns CommentGenerationOutput(feed(), 123, 0)
         every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } returns Unit
         val savedMessages =
             listOf(Message(conversationId = 10L, senderType = SenderType.CHARACTER, emotionType = EmotionType.JOY, content = "댓글"))
@@ -179,7 +179,7 @@ class CommentGenerationServiceTest {
         every { messageRepository.findById(1L) } returns Optional.of(message)
         every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
         stubClaimSuccess()
-        every { commentGenerator.generateComment(any(), any(), any(), any(), any()) } returns CommentGenerationOutput(feed(), 123)
+        every { commentGenerator.generateComment(any(), any(), any(), any(), any()) } returns CommentGenerationOutput(feed(), 123, 0)
         every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } returns Unit
         every { commentPersistenceService.saveFeed(10L, 1L, feed()) } throws RuntimeException("DB 제약조건 위반")
         every { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) } returns 1
@@ -197,7 +197,7 @@ class CommentGenerationServiceTest {
         every { messageRepository.findById(1L) } returns Optional.of(message)
         every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
         stubClaimSuccess()
-        every { commentGenerator.generateComment(any(), any(), any(), any(), any()) } returns CommentGenerationOutput(feed(), 123)
+        every { commentGenerator.generateComment(any(), any(), any(), any(), any()) } returns CommentGenerationOutput(feed(), 123, 0)
         every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } returns Unit
         every { commentPersistenceService.saveFeed(10L, 1L, feed()) } throws BusinessException(ErrorCode.CONVERSATION_NOT_FOUND)
         every { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) } returns 1
@@ -227,7 +227,7 @@ class CommentGenerationServiceTest {
             )
         every {
             commentGenerator.generateComment("", message.content, charactersWithQuirky, 1, "소재")
-        } returns CommentGenerationOutput(quirkyFeed, 456)
+        } returns CommentGenerationOutput(quirkyFeed, 456, 0)
         every { commentFeedValidator.validate(quirkyFeed, charactersWithQuirky, 1) } returns Unit
         every { commentPersistenceService.saveFeed(10L, 1L, quirkyFeed) } returns emptyList()
 
@@ -296,7 +296,7 @@ class CommentGenerationServiceTest {
         } returns 1
         every {
             commentGenerator.generateReply(diaryMessage().content, "gippeum", characterMessage().content, userReplyMessage().content)
-        } returns ReplyGenerationOutput("그치! 잘했어!", 77)
+        } returns ReplyGenerationOutput("그치! 잘했어!", 77, 0)
         every { commentFeedValidator.validateReply("그치! 잘했어!") } returns Unit
         val savedReply =
             Message(conversationId = 10L, senderType = SenderType.CHARACTER, emotionType = EmotionType.JOY, content = "그치! 잘했어!")
@@ -463,7 +463,7 @@ class CommentGenerationServiceTest {
         stubClaimSuccess()
         every {
             commentGenerator.generateComment("", message.content, characters, tikitakaCount, null)
-        } returns CommentGenerationOutput(feed(), 123)
+        } returns CommentGenerationOutput(feed(), 123, 0)
         every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } returns Unit
         val savedMessages =
             listOf(Message(conversationId = 10L, senderType = SenderType.CHARACTER, emotionType = EmotionType.JOY, content = "댓글"))
@@ -487,7 +487,7 @@ class CommentGenerationServiceTest {
         } returns 1
         every {
             commentGenerator.generateReply(diaryMessage().content, "gippeum", characterMessage().content, reply.content)
-        } returns ReplyGenerationOutput("그치! 잘했어!", 77)
+        } returns ReplyGenerationOutput("그치! 잘했어!", 77, 0)
         every { commentFeedValidator.validateReply("그치! 잘했어!") } returns Unit
         val savedReply =
             Message(conversationId = 10L, senderType = SenderType.CHARACTER, emotionType = EmotionType.JOY, content = "그치! 잘했어!")
