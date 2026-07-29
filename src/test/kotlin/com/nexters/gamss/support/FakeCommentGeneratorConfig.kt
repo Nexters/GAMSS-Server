@@ -43,7 +43,7 @@ class FakeCommentGenerator : CommentGenerator {
                 val to = characters[(i + 1) % characters.size]
                 TikitakaDraft(from, to, "티키타카-$i")
             }
-        return CommentGenerationOutput(CommentFeed(comments, tikitaka), usedTokens = 10)
+        return CommentGenerationOutput(CommentFeed(comments, tikitaka), usedTokens = 10, cachedTokens = 0)
     }
 
     override fun generateReply(
@@ -53,6 +53,6 @@ class FakeCommentGenerator : CommentGenerator {
         userReply: String,
     ): ReplyGenerationOutput {
         if (shouldFail) throw CommentGenerationFailedException("테스트 강제 실패")
-        return ReplyGenerationOutput("재응답 텍스트", usedTokens = 5)
+        return ReplyGenerationOutput("재응답 텍스트", usedTokens = 5, cachedTokens = 0)
     }
 }

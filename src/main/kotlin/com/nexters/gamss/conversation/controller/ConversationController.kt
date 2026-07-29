@@ -47,6 +47,8 @@ class ConversationController(
                 "LLM 생성이 재시도(최대 2회) 끝에 실패해도 저장은 유지됩니다 — 이 경우 commentStatus=FAILED, " +
                 "comments는 빈 리스트로 반환되며, 실패한 메시지는 `/messages/comments`류 엔드포인트로 " +
                 "재시도할 수 있습니다.\n\n" +
+                "유저의 일일 토큰 상한(prod 전용)을 넘긴 경우에도 저장은 유지되고 생성만 건너뜁니다 — " +
+                "이 경우 commentStatus=LIMIT_EXCEEDED, comments는 빈 리스트로 반환됩니다(리셋 이후 재시도 가능).\n\n" +
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +
@@ -68,7 +70,7 @@ class ConversationController(
                 content = request.content,
                 repliesToMessageId = request.repliesToMessageId,
             )
-        val result = commentGenerationService.generateFor(message)
+        val result = commentGenerationService.generateFor(principal.memberId, message)
         return ApiResponse.success(SaveMessageResponse.from(message, result))
     }
 

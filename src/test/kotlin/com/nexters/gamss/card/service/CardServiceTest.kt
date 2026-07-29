@@ -10,6 +10,8 @@ import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.llm.error.CardGenerationFailedException
 import com.nexters.gamss.llm.generation.CardMessageGenerator
 import com.nexters.gamss.llm.generation.CardMessageOutput
+import com.nexters.gamss.monitoring.service.GenerationLogRecorder
+import com.nexters.gamss.tokenlimit.service.DailyTokenLimitService
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -28,7 +30,10 @@ class CardServiceTest {
     private val cardRepository = mockk<CardRepository>()
     private val conversationRepository = mockk<ConversationRepository>()
     private val cardMessageGenerator = mockk<CardMessageGenerator>()
-    private val service = CardService(cardRepository, conversationRepository, cardMessageGenerator)
+    private val generationLogRecorder = mockk<GenerationLogRecorder>(relaxed = true)
+    private val dailyTokenLimitService = mockk<DailyTokenLimitService> { every { isWithinLimit(any()) } returns true }
+    private val service =
+        CardService(cardRepository, conversationRepository, cardMessageGenerator, generationLogRecorder, dailyTokenLimitService)
 
     private val zone = ZoneId.of("Asia/Seoul")
 
@@ -39,7 +44,7 @@ class CardServiceTest {
         val conversation = endedConversation()
         every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(conversation)
         every { cardRepository.existsByConversationId(CONVERSATION_ID) } returns false
-        every { cardMessageGenerator.generate(EmotionType.ANGER, "요약") } returns CardMessageOutput("얘 오늘 건들면 안 됨.", 10)
+        every { cardMessageGenerator.generate(EmotionType.ANGER, "요약") } returns CardMessageOutput("얘 오늘 건들면 안 됨.", 10, 0)
         val saved = slot<Card>()
         every { cardRepository.saveAndFlush(capture(saved)) } answers { firstArg() }
 
@@ -49,6 +54,18 @@ class CardServiceTest {
         assertEquals("요약", saved.captured.summary)
         assertEquals("얘 오늘 건들면 안 됨.", saved.captured.message)
         assertEquals(conversation.createdAt, saved.captured.conversationCreatedAt)
+    }
+
+    @Test
+    fun `일일 토큰 상한을 넘으면 카드 생성을 막고 DAILY_TOKEN_LIMIT_EXCEEDED`() {
+        every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
+        every { cardRepository.existsByConversationId(CONVERSATION_ID) } returns false
+        every { dailyTokenLimitService.isWithinLimit(MEMBER_ID) } returns false
+
+        val exception = assertFailsWith<BusinessException> { service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약") }
+
+        assertEquals(ErrorCode.DAILY_TOKEN_LIMIT_EXCEEDED, exception.errorCode)
+        verify(exactly = 0) { cardMessageGenerator.generate(any(), any()) }
     }
 
     @Test
@@ -104,7 +121,7 @@ class CardServiceTest {
     fun `동시 요청이 사전 검사를 함께 통과해도 유니크 위반은 CARD_ALREADY_EXISTS로 변환된다`() {
         every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
         every { cardRepository.existsByConversationId(CONVERSATION_ID) } returns false
-        every { cardMessageGenerator.generate(any(), any()) } returns CardMessageOutput("대사", 10)
+        every { cardMessageGenerator.generate(any(), any()) } returns CardMessageOutput("대사", 10, 0)
         every { cardRepository.saveAndFlush(any()) } throws DataIntegrityViolationException("duplicate")
 
         val exception = assertFailsWith<BusinessException> { service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약") }

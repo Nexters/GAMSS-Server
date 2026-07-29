@@ -47,13 +47,36 @@ class GeminiCardMessageGenerator(
                 throw CardGenerationFailedException("카드 대사 LLM 호출에 실패했습니다.", e)
             }
 
+        // 토큰은 파싱 전에 뽑는다 — 이후 파싱이 실패해도 이미 과금된 토큰을 실패 로그에 전달할 수 있게 한다.
+        val usedTokens = response.usageMetadata().flatMap { it.totalTokenCount() }.orElse(0)
+        val cachedTokens = response.usageMetadata().flatMap { it.cachedContentTokenCount() }.orElse(0)
+        val inputTokens = response.usageMetadata().flatMap { it.promptTokenCount() }.orElse(0)
+        val outputTokens = response.usageMetadata().flatMap { it.candidatesTokenCount() }.orElse(0)
+
         val text =
             response.text()
-                ?: throw CardGenerationFailedException("카드 대사 응답이 비어 있습니다.")
+                ?: throw CardGenerationFailedException(
+                    "카드 대사 응답이 비어 있습니다.",
+                    usedTokens = usedTokens,
+                    cachedTokens = cachedTokens,
+                    inputTokens = inputTokens,
+                    outputTokens = outputTokens,
+                )
 
-        val message = parseLine(text)
-        val usedTokens = response.usageMetadata().flatMap { it.totalTokenCount() }.orElse(0)
-        return CardMessageOutput(message, usedTokens)
+        val message =
+            try {
+                parseLine(text)
+            } catch (e: CardGenerationFailedException) {
+                throw CardGenerationFailedException(
+                    e.message ?: "카드 대사 파싱 실패",
+                    e.cause,
+                    usedTokens,
+                    cachedTokens,
+                    inputTokens,
+                    outputTokens,
+                )
+            }
+        return CardMessageOutput(message, usedTokens, cachedTokens, inputTokens, outputTokens)
     }
 
     private fun parseLine(text: String): String {

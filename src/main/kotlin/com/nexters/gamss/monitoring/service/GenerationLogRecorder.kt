@@ -24,7 +24,12 @@ class GenerationLogRecorder(
         success: Boolean,
         attemptCount: Int,
         latencyMs: Long,
+        memberId: Long? = null,
+        conversationId: Long? = null,
         usedTokens: Int? = null,
+        cachedTokens: Int? = null,
+        inputTokens: Int? = null,
+        outputTokens: Int? = null,
         failureReason: String? = null,
     ) {
         runCatching {
@@ -32,9 +37,14 @@ class GenerationLogRecorder(
                 GenerationLog(
                     generationType = type,
                     model = llmSettingsService.currentModel(),
+                    memberId = memberId,
+                    conversationId = conversationId,
                     success = success,
                     attemptCount = attemptCount,
                     usedTokens = usedTokens,
+                    cachedTokens = cachedTokens,
+                    inputTokens = inputTokens,
+                    outputTokens = outputTokens,
                     latencyMs = latencyMs,
                     failureReason = failureReason?.take(MAX_REASON_LENGTH),
                     createdAt = Instant.now(),

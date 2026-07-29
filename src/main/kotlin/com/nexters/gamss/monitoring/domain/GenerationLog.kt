@@ -22,12 +22,23 @@ class GenerationLog(
     val generationType: GenerationType,
     @Column(name = "model", length = 100, nullable = false)
     val model: String,
+    // 유저별 일일 토큰 상한(member_id)·대화방별 사용량(conversation_id) 집계용. 과거 행엔 없으므로 nullable.
+    @Column(name = "member_id")
+    val memberId: Long? = null,
+    @Column(name = "conversation_id")
+    val conversationId: Long? = null,
     @Column(name = "success", nullable = false)
     val success: Boolean,
     @Column(name = "attempt_count", nullable = false)
     val attemptCount: Int,
     @Column(name = "used_tokens")
     val usedTokens: Int? = null,
+    @Column(name = "cached_tokens")
+    val cachedTokens: Int? = null,
+    @Column(name = "input_tokens")
+    val inputTokens: Int? = null,
+    @Column(name = "output_tokens")
+    val outputTokens: Int? = null,
     @Column(name = "latency_ms", nullable = false)
     val latencyMs: Long,
     @Column(name = "failure_reason", length = 255)
