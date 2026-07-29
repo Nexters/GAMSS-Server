@@ -11,6 +11,12 @@ import java.time.Instant
 interface CardRepository : JpaRepository<Card, Long> {
     fun existsByConversationId(conversationId: Long): Boolean
 
+    /** 카드가 생성된 대화방 id들만 골라 반환한다(백오피스 대화방 사용량 페이지의 카드 생성 여부 배치 조회). */
+    @Query("select c.conversationId from Card c where c.conversationId in :conversationIds")
+    fun findConversationIdsIn(
+        @Param("conversationIds") conversationIds: Collection<Long>,
+    ): List<Long>
+
     /**
      * [start, end) 사이(대화 생성시간 기준)에 속한 회원의 카드를 오래된 순으로 조회한다.
      * 삭제된 채팅방의 카드는 제외한다 — 카드는 대화 종료 여부와 무관하게 삭제될 수 있어(Conversation.delete),

@@ -5,6 +5,7 @@ import com.nexters.gamss.admin.controller.dto.QualityStatsResponse
 import com.nexters.gamss.conversation.config.ConversationProperties
 import com.nexters.gamss.conversation.domain.CommentStatus
 import com.nexters.gamss.conversation.repository.MessageRepository
+import com.nexters.gamss.llm.config.GeminiPricing
 import com.nexters.gamss.monitoring.domain.GenerationLog
 import com.nexters.gamss.monitoring.repository.GenerationLogRepository
 import org.springframework.stereotype.Service
@@ -23,6 +24,7 @@ class QualityStatsService(
     private val generationLogRepository: GenerationLogRepository,
     private val messageRepository: MessageRepository,
     private val conversationProperties: ConversationProperties,
+    private val geminiPricing: GeminiPricing,
 ) {
     @Transactional(readOnly = true)
     fun getQualityStats(days: Int): QualityStatsResponse {
@@ -35,6 +37,14 @@ class QualityStatsService(
         val retried = logs.count { it.attemptCount > 1 }.toLong()
         val latencies = logs.map { it.latencyMs }.sorted()
         val stuckBefore = Instant.now().minus(conversationProperties.commentPendingTimeout)
+        val totalTokens = logs.sumOf { (it.usedTokens ?: 0).toLong() }
+        val cachedTokens = logs.sumOf { (it.cachedTokens ?: 0).toLong() }
+        // 캐시는 입력의 부분집합이라, 적중률은 입력 토큰 대비로 계산한다(출력은 캐시 대상이 아님).
+        val inputTokens = logs.sumOf { (it.inputTokens ?: 0).toLong() }
+        val estimatedCostUsd =
+            logs.sumOf {
+                geminiPricing.costUsd(it.model, it.inputTokens ?: 0, it.cachedTokens ?: 0, it.outputTokens ?: 0)
+            }
 
         return QualityStatsResponse(
             totalGenerations = total,
@@ -45,7 +55,10 @@ class QualityStatsService(
             retryRate = percentageOrNull(retried, total),
             avgLatencyMs = if (latencies.isEmpty()) 0 else latencies.average().roundToLong(),
             p95LatencyMs = percentile(latencies, P95),
-            totalTokens = logs.sumOf { (it.usedTokens ?: 0).toLong() },
+            totalTokens = totalTokens,
+            cachedTokens = cachedTokens,
+            cacheHitRate = percentageOrNull(cachedTokens, inputTokens),
+            estimatedCostUsd = (estimatedCostUsd * 10000).roundToLong() / 10000.0,
             stuckPending = messageRepository.countByCommentStatusOlderThan(CommentStatus.PENDING, stuckBefore),
             dailyGeneration = buildDailyGeneration(today, days, logs),
         )

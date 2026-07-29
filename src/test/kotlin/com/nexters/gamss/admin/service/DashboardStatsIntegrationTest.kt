@@ -86,10 +86,13 @@ class DashboardStatsIntegrationTest : RepositoryTest() {
         generationLogRepository.save(
             GenerationLog(
                 generationType = GenerationType.COMMENT,
-                model = "gemini-test",
+                model = "gemini-3.1-flash-lite",
                 success = true,
                 attemptCount = 1,
-                usedTokens = 10,
+                usedTokens = 5500,
+                cachedTokens = 3000,
+                inputTokens = 5000,
+                outputTokens = 500,
                 latencyMs = 100,
                 createdAt = now,
             ),
@@ -116,7 +119,12 @@ class DashboardStatsIntegrationTest : RepositoryTest() {
         assertEquals(50.0, quality.retryRate)
         assertEquals(150, quality.avgLatencyMs)
         assertEquals(200, quality.p95LatencyMs)
-        assertEquals(10, quality.totalTokens)
+        assertEquals(5500, quality.totalTokens)
+        assertEquals(3000, quality.cachedTokens)
+        // 적중률 = 캐시(3000) / 입력(5000) = 60.0
+        assertEquals(60.0, quality.cacheHitRate)
+        // 비용 = 비캐시입력(2000)×0.25 + 캐시(3000)×0.025 + 출력(500)×1.5 (per 1M) = 0.001325 → 0.0013
+        assertEquals(0.0013, quality.estimatedCostUsd)
         assertEquals(0, quality.stuckPending)
     }
 
@@ -128,5 +136,8 @@ class DashboardStatsIntegrationTest : RepositoryTest() {
         val quality = qualityStatsService.getQualityStats(14)
         assertNull(quality.successRate, "생성이 없으면 성공률은 null")
         assertNull(quality.retryRate, "생성이 없으면 재시도율은 null")
+        assertEquals(0, quality.cachedTokens, "생성이 없으면 캐시 토큰은 0")
+        assertNull(quality.cacheHitRate, "입력 토큰이 없으면 캐시 적중률은 null")
+        assertEquals(0.0, quality.estimatedCostUsd, "생성이 없으면 예상 비용은 0")
     }
 }

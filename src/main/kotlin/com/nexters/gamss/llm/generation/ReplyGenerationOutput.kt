@@ -4,4 +4,7 @@ package com.nexters.gamss.llm.generation
 data class ReplyGenerationOutput(
     val text: String,
     val usedTokens: Int,
+    val cachedTokens: Int,
+    val inputTokens: Int = 0,
+    val outputTokens: Int = 0,
 )
