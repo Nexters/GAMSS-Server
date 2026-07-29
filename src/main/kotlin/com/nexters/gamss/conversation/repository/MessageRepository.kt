@@ -20,6 +20,18 @@ interface MessageRepository : JpaRepository<Message, Long> {
     fun findByRepliesToMessageId(repliesToMessageId: Long): Message?
 
     /**
+     * 여러 대화방의 발신주체별 메시지 수를 한 번에 집계한다(백오피스 대화방 사용량 페이지).
+     * 페이지에 올라온 대화방 id들만 넘겨 N+1 없이 유저/캐릭터 메시지 개수를 채운다.
+     */
+    @Query(
+        "select m.conversationId as conversationId, m.senderType as senderType, count(m) as count " +
+            "from Message m where m.conversationId in :conversationIds group by m.conversationId, m.senderType",
+    )
+    fun countBySenderForConversations(
+        @Param("conversationIds") conversationIds: Collection<Long>,
+    ): List<ConversationSenderCountProjection>
+
+    /**
      * [messageId]의 commentStatus가 [fromAny] 중 하나일 때만 [to]로 원자적으로 바꾼다.
      * 영향받은 행 수(0 또는 1)로 선점 성공 여부를 판단한다 — check-then-act 레이스 없이
      * DB 행 락 안에서 확인과 변경이 한 번에 처리된다. [now]는 이 상태 전이 시각(고아 PENDING 판정 기준)이다.

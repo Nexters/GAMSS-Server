@@ -24,6 +24,8 @@ class GenerationLogRecorder(
         success: Boolean,
         attemptCount: Int,
         latencyMs: Long,
+        memberId: Long? = null,
+        conversationId: Long? = null,
         usedTokens: Int? = null,
         cachedTokens: Int? = null,
         inputTokens: Int? = null,
@@ -35,6 +37,8 @@ class GenerationLogRecorder(
                 GenerationLog(
                     generationType = type,
                     model = llmSettingsService.currentModel(),
+                    memberId = memberId,
+                    conversationId = conversationId,
                     success = success,
                     attemptCount = attemptCount,
                     usedTokens = usedTokens,

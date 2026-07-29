@@ -12,6 +12,7 @@ import com.nexters.gamss.llm.error.CardGenerationFailedException
 import com.nexters.gamss.llm.generation.CardMessageGenerator
 import com.nexters.gamss.monitoring.domain.GenerationType
 import com.nexters.gamss.monitoring.service.GenerationLogRecorder
+import com.nexters.gamss.tokenlimit.service.DailyTokenLimitService
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -29,6 +30,7 @@ class CardService(
     private val conversationRepository: ConversationRepository,
     private val cardMessageGenerator: CardMessageGenerator,
     private val generationLogRecorder: GenerationLogRecorder,
+    private val dailyTokenLimitService: DailyTokenLimitService,
 ) {
     /**
      * 종료된 대화에 대해 대표 감정 캐릭터의 한 줄 대사를 생성해 카드를 저장한다.
@@ -49,6 +51,10 @@ class CardService(
         if (cardRepository.existsByConversationId(conversationId)) {
             throw BusinessException(ErrorCode.CARD_ALREADY_EXISTS)
         }
+        // 카드도 LLM 생성이므로 일일 토큰 상한을 적용한다(prod만). 초과 시 생성을 막는다.
+        if (!dailyTokenLimitService.isWithinLimit(memberId)) {
+            throw BusinessException(ErrorCode.DAILY_TOKEN_LIMIT_EXCEEDED)
+        }
         val startedAt = System.currentTimeMillis()
         val output =
             try {
@@ -59,6 +65,8 @@ class CardService(
                     success = false,
                     attemptCount = 1,
                     latencyMs = System.currentTimeMillis() - startedAt,
+                    memberId = memberId,
+                    conversationId = conversationId,
                     usedTokens = e.usedTokens,
                     cachedTokens = e.cachedTokens,
                     inputTokens = e.inputTokens,
@@ -72,6 +80,8 @@ class CardService(
             success = true,
             attemptCount = 1,
             latencyMs = System.currentTimeMillis() - startedAt,
+            memberId = memberId,
+            conversationId = conversationId,
             usedTokens = output.usedTokens,
             cachedTokens = output.cachedTokens,
             inputTokens = output.inputTokens,

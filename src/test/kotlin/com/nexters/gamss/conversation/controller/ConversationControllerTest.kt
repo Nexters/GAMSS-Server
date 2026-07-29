@@ -58,7 +58,7 @@ class ConversationControllerTest {
         every {
             conversationService.saveUserMessage(memberId = 1L, conversationId = null, content = "오늘 있었던 일", repliesToMessageId = null)
         } returns saved
-        every { commentGenerationService.generateFor(saved) } returns
+        every { commentGenerationService.generateFor(1L, saved) } returns
             GenerationResult(CommentGenerationOutcome.DONE, comments, usedTokens = 42)
 
         val response = controller.saveMessage(principal, SaveMessageRequest(content = "오늘 있었던 일"))
@@ -76,7 +76,7 @@ class ConversationControllerTest {
         every {
             conversationService.saveUserMessage(memberId = 1L, conversationId = 10L, content = "답장", repliesToMessageId = 5L)
         } returns saved
-        every { commentGenerationService.generateFor(saved) } returns
+        every { commentGenerationService.generateFor(1L, saved) } returns
             GenerationResult(CommentGenerationOutcome.DONE, listOf(reply), usedTokens = 7)
 
         val response =
@@ -94,7 +94,7 @@ class ConversationControllerTest {
         every {
             conversationService.saveUserMessage(memberId = 1L, conversationId = null, content = "오늘 있었던 일", repliesToMessageId = null)
         } returns saved
-        every { commentGenerationService.generateFor(saved) } returns GenerationResult(CommentGenerationOutcome.FAILED)
+        every { commentGenerationService.generateFor(1L, saved) } returns GenerationResult(CommentGenerationOutcome.FAILED)
 
         val response = controller.saveMessage(principal, SaveMessageRequest(content = "오늘 있었던 일"))
 
@@ -110,7 +110,7 @@ class ConversationControllerTest {
         every {
             conversationService.saveUserMessage(memberId = 1L, conversationId = null, content = "오늘 있었던 일", repliesToMessageId = null)
         } returns saved
-        every { commentGenerationService.generateFor(saved) } returns GenerationResult(CommentGenerationOutcome.GENERATING)
+        every { commentGenerationService.generateFor(1L, saved) } returns GenerationResult(CommentGenerationOutcome.GENERATING)
 
         assertFailsWith<IllegalStateException> {
             controller.saveMessage(principal, SaveMessageRequest(content = "오늘 있었던 일"))

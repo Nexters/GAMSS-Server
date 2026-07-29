@@ -19,6 +19,7 @@ import com.nexters.gamss.llm.selection.CharacterSelector
 import com.nexters.gamss.llm.selection.EongttungTopicSelector
 import com.nexters.gamss.monitoring.domain.GenerationType
 import com.nexters.gamss.monitoring.service.GenerationLogRecorder
+import com.nexters.gamss.tokenlimit.service.DailyTokenLimitService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.time.Instant
@@ -38,6 +39,7 @@ class CommentGenerationService(
     private val commentFeedValidator: CommentFeedValidator,
     private val commentPersistenceService: CommentPersistenceService,
     private val generationLogRecorder: GenerationLogRecorder,
+    private val dailyTokenLimitService: DailyTokenLimitService,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -48,11 +50,15 @@ class CommentGenerationService(
      * 정보([Message.repliesToMessageId])라, 어떤 생성 흐름을 탈지는 호출자(컨트롤러)가 아니라
      * 여기서 정한다.
      */
-    fun generateFor(message: Message): GenerationResult {
+    fun generateFor(
+        memberId: Long,
+        message: Message,
+    ): GenerationResult {
+        limitExceededOrNull(memberId)?.let { return it }
         if (message.repliesToMessageId == null) {
-            return generateCommentsInternal(message, message.id)
+            return generateCommentsInternal(memberId, message, message.id)
         }
-        return generateReplyInternal(message, message.id)
+        return generateReplyInternal(memberId, message, message.id)
     }
 
     /** 실패 후 수동 재시도용(멱등). [messageId]가 본인 소유의 일기(사용자) 메시지인지 새로 검증한다. */
@@ -61,7 +67,8 @@ class CommentGenerationService(
         messageId: Long,
     ): GenerationResult {
         val rootMessage = getOwnedRootMessage(memberId, messageId)
-        return generateCommentsInternal(rootMessage, messageId)
+        limitExceededOrNull(memberId)?.let { return it }
+        return generateCommentsInternal(memberId, rootMessage, messageId)
     }
 
     /** 실패 후 수동 재시도용(멱등). [messageId]가 본인 소유의 답글(사용자) 메시지인지 새로 검증한다. */
@@ -70,10 +77,24 @@ class CommentGenerationService(
         messageId: Long,
     ): GenerationResult {
         val userReplyMessage = getOwnedRootMessage(memberId, messageId)
-        return generateReplyInternal(userReplyMessage, messageId)
+        limitExceededOrNull(memberId)?.let { return it }
+        return generateReplyInternal(memberId, userReplyMessage, messageId)
+    }
+
+    /**
+     * 생성 진입점 공통 상한 가드. 초과면 [CommentGenerationOutcome.LIMIT_EXCEEDED] 결과를, 아니면 null을 돌려준다.
+     * 저장은 이미 끝난 상태라(저장 O, 생성만 차단) 여기선 생성을 건너뛰고 상태만 알린다 —
+     * 새 생성 경로가 늘어도 이 한 곳으로 가드를 강제해 우회를 막는다.
+     */
+    private fun limitExceededOrNull(memberId: Long): GenerationResult? {
+        if (dailyTokenLimitService.isWithinLimit(memberId)) {
+            return null
+        }
+        return GenerationResult(CommentGenerationOutcome.LIMIT_EXCEEDED)
     }
 
     private fun generateCommentsInternal(
+        memberId: Long,
         rootMessage: Message,
         messageId: Long,
     ): GenerationResult {
@@ -89,7 +110,7 @@ class CommentGenerationService(
         }
 
         return try {
-            val output = generateWithRetry(rootMessage.content)
+            val output = generateWithRetry(memberId, rootMessage.conversationId, rootMessage.content)
             val saved = commentPersistenceService.saveFeed(rootMessage.conversationId, messageId, output.feed)
             GenerationResult(CommentGenerationOutcome.DONE, saved, output.usedTokens)
         } catch (e: Exception) {
@@ -109,6 +130,7 @@ class CommentGenerationService(
     }
 
     private fun generateReplyInternal(
+        memberId: Long,
         userReplyMessage: Message,
         messageId: Long,
     ): GenerationResult {
@@ -138,7 +160,14 @@ class CommentGenerationService(
         }
 
         return try {
-            val output = generateReplyWithRetry(diaryMessage.content, characterMessage, userReplyMessage.content)
+            val output =
+                generateReplyWithRetry(
+                    memberId,
+                    userReplyMessage.conversationId,
+                    diaryMessage.content,
+                    characterMessage,
+                    userReplyMessage.content,
+                )
             val saved =
                 commentPersistenceService.saveReply(
                     conversationId = userReplyMessage.conversationId,
@@ -166,6 +195,8 @@ class CommentGenerationService(
 
     /** LLM 호출 + 의미 검증을 하나의 단위로 묶어 최대 [LlmRetryPolicy.MAX_ATTEMPTS]회 시도한다. */
     private fun generateReplyWithRetry(
+        memberId: Long,
+        conversationId: Long,
         diaryContent: String,
         characterMessage: Message,
         userReply: String,
@@ -199,6 +230,8 @@ class CommentGenerationService(
                     success = true,
                     attemptCount = attempt + 1,
                     latencyMs = System.currentTimeMillis() - startedAt,
+                    memberId = memberId,
+                    conversationId = conversationId,
                     usedTokens = output.usedTokens,
                     cachedTokens = output.cachedTokens,
                     inputTokens = output.inputTokens,
@@ -215,6 +248,8 @@ class CommentGenerationService(
                     success = false,
                     attemptCount = attempt + 1,
                     latencyMs = System.currentTimeMillis() - startedAt,
+                    memberId = memberId,
+                    conversationId = conversationId,
                     failureReason = failureReasonOf(e),
                 )
                 throw e
@@ -225,6 +260,8 @@ class CommentGenerationService(
             success = false,
             attemptCount = LlmRetryPolicy.MAX_ATTEMPTS,
             latencyMs = System.currentTimeMillis() - startedAt,
+            memberId = memberId,
+            conversationId = conversationId,
             usedTokens = lastError?.usedTokens,
             cachedTokens = lastError?.cachedTokens,
             inputTokens = lastError?.inputTokens,
@@ -243,7 +280,11 @@ class CommentGenerationService(
     }
 
     /** LLM 호출 + 의미 검증을 하나의 단위로 묶어 최대 [LlmRetryPolicy.MAX_ATTEMPTS]회 시도한다. */
-    private fun generateWithRetry(diaryContent: String): CommentGenerationOutput {
+    private fun generateWithRetry(
+        memberId: Long,
+        conversationId: Long,
+        diaryContent: String,
+    ): CommentGenerationOutput {
         val characters = characterSelector.select()
         val tikitakaCount = characterSelector.selectTikitakaCount()
         val eongttungTopic = if (EmotionType.QUIRKY in characters) eongttungTopicSelector.select() else null
@@ -274,6 +315,8 @@ class CommentGenerationService(
                     success = true,
                     attemptCount = attempt + 1,
                     latencyMs = System.currentTimeMillis() - startedAt,
+                    memberId = memberId,
+                    conversationId = conversationId,
                     usedTokens = output.usedTokens,
                     cachedTokens = output.cachedTokens,
                     inputTokens = output.inputTokens,
@@ -290,6 +333,8 @@ class CommentGenerationService(
                     success = false,
                     attemptCount = attempt + 1,
                     latencyMs = System.currentTimeMillis() - startedAt,
+                    memberId = memberId,
+                    conversationId = conversationId,
                     failureReason = failureReasonOf(e),
                 )
                 throw e
@@ -300,6 +345,8 @@ class CommentGenerationService(
             success = false,
             attemptCount = LlmRetryPolicy.MAX_ATTEMPTS,
             latencyMs = System.currentTimeMillis() - startedAt,
+            memberId = memberId,
+            conversationId = conversationId,
             usedTokens = lastError?.usedTokens,
             cachedTokens = lastError?.cachedTokens,
             inputTokens = lastError?.inputTokens,

@@ -4,6 +4,7 @@ import { AlertTriangle, Coins, Gauge, RefreshCw } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { MetricCard } from '@/components/metric-card'
+import { formatKrw, formatUsd, USD_TO_KRW_LABEL } from '@/lib/currency'
 import { SectionError, SeriesTooltip, shortDate } from './chart-shared'
 
 interface DailyGeneration {
@@ -106,8 +107,8 @@ export function QualitySection() {
         <MetricCard label="p95 지연" value={latency(stats.p95LatencyMs)} hint="상위 5% 대기시간" />
         <MetricCard
           label="예상 비용"
-          value={`$${stats.estimatedCostUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`}
-          hint="최근 기간 누적(캐시 반영)"
+          value={formatUsd(stats.estimatedCostUsd)}
+          hint={`≈ ${formatKrw(stats.estimatedCostUsd)} · 환율 ${USD_TO_KRW_LABEL}원`}
           icon={<Coins className="size-4" />}
         />
         <MetricCard label="총 토큰" value={stats.totalTokens.toLocaleString()} hint="처리된 전체 토큰(입력+출력)" />

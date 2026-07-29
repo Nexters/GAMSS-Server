@@ -20,6 +20,7 @@ import com.nexters.gamss.llm.parsing.TikitakaDraft
 import com.nexters.gamss.llm.selection.CharacterSelector
 import com.nexters.gamss.llm.selection.EongttungTopicSelector
 import com.nexters.gamss.monitoring.service.GenerationLogRecorder
+import com.nexters.gamss.tokenlimit.service.DailyTokenLimitService
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -38,6 +39,7 @@ class CommentGenerationServiceTest {
     private val commentFeedValidator = mockk<CommentFeedValidator>()
     private val commentPersistenceService = mockk<CommentPersistenceService>()
     private val generationLogRecorder = mockk<GenerationLogRecorder>(relaxed = true)
+    private val dailyTokenLimitService = mockk<DailyTokenLimitService> { every { isWithinLimit(any()) } returns true }
 
     private val service =
         CommentGenerationService(
@@ -49,6 +51,7 @@ class CommentGenerationServiceTest {
             commentFeedValidator,
             commentPersistenceService,
             generationLogRecorder,
+            dailyTokenLimitService,
         )
 
     private val characters = listOf(EmotionType.JOY, EmotionType.WARM, EmotionType.GRUMPY)
@@ -469,7 +472,7 @@ class CommentGenerationServiceTest {
             listOf(Message(conversationId = 10L, senderType = SenderType.CHARACTER, emotionType = EmotionType.JOY, content = "댓글"))
         every { commentPersistenceService.saveFeed(10L, 1L, feed()) } returns savedMessages
 
-        val result = service.generateFor(message)
+        val result = service.generateFor(1L, message)
 
         assertEquals(CommentGenerationOutcome.DONE, result.outcome)
         assertEquals(savedMessages, result.messages)
@@ -493,11 +496,24 @@ class CommentGenerationServiceTest {
             Message(conversationId = 10L, senderType = SenderType.CHARACTER, emotionType = EmotionType.JOY, content = "그치! 잘했어!")
         every { commentPersistenceService.saveReply(10L, 3L, 1L, EmotionType.JOY, "그치! 잘했어!") } returns savedReply
 
-        val result = service.generateFor(reply)
+        val result = service.generateFor(1L, reply)
 
         assertEquals(CommentGenerationOutcome.DONE, result.outcome)
         assertEquals(listOf(savedReply), result.messages)
         assertEquals(77, result.usedTokens)
         verify(exactly = 0) { commentGenerator.generateComment(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `일일 토큰 상한을 넘으면 저장은 유지한 채 생성을 건너뛰고 LIMIT_EXCEEDED를 반환한다`() {
+        val message = rootMessage().also { ReflectionTestUtils.setField(it, "id", 1L) }
+        every { dailyTokenLimitService.isWithinLimit(1L) } returns false
+
+        val result = service.generateFor(1L, message)
+
+        assertEquals(CommentGenerationOutcome.LIMIT_EXCEEDED, result.outcome)
+        // 생성도, 선점(CAS)도 하지 않는다 — 저장(컨트롤러가 이미 함)만 남고 토큰 소비는 없다.
+        verify(exactly = 0) { commentGenerator.generateComment(any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { messageRepository.updateCommentStatus(any(), any(), any(), any()) }
     }
 }

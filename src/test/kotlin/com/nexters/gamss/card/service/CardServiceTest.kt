@@ -11,6 +11,7 @@ import com.nexters.gamss.llm.error.CardGenerationFailedException
 import com.nexters.gamss.llm.generation.CardMessageGenerator
 import com.nexters.gamss.llm.generation.CardMessageOutput
 import com.nexters.gamss.monitoring.service.GenerationLogRecorder
+import com.nexters.gamss.tokenlimit.service.DailyTokenLimitService
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -30,7 +31,9 @@ class CardServiceTest {
     private val conversationRepository = mockk<ConversationRepository>()
     private val cardMessageGenerator = mockk<CardMessageGenerator>()
     private val generationLogRecorder = mockk<GenerationLogRecorder>(relaxed = true)
-    private val service = CardService(cardRepository, conversationRepository, cardMessageGenerator, generationLogRecorder)
+    private val dailyTokenLimitService = mockk<DailyTokenLimitService> { every { isWithinLimit(any()) } returns true }
+    private val service =
+        CardService(cardRepository, conversationRepository, cardMessageGenerator, generationLogRecorder, dailyTokenLimitService)
 
     private val zone = ZoneId.of("Asia/Seoul")
 
@@ -51,6 +54,18 @@ class CardServiceTest {
         assertEquals("요약", saved.captured.summary)
         assertEquals("얘 오늘 건들면 안 됨.", saved.captured.message)
         assertEquals(conversation.createdAt, saved.captured.conversationCreatedAt)
+    }
+
+    @Test
+    fun `일일 토큰 상한을 넘으면 카드 생성을 막고 DAILY_TOKEN_LIMIT_EXCEEDED`() {
+        every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
+        every { cardRepository.existsByConversationId(CONVERSATION_ID) } returns false
+        every { dailyTokenLimitService.isWithinLimit(MEMBER_ID) } returns false
+
+        val exception = assertFailsWith<BusinessException> { service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약") }
+
+        assertEquals(ErrorCode.DAILY_TOKEN_LIMIT_EXCEEDED, exception.errorCode)
+        verify(exactly = 0) { cardMessageGenerator.generate(any(), any()) }
     }
 
     @Test

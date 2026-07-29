@@ -15,9 +15,9 @@ import io.swagger.v3.oas.annotations.media.Schema
 data class SaveMessageResponse(
     @field:Schema(description = "저장된 메시지")
     val message: MessageResponse,
-    @field:Schema(description = "댓글 생성 상태 (저장과 동기로 처리되어 GENERATING은 나올 수 없다)")
+    @field:Schema(description = "댓글 생성 상태 (저장과 동기로 처리되어 GENERATING은 나올 수 없다. DONE·FAILED·LIMIT_EXCEEDED 중 하나)")
     val commentStatus: CommentGenerationStatus,
-    @field:Schema(description = "생성된 캐릭터 댓글·티키타카(일기) 또는 재응답(답글). commentStatus=FAILED면 빈 리스트")
+    @field:Schema(description = "생성된 캐릭터 댓글·티키타카(일기) 또는 재응답(답글). commentStatus=FAILED·LIMIT_EXCEEDED면 빈 리스트")
     val comments: List<MessageResponse>,
     @field:Schema(description = "이번 요청에서 LLM을 호출해 생성한 경우에만 채워지는 사용 토큰 수", nullable = true)
     val usedTokens: Int? = null,
