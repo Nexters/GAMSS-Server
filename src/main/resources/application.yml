@@ -13,6 +13,12 @@ spring:
   flyway:
     enabled: true
 
+# HTTPS 엣지(nginx) 뒤에서 X-Forwarded-Proto/Host 를 반영해 앱이 요청 스킴을 https 로 인식하게 한다.
+# springdoc 이 문서·Try it out URL 을 http 가 아니라 https 로 생성하도록 하는 것이 목적.
+# 앱 포트는 127.0.0.1 에만 바인딩돼 nginx만 접근하므로 이 헤더를 신뢰해도 안전하다(외부에서 위조 주입 불가).
+server:
+  forward-headers-strategy: framework
+
 jwt:
   secret: ${JWT_SECRET}
   access-token-validity: ${JWT_ACCESS_VALIDITY:PT1H}
