@@ -2,6 +2,7 @@ package com.nexters.gamss.card.service
 
 import com.nexters.gamss.card.domain.Card
 import com.nexters.gamss.card.repository.CardRepository
+import com.nexters.gamss.conversation.domain.CardGenerationStatus
 import com.nexters.gamss.conversation.domain.Conversation
 import com.nexters.gamss.conversation.repository.ConversationRepository
 import com.nexters.gamss.emotion.domain.EmotionType
@@ -39,12 +40,35 @@ class CardServiceTest {
 
     private fun endedConversation(memberId: Long = MEMBER_ID): Conversation = Conversation(memberId).apply { end() }
 
+    /** LLM 호출 전 CAS 선점이 성공하는 경로. */
+    private fun stubClaimSuccess() {
+        every {
+            conversationRepository.updateCardGenerationStatus(
+                CONVERSATION_ID,
+                CardGenerationStatus.PENDING,
+                listOf(CardGenerationStatus.NONE, CardGenerationStatus.FAILED),
+                any(),
+            )
+        } returns 1
+    }
+
+    private fun stubMarkStatus(
+        to: CardGenerationStatus,
+        returns: Int = 1,
+    ) {
+        every {
+            conversationRepository.updateCardGenerationStatus(CONVERSATION_ID, to, listOf(CardGenerationStatus.PENDING), any())
+        } returns returns
+    }
+
     @Test
-    fun `종료된 대화에 카드를 생성한다`() {
+    fun `종료된 대화에 카드를 생성하고 대화 요약을 저장한다`() {
         val conversation = endedConversation()
         every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(conversation)
-        every { cardRepository.existsByConversationId(CONVERSATION_ID) } returns false
+        stubClaimSuccess()
         every { cardMessageGenerator.generate(EmotionType.ANGER, "요약") } returns CardMessageOutput("얘 오늘 건들면 안 됨.", 10, 0)
+        every { conversationRepository.updateSummary(CONVERSATION_ID, "요약") } returns 1
+        stubMarkStatus(CardGenerationStatus.DONE)
         val saved = slot<Card>()
         every { cardRepository.saveAndFlush(capture(saved)) } answers { firstArg() }
 
@@ -54,13 +78,16 @@ class CardServiceTest {
         assertEquals("요약", saved.captured.summary)
         assertEquals("얘 오늘 건들면 안 됨.", saved.captured.message)
         assertEquals(conversation.createdAt, saved.captured.conversationCreatedAt)
+        verify(exactly = 1) { conversationRepository.updateSummary(CONVERSATION_ID, "요약") }
+        verify(exactly = 1) { conversationRepository.updateCardGenerationStatus(CONVERSATION_ID, CardGenerationStatus.DONE, any(), any()) }
     }
 
     @Test
     fun `일일 토큰 상한을 넘으면 카드 생성을 막고 DAILY_TOKEN_LIMIT_EXCEEDED`() {
         every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
-        every { cardRepository.existsByConversationId(CONVERSATION_ID) } returns false
+        stubClaimSuccess()
         every { dailyTokenLimitService.isWithinLimit(MEMBER_ID) } returns false
+        stubMarkStatus(CardGenerationStatus.FAILED)
 
         val exception = assertFailsWith<BusinessException> { service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약") }
 
@@ -96,37 +123,99 @@ class CardServiceTest {
     }
 
     @Test
-    fun `이미 카드가 있으면 CARD_ALREADY_EXISTS`() {
+    fun `선점에 실패했는데 이미 카드가 있으면 LLM 호출 없이 CARD_ALREADY_EXISTS`() {
         every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
+        every {
+            conversationRepository.updateCardGenerationStatus(
+                CONVERSATION_ID,
+                CardGenerationStatus.PENDING,
+                listOf(CardGenerationStatus.NONE, CardGenerationStatus.FAILED),
+                any(),
+            )
+        } returns 0
         every { cardRepository.existsByConversationId(CONVERSATION_ID) } returns true
 
         val exception = assertFailsWith<BusinessException> { service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약") }
 
         assertEquals(ErrorCode.CARD_ALREADY_EXISTS, exception.errorCode)
+        verify(exactly = 0) { cardMessageGenerator.generate(any(), any()) }
+        verify(exactly = 0) { conversationRepository.updateSummary(any(), any()) }
     }
 
     @Test
-    fun `대사 생성에 실패하면 CARD_GENERATION_FAILED`() {
+    fun `선점에 실패했는데 카드가 아직 없으면(동시 생성 중) LLM 호출 없이 CARD_GENERATION_IN_PROGRESS`() {
         every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
+        every {
+            conversationRepository.updateCardGenerationStatus(
+                CONVERSATION_ID,
+                CardGenerationStatus.PENDING,
+                listOf(CardGenerationStatus.NONE, CardGenerationStatus.FAILED),
+                any(),
+            )
+        } returns 0
         every { cardRepository.existsByConversationId(CONVERSATION_ID) } returns false
+
+        val exception = assertFailsWith<BusinessException> { service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약") }
+
+        assertEquals(ErrorCode.CARD_GENERATION_IN_PROGRESS, exception.errorCode)
+        verify(exactly = 0) { cardMessageGenerator.generate(any(), any()) }
+    }
+
+    @Test
+    fun `대사 생성에 실패하면 FAILED로 전이하고 CARD_GENERATION_FAILED`() {
+        every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
+        stubClaimSuccess()
         every { cardMessageGenerator.generate(any(), any()) } throws CardGenerationFailedException("실패")
+        stubMarkStatus(CardGenerationStatus.FAILED)
 
         val exception = assertFailsWith<BusinessException> { service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약") }
 
         assertEquals(ErrorCode.CARD_GENERATION_FAILED, exception.errorCode)
+        verify(exactly = 0) { conversationRepository.updateSummary(any(), any()) }
         verify(exactly = 0) { cardRepository.saveAndFlush(any()) }
+        verify(exactly = 1) {
+            conversationRepository.updateCardGenerationStatus(CONVERSATION_ID, CardGenerationStatus.FAILED, any(), any())
+        }
     }
 
     @Test
-    fun `동시 요청이 사전 검사를 함께 통과해도 유니크 위반은 CARD_ALREADY_EXISTS로 변환된다`() {
+    fun `선점 이후에도 저장 시점에 유니크 위반이 나면 DONE으로 맞추고 CARD_ALREADY_EXISTS로 변환된다`() {
         every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
-        every { cardRepository.existsByConversationId(CONVERSATION_ID) } returns false
+        stubClaimSuccess()
         every { cardMessageGenerator.generate(any(), any()) } returns CardMessageOutput("대사", 10, 0)
         every { cardRepository.saveAndFlush(any()) } throws DataIntegrityViolationException("duplicate")
+        every { cardRepository.existsByConversationId(CONVERSATION_ID) } returns true
+        stubMarkStatus(CardGenerationStatus.DONE)
 
         val exception = assertFailsWith<BusinessException> { service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약") }
 
         assertEquals(ErrorCode.CARD_ALREADY_EXISTS, exception.errorCode)
+        verify(exactly = 0) { conversationRepository.updateSummary(any(), any()) }
+        verify(exactly = 1) {
+            conversationRepository.updateCardGenerationStatus(CONVERSATION_ID, CardGenerationStatus.DONE, any(), any())
+        }
+    }
+
+    @Test
+    fun `저장 시점 유니크 위반인데 실제로는 카드가 없으면 FAILED로 전이하고 원래 예외를 그대로 던진다`() {
+        every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
+        stubClaimSuccess()
+        every { cardMessageGenerator.generate(any(), any()) } returns CardMessageOutput("대사", 10, 0)
+        val saveFailure = DataIntegrityViolationException("not-null constraint")
+        every { cardRepository.saveAndFlush(any()) } throws saveFailure
+        every { cardRepository.existsByConversationId(CONVERSATION_ID) } returns false
+        stubMarkStatus(CardGenerationStatus.FAILED)
+
+        val exception =
+            assertFailsWith<DataIntegrityViolationException> {
+                service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약")
+            }
+
+        assertEquals(saveFailure, exception)
+        verify(exactly = 0) { conversationRepository.updateSummary(any(), any()) }
+        verify(exactly = 1) {
+            conversationRepository.updateCardGenerationStatus(CONVERSATION_ID, CardGenerationStatus.FAILED, any(), any())
+        }
     }
 
     @Test

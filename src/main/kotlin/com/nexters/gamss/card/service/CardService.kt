@@ -2,6 +2,7 @@ package com.nexters.gamss.card.service
 
 import com.nexters.gamss.card.domain.Card
 import com.nexters.gamss.card.repository.CardRepository
+import com.nexters.gamss.conversation.domain.CardGenerationStatus
 import com.nexters.gamss.conversation.domain.Conversation
 import com.nexters.gamss.conversation.domain.ConversationStatus
 import com.nexters.gamss.conversation.repository.ConversationRepository
@@ -16,6 +17,7 @@ import com.nexters.gamss.tokenlimit.service.DailyTokenLimitService
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
@@ -33,10 +35,11 @@ class CardService(
     private val dailyTokenLimitService: DailyTokenLimitService,
 ) {
     /**
-     * 종료된 대화에 대해 대표 감정 캐릭터의 한 줄 대사를 생성해 카드를 저장한다.
-     * 외부 LLM 호출이 DB 커넥션을 오래 점유하지 않도록 이 메서드는 트랜잭션으로 감싸지 않는다 —
-     * 조회·검사는 각 리포지토리 호출 단위 트랜잭션으로 처리하고, 최종 저장은 conversation_id
-     * 유니크 제약으로 동시 생성의 원자성을 보장한다(사전 검사를 함께 통과한 경쟁 요청은 저장에서 걸러짐).
+     * 종료된 대화에 대해 대표 감정 캐릭터의 한 줄 대사를 생성해 카드를 저장한다. 외부 LLM 호출이 DB
+     * 커넥션을 오래 점유하지 않도록 트랜잭션으로 감싸지 않는다.
+     *
+     * LLM을 부르기 전에 [Conversation.cardGenerationStatus]를 CAS로 선점한다([Message.commentStatus]와
+     * 같은 패턴) — 동시 중복 요청은 선점에 실패해 LLM을 아예 호출하지 않고 즉시 반환된다.
      */
     fun createCard(
         memberId: Long,
@@ -48,13 +51,25 @@ class CardService(
         if (conversation.status != ConversationStatus.ENDED) {
             throw BusinessException(ErrorCode.CONVERSATION_NOT_ENDED)
         }
-        if (cardRepository.existsByConversationId(conversationId)) {
-            throw BusinessException(ErrorCode.CARD_ALREADY_EXISTS)
+
+        val claimed =
+            conversationRepository.updateCardGenerationStatus(
+                conversationId,
+                CardGenerationStatus.PENDING,
+                listOf(CardGenerationStatus.NONE, CardGenerationStatus.FAILED),
+                Instant.now(),
+            )
+        if (claimed == 0) {
+            if (cardRepository.existsByConversationId(conversationId)) {
+                throw BusinessException(ErrorCode.CARD_ALREADY_EXISTS)
+            }
+            throw BusinessException(ErrorCode.CARD_GENERATION_IN_PROGRESS)
         }
-        // 카드도 LLM 생성이므로 일일 토큰 상한을 적용한다(prod만). 초과 시 생성을 막는다.
         if (!dailyTokenLimitService.isWithinLimit(memberId)) {
+            markCardGenerationStatus(conversationId, CardGenerationStatus.FAILED)
             throw BusinessException(ErrorCode.DAILY_TOKEN_LIMIT_EXCEEDED)
         }
+
         val startedAt = System.currentTimeMillis()
         val output =
             try {
@@ -73,6 +88,7 @@ class CardService(
                     outputTokens = e.outputTokens,
                     failureReason = (e.cause ?: e).javaClass.simpleName,
                 )
+                markCardGenerationStatus(conversationId, CardGenerationStatus.FAILED)
                 throw BusinessException(ErrorCode.CARD_GENERATION_FAILED, e.message)
             }
         generationLogRecorder.record(
@@ -96,11 +112,34 @@ class CardService(
                 message = output.message,
                 conversationCreatedAt = conversation.createdAt,
             )
-        return try {
-            cardRepository.saveAndFlush(card)
-        } catch (e: DataIntegrityViolationException) {
-            throw BusinessException(ErrorCode.CARD_ALREADY_EXISTS, e.message)
-        }
+        val saved =
+            try {
+                cardRepository.saveAndFlush(card)
+            } catch (e: DataIntegrityViolationException) {
+                if (cardRepository.existsByConversationId(conversationId)) {
+                    // 카드는 이미 다른 요청이 저장을 마쳤다는 뜻이라 DONE으로 맞춰준다 — FAILED로 두면
+                    // 재선점 때마다 LLM을 다시 부르고도 매번 같은 유니크 제약에 걸려 낭비만 반복된다.
+                    markCardGenerationStatus(conversationId, CardGenerationStatus.DONE)
+                    throw BusinessException(ErrorCode.CARD_ALREADY_EXISTS, e.message)
+                }
+                markCardGenerationStatus(conversationId, CardGenerationStatus.FAILED)
+                throw e
+            }
+        conversationRepository.updateSummary(conversationId, summary)
+        markCardGenerationStatus(conversationId, CardGenerationStatus.DONE)
+        return saved
+    }
+
+    private fun markCardGenerationStatus(
+        conversationId: Long,
+        status: CardGenerationStatus,
+    ) {
+        conversationRepository.updateCardGenerationStatus(
+            conversationId,
+            status,
+            listOf(CardGenerationStatus.PENDING),
+            Instant.now(),
+        )
     }
 
     /** 날짜(KST 자정~자정)에 속한 카드를 조회한다. */
