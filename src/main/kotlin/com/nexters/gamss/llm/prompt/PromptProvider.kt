@@ -26,17 +26,26 @@ class PromptProvider {
         }
 
     fun buildUserContent(
-        pastSummary: String,
+        currentConversationSummary: String?,
+        pastSummaries: List<String>,
         diaryContent: String,
         characters: List<EmotionType>,
         tikitakaCount: Int,
         eongttungTopic: String?,
     ): String {
         val characterIds = characters.joinToString(", ") { PromptCharacterId.of(it).promptId }
-        val pastSummaryText = pastSummary.ifBlank { "기록 없음." }
+        // 개행을 공백으로 정규화한다 — 그대로 두면 "[오늘 일기]" 같은 섹션 헤더를 흉내 낸 텍스트가
+        // 요약에 섞여 들어올 때 프롬프트 구조 자체가 깨질 수 있다(클라이언트가 보낸 값이라 신뢰 불가).
+        val currentConversationSummaryText =
+            currentConversationSummary?.normalizeForPrompt()?.ifBlank { null } ?: "기록 없음."
+        val pastSummaryLines = pastSummaries.map { it.normalizeForPrompt() }.filter { it.isNotBlank() }
         val eongttungLine = eongttungTopic?.let { "- eongttung 소재: $it" }.orEmpty()
         return buildString {
-            appendLine("[과거] $pastSummaryText")
+            appendLine("[오늘 대화] $currentConversationSummaryText")
+            if (pastSummaryLines.isNotEmpty()) {
+                appendLine("[과거 대화 요약] (다른 날 다른 채팅방 기록. 오늘과 확실히 관련 있을 때만 참고)")
+                pastSummaryLines.forEach { appendLine("- $it") }
+            }
             appendLine("[오늘 일기]")
             appendLine(diaryContent)
             appendLine("[이번 응답 조건]")
@@ -46,6 +55,9 @@ class PromptProvider {
             append("위 조건대로 코멘트 + 티키타카를 JSON으로 출력해.")
         }
     }
+
+    /** 연속 공백(개행 포함)을 스페이스 하나로 뭉갠다 — 신뢰할 수 없는 입력이 프롬프트 섹션 구조를 흉내 내지 못하게 한다. */
+    private fun String.normalizeForPrompt(): String = replace(Regex("\\s+"), " ").trim()
 
     /** 유저가 [characterId] 캐릭터의 댓글에 단 답글에, 그 캐릭터만 다시 반응하게 하는 유저 콘텐츠. */
     fun buildReplyUserContent(
@@ -164,7 +176,8 @@ class PromptProvider {
             너는 감정일기 앱 '걱정인형의 방'의 캐릭터 생성기다.
             유저가 하루 한 줄 일기를 쓰면, 서로 개성이 뚜렷한 캐릭터들이 코멘트를 달고 서로 대댓글(티키타카)로 티격태격한다.
             - 유저는 '너'라고 부르거나 상황에 맞는 호칭을 붙인다(캐릭터 이름은 금지).
-            - 과거 맥락은 [과거]만 사실이다. [과거]에 없는 구체적 사건을 지어내지 마라. '기록 없음'이면 특정 과거를 언급하지 마라.
+            - 오늘 이 방에서 오간 대화 맥락은 [오늘 대화]만 사실이다. [오늘 대화]에 없는 구체적 사건을 지어내지 마라. '기록 없음'이면 특정 과거를 언급하지 마라.
+            - [과거 대화 요약]이 주어지면 다른 날 다른 채팅방에서 있었던 일이다. 오늘 일기·오늘 대화와 확실히 관련 있을 때만 자연스럽게 슬쩍 언급해라(예: "너 지난번에도 비슷한 얘기 했잖아"). 관련 없거나 애매하면 언급하지 말고 오늘 얘기에만 집중해라 — 매번 언급할 필요 없다. [과거 대화 요약]이 없으면 과거를 지어내지 마라.
             - 일기가 짧거나 모호해도 없는 원인·사건을 추측해 단정 짓지 마라("오늘 좀 피곤함"만 있는데 "밤새 게임한 거 아냐?" 금지). 소재가 부족하면 일반적 반응이나 성향으로 채워라.
             - eongttung(엉뚱)이 이번에 다룰 소재는 [이번 응답 조건]의 "eongttung 소재"로 주어진다 — 반드시 그 소재만 다루고 다른 소재로 바꾸지 마라(주어지지 않으면 등장하지 않는다).
             규칙:

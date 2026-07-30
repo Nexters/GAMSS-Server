@@ -1,4 +1,5 @@
 package com.nexters.gamss.llm.generation
+
 import com.google.genai.Client
 import com.google.genai.types.Content
 import com.google.genai.types.GenerateContentConfig
@@ -23,9 +24,9 @@ import org.springframework.stereotype.Component
  * 출력 계약이므로 별도 컴포넌트로 분리되어 있다 — 이 클래스는 그 계약을 SDK 호출에 실어 나르는
  * 역할만 한다.
  *
- * 과거 요약(pastSummary)은 아직 실제 소스가 없다 — 프론트에서 나중에 내려줄 예정이라 지금은 항상
- * 빈 값으로 호출된다([com.nexters.gamss.conversation.service.CommentGenerationService] 참고).
- * TODO: 프론트 연동되면 여기 지나가는 pastSummary를 실제 값으로 채우고 PR에 명시할 것.
+ * currentConversationSummary는 프론트가 매 요청마다 압축해 보내는 현재 채팅방의 임시 요약이다(서버에
+ * 저장하지 않음). pastSummaries는 서버가 같은 회원의 다른 채팅방에서 저장해둔 요약 중 일부를 무작위로
+ * 뽑아 넘기는 값이다([com.nexters.gamss.conversation.repository.ConversationRepository.findRandomPastSummaries]).
  */
 @Component
 class GeminiCommentGenerator(
@@ -38,7 +39,8 @@ class GeminiCommentGenerator(
     private val client: Client by lazy { Client.builder().apiKey(properties.apiKey).build() }
 
     override fun generateComment(
-        pastSummary: String,
+        currentConversationSummary: String?,
+        pastSummaries: List<String>,
         diaryContent: String,
         characters: List<EmotionType>,
         tikitakaCount: Int,
@@ -51,7 +53,14 @@ class GeminiCommentGenerator(
                 val settings = systemPromptResolver.resolve(PromptType.COMMENT)
                 client.models.generateContent(
                     settings.model,
-                    promptProvider.buildUserContent(pastSummary, diaryContent, characters, tikitakaCount, eongttungTopic),
+                    promptProvider.buildUserContent(
+                        currentConversationSummary,
+                        pastSummaries,
+                        diaryContent,
+                        characters,
+                        tikitakaCount,
+                        eongttungTopic,
+                    ),
                     buildConfig(settings.systemPrompt, commentFeedSchema()),
                 )
             } catch (e: Exception) {

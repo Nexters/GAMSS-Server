@@ -29,7 +29,8 @@ class FakeCommentGenerator : CommentGenerator {
     var shouldFail = false
 
     override fun generateComment(
-        pastSummary: String,
+        currentConversationSummary: String?,
+        pastSummaries: List<String>,
         diaryContent: String,
         characters: List<EmotionType>,
         tikitakaCount: Int,

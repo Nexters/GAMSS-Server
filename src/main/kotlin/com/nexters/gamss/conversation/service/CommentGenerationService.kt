@@ -53,22 +53,26 @@ class CommentGenerationService(
     fun generateFor(
         memberId: Long,
         message: Message,
+        currentConversationSummary: String?,
     ): GenerationResult {
         limitExceededOrNull(memberId)?.let { return it }
         if (message.repliesToMessageId == null) {
-            return generateCommentsInternal(memberId, message, message.id)
+            return generateCommentsInternal(memberId, message, message.id, currentConversationSummary)
         }
         return generateReplyInternal(memberId, message, message.id)
     }
 
-    /** 실패 후 수동 재시도용(멱등). [messageId]가 본인 소유의 일기(사용자) 메시지인지 새로 검증한다. */
+    /**
+     * 실패 후 수동 재시도용(멱등). [messageId]가 본인 소유의 일기(사용자) 메시지인지 새로 검증한다.
+     * 이 엔드포인트는 요청 바디가 없어 프론트의 임시 요약을 다시 받을 수 없으므로 빈 값으로 재생성한다.
+     */
     fun generateComments(
         memberId: Long,
         messageId: Long,
     ): GenerationResult {
         val rootMessage = getOwnedRootMessage(memberId, messageId)
         limitExceededOrNull(memberId)?.let { return it }
-        return generateCommentsInternal(memberId, rootMessage, messageId)
+        return generateCommentsInternal(memberId, rootMessage, messageId, currentConversationSummary = "")
     }
 
     /** 실패 후 수동 재시도용(멱등). [messageId]가 본인 소유의 답글(사용자) 메시지인지 새로 검증한다. */
@@ -97,6 +101,7 @@ class CommentGenerationService(
         memberId: Long,
         rootMessage: Message,
         messageId: Long,
+        currentConversationSummary: String? = null,
     ): GenerationResult {
         val claimed =
             messageRepository.updateCommentStatus(
@@ -110,7 +115,9 @@ class CommentGenerationService(
         }
 
         return try {
-            val output = generateWithRetry(memberId, rootMessage.conversationId, rootMessage.content)
+            val pastSummaries = conversationRepository.findRandomPastSummaries(memberId, rootMessage.conversationId)
+            val output =
+                generateWithRetry(memberId, rootMessage.conversationId, rootMessage.content, currentConversationSummary, pastSummaries)
             val saved = commentPersistenceService.saveFeed(rootMessage.conversationId, messageId, output.feed)
             GenerationResult(CommentGenerationOutcome.DONE, saved, output.usedTokens)
         } catch (e: Exception) {
@@ -136,8 +143,9 @@ class CommentGenerationService(
     ): GenerationResult {
         val characterMessage =
             messageRepository
-                .findById(userReplyMessage.repliesToMessageId ?: throw BusinessException(ErrorCode.INVALID_COMMENT_TARGET))
-                .orElseThrow { BusinessException(ErrorCode.MESSAGE_NOT_FOUND) }
+                .findById(
+                    userReplyMessage.repliesToMessageId ?: throw BusinessException(ErrorCode.INVALID_COMMENT_TARGET),
+                ).orElseThrow { BusinessException(ErrorCode.MESSAGE_NOT_FOUND) }
                 .also { ensureSameConversation(it, userReplyMessage.conversationId) }
         if (characterMessage.senderType != SenderType.CHARACTER) {
             throw BusinessException(ErrorCode.INVALID_COMMENT_TARGET)
@@ -284,19 +292,26 @@ class CommentGenerationService(
         memberId: Long,
         conversationId: Long,
         diaryContent: String,
+        currentConversationSummary: String? = null,
+        pastSummaries: List<String> = emptyList(),
     ): CommentGenerationOutput {
         val characters = characterSelector.select()
         val tikitakaCount = characterSelector.selectTikitakaCount()
         val eongttungTopic = if (EmotionType.QUIRKY in characters) eongttungTopicSelector.select() else null
-        // TODO: 프론트에서 과거 요약을 내려주기 전까지는 항상 빈 값으로 호출한다.
-        val pastSummary = ""
 
         val startedAt = System.currentTimeMillis()
         var lastError: CommentGenerationFailedException? = null
         repeat(LlmRetryPolicy.MAX_ATTEMPTS) { attempt ->
             try {
                 val output =
-                    commentGenerator.generateComment(pastSummary, diaryContent, characters, tikitakaCount, eongttungTopic)
+                    commentGenerator.generateComment(
+                        currentConversationSummary,
+                        pastSummaries,
+                        diaryContent,
+                        characters,
+                        tikitakaCount,
+                        eongttungTopic,
+                    )
                 try {
                     commentFeedValidator.validate(output.feed, characters, tikitakaCount)
                 } catch (e: CommentGenerationFailedException) {

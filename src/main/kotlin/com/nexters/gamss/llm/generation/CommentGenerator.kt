@@ -12,7 +12,8 @@ import com.nexters.gamss.emotion.domain.EmotionType
  */
 interface CommentGenerator {
     fun generateComment(
-        pastSummary: String,
+        currentConversationSummary: String?,
+        pastSummaries: List<String>,
         diaryContent: String,
         characters: List<EmotionType>,
         tikitakaCount: Int,

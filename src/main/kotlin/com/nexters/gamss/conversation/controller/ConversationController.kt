@@ -70,7 +70,7 @@ class ConversationController(
                 content = request.content,
                 repliesToMessageId = request.repliesToMessageId,
             )
-        val result = commentGenerationService.generateFor(principal.memberId, message)
+        val result = commentGenerationService.generateFor(principal.memberId, message, request.currentConversationSummary)
         return ApiResponse.success(SaveMessageResponse.from(message, result))
     }
 
@@ -192,7 +192,8 @@ class ConversationController(
     ): ApiResponse<CommentGenerationResponse> {
         val result = commentGenerationService.generateComments(principal.memberId, checkNotNull(request.messageId))
         val status = result.outcome.toResponseStatus()
-        val comments = if (status == CommentGenerationStatus.DONE) result.messages.map { MessageResponse.from(it) } else null
+        val comments =
+            if (status == CommentGenerationStatus.DONE) result.messages.map { MessageResponse.from(it) } else null
         return ApiResponse.success(CommentGenerationResponse(status, comments, result.usedTokens))
     }
 
@@ -226,7 +227,8 @@ class ConversationController(
     ): ApiResponse<ReplyGenerationResponse> {
         val result = commentGenerationService.generateReplyComment(principal.memberId, messageId)
         val status = result.outcome.toResponseStatus()
-        val comment = if (status == CommentGenerationStatus.DONE) MessageResponse.from(result.messages.single()) else null
+        val comment =
+            if (status == CommentGenerationStatus.DONE) MessageResponse.from(result.messages.single()) else null
         return ApiResponse.success(ReplyGenerationResponse(status, comment, result.usedTokens))
     }
 
