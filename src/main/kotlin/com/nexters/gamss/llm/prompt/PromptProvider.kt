@@ -28,7 +28,8 @@ class PromptProvider {
     fun buildUserContent(context: CommentPromptContext): String {
         val characterIds = context.characters.joinToString(", ") { PromptCharacterId.of(it).promptId }
         // 개행을 공백으로 정규화한다 — 그대로 두면 "[오늘 일기]" 같은 섹션 헤더를 흉내 낸 텍스트가
-        // 요약에 섞여 들어올 때 프롬프트 구조 자체가 깨질 수 있다(클라이언트가 보낸 값이라 신뢰 불가).
+        // 유저 입력(일기·요약 등)에 섞여 들어올 때 프롬프트 구조 자체가 깨질 수 있다(신뢰 불가한 입력이라
+        // diaryContent·userReply·characterComment·카드 summary까지 이 파일의 모든 유저/LLM 유래 텍스트에 적용한다).
         val currentConversationSummaryText =
             context.currentConversationSummary?.normalizeForPrompt()?.ifBlank { null } ?: "기록 없음."
         val pastSummaryLines = context.pastSummaries.lines
@@ -40,7 +41,7 @@ class PromptProvider {
                 pastSummaryLines.forEach { appendLine("- $it") }
             }
             appendLine("[오늘 일기]")
-            appendLine(context.diaryContent)
+            appendLine(context.diaryContent.normalizeForPrompt())
             appendLine("[이번 응답 조건]")
             appendLine("- 등장 캐릭터(전원 포함, 다른 캐릭터 추가 금지): $characterIds")
             appendLine("- tikitaka 개수: 정확히 ${context.tikitakaCount}개")
@@ -58,13 +59,13 @@ class PromptProvider {
     ): String =
         buildString {
             appendLine("[오늘 일기]")
-            appendLine(diaryContent)
+            appendLine(diaryContent.normalizeForPrompt())
             appendLine("[이번 응답 조건]")
             appendLine("- 응답할 캐릭터: $characterId (반드시 이 캐릭터로만 응답, 다른 캐릭터로 바꾸지 마라)")
             appendLine("[네가 방금 남긴 댓글]")
-            appendLine(characterComment)
+            appendLine(characterComment.normalizeForPrompt())
             appendLine("[유저의 답글]")
-            appendLine(userReply)
+            appendLine(userReply.normalizeForPrompt())
             append("위 유저 답글에 대해 네 캐릭터 말투로 답글을 JSON으로 출력해.")
         }
 
@@ -77,7 +78,7 @@ class PromptProvider {
         return buildString {
             appendLine("[대표 감정 캐릭터] $characterId")
             appendLine("[오늘 대화 요약]")
-            appendLine(summary)
+            appendLine(summary.normalizeForPrompt())
             append("위 캐릭터가 유저를 대신해 불특정 다수에게 남기는, 이 하루를 대표하는 카드 한 줄을 JSON으로 출력해.")
         }
     }
