@@ -102,7 +102,7 @@ class CommentGenerationService(
         memberId: Long,
         rootMessage: Message,
         messageId: Long,
-        currentConversationSummary: String? = null,
+        currentConversationSummary: String?,
     ): GenerationResult {
         val claimed =
             messageRepository.updateCommentStatus(
