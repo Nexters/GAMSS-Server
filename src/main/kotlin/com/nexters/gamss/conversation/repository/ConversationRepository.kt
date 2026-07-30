@@ -107,7 +107,7 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
             "select recent.summary from (" +
                 "select summary from conversations " +
                 "where member_id = :memberId and id <> :excludeConversationId " +
-                "and summary is not null and status <> 'DELETED' " +
+                "and summary is not null and status <> :excludedStatus " +
                 "order by created_at desc, id desc limit :poolSize" +
                 ") recent order by rand() limit :pickCount",
         nativeQuery = true,
@@ -117,5 +117,9 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
         @Param("excludeConversationId") excludeConversationId: Long,
         @Param("poolSize") poolSize: Int,
         @Param("pickCount") pickCount: Int,
+        // native query라 엔티티의 @Enumerated(STRING) 매핑이 적용되지 않는다 — enum을 그대로 바인딩하면
+        // Hibernate가 문자열이 아닌 다른 방식으로 바인딩해 이 필터가 무력화된다(Testcontainers 테스트로 확인).
+        // 그래서 String으로 받되 값의 출처는 ConversationStatus.DELETED로 고정한다.
+        @Param("excludedStatus") excludedStatus: String = ConversationStatus.DELETED.name,
     ): List<String>
 }

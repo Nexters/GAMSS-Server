@@ -113,7 +113,7 @@ class CommentGenerationServiceTest {
         every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
         stubClaimSuccess()
         every {
-            commentGenerator.generateComment("", emptyList(), message.content, characters, tikitakaCount, null)
+            commentGenerator.generateComment(null, emptyList(), message.content, characters, tikitakaCount, null)
         } returns CommentGenerationOutput(feed(), 123, 0)
         every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } returns Unit
         val savedMessages =
@@ -147,7 +147,7 @@ class CommentGenerationServiceTest {
             )
         } returns pastSummaries
         every {
-            commentGenerator.generateComment("", pastSummaries, message.content, characters, tikitakaCount, null)
+            commentGenerator.generateComment(null, pastSummaries, message.content, characters, tikitakaCount, null)
         } returns CommentGenerationOutput(feed(), 123, 0)
         every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } returns Unit
         every { commentPersistenceService.saveFeed(10L, 1L, feed()) } returns emptyList()
@@ -156,7 +156,7 @@ class CommentGenerationServiceTest {
 
         assertEquals(CommentGenerationOutcome.DONE, result.outcome)
         verify(exactly = 1) {
-            commentGenerator.generateComment("", pastSummaries, message.content, characters, tikitakaCount, null)
+            commentGenerator.generateComment(null, pastSummaries, message.content, characters, tikitakaCount, null)
         }
     }
 
@@ -280,7 +280,7 @@ class CommentGenerationServiceTest {
                 tikitaka = listOf(TikitakaDraft(EmotionType.JOY, EmotionType.QUIRKY, "티키타카")),
             )
         every {
-            commentGenerator.generateComment("", emptyList(), message.content, charactersWithQuirky, 1, "소재")
+            commentGenerator.generateComment(null, emptyList(), message.content, charactersWithQuirky, 1, "소재")
         } returns CommentGenerationOutput(quirkyFeed, 456, 0)
         every { commentFeedValidator.validate(quirkyFeed, charactersWithQuirky, 1) } returns Unit
         every { commentPersistenceService.saveFeed(10L, 1L, quirkyFeed) } returns emptyList()
