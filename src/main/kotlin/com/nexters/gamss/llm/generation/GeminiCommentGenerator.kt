@@ -11,6 +11,7 @@ import com.nexters.gamss.llm.config.GeminiProperties
 import com.nexters.gamss.llm.error.CommentGenerationFailedException
 import com.nexters.gamss.llm.parsing.CommentFeedJsonParser
 import com.nexters.gamss.llm.parsing.ReplyJsonParser
+import com.nexters.gamss.llm.prompt.PastSummaries
 import com.nexters.gamss.llm.prompt.PromptCharacterId
 import com.nexters.gamss.llm.prompt.PromptProvider
 import com.nexters.gamss.llm.prompt.PromptType
@@ -40,7 +41,7 @@ class GeminiCommentGenerator(
 
     override fun generateComment(
         currentConversationSummary: String?,
-        pastSummaries: List<String>,
+        pastSummaries: PastSummaries,
         diaryContent: String,
         characters: List<EmotionType>,
         tikitakaCount: Int,

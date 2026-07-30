@@ -27,7 +27,7 @@ class PromptProvider {
 
     fun buildUserContent(
         currentConversationSummary: String?,
-        pastSummaries: List<String>,
+        pastSummaries: PastSummaries,
         diaryContent: String,
         characters: List<EmotionType>,
         tikitakaCount: Int,
@@ -38,7 +38,7 @@ class PromptProvider {
         // 요약에 섞여 들어올 때 프롬프트 구조 자체가 깨질 수 있다(클라이언트가 보낸 값이라 신뢰 불가).
         val currentConversationSummaryText =
             currentConversationSummary?.normalizeForPrompt()?.ifBlank { null } ?: "기록 없음."
-        val pastSummaryLines = pastSummaries.map { it.normalizeForPrompt() }.filter { it.isNotBlank() }
+        val pastSummaryLines = pastSummaries.lines
         val eongttungLine = eongttungTopic?.let { "- eongttung 소재: $it" }.orEmpty()
         return buildString {
             appendLine("[오늘 대화] $currentConversationSummaryText")
@@ -55,9 +55,6 @@ class PromptProvider {
             append("위 조건대로 코멘트 + 티키타카를 JSON으로 출력해.")
         }
     }
-
-    /** 연속 공백(개행 포함)을 스페이스 하나로 뭉갠다 — 신뢰할 수 없는 입력이 프롬프트 섹션 구조를 흉내 내지 못하게 한다. */
-    private fun String.normalizeForPrompt(): String = replace(Regex("\\s+"), " ").trim()
 
     /** 유저가 [characterId] 캐릭터의 댓글에 단 답글에, 그 캐릭터만 다시 반응하게 하는 유저 콘텐츠. */
     fun buildReplyUserContent(

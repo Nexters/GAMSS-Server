@@ -1,6 +1,7 @@
 package com.nexters.gamss.llm.generation
 
 import com.nexters.gamss.emotion.domain.EmotionType
+import com.nexters.gamss.llm.prompt.PastSummaries
 
 /**
  * 일기 내용과 이번 생성 조건(등장 캐릭터·티키타카 개수·엉뚱이 소재)으로 댓글 피드를 생성하거나,
@@ -13,7 +14,7 @@ import com.nexters.gamss.emotion.domain.EmotionType
 interface CommentGenerator {
     fun generateComment(
         currentConversationSummary: String?,
-        pastSummaries: List<String>,
+        pastSummaries: PastSummaries,
         diaryContent: String,
         characters: List<EmotionType>,
         tikitakaCount: Int,

@@ -8,6 +8,7 @@ import com.nexters.gamss.llm.generation.ReplyGenerationOutput
 import com.nexters.gamss.llm.parsing.CommentDraft
 import com.nexters.gamss.llm.parsing.CommentFeed
 import com.nexters.gamss.llm.parsing.TikitakaDraft
+import com.nexters.gamss.llm.prompt.PastSummaries
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Primary
@@ -30,7 +31,7 @@ class FakeCommentGenerator : CommentGenerator {
 
     override fun generateComment(
         currentConversationSummary: String?,
-        pastSummaries: List<String>,
+        pastSummaries: PastSummaries,
         diaryContent: String,
         characters: List<EmotionType>,
         tikitakaCount: Int,

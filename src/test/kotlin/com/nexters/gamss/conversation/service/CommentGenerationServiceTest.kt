@@ -17,6 +17,7 @@ import com.nexters.gamss.llm.parsing.CommentDraft
 import com.nexters.gamss.llm.parsing.CommentFeed
 import com.nexters.gamss.llm.parsing.CommentFeedValidator
 import com.nexters.gamss.llm.parsing.TikitakaDraft
+import com.nexters.gamss.llm.prompt.PastSummaries
 import com.nexters.gamss.llm.selection.CharacterSelector
 import com.nexters.gamss.llm.selection.EongttungTopicSelector
 import com.nexters.gamss.llm.selection.PastSummaryPolicy
@@ -113,7 +114,7 @@ class CommentGenerationServiceTest {
         every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
         stubClaimSuccess()
         every {
-            commentGenerator.generateComment(null, emptyList(), message.content, characters, tikitakaCount, null)
+            commentGenerator.generateComment(null, PastSummaries.of(emptyList()), message.content, characters, tikitakaCount, null)
         } returns CommentGenerationOutput(feed(), 123, 0)
         every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } returns Unit
         val savedMessages =
@@ -147,7 +148,7 @@ class CommentGenerationServiceTest {
             )
         } returns pastSummaries
         every {
-            commentGenerator.generateComment(null, pastSummaries, message.content, characters, tikitakaCount, null)
+            commentGenerator.generateComment(null, PastSummaries.of(pastSummaries), message.content, characters, tikitakaCount, null)
         } returns CommentGenerationOutput(feed(), 123, 0)
         every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } returns Unit
         every { commentPersistenceService.saveFeed(10L, 1L, feed()) } returns emptyList()
@@ -156,7 +157,7 @@ class CommentGenerationServiceTest {
 
         assertEquals(CommentGenerationOutcome.DONE, result.outcome)
         verify(exactly = 1) {
-            commentGenerator.generateComment(null, pastSummaries, message.content, characters, tikitakaCount, null)
+            commentGenerator.generateComment(null, PastSummaries.of(pastSummaries), message.content, characters, tikitakaCount, null)
         }
     }
 
@@ -280,7 +281,7 @@ class CommentGenerationServiceTest {
                 tikitaka = listOf(TikitakaDraft(EmotionType.JOY, EmotionType.QUIRKY, "티키타카")),
             )
         every {
-            commentGenerator.generateComment(null, emptyList(), message.content, charactersWithQuirky, 1, "소재")
+            commentGenerator.generateComment(null, PastSummaries.of(emptyList()), message.content, charactersWithQuirky, 1, "소재")
         } returns CommentGenerationOutput(quirkyFeed, 456, 0)
         every { commentFeedValidator.validate(quirkyFeed, charactersWithQuirky, 1) } returns Unit
         every { commentPersistenceService.saveFeed(10L, 1L, quirkyFeed) } returns emptyList()
@@ -516,7 +517,7 @@ class CommentGenerationServiceTest {
         val message = rootMessage().also { ReflectionTestUtils.setField(it, "id", 1L) }
         stubClaimSuccess()
         every {
-            commentGenerator.generateComment(null, emptyList(), message.content, characters, tikitakaCount, null)
+            commentGenerator.generateComment(null, PastSummaries.of(emptyList()), message.content, characters, tikitakaCount, null)
         } returns CommentGenerationOutput(feed(), 123, 0)
         every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } returns Unit
         val savedMessages =
@@ -536,7 +537,14 @@ class CommentGenerationServiceTest {
         val message = rootMessage().also { ReflectionTestUtils.setField(it, "id", 1L) }
         stubClaimSuccess()
         every {
-            commentGenerator.generateComment("현재 요약", emptyList(), message.content, characters, tikitakaCount, null)
+            commentGenerator.generateComment(
+                "현재 요약",
+                PastSummaries.of(emptyList()),
+                message.content,
+                characters,
+                tikitakaCount,
+                null,
+            )
         } returns CommentGenerationOutput(feed(), 123, 0)
         every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } returns Unit
         every { commentPersistenceService.saveFeed(10L, 1L, feed()) } returns emptyList()
@@ -545,7 +553,14 @@ class CommentGenerationServiceTest {
 
         assertEquals(CommentGenerationOutcome.DONE, result.outcome)
         verify(exactly = 1) {
-            commentGenerator.generateComment("현재 요약", emptyList(), message.content, characters, tikitakaCount, null)
+            commentGenerator.generateComment(
+                "현재 요약",
+                PastSummaries.of(emptyList()),
+                message.content,
+                characters,
+                tikitakaCount,
+                null,
+            )
         }
     }
 
