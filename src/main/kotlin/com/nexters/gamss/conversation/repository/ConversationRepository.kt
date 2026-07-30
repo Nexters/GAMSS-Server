@@ -115,7 +115,7 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
     fun findRandomPastSummaries(
         @Param("memberId") memberId: Long,
         @Param("excludeConversationId") excludeConversationId: Long,
-        @Param("poolSize") poolSize: Int = 5,
-        @Param("pickCount") pickCount: Int = 2,
+        @Param("poolSize") poolSize: Int,
+        @Param("pickCount") pickCount: Int,
     ): List<String>
 }

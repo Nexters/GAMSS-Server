@@ -19,6 +19,7 @@ import com.nexters.gamss.llm.parsing.CommentFeedValidator
 import com.nexters.gamss.llm.parsing.TikitakaDraft
 import com.nexters.gamss.llm.selection.CharacterSelector
 import com.nexters.gamss.llm.selection.EongttungTopicSelector
+import com.nexters.gamss.llm.selection.PastSummarySelectionPolicy
 import com.nexters.gamss.monitoring.service.GenerationLogRecorder
 import com.nexters.gamss.tokenlimit.service.DailyTokenLimitService
 import io.mockk.every
@@ -95,7 +96,14 @@ class CommentGenerationServiceTest {
         } returns 1
         every { characterSelector.select() } returns characters
         every { characterSelector.selectTikitakaCount() } returns tikitakaCount
-        every { conversationRepository.findRandomPastSummaries(any(), any()) } returns emptyList()
+        every {
+            conversationRepository.findRandomPastSummaries(
+                any(),
+                any(),
+                PastSummarySelectionPolicy.POOL_SIZE,
+                PastSummarySelectionPolicy.PICK_COUNT,
+            )
+        } returns emptyList()
     }
 
     @Test
@@ -130,7 +138,14 @@ class CommentGenerationServiceTest {
         } returns 1
         every { characterSelector.select() } returns characters
         every { characterSelector.selectTikitakaCount() } returns tikitakaCount
-        every { conversationRepository.findRandomPastSummaries(1L, 10L) } returns pastSummaries
+        every {
+            conversationRepository.findRandomPastSummaries(
+                1L,
+                10L,
+                PastSummarySelectionPolicy.POOL_SIZE,
+                PastSummarySelectionPolicy.PICK_COUNT,
+            )
+        } returns pastSummaries
         every {
             commentGenerator.generateComment("", pastSummaries, message.content, characters, tikitakaCount, null)
         } returns CommentGenerationOutput(feed(), 123, 0)
@@ -251,7 +266,14 @@ class CommentGenerationServiceTest {
         every { characterSelector.select() } returns charactersWithQuirky
         every { characterSelector.selectTikitakaCount() } returns 1
         every { eongttungTopicSelector.select() } returns "소재"
-        every { conversationRepository.findRandomPastSummaries(any(), any()) } returns emptyList()
+        every {
+            conversationRepository.findRandomPastSummaries(
+                any(),
+                any(),
+                PastSummarySelectionPolicy.POOL_SIZE,
+                PastSummarySelectionPolicy.PICK_COUNT,
+            )
+        } returns emptyList()
         val quirkyFeed =
             CommentFeed(
                 comments = charactersWithQuirky.map { CommentDraft(it, "댓글-$it") },

@@ -17,6 +17,7 @@ import com.nexters.gamss.llm.parsing.CommentFeedValidator
 import com.nexters.gamss.llm.prompt.PromptCharacterId
 import com.nexters.gamss.llm.selection.CharacterSelector
 import com.nexters.gamss.llm.selection.EongttungTopicSelector
+import com.nexters.gamss.llm.selection.PastSummarySelectionPolicy
 import com.nexters.gamss.monitoring.domain.GenerationType
 import com.nexters.gamss.monitoring.service.GenerationLogRecorder
 import com.nexters.gamss.tokenlimit.service.DailyTokenLimitService
@@ -115,7 +116,13 @@ class CommentGenerationService(
         }
 
         return try {
-            val pastSummaries = conversationRepository.findRandomPastSummaries(memberId, rootMessage.conversationId)
+            val pastSummaries =
+                conversationRepository.findRandomPastSummaries(
+                    memberId,
+                    rootMessage.conversationId,
+                    PastSummarySelectionPolicy.POOL_SIZE,
+                    PastSummarySelectionPolicy.PICK_COUNT,
+                )
             val output =
                 generateWithRetry(memberId, rootMessage.conversationId, rootMessage.content, currentConversationSummary, pastSummaries)
             val saved = commentPersistenceService.saveFeed(rootMessage.conversationId, messageId, output.feed)
