@@ -6,7 +6,7 @@ package com.nexters.gamss.llm.selection
  * [com.nexters.gamss.conversation.repository.ConversationRepository.findRandomPastSummaries]의
  * SQL(`RAND() LIMIT`)이 수행하고, 여기는 그 개수만 정한다.
  */
-internal object PastSummarySelectionPolicy {
+internal object PastSummaryPolicy {
     const val POOL_SIZE = 5
     const val PICK_COUNT = 2
 }

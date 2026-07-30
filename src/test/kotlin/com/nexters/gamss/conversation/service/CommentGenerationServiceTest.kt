@@ -19,7 +19,7 @@ import com.nexters.gamss.llm.parsing.CommentFeedValidator
 import com.nexters.gamss.llm.parsing.TikitakaDraft
 import com.nexters.gamss.llm.selection.CharacterSelector
 import com.nexters.gamss.llm.selection.EongttungTopicSelector
-import com.nexters.gamss.llm.selection.PastSummarySelectionPolicy
+import com.nexters.gamss.llm.selection.PastSummaryPolicy
 import com.nexters.gamss.monitoring.service.GenerationLogRecorder
 import com.nexters.gamss.tokenlimit.service.DailyTokenLimitService
 import io.mockk.every
@@ -100,8 +100,8 @@ class CommentGenerationServiceTest {
             conversationRepository.findRandomPastSummaries(
                 any(),
                 any(),
-                PastSummarySelectionPolicy.POOL_SIZE,
-                PastSummarySelectionPolicy.PICK_COUNT,
+                PastSummaryPolicy.POOL_SIZE,
+                PastSummaryPolicy.PICK_COUNT,
             )
         } returns emptyList()
     }
@@ -142,8 +142,8 @@ class CommentGenerationServiceTest {
             conversationRepository.findRandomPastSummaries(
                 1L,
                 10L,
-                PastSummarySelectionPolicy.POOL_SIZE,
-                PastSummarySelectionPolicy.PICK_COUNT,
+                PastSummaryPolicy.POOL_SIZE,
+                PastSummaryPolicy.PICK_COUNT,
             )
         } returns pastSummaries
         every {
@@ -270,8 +270,8 @@ class CommentGenerationServiceTest {
             conversationRepository.findRandomPastSummaries(
                 any(),
                 any(),
-                PastSummarySelectionPolicy.POOL_SIZE,
-                PastSummarySelectionPolicy.PICK_COUNT,
+                PastSummaryPolicy.POOL_SIZE,
+                PastSummaryPolicy.PICK_COUNT,
             )
         } returns emptyList()
         val quirkyFeed =
