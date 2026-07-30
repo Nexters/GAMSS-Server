@@ -17,6 +17,7 @@ import com.nexters.gamss.llm.parsing.CommentDraft
 import com.nexters.gamss.llm.parsing.CommentFeed
 import com.nexters.gamss.llm.parsing.CommentFeedValidator
 import com.nexters.gamss.llm.parsing.TikitakaDraft
+import com.nexters.gamss.llm.prompt.CommentPromptContext
 import com.nexters.gamss.llm.prompt.PastSummaries
 import com.nexters.gamss.llm.selection.CharacterSelector
 import com.nexters.gamss.llm.selection.EongttungTopicSelector
@@ -91,6 +92,23 @@ class CommentGenerationServiceTest {
             tikitaka = listOf(TikitakaDraft(EmotionType.JOY, EmotionType.WARM, "티키타카")),
         )
 
+    private fun promptContext(
+        currentConversationSummary: String? = null,
+        pastSummaries: List<String> = emptyList(),
+        diaryContent: String,
+        characters: List<EmotionType> = this.characters,
+        tikitakaCount: Int = this.tikitakaCount,
+        eongttungTopic: String? = null,
+    ): CommentPromptContext =
+        CommentPromptContext(
+            currentConversationSummary,
+            PastSummaries.of(pastSummaries),
+            diaryContent,
+            characters,
+            tikitakaCount,
+            eongttungTopic,
+        )
+
     private fun stubClaimSuccess() {
         every {
             messageRepository.updateCommentStatus(1L, CommentStatus.PENDING, listOf(CommentStatus.NONE, CommentStatus.FAILED), any())
@@ -114,7 +132,7 @@ class CommentGenerationServiceTest {
         every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
         stubClaimSuccess()
         every {
-            commentGenerator.generateComment(null, PastSummaries.of(emptyList()), message.content, characters, tikitakaCount, null)
+            commentGenerator.generateComment(promptContext(diaryContent = message.content))
         } returns CommentGenerationOutput(feed(), 123, 0)
         every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } returns Unit
         val savedMessages =
@@ -148,7 +166,7 @@ class CommentGenerationServiceTest {
             )
         } returns pastSummaries
         every {
-            commentGenerator.generateComment(null, PastSummaries.of(pastSummaries), message.content, characters, tikitakaCount, null)
+            commentGenerator.generateComment(promptContext(pastSummaries = pastSummaries, diaryContent = message.content))
         } returns CommentGenerationOutput(feed(), 123, 0)
         every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } returns Unit
         every { commentPersistenceService.saveFeed(10L, 1L, feed()) } returns emptyList()
@@ -157,7 +175,7 @@ class CommentGenerationServiceTest {
 
         assertEquals(CommentGenerationOutcome.DONE, result.outcome)
         verify(exactly = 1) {
-            commentGenerator.generateComment(null, PastSummaries.of(pastSummaries), message.content, characters, tikitakaCount, null)
+            commentGenerator.generateComment(promptContext(pastSummaries = pastSummaries, diaryContent = message.content))
         }
     }
 
@@ -174,7 +192,7 @@ class CommentGenerationServiceTest {
 
         assertEquals(CommentGenerationOutcome.GENERATING, result.outcome)
         assertEquals(null, result.usedTokens)
-        verify(exactly = 0) { commentGenerator.generateComment(any(), any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { commentGenerator.generateComment(any()) }
     }
 
     @Test
@@ -208,7 +226,7 @@ class CommentGenerationServiceTest {
         every { messageRepository.findById(1L) } returns Optional.of(message)
         every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
         stubClaimSuccess()
-        every { commentGenerator.generateComment(any(), any(), any(), any(), any(), any()) } throws
+        every { commentGenerator.generateComment(any()) } throws
             CommentGenerationFailedException("LLM 호출 실패")
         every { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) } returns 1
 
@@ -216,7 +234,7 @@ class CommentGenerationServiceTest {
 
         assertEquals(CommentGenerationOutcome.FAILED, result.outcome)
         assertEquals(null, result.usedTokens)
-        verify(exactly = 2) { commentGenerator.generateComment(any(), any(), any(), any(), any(), any()) }
+        verify(exactly = 2) { commentGenerator.generateComment(any()) }
         verify(exactly = 1) { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) }
     }
 
@@ -226,7 +244,7 @@ class CommentGenerationServiceTest {
         every { messageRepository.findById(1L) } returns Optional.of(message)
         every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
         stubClaimSuccess()
-        every { commentGenerator.generateComment(any(), any(), any(), any(), any(), any()) } returns CommentGenerationOutput(feed(), 123, 0)
+        every { commentGenerator.generateComment(any()) } returns CommentGenerationOutput(feed(), 123, 0)
         every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } returns Unit
         every { commentPersistenceService.saveFeed(10L, 1L, feed()) } throws RuntimeException("DB 제약조건 위반")
         every { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) } returns 1
@@ -244,7 +262,7 @@ class CommentGenerationServiceTest {
         every { messageRepository.findById(1L) } returns Optional.of(message)
         every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
         stubClaimSuccess()
-        every { commentGenerator.generateComment(any(), any(), any(), any(), any(), any()) } returns CommentGenerationOutput(feed(), 123, 0)
+        every { commentGenerator.generateComment(any()) } returns CommentGenerationOutput(feed(), 123, 0)
         every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } returns Unit
         every { commentPersistenceService.saveFeed(10L, 1L, feed()) } throws BusinessException(ErrorCode.CONVERSATION_NOT_FOUND)
         every { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) } returns 1
@@ -281,7 +299,9 @@ class CommentGenerationServiceTest {
                 tikitaka = listOf(TikitakaDraft(EmotionType.JOY, EmotionType.QUIRKY, "티키타카")),
             )
         every {
-            commentGenerator.generateComment(null, PastSummaries.of(emptyList()), message.content, charactersWithQuirky, 1, "소재")
+            commentGenerator.generateComment(
+                promptContext(diaryContent = message.content, characters = charactersWithQuirky, tikitakaCount = 1, eongttungTopic = "소재"),
+            )
         } returns CommentGenerationOutput(quirkyFeed, 456, 0)
         every { commentFeedValidator.validate(quirkyFeed, charactersWithQuirky, 1) } returns Unit
         every { commentPersistenceService.saveFeed(10L, 1L, quirkyFeed) } returns emptyList()
@@ -337,7 +357,7 @@ class CommentGenerationServiceTest {
 
         assertEquals(ErrorCode.CONVERSATION_ALREADY_DELETED, exception.errorCode)
         verify(exactly = 0) { messageRepository.updateCommentStatus(any(), any(), any(), any()) }
-        verify(exactly = 0) { commentGenerator.generateComment(any(), any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { commentGenerator.generateComment(any()) }
     }
 
     @Test
@@ -517,7 +537,7 @@ class CommentGenerationServiceTest {
         val message = rootMessage().also { ReflectionTestUtils.setField(it, "id", 1L) }
         stubClaimSuccess()
         every {
-            commentGenerator.generateComment(null, PastSummaries.of(emptyList()), message.content, characters, tikitakaCount, null)
+            commentGenerator.generateComment(promptContext(diaryContent = message.content))
         } returns CommentGenerationOutput(feed(), 123, 0)
         every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } returns Unit
         val savedMessages =
@@ -537,14 +557,7 @@ class CommentGenerationServiceTest {
         val message = rootMessage().also { ReflectionTestUtils.setField(it, "id", 1L) }
         stubClaimSuccess()
         every {
-            commentGenerator.generateComment(
-                "현재 요약",
-                PastSummaries.of(emptyList()),
-                message.content,
-                characters,
-                tikitakaCount,
-                null,
-            )
+            commentGenerator.generateComment(promptContext(currentConversationSummary = "현재 요약", diaryContent = message.content))
         } returns CommentGenerationOutput(feed(), 123, 0)
         every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } returns Unit
         every { commentPersistenceService.saveFeed(10L, 1L, feed()) } returns emptyList()
@@ -553,14 +566,7 @@ class CommentGenerationServiceTest {
 
         assertEquals(CommentGenerationOutcome.DONE, result.outcome)
         verify(exactly = 1) {
-            commentGenerator.generateComment(
-                "현재 요약",
-                PastSummaries.of(emptyList()),
-                message.content,
-                characters,
-                tikitakaCount,
-                null,
-            )
+            commentGenerator.generateComment(promptContext(currentConversationSummary = "현재 요약", diaryContent = message.content))
         }
     }
 
@@ -585,7 +591,7 @@ class CommentGenerationServiceTest {
         assertEquals(CommentGenerationOutcome.DONE, result.outcome)
         assertEquals(listOf(savedReply), result.messages)
         assertEquals(77, result.usedTokens)
-        verify(exactly = 0) { commentGenerator.generateComment(any(), any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { commentGenerator.generateComment(any()) }
     }
 
     @Test
@@ -597,7 +603,7 @@ class CommentGenerationServiceTest {
 
         assertEquals(CommentGenerationOutcome.LIMIT_EXCEEDED, result.outcome)
         // 생성도, 선점(CAS)도 하지 않는다 — 저장(컨트롤러가 이미 함)만 남고 토큰 소비는 없다.
-        verify(exactly = 0) { commentGenerator.generateComment(any(), any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { commentGenerator.generateComment(any()) }
         verify(exactly = 0) { messageRepository.updateCommentStatus(any(), any(), any(), any()) }
     }
 }

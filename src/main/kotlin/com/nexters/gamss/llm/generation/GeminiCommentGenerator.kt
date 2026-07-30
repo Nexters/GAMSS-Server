@@ -6,12 +6,11 @@ import com.google.genai.types.GenerateContentConfig
 import com.google.genai.types.HttpOptions
 import com.google.genai.types.Part
 import com.google.genai.types.Schema
-import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.llm.config.GeminiProperties
 import com.nexters.gamss.llm.error.CommentGenerationFailedException
 import com.nexters.gamss.llm.parsing.CommentFeedJsonParser
 import com.nexters.gamss.llm.parsing.ReplyJsonParser
-import com.nexters.gamss.llm.prompt.PastSummaries
+import com.nexters.gamss.llm.prompt.CommentPromptContext
 import com.nexters.gamss.llm.prompt.PromptCharacterId
 import com.nexters.gamss.llm.prompt.PromptProvider
 import com.nexters.gamss.llm.prompt.PromptType
@@ -24,10 +23,6 @@ import org.springframework.stereotype.Component
  * 내용([PromptProvider])과 응답 파싱([CommentFeedJsonParser])은 Gemini 고유가 아니라 우리가 정한
  * 출력 계약이므로 별도 컴포넌트로 분리되어 있다 — 이 클래스는 그 계약을 SDK 호출에 실어 나르는
  * 역할만 한다.
- *
- * currentConversationSummary는 프론트가 매 요청마다 압축해 보내는 현재 채팅방의 임시 요약이다(서버에
- * 저장하지 않음). pastSummaries는 서버가 같은 회원의 다른 채팅방에서 저장해둔 요약 중 일부를 무작위로
- * 뽑아 넘기는 값이다([com.nexters.gamss.conversation.repository.ConversationRepository.findRandomPastSummaries]).
  */
 @Component
 class GeminiCommentGenerator(
@@ -39,14 +34,7 @@ class GeminiCommentGenerator(
 ) : CommentGenerator {
     private val client: Client by lazy { Client.builder().apiKey(properties.apiKey).build() }
 
-    override fun generateComment(
-        currentConversationSummary: String?,
-        pastSummaries: PastSummaries,
-        diaryContent: String,
-        characters: List<EmotionType>,
-        tikitakaCount: Int,
-        eongttungTopic: String?,
-    ): CommentGenerationOutput {
+    override fun generateComment(context: CommentPromptContext): CommentGenerationOutput {
         val response =
             try {
                 // 운영 중 백오피스에서 바꾼 값을 매 호출 반영한다(재배포 불필요).
@@ -54,14 +42,7 @@ class GeminiCommentGenerator(
                 val settings = systemPromptResolver.resolve(PromptType.COMMENT)
                 client.models.generateContent(
                     settings.model,
-                    promptProvider.buildUserContent(
-                        currentConversationSummary,
-                        pastSummaries,
-                        diaryContent,
-                        characters,
-                        tikitakaCount,
-                        eongttungTopic,
-                    ),
+                    promptProvider.buildUserContent(context),
                     buildConfig(settings.systemPrompt, commentFeedSchema()),
                 )
             } catch (e: Exception) {

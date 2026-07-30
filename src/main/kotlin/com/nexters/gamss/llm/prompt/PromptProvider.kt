@@ -25,21 +25,14 @@ class PromptProvider {
             PromptType.CARD -> cardPrompt
         }
 
-    fun buildUserContent(
-        currentConversationSummary: String?,
-        pastSummaries: PastSummaries,
-        diaryContent: String,
-        characters: List<EmotionType>,
-        tikitakaCount: Int,
-        eongttungTopic: String?,
-    ): String {
-        val characterIds = characters.joinToString(", ") { PromptCharacterId.of(it).promptId }
+    fun buildUserContent(context: CommentPromptContext): String {
+        val characterIds = context.characters.joinToString(", ") { PromptCharacterId.of(it).promptId }
         // 개행을 공백으로 정규화한다 — 그대로 두면 "[오늘 일기]" 같은 섹션 헤더를 흉내 낸 텍스트가
         // 요약에 섞여 들어올 때 프롬프트 구조 자체가 깨질 수 있다(클라이언트가 보낸 값이라 신뢰 불가).
         val currentConversationSummaryText =
-            currentConversationSummary?.normalizeForPrompt()?.ifBlank { null } ?: "기록 없음."
-        val pastSummaryLines = pastSummaries.lines
-        val eongttungLine = eongttungTopic?.let { "- eongttung 소재: $it" }.orEmpty()
+            context.currentConversationSummary?.normalizeForPrompt()?.ifBlank { null } ?: "기록 없음."
+        val pastSummaryLines = context.pastSummaries.lines
+        val eongttungLine = context.eongttungTopic?.let { "- eongttung 소재: $it" }.orEmpty()
         return buildString {
             appendLine("[오늘 대화] $currentConversationSummaryText")
             if (pastSummaryLines.isNotEmpty()) {
@@ -47,10 +40,10 @@ class PromptProvider {
                 pastSummaryLines.forEach { appendLine("- $it") }
             }
             appendLine("[오늘 일기]")
-            appendLine(diaryContent)
+            appendLine(context.diaryContent)
             appendLine("[이번 응답 조건]")
             appendLine("- 등장 캐릭터(전원 포함, 다른 캐릭터 추가 금지): $characterIds")
-            appendLine("- tikitaka 개수: 정확히 ${tikitakaCount}개")
+            appendLine("- tikitaka 개수: 정확히 ${context.tikitakaCount}개")
             if (eongttungLine.isNotEmpty()) appendLine(eongttungLine)
             append("위 조건대로 코멘트 + 티키타카를 JSON으로 출력해.")
         }

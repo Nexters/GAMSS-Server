@@ -14,6 +14,7 @@ import com.nexters.gamss.llm.generation.CommentGenerator
 import com.nexters.gamss.llm.generation.LlmRetryPolicy
 import com.nexters.gamss.llm.generation.ReplyGenerationOutput
 import com.nexters.gamss.llm.parsing.CommentFeedValidator
+import com.nexters.gamss.llm.prompt.CommentPromptContext
 import com.nexters.gamss.llm.prompt.PastSummaries
 import com.nexters.gamss.llm.prompt.PromptCharacterId
 import com.nexters.gamss.llm.selection.CharacterSelector
@@ -307,20 +308,20 @@ class CommentGenerationService(
         val tikitakaCount = characterSelector.selectTikitakaCount()
         val eongttungTopic = if (EmotionType.QUIRKY in characters) eongttungTopicSelector.select() else null
 
-        val pastSummariesValue = PastSummaries.of(pastSummaries)
+        val context =
+            CommentPromptContext(
+                currentConversationSummary = currentConversationSummary,
+                pastSummaries = PastSummaries.of(pastSummaries),
+                diaryContent = diaryContent,
+                characters = characters,
+                tikitakaCount = tikitakaCount,
+                eongttungTopic = eongttungTopic,
+            )
         val startedAt = System.currentTimeMillis()
         var lastError: CommentGenerationFailedException? = null
         repeat(LlmRetryPolicy.MAX_ATTEMPTS) { attempt ->
             try {
-                val output =
-                    commentGenerator.generateComment(
-                        currentConversationSummary,
-                        pastSummariesValue,
-                        diaryContent,
-                        characters,
-                        tikitakaCount,
-                        eongttungTopic,
-                    )
+                val output = commentGenerator.generateComment(context)
                 try {
                     commentFeedValidator.validate(output.feed, characters, tikitakaCount)
                 } catch (e: CommentGenerationFailedException) {
