@@ -59,10 +59,21 @@ class Member(
         this.nickname = nickname
     }
 
+    /**
+     * 탈퇴 처리. 상태를 전이하고 개인 식별정보를 지운다 — 가입·탈퇴 통계를 위해 행은 남기되
+     * 그 행이 누구였는지는 남기지 않는다. 소셜 계정·리프레시 토큰처럼 회원 밖에 있는 자원의
+     * 정리는 [com.nexters.gamss.member.service.WithdrawnMemberCleaner] 구현들이 맡는다.
+     */
     fun withdraw() {
         status = MemberStatus.WITHDRAWN
         deletedAt = Instant.now()
+        anonymize()
     }
 
     fun isWithdrawn(): Boolean = status == MemberStatus.WITHDRAWN
+
+    private fun anonymize() {
+        email = null
+        nickname = null
+    }
 }

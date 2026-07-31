@@ -15,10 +15,12 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertSame
+import kotlin.test.assertTrue
 
 class MemberServiceTest {
     private val memberRepository = mockk<MemberRepository>()
-    private val memberService = MemberService(memberRepository)
+    private val cleaner = RecordingCleaner()
+    private val memberService = MemberService(memberRepository, WithdrawnMemberCleaners(listOf(cleaner)))
 
     @Test
     fun `회원을 생성한다`() {
@@ -66,6 +68,17 @@ class MemberServiceTest {
         memberService.withdraw(10L)
 
         assertEquals(true, member.isWithdrawn())
+        assertEquals(listOf(10L), cleaner.cleaned, "탈퇴에 딸린 자원 정리가 호출돼야 한다")
+    }
+
+    @Test
+    fun `이미 탈퇴한 회원이면 자원 정리를 호출하지 않는다`() {
+        val member = Member("b@example.com").apply { withdraw() }
+        every { memberRepository.findById(10L) } returns Optional.of(member)
+
+        assertFailsWith<BusinessException> { memberService.withdraw(10L) }
+
+        assertTrue(cleaner.cleaned.isEmpty())
     }
 
     @Test
@@ -93,5 +106,14 @@ class MemberServiceTest {
         assertEquals(14, stats.dailySignups.size)
         // 자정 경계 플래키를 피하려고 특정 날짜가 아니라 기간 합계로 단언한다(오늘 가입 2명).
         assertEquals(2L, stats.dailySignups.sumOf { it.count })
+    }
+
+    /** 정리 확장점이 어떤 memberId 로 불렸는지만 기록하는 페이크. */
+    private class RecordingCleaner : WithdrawnMemberCleaner {
+        val cleaned = mutableListOf<Long>()
+
+        override fun clean(memberId: Long) {
+            cleaned.add(memberId)
+        }
     }
 }
