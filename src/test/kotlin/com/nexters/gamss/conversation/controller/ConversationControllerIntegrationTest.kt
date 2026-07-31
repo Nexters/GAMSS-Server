@@ -167,6 +167,38 @@ class ConversationControllerIntegrationTest {
     }
 
     @Test
+    fun `2000자를 넘는 현재 대화방 요약은 400을 반환한다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val tooLong = "가".repeat(2001)
+
+        mockMvc
+            .post("/api/conversations/messages") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"content":"오늘 있었던 일","currentConversationSummary":"$tooLong"}"""
+            }.andExpect {
+                status { isBadRequest() }
+                jsonPath("$.error.code") { value("INVALID_INPUT") }
+            }
+    }
+
+    @Test
+    fun `재시도 요청에서도 2000자를 넘는 현재 대화방 요약은 400을 반환한다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val tooLong = "가".repeat(2001)
+
+        mockMvc
+            .post("/api/conversations/messages/comments") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"messageId":1,"currentConversationSummary":"$tooLong"}"""
+            }.andExpect {
+                status { isBadRequest() }
+                jsonPath("$.error.code") { value("INVALID_INPUT") }
+            }
+    }
+
+    @Test
     fun `캐릭터 댓글에 답장하면 응답에 답장 대상이 담긴다`() {
         val member = memberRepository.save(Member("me@a.com"))
         val conversation = conversationRepository.save(Conversation(member.id))

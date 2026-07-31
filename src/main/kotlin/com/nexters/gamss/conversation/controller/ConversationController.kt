@@ -71,7 +71,7 @@ class ConversationController(
                 content = request.content,
                 repliesToMessageId = request.repliesToMessageId,
             )
-        val result = commentGenerationService.generateFor(principal.memberId, message)
+        val result = commentGenerationService.generateFor(principal.memberId, message, request.currentConversationSummary)
         return ApiResponse.success(SaveMessageResponse.from(message, result))
     }
 
@@ -174,6 +174,9 @@ class ConversationController(
                 "따로 호출할 필요가 없습니다. `POST /messages` 응답이 commentStatus=FAILED였을 때 같은 " +
                 "messageId로 재시도하는 용도로 남아 있습니다. 멱등한 엔드포인트로, " +
                 "재요청이 곧 결과 조회를 겸합니다 — GENERATING이면 잠시 후 같은 요청을 다시 보내면 됩니다.\n\n" +
+                "currentConversationSummary를 함께 보내면 재시도 생성에도 그 맥락이 반영됩니다(생략하면 맥락 없이 " +
+                "재생성). 단, 이미 DONE·GENERATING 상태라 선점에 실패해 상태 조회만 하는 경우엔 이 값이 쓰이지 " +
+                "않습니다.\n\n" +
                 "**status 값**\n\n" +
                 "| status | 의미 |\n" +
                 "|---|---|\n" +
@@ -196,9 +199,15 @@ class ConversationController(
         @Parameter(hidden = true) @AuthenticationPrincipal principal: AuthPrincipal,
         @Valid @RequestBody request: GenerateCommentsRequest,
     ): ApiResponse<CommentGenerationResponse> {
-        val result = commentGenerationService.generateComments(principal.memberId, checkNotNull(request.messageId))
+        val result =
+            commentGenerationService.generateComments(
+                principal.memberId,
+                checkNotNull(request.messageId),
+                request.currentConversationSummary,
+            )
         val status = result.outcome.toResponseStatus()
-        val comments = if (status == CommentGenerationStatus.DONE) result.messages.map { MessageResponse.from(it) } else null
+        val comments =
+            if (status == CommentGenerationStatus.DONE) result.messages.map { MessageResponse.from(it) } else null
         return ApiResponse.success(CommentGenerationResponse(status, comments, result.usedTokens))
     }
 
@@ -233,7 +242,8 @@ class ConversationController(
     ): ApiResponse<ReplyGenerationResponse> {
         val result = commentGenerationService.generateReplyComment(principal.memberId, messageId)
         val status = result.outcome.toResponseStatus()
-        val comment = if (status == CommentGenerationStatus.DONE) MessageResponse.from(result.messages.single()) else null
+        val comment =
+            if (status == CommentGenerationStatus.DONE) MessageResponse.from(result.messages.single()) else null
         return ApiResponse.success(ReplyGenerationResponse(status, comment, result.usedTokens))
     }
 

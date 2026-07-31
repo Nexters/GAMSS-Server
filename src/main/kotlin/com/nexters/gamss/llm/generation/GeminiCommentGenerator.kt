@@ -1,15 +1,16 @@
 package com.nexters.gamss.llm.generation
+
 import com.google.genai.Client
 import com.google.genai.types.Content
 import com.google.genai.types.GenerateContentConfig
 import com.google.genai.types.HttpOptions
 import com.google.genai.types.Part
 import com.google.genai.types.Schema
-import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.llm.config.GeminiProperties
 import com.nexters.gamss.llm.error.CommentGenerationFailedException
 import com.nexters.gamss.llm.parsing.CommentFeedJsonParser
 import com.nexters.gamss.llm.parsing.ReplyJsonParser
+import com.nexters.gamss.llm.prompt.CommentPromptContext
 import com.nexters.gamss.llm.prompt.PromptCharacterId
 import com.nexters.gamss.llm.prompt.PromptProvider
 import com.nexters.gamss.llm.prompt.PromptType
@@ -22,10 +23,6 @@ import org.springframework.stereotype.Component
  * 내용([PromptProvider])과 응답 파싱([CommentFeedJsonParser])은 Gemini 고유가 아니라 우리가 정한
  * 출력 계약이므로 별도 컴포넌트로 분리되어 있다 — 이 클래스는 그 계약을 SDK 호출에 실어 나르는
  * 역할만 한다.
- *
- * 과거 요약(pastSummary)은 아직 실제 소스가 없다 — 프론트에서 나중에 내려줄 예정이라 지금은 항상
- * 빈 값으로 호출된다([com.nexters.gamss.conversation.service.CommentGenerationService] 참고).
- * TODO: 프론트 연동되면 여기 지나가는 pastSummary를 실제 값으로 채우고 PR에 명시할 것.
  */
 @Component
 class GeminiCommentGenerator(
@@ -37,13 +34,7 @@ class GeminiCommentGenerator(
 ) : CommentGenerator {
     private val client: Client by lazy { Client.builder().apiKey(properties.apiKey).build() }
 
-    override fun generateComment(
-        pastSummary: String,
-        diaryContent: String,
-        characters: List<EmotionType>,
-        tikitakaCount: Int,
-        eongttungTopic: String?,
-    ): CommentGenerationOutput {
+    override fun generateComment(context: CommentPromptContext): CommentGenerationOutput {
         val response =
             try {
                 // 운영 중 백오피스에서 바꾼 값을 매 호출 반영한다(재배포 불필요).
@@ -51,7 +42,7 @@ class GeminiCommentGenerator(
                 val settings = systemPromptResolver.resolve(PromptType.COMMENT)
                 client.models.generateContent(
                     settings.model,
-                    promptProvider.buildUserContent(pastSummary, diaryContent, characters, tikitakaCount, eongttungTopic),
+                    promptProvider.buildUserContent(context),
                     buildConfig(settings.systemPrompt, commentFeedSchema()),
                 )
             } catch (e: Exception) {

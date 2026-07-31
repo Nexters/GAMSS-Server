@@ -96,4 +96,30 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
         @Param("to") to: CardGenerationStatus = CardGenerationStatus.NONE,
         @Param("from") from: CardGenerationStatus = CardGenerationStatus.PENDING,
     ): Int
+
+    /**
+     * 같은 회원의 다른 채팅방 중 요약이 저장된 최근 [poolSize]개를 후보로 삼아, 그중 무작위로
+     * [pickCount]개를 골라 반환한다(댓글 생성 시 과거 맥락으로 참고 — 매번 언급하지 않도록 일부만 뽑음).
+     * 후보가 [pickCount]보다 적으면 있는 만큼만 반환한다. [excludeConversationId]는 현재 대화방(자기 자신) 제외용.
+     */
+    @Query(
+        value =
+            "select recent.summary from (" +
+                "select summary from conversations " +
+                "where member_id = :memberId and id <> :excludeConversationId " +
+                "and summary is not null and status <> :excludedStatus " +
+                "order by created_at desc, id desc limit :poolSize" +
+                ") recent order by rand() limit :pickCount",
+        nativeQuery = true,
+    )
+    fun findRandomPastSummaries(
+        @Param("memberId") memberId: Long,
+        @Param("excludeConversationId") excludeConversationId: Long,
+        @Param("poolSize") poolSize: Int,
+        @Param("pickCount") pickCount: Int,
+        // native query라 엔티티의 @Enumerated(STRING) 매핑이 적용되지 않는다 — enum을 그대로 바인딩하면
+        // Hibernate가 문자열이 아닌 다른 방식으로 바인딩해 이 필터가 무력화된다(Testcontainers 테스트로 확인).
+        // 그래서 String으로 받되 값의 출처는 ConversationStatus.DELETED로 고정한다.
+        @Param("excludedStatus") excludedStatus: String = ConversationStatus.DELETED.name,
+    ): List<String>
 }
