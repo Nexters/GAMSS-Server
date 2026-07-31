@@ -129,6 +129,16 @@ class CardServiceTest {
     }
 
     @Test
+    fun `종료 후 삭제된 대화면 CONVERSATION_NOT_ENDED가 아니라 CONVERSATION_ALREADY_DELETED`() {
+        val conversation = endedConversation().apply { delete() }
+        every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(conversation)
+
+        val exception = assertFailsWith<BusinessException> { service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약") }
+
+        assertEquals(ErrorCode.CONVERSATION_ALREADY_DELETED, exception.errorCode)
+    }
+
+    @Test
     fun `선점에 실패했는데 이미 카드가 있으면 LLM 호출 없이 CARD_ALREADY_EXISTS`() {
         every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
         every {

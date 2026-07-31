@@ -80,6 +80,9 @@ class CardService(
         memberId: Long,
     ): Conversation {
         val conversation = getOwnedConversation(conversationId, memberId)
+        // 종료 후 삭제된 방은 status가 DELETED로 덮어써져 ENDED 여부가 사라지므로, 삭제 여부를 먼저
+        // 확인해야 "종료되지 않았다"는 정반대 안내가 나가지 않는다.
+        conversation.ensureNotDeleted()
         if (conversation.status != ConversationStatus.ENDED) {
             throw BusinessException(ErrorCode.CONVERSATION_NOT_ENDED)
         }
