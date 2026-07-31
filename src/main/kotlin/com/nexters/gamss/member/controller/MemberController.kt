@@ -31,7 +31,8 @@ class MemberController(
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +
-                "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·만료·무효) |",
+                "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·무효) |\n" +
+                "| EXPIRED_TOKEN | 401 | accessToken 만료 — 재발급 후 재시도 |",
     )
     @GetMapping("/me")
     fun me(
@@ -48,7 +49,8 @@ class MemberController(
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +
-                "| UNAUTHORIZED | 401 | 인증 필요 |\n" +
+                "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·무효) |\n" +
+                "| EXPIRED_TOKEN | 401 | accessToken 만료 — 재발급 후 재시도 |\n" +
                 "| INVALID_INPUT | 400 | nickname 누락 |\n" +
                 "| INVALID_NICKNAME | 400 | 길이(2~20자) 위반 또는 금칙어 포함 |",
     )
@@ -64,11 +66,16 @@ class MemberController(
     @Operation(
         summary = "회원 탈퇴",
         description =
-            "소프트 삭제로 탈퇴 처리합니다. 탈퇴 후에는 로그인·토큰 재발급이 차단됩니다.\n\n" +
+            "탈퇴 처리합니다. 가입·탈퇴 통계를 위해 회원 행은 남기되 이메일·닉네임 등 개인 식별정보는 " +
+                "비우고, 소셜 계정 연결과 리프레시 토큰은 삭제합니다.\n\n" +
+                "- 이미 발급된 accessToken은 만료(기본 1시간)까지 유효하고, refreshToken 재발급은 즉시 차단됩니다.\n" +
+                "- 같은 소셜 계정으로 다시 로그인하면 **이전 기록과 분리된 신규 회원**으로 가입됩니다 " +
+                "(이전 대화·카드에는 접근할 수 없습니다).\n\n" +
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +
-                "| UNAUTHORIZED | 401 | 인증 필요 |\n" +
+                "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·무효) |\n" +
+                "| EXPIRED_TOKEN | 401 | accessToken 만료 — 재발급 후 재시도 |\n" +
                 "| ALREADY_WITHDRAWN | 409 | 이미 탈퇴한 회원 |",
     )
     @DeleteMapping("/me")

@@ -65,4 +65,14 @@ class MemberTest {
         assertTrue(member.isWithdrawn())
         assertNotNull(member.deletedAt)
     }
+
+    @Test
+    fun `탈퇴하면 개인 식별정보를 비운다`() {
+        val member = Member("user@example.com", Nickname("걱정인형"))
+
+        member.withdraw()
+
+        assertNull(member.email)
+        assertNull(member.nickname)
+    }
 }
