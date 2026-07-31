@@ -119,6 +119,25 @@ class SecurityIntegrationTest {
     }
 
     @Test
+    fun `보안 응답 헤더는 앱이 아니라 nginx 가 내보낸다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+
+        mockMvc
+            .get("/api/members/me") {
+                header(HttpHeaders.AUTHORIZATION, "Bearer ${jwtIssuer.issueAccessToken(member.id)}")
+            }.andExpect {
+                status { isOk() }
+                // 앱이 함께 내보내면 nginx 것과 중복되고, HSTS 는 브라우저가 첫 번째만 처리해
+                // 어느 값이 적용되는지 예측할 수 없다(#81).
+                header { doesNotExist("Strict-Transport-Security") }
+                header { doesNotExist("X-Frame-Options") }
+                header { doesNotExist("X-Content-Type-Options") }
+                // 캐시 방지 헤더는 nginx 가 내보내지 않으므로 앱이 계속 책임진다.
+                header { exists("Cache-Control") }
+            }
+    }
+
+    @Test
     fun `잘못된 토큰이면 401을 반환한다`() {
         mockMvc
             .get("/api/members/me") {
