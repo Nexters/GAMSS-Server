@@ -9,6 +9,7 @@ import org.springframework.data.domain.PageRequest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class MemberRepositoryTest : RepositoryTest() {
@@ -66,8 +67,7 @@ class MemberRepositoryTest : RepositoryTest() {
     @Test
     fun `상태로 필터링한다`() {
         memberRepository.save(Member("active@example.com"))
-        val withdrawn = Member("left@example.com").apply { withdraw() }
-        memberRepository.save(withdrawn)
+        val withdrawn = memberRepository.save(Member("left@example.com").apply { withdraw() })
 
         val actives = memberRepository.search(null, MemberStatus.ACTIVE, PageRequest.of(0, 10))
         val withdrawns = memberRepository.search(null, MemberStatus.WITHDRAWN, PageRequest.of(0, 10))
@@ -75,6 +75,8 @@ class MemberRepositoryTest : RepositoryTest() {
         assertEquals(1, actives.totalElements)
         assertEquals("active@example.com", actives.content.first().email)
         assertEquals(1, withdrawns.totalElements)
-        assertEquals("left@example.com", withdrawns.content.first().email)
+        // 탈퇴하면 개인 식별정보를 비우므로 이메일이 아니라 id 로 식별한다.
+        assertEquals(withdrawn.id, withdrawns.content.first().id)
+        assertNull(withdrawns.content.first().email)
     }
 }
