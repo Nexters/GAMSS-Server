@@ -270,7 +270,7 @@ class CommentGenerationServiceTest {
         stubClaimSuccess()
         val attempt1 = CommentGenerationOutput(feed(), usedTokens = 100, cachedTokens = 10, inputTokens = 80, outputTokens = 20)
         val attempt2 = CommentGenerationOutput(feed(), usedTokens = 200, cachedTokens = 30, inputTokens = 150, outputTokens = 50)
-        every { commentGenerator.generateComment(any(), any(), any(), any(), any()) } returnsMany listOf(attempt1, attempt2)
+        every { commentGenerator.generateComment(any()) } returnsMany listOf(attempt1, attempt2)
         // 1차 검증 실패 → 재시도, 2차 통과
         var validateCall = 0
         every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } answers {
@@ -281,7 +281,7 @@ class CommentGenerationServiceTest {
             listOf(Message(conversationId = 10L, senderType = SenderType.CHARACTER, emotionType = EmotionType.JOY, content = "댓글"))
         every { commentPersistenceService.saveFeed(10L, 1L, feed()) } returns saved
 
-        val result = service.generateComments(memberId = 1L, messageId = 1L)
+        val result = service.generateComments(memberId = 1L, messageId = 1L, currentConversationSummary = null)
 
         assertEquals(CommentGenerationOutcome.DONE, result.outcome)
         // 성공 로그에 1차(100/10/80/20) + 2차(200/30/150/50) 합산이 남아야 한다(마지막 시도만 X)
@@ -310,11 +310,11 @@ class CommentGenerationServiceTest {
         stubClaimSuccess()
         val attempt1 = CommentGenerationOutput(feed(), usedTokens = 100, cachedTokens = 10, inputTokens = 80, outputTokens = 20)
         val attempt2 = CommentGenerationOutput(feed(), usedTokens = 200, cachedTokens = 30, inputTokens = 150, outputTokens = 50)
-        every { commentGenerator.generateComment(any(), any(), any(), any(), any()) } returnsMany listOf(attempt1, attempt2)
+        every { commentGenerator.generateComment(any()) } returnsMany listOf(attempt1, attempt2)
         every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } throws CommentGenerationFailedException("검증 실패")
         every { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) } returns 1
 
-        service.generateComments(memberId = 1L, messageId = 1L)
+        service.generateComments(memberId = 1L, messageId = 1L, currentConversationSummary = null)
 
         verify {
             generationLogRecorder.record(
