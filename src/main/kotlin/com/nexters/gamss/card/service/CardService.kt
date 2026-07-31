@@ -74,7 +74,7 @@ class CardService(
         }
     }
 
-    /** 소유권·종료 상태를 검증하고 [CardGenerationStatus]를 CAS로 선점한 뒤 토큰 상한을 확인한다. */
+    /** 소유권·종료 상태·토큰 상한을 확인한 뒤 [CardGenerationStatus]를 CAS로 선점한다. */
     private fun claimForGeneration(
         conversationId: Long,
         memberId: Long,
@@ -82,6 +82,9 @@ class CardService(
         val conversation = getOwnedConversation(conversationId, memberId)
         if (conversation.status != ConversationStatus.ENDED) {
             throw BusinessException(ErrorCode.CONVERSATION_NOT_ENDED)
+        }
+        if (!dailyTokenLimitService.isWithinLimit(memberId)) {
+            throw BusinessException(ErrorCode.DAILY_TOKEN_LIMIT_EXCEEDED)
         }
 
         val claimed =
@@ -96,10 +99,6 @@ class CardService(
                 throw BusinessException(ErrorCode.CARD_ALREADY_EXISTS)
             }
             throw BusinessException(ErrorCode.CARD_GENERATION_IN_PROGRESS)
-        }
-        if (!dailyTokenLimitService.isWithinLimit(memberId)) {
-            markCardGenerationStatus(conversationId, CardGenerationStatus.FAILED)
-            throw BusinessException(ErrorCode.DAILY_TOKEN_LIMIT_EXCEEDED)
         }
         return conversation
     }

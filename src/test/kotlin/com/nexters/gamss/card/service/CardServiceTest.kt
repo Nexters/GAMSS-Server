@@ -88,16 +88,17 @@ class CardServiceTest {
     }
 
     @Test
-    fun `일일 토큰 상한을 넘으면 카드 생성을 막고 DAILY_TOKEN_LIMIT_EXCEEDED`() {
+    fun `일일 토큰 상한을 넘으면 선점 없이 카드 생성을 막고 DAILY_TOKEN_LIMIT_EXCEEDED`() {
         every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
-        stubClaimSuccess()
         every { dailyTokenLimitService.isWithinLimit(MEMBER_ID) } returns false
-        stubMarkStatus(CardGenerationStatus.FAILED)
 
         val exception = assertFailsWith<BusinessException> { service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약") }
 
         assertEquals(ErrorCode.DAILY_TOKEN_LIMIT_EXCEEDED, exception.errorCode)
         verify(exactly = 0) { cardMessageGenerator.generate(any(), any()) }
+        verify(
+            exactly = 0,
+        ) { conversationRepository.updateCardGenerationStatus(CONVERSATION_ID, CardGenerationStatus.PENDING, any(), any()) }
     }
 
     @Test
