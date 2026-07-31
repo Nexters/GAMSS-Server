@@ -106,11 +106,13 @@ class ConversationController(
     @Operation(
         summary = "대화방 검색",
         description =
-            "제목(카드 요약) 또는 채팅 내용에 검색어가 포함된 본인 대화방을 최신순으로 조회합니다.\n\n" +
+            "지정한 제목 또는 채팅 내용에 검색어가 포함된 본인 대화방을 최신순으로 조회합니다. " +
+                "삭제된 채팅방은 검색되지 않습니다.\n\n" +
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +
-                "| UNAUTHORIZED | 401 | 인증 필요 |\n" +
+                "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·무효) |\n" +
+                "| EXPIRED_TOKEN | 401 | accessToken 만료 — 재발급 후 재시도 |\n" +
                 "| INVALID_INPUT | 400 | 검색어가 2자 미만 |",
     )
     @GetMapping("/search")

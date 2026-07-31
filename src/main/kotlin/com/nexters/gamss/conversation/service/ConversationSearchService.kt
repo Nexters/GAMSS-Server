@@ -7,6 +7,7 @@ import com.nexters.gamss.global.exception.ErrorCode
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 
 /**
  * 대화방 검색 서비스. 엔진에 무관한 검증(검색어 정제·최소 길이)만 담당하고, 실제 검색은
@@ -16,6 +17,8 @@ import org.springframework.stereotype.Service
 class ConversationSearchService(
     private val searchPort: ConversationSearchPort,
 ) {
+    // 포트 구현이 리포지토리를 여러 번 호출하므로 한 트랜잭션·한 커넥션으로 묶는다.
+    @Transactional(readOnly = true)
     fun search(
         memberId: Long,
         keyword: String,

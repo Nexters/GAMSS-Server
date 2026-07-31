@@ -11,9 +11,6 @@ import java.time.Instant
 interface CardRepository : JpaRepository<Card, Long> {
     fun existsByConversationId(conversationId: Long): Boolean
 
-    /** 여러 대화방의 카드를 한 번에 조회한다(대화방 검색에서 제목=요약을 붙일 때 사용). */
-    fun findByConversationIdIn(conversationIds: Collection<Long>): List<Card>
-
     /** 카드가 생성된 대화방 id들만 골라 반환한다(백오피스 대화방 사용량 페이지의 카드 생성 여부 배치 조회). */
     @Query("select c.conversationId from Card c where c.conversationId in :conversationIds")
     fun findConversationIdsIn(

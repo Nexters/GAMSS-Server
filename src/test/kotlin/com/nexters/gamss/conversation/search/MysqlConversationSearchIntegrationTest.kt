@@ -1,13 +1,11 @@
 package com.nexters.gamss.conversation.search
 
-import com.nexters.gamss.card.domain.Card
-import com.nexters.gamss.card.repository.CardRepository
 import com.nexters.gamss.conversation.domain.Conversation
+import com.nexters.gamss.conversation.domain.ConversationTitle
 import com.nexters.gamss.conversation.domain.Message
 import com.nexters.gamss.conversation.domain.SenderType
 import com.nexters.gamss.conversation.repository.ConversationRepository
 import com.nexters.gamss.conversation.repository.MessageRepository
-import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.support.TestcontainersConfig
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
@@ -36,12 +34,8 @@ class MysqlConversationSearchIntegrationTest {
     @Autowired
     private lateinit var messageRepository: MessageRepository
 
-    @Autowired
-    private lateinit var cardRepository: CardRepository
-
     @AfterEach
     fun cleanUp() {
-        cardRepository.deleteAll()
         messageRepository.deleteAll()
         conversationRepository.deleteAll()
     }
@@ -60,18 +54,11 @@ class MysqlConversationSearchIntegrationTest {
     }
 
     @Test
-    fun `제목(카드 요약)으로 대화방을 검색하고 제목을 채워 반환한다`() {
-        val conversation = conversationRepository.save(Conversation(memberId = 1L))
-        cardRepository.save(
-            Card(
-                memberId = 1L,
-                conversationId = conversation.id,
-                emotion = EmotionType.JOY,
-                summary = "행복한 하루",
-                message = "오늘 참 좋았다",
-                conversationCreatedAt = conversation.createdAt,
-            ),
-        )
+    fun `클라이언트가 지정한 제목으로 대화방을 검색하고 그 제목을 반환한다`() {
+        val conversation =
+            conversationRepository.save(
+                Conversation(memberId = 1L).apply { rename(ConversationTitle("행복한 하루")) },
+            )
 
         val result = searchPort.search(memberId = 1L, keyword = "행복", pageable = PageRequest.of(0, 20))
 
@@ -79,6 +66,49 @@ class MysqlConversationSearchIntegrationTest {
         val row = result.content.first()
         assertEquals(conversation.id, row.conversationId)
         assertEquals("행복한 하루", row.title)
+    }
+
+    @Test
+    fun `삭제된 대화방은 제목이 맞아도 검색되지 않는다`() {
+        conversationRepository.save(
+            Conversation(memberId = 1L).apply {
+                rename(ConversationTitle("행복한 하루"))
+                delete()
+            },
+        )
+
+        val result = searchPort.search(memberId = 1L, keyword = "행복", pageable = PageRequest.of(0, 20))
+
+        assertEquals(0, result.totalElements.toInt())
+    }
+
+    @Test
+    fun `삭제된 대화방은 채팅 내용이 맞아도 검색되지 않는다`() {
+        val deleted = conversationRepository.save(Conversation(memberId = 1L).apply { delete() })
+        messageRepository.save(
+            Message(conversationId = deleted.id, senderType = SenderType.USER, content = "삭제된 방의 짜증"),
+        )
+        val alive = conversationRepository.save(Conversation(memberId = 1L))
+        messageRepository.save(
+            Message(conversationId = alive.id, senderType = SenderType.USER, content = "살아있는 방의 짜증"),
+        )
+
+        val result = searchPort.search(memberId = 1L, keyword = "짜증", pageable = PageRequest.of(0, 20))
+
+        assertEquals(1, result.totalElements.toInt())
+        assertEquals(alive.id, result.content.first().conversationId)
+    }
+
+    @Test
+    fun `제목을 지정하지 않은 대화방은 제목이 null 로 나온다`() {
+        val conversation = conversationRepository.save(Conversation(memberId = 1L))
+        messageRepository.save(
+            Message(conversationId = conversation.id, senderType = SenderType.USER, content = "제목 없는 짜증"),
+        )
+
+        val result = searchPort.search(memberId = 1L, keyword = "짜증", pageable = PageRequest.of(0, 20))
+
+        assertEquals(null, result.content.first().title)
     }
 
     @Test
