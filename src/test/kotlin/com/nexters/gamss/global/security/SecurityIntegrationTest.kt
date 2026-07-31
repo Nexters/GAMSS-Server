@@ -17,6 +17,7 @@ import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.context.WebApplicationContext
+import java.time.Duration
 
 @SpringBootTest
 @Import(TestcontainersConfig::class)
@@ -31,7 +32,13 @@ class SecurityIntegrationTest {
     @Autowired
     private lateinit var jwtIssuer: JwtIssuer
 
+    @Autowired
+    private lateinit var jwtProperties: JwtProperties
+
     private lateinit var mockMvc: MockMvc
+
+    /** 서명은 앱과 같은 키로 하되 유효기간만 음수라, 발급 즉시 만료된 토큰을 만든다. */
+    private lateinit var expiredIssuer: JwtIssuer
 
     @BeforeEach
     fun setUp() {
@@ -40,6 +47,13 @@ class SecurityIntegrationTest {
                 .webAppContextSetup(context)
                 .apply<DefaultMockMvcBuilder>(springSecurity())
                 .build()
+        expiredIssuer =
+            JjwtIssuer(
+                jwtProperties.copy(
+                    accessTokenValidity = Duration.ofSeconds(-1),
+                    refreshTokenValidity = Duration.ofSeconds(-1),
+                ),
+            )
     }
 
     @Test
@@ -121,6 +135,82 @@ class SecurityIntegrationTest {
             .get("/api/members/me") {
                 header(HttpHeaders.AUTHORIZATION, "Basic dXNlcjpwYXNz")
             }.andExpect {
+                status { isUnauthorized() }
+                jsonPath("$.error.code") { value("UNAUTHORIZED") }
+            }
+    }
+
+    @Test
+    fun `만료된 액세스 토큰이면 401과 EXPIRED_TOKEN을 반환한다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val expiredToken = expiredIssuer.issueAccessToken(member.id)
+
+        mockMvc
+            .get("/api/members/me") {
+                header(HttpHeaders.AUTHORIZATION, "Bearer $expiredToken")
+            }.andExpect {
+                status { isUnauthorized() }
+                jsonPath("$.success") { value(false) }
+                jsonPath("$.error.code") { value("EXPIRED_TOKEN") }
+            }
+    }
+
+    @Test
+    fun `만료된 관리자 토큰이면 401과 EXPIRED_TOKEN을 반환한다`() {
+        val expiredToken = expiredIssuer.issueAdminToken("admin@gamss.kr")
+
+        mockMvc
+            .get("/api/admin/members") {
+                header(HttpHeaders.AUTHORIZATION, "Bearer $expiredToken")
+            }.andExpect {
+                status { isUnauthorized() }
+                jsonPath("$.error.code") { value("EXPIRED_TOKEN") }
+            }
+    }
+
+    @Test
+    fun `만료된 리프레시 토큰으로 보호된 자원에 접근하면 EXPIRED_TOKEN을 반환한다`() {
+        // 만료는 토큰 종류 검사보다 먼저 판정된다 — 종류가 무엇이든 만료면 EXPIRED_TOKEN 이다.
+        val member = memberRepository.save(Member("me@a.com"))
+        val expiredRefreshToken = expiredIssuer.issueRefreshToken(member.id)
+
+        mockMvc
+            .get("/api/members/me") {
+                header(HttpHeaders.AUTHORIZATION, "Bearer $expiredRefreshToken")
+            }.andExpect {
+                status { isUnauthorized() }
+                jsonPath("$.error.code") { value("EXPIRED_TOKEN") }
+            }
+    }
+
+    @Test
+    fun `다른 키로 서명된 토큰은 만료가 아니므로 UNAUTHORIZED를 반환한다`() {
+        val forgedIssuer =
+            JjwtIssuer(jwtProperties.copy(secret = jwtProperties.secret.reversed()))
+        val forgedToken = forgedIssuer.issueAccessToken(1L)
+
+        mockMvc
+            .get("/api/members/me") {
+                header(HttpHeaders.AUTHORIZATION, "Bearer $forgedToken")
+            }.andExpect {
+                status { isUnauthorized() }
+                jsonPath("$.error.code") { value("UNAUTHORIZED") }
+            }
+    }
+
+    @Test
+    fun `만료 응답은 다음 요청에 남지 않는다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+
+        mockMvc
+            .get("/api/members/me") {
+                header(HttpHeaders.AUTHORIZATION, "Bearer ${expiredIssuer.issueAccessToken(member.id)}")
+            }.andExpect { jsonPath("$.error.code") { value("EXPIRED_TOKEN") } }
+
+        // 요청 속성으로 사유를 넘기므로 요청 간에 상태가 새지 않아야 한다.
+        mockMvc
+            .get("/api/members/me")
+            .andExpect {
                 status { isUnauthorized() }
                 jsonPath("$.error.code") { value("UNAUTHORIZED") }
             }
