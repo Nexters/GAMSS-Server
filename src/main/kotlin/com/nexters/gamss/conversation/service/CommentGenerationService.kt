@@ -303,8 +303,8 @@ class CommentGenerationService(
         memberId: Long,
         conversationId: Long,
         diaryContent: String,
-        currentConversationSummary: String? = null,
-        pastSummaries: List<String> = emptyList(),
+        currentConversationSummary: String?,
+        pastSummaries: List<String>,
     ): CommentGenerationOutput {
         val selection = characterSelector.select()
         val characters = selection.characters
