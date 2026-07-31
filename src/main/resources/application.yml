@@ -13,6 +13,12 @@ spring:
   flyway:
     enabled: true
 
+# HTTPS 엣지(nginx) 뒤에서 X-Forwarded-Proto/Host 를 반영해 앱이 요청 스킴을 https 로 인식하게 한다.
+# springdoc 이 문서·Try it out URL 을 http 가 아니라 https 로 생성하도록 하는 것이 목적.
+# 앱 포트는 127.0.0.1 에만 바인딩돼 nginx만 접근하므로 이 헤더를 신뢰해도 안전하다(외부에서 위조 주입 불가).
+server:
+  forward-headers-strategy: framework
+
 jwt:
   secret: ${JWT_SECRET}
   access-token-validity: ${JWT_ACCESS_VALIDITY:PT1H}
@@ -27,11 +33,21 @@ admin:
   emails: ${ADMIN_EMAILS:}
 
 conversation:
-  comment-pending-timeout: PT3M
+  pending-generation-timeout: PT3M
 
 gemini:
   api-key: ${GEMINI_API_KEY}
   model: gemini-3.1-flash-lite
+  request-timeout: PT30S
+  # 모델별 토큰 요금(USD, 100만 토큰당, 글로벌 기준). Gemini는 요금 API가 없어 문서 기준으로 둔다
+  # (2026-07, ai.google.dev/gemini-api/docs/pricing). 캐시 입력은 할인가, 출력은 캐시 안 됨.
+  # 새 모델을 쓰면 항목만 추가하면 비용 계산이 자동 반영된다. 키에 점(.)이 있어 [ ] 로 감싼다.
+  pricing:
+    models:
+      "[gemini-3.1-flash-lite]": { input-per1m: 0.25, cached-input-per1m: 0.025, output-per1m: 1.50 }
+      "[gemini-3.5-flash-lite]": { input-per1m: 0.30, cached-input-per1m: 0.03, output-per1m: 2.50 }
+      "[gemini-3.5-flash]": { input-per1m: 1.50, cached-input-per1m: 0.15, output-per1m: 9.00 }
+      "[gemini-3.6-flash]": { input-per1m: 1.50, cached-input-per1m: 0.15, output-per1m: 7.50 }
 
 springdoc:
   swagger-ui:

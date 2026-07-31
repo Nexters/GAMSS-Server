@@ -4,6 +4,7 @@ import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import jakarta.persistence.Column
+import jakarta.persistence.Embedded
 import jakarta.persistence.Entity
 import jakarta.persistence.EntityListeners
 import jakarta.persistence.EnumType
@@ -32,9 +33,31 @@ class Conversation(
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long = 0L
 
+    @Embedded
+    var title: ConversationTitle? = null
+        protected set
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 20, nullable = false)
     var status: ConversationStatus = ConversationStatus.ACTIVE
+        protected set
+
+    /**
+     * 카드 생성 시점에 저장되는 이 대화 전체의 요약. 다른 대화방 댓글 생성 시 과거 맥락으로 참고한다.
+     * 값 자체는 [com.nexters.gamss.conversation.repository.ConversationRepository.updateSummary]로만 갱신한다.
+     */
+    @Column(name = "summary", columnDefinition = "TEXT")
+    var summary: String? = null
+        protected set
+
+    /** 카드 생성 LLM 호출 전 CAS 선점 상태([Message.commentStatus]와 같은 패턴). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "card_generation_status", length = 20, nullable = false)
+    var cardGenerationStatus: CardGenerationStatus = CardGenerationStatus.NONE
+        protected set
+
+    @Column(name = "card_generation_status_updated_at")
+    var cardGenerationStatusUpdatedAt: Instant? = null
         protected set
 
     @CreatedDate
@@ -49,18 +72,39 @@ class Conversation(
 
     fun isOwnedBy(memberId: Long): Boolean = this.memberId == memberId
 
-    /** 채팅방을 종료한다. 이미 종료된 방을 다시 종료하면 예외를 던진다. */
+    /** 채팅방을 종료한다. 삭제된 방이거나 이미 종료된 방을 다시 종료하면 예외를 던진다. */
     fun end() {
+        ensureNotDeleted()
         if (status == ConversationStatus.ENDED) {
             throw BusinessException(ErrorCode.CONVERSATION_ALREADY_ENDED)
         }
         status = ConversationStatus.ENDED
     }
 
+    /** 채팅방을 삭제한다. 이미 삭제된 방을 다시 삭제하면 예외를 던진다. */
+    fun delete() {
+        ensureNotDeleted()
+        status = ConversationStatus.DELETED
+    }
+
+    /** 채팅방 제목을 지정·변경한다. 여러 번 호출할 수 있으며, 삭제된 방은 변경할 수 없다. */
+    fun rename(title: ConversationTitle) {
+        ensureNotDeleted()
+        this.title = title
+    }
+
     /** 종료된 채팅방에는 사용자 메시지를 추가할 수 없다. */
     fun ensureActive() {
+        ensureNotDeleted()
         if (status == ConversationStatus.ENDED) {
             throw BusinessException(ErrorCode.CONVERSATION_ENDED)
+        }
+    }
+
+    /** 삭제된 채팅방은 조회·종료·메시지 추가 등 어떤 작업도 할 수 없다. */
+    fun ensureNotDeleted() {
+        if (status == ConversationStatus.DELETED) {
+            throw BusinessException(ErrorCode.CONVERSATION_ALREADY_DELETED)
         }
     }
 

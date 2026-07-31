@@ -9,6 +9,10 @@ COPY gradlew settings.gradle.kts build.gradle.kts gradle.properties ./
 COPY gradle ./gradle
 RUN chmod +x gradlew
 
+# 의존성만 먼저 받아 별도 레이어로 캐시한다. 소스와 분리돼 있어, build.gradle 이 그대로면
+# 이 레이어가 gha 캐시로 복원되어 매 배포마다 의존성을 재다운로드하지 않는다(소스 변경 시 컴파일만 재실행).
+RUN ./gradlew --no-daemon resolveDependencies
+
 # 소스 복사 후 빌드(테스트는 CI에서 수행하므로 제외)
 COPY src ./src
 RUN ./gradlew --no-daemon clean bootJar -x test

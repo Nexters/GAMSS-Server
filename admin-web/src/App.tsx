@@ -1,15 +1,17 @@
 import { Authenticated, Refine } from '@refinedev/core'
-import routerBindings, { CatchAllNavigate, NavigateToResource } from '@refinedev/react-router-v6'
-import { BrowserRouter, Outlet, Route, Routes } from 'react-router-dom'
+import routerBindings, { CatchAllNavigate } from '@refinedev/react-router-v6'
+import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { firebaseAuthProvider } from '@/providers/authProvider'
 import { devAuthProvider } from '@/providers/devAuthProvider'
 import { dataProvider } from '@/providers/dataProvider'
 import { AdminLayout } from '@/components/layout/AdminLayout'
+import { DashboardPage } from '@/pages/dashboard'
 import { LoginPage } from '@/pages/login'
 import { MemberList } from '@/pages/members/list'
 import { MemberShow } from '@/pages/members/show'
 import { AdminAccountList } from '@/pages/admin-accounts/list'
 import { LlmSettingsPage } from '@/pages/llm-settings'
+import { TokenUsagePage } from '@/pages/token-usage'
 
 // mock(로컬) 모드에서는 Firebase 없이 dev-login 을 쓴다.
 const authProvider = import.meta.env.VITE_AUTH_MODE === 'mock' ? devAuthProvider : firebaseAuthProvider
@@ -24,6 +26,7 @@ export default function App() {
         resources={[
           { name: 'members', list: '/members', show: '/members/:id', meta: { label: '회원 관리' } },
           { name: 'admin-accounts', list: '/admin-accounts', meta: { label: '관리자 관리' } },
+          { name: 'conversation-usage', list: '/token-usage', meta: { label: '토큰 사용량' } },
         ]}
         options={{ syncWithLocation: true, disableTelemetry: true }}
       >
@@ -35,17 +38,19 @@ export default function App() {
               </Authenticated>
             }
           >
-            <Route index element={<NavigateToResource resource="members" />} />
+            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/members" element={<MemberList />} />
             <Route path="/members/:id" element={<MemberShow />} />
             <Route path="/admin-accounts" element={<AdminAccountList />} />
             <Route path="/llm-settings" element={<LlmSettingsPage />} />
+            <Route path="/token-usage" element={<TokenUsagePage />} />
           </Route>
 
           <Route
             element={
               <Authenticated key="public" fallback={<Outlet />}>
-                <NavigateToResource resource="members" />
+                <Navigate to="/dashboard" replace />
               </Authenticated>
             }
           >
