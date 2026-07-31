@@ -31,7 +31,8 @@ class MemberController(
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +
-                "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·만료·무효) |",
+                "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·무효) |\n" +
+                "| EXPIRED_TOKEN | 401 | accessToken 만료 — 재발급 후 재시도 |",
     )
     @GetMapping("/me")
     fun me(
@@ -48,7 +49,8 @@ class MemberController(
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +
-                "| UNAUTHORIZED | 401 | 인증 필요 |\n" +
+                "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·무효) |\n" +
+                "| EXPIRED_TOKEN | 401 | accessToken 만료 — 재발급 후 재시도 |\n" +
                 "| INVALID_INPUT | 400 | nickname 누락 |\n" +
                 "| INVALID_NICKNAME | 400 | 길이(2~20자) 위반 또는 금칙어 포함 |",
     )
@@ -68,7 +70,8 @@ class MemberController(
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +
-                "| UNAUTHORIZED | 401 | 인증 필요 |\n" +
+                "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·무효) |\n" +
+                "| EXPIRED_TOKEN | 401 | accessToken 만료 — 재발급 후 재시도 |\n" +
                 "| ALREADY_WITHDRAWN | 409 | 이미 탈퇴한 회원 |",
     )
     @DeleteMapping("/me")
