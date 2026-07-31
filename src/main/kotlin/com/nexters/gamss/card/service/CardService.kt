@@ -61,7 +61,16 @@ class CardService(
                 message = output.message,
                 conversationCreatedAt = conversation.createdAt,
             )
-        return try {
+        return persistCard(card, conversationId, summary)
+    }
+
+    /** 카드를 저장하고, 저장 시점에 드러난 CAS 경합을 원인에 맞는 [BusinessException]으로 변환한다. */
+    private fun persistCard(
+        card: Card,
+        conversationId: Long,
+        summary: String,
+    ): Card =
+        try {
             cardPersistenceService.save(card, conversationId, summary)
         } catch (e: DataIntegrityViolationException) {
             if (cardRepository.existsByConversationId(conversationId)) {
@@ -72,8 +81,16 @@ class CardService(
             }
             markCardGenerationStatus(conversationId, CardGenerationStatus.FAILED)
             throw e
+        } catch (e: CardGenerationStateConflictException) {
+            // updated == 0이 나온 시점엔 이미 PENDING이 아니라는 뜻이라 markCardGenerationStatus로
+            // 되돌릴 대상 자체가 없다 — 채팅방 삭제(status <> DELETED 조건 탈락) 아니면 정리
+            // 스케줄러가 이미 PENDING을 NONE으로 되돌린 상태다.
+            val conversation = conversationRepository.findById(conversationId).orElse(null)
+            if (conversation?.status == ConversationStatus.DELETED) {
+                throw BusinessException(ErrorCode.CONVERSATION_ALREADY_DELETED).apply { initCause(e) }
+            }
+            throw BusinessException(ErrorCode.CARD_GENERATION_FAILED, e.message).apply { initCause(e) }
         }
-    }
 
     /** 소유권·종료 상태·토큰 상한을 확인한 뒤 [CardGenerationStatus]를 CAS로 선점한다. */
     private fun claimForGeneration(

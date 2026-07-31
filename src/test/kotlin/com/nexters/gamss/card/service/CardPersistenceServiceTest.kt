@@ -50,8 +50,8 @@ class CardPersistenceServiceTest {
                 conversationCreatedAt = Instant.now(),
             )
 
-        // 존재하지 않는 대화라 updateCardGenerationStatus가 0건 갱신 → check() 실패로 트랜잭션이 롤백된다.
-        assertFailsWith<IllegalStateException> {
+        // 존재하지 않는 대화라 updateCardGenerationStatus가 0건 갱신 → 상태 전이 실패로 트랜잭션이 롤백된다.
+        assertFailsWith<CardGenerationStateConflictException> {
             cardPersistenceService.save(card, NON_EXISTENT_CONVERSATION_ID, "요약")
         }
 

@@ -37,7 +37,11 @@ class CardPersistenceService(
                 listOf(CardGenerationStatus.PENDING),
                 Instant.now(),
             )
-        check(updated == 1) { "카드 생성 상태 전이가 실패했습니다. conversationId=$conversationId" }
+        if (updated != 1) {
+            throw CardGenerationStateConflictException(
+                "카드 생성 상태 전이가 실패했습니다. conversationId=$conversationId",
+            )
+        }
         return saved
     }
 }

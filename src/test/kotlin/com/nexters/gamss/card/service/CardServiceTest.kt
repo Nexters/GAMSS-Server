@@ -233,6 +233,41 @@ class CardServiceTest {
     }
 
     @Test
+    fun `저장 시점 상태 전이가 채팅방 삭제로 실패하면 CONVERSATION_ALREADY_DELETED로 변환된다`() {
+        val activeConversation = endedConversation()
+        val deletedConversation = endedConversation().apply { delete() }
+        every { conversationRepository.findById(CONVERSATION_ID) } returnsMany
+            listOf(Optional.of(activeConversation), Optional.of(deletedConversation))
+        stubClaimSuccess()
+        every { cardMessageGenerator.generate(any(), any()) } returns CardMessageOutput("대사", 10, 0)
+        every {
+            cardPersistenceService.save(any(), any(), any())
+        } throws CardGenerationStateConflictException("conflict")
+
+        val exception = assertFailsWith<BusinessException> { service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약") }
+
+        assertEquals(ErrorCode.CONVERSATION_ALREADY_DELETED, exception.errorCode)
+        // 이미 PENDING이 아니라는 뜻(삭제됨)이라 되돌릴 대상 자체가 없다 — 되돌리기를 시도하지 않는다.
+        verify(exactly = 0) {
+            conversationRepository.updateCardGenerationStatus(CONVERSATION_ID, CardGenerationStatus.FAILED, any(), any())
+        }
+    }
+
+    @Test
+    fun `저장 시점 상태 전이가 삭제 아닌 이유로 실패하면(PENDING 타임아웃 리셋 등) CARD_GENERATION_FAILED로 변환된다`() {
+        every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
+        stubClaimSuccess()
+        every { cardMessageGenerator.generate(any(), any()) } returns CardMessageOutput("대사", 10, 0)
+        every {
+            cardPersistenceService.save(any(), any(), any())
+        } throws CardGenerationStateConflictException("conflict")
+
+        val exception = assertFailsWith<BusinessException> { service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약") }
+
+        assertEquals(ErrorCode.CARD_GENERATION_FAILED, exception.errorCode)
+    }
+
+    @Test
     fun `날짜별 조회는 그날 자정부터 다음날 자정까지 KST 범위로 조회한다`() {
         val start = slot<Instant>()
         val end = slot<Instant>()
