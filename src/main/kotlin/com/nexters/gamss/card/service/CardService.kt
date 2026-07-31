@@ -15,6 +15,7 @@ import com.nexters.gamss.llm.generation.CardMessageOutput
 import com.nexters.gamss.monitoring.domain.GenerationType
 import com.nexters.gamss.monitoring.service.GenerationLogRecorder
 import com.nexters.gamss.tokenlimit.service.DailyTokenLimitService
+import org.slf4j.LoggerFactory
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -67,7 +68,7 @@ class CardService(
                 // 카드는 이미 다른 요청이 저장을 마쳤다는 뜻이라 DONE으로 맞춰준다 — FAILED로 두면
                 // 재선점 때마다 LLM을 다시 부르고도 매번 같은 유니크 제약에 걸려 낭비만 반복된다.
                 markCardGenerationStatus(conversationId, CardGenerationStatus.DONE)
-                throw BusinessException(ErrorCode.CARD_ALREADY_EXISTS, e.message)
+                throw BusinessException(ErrorCode.CARD_ALREADY_EXISTS, e.message).apply { initCause(e) }
             }
             markCardGenerationStatus(conversationId, CardGenerationStatus.FAILED)
             throw e
@@ -153,12 +154,16 @@ class CardService(
         conversationId: Long,
         status: CardGenerationStatus,
     ) {
-        conversationRepository.updateCardGenerationStatus(
-            conversationId,
-            status,
-            listOf(CardGenerationStatus.PENDING),
-            Instant.now(),
-        )
+        val updated =
+            conversationRepository.updateCardGenerationStatus(
+                conversationId,
+                status,
+                listOf(CardGenerationStatus.PENDING),
+                Instant.now(),
+            )
+        if (updated == 0) {
+            log.warn("카드 생성 상태 전이 실패: conversationId={}, to={} (이미 PENDING 상태가 아님)", conversationId, status)
+        }
     }
 
     /** 날짜(KST 자정~자정)에 속한 카드를 조회한다. */
@@ -201,5 +206,6 @@ class CardService(
 
     companion object {
         private val ZONE = ZoneId.of("Asia/Seoul")
+        private val log = LoggerFactory.getLogger(CardService::class.java)
     }
 }

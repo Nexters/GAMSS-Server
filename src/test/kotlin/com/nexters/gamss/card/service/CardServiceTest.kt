@@ -197,13 +197,15 @@ class CardServiceTest {
         every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
         stubClaimSuccess()
         every { cardMessageGenerator.generate(any(), any()) } returns CardMessageOutput("대사", 10, 0)
-        every { cardPersistenceService.save(any(), any(), any()) } throws DataIntegrityViolationException("duplicate")
+        val saveFailure = DataIntegrityViolationException("duplicate")
+        every { cardPersistenceService.save(any(), any(), any()) } throws saveFailure
         every { cardRepository.existsByConversationId(CONVERSATION_ID) } returns true
         stubMarkStatus(CardGenerationStatus.DONE)
 
         val exception = assertFailsWith<BusinessException> { service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약") }
 
         assertEquals(ErrorCode.CARD_ALREADY_EXISTS, exception.errorCode)
+        assertEquals(saveFailure, exception.cause)
         verify(exactly = 1) {
             conversationRepository.updateCardGenerationStatus(CONVERSATION_ID, CardGenerationStatus.DONE, any(), any())
         }
