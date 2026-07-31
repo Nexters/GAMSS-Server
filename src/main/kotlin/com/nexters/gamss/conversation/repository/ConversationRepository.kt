@@ -56,7 +56,7 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
      * 갱신해, 종료·삭제 같은 동시 상태 변경과 경합해도 엔티티 merge처럼 전체 행을 덮어쓰지 않는다.
      */
     @Transactional
-    @Modifying(clearAutomatically = true)
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("update Conversation c set c.summary = :summary where c.id = :id")
     fun updateSummary(
         @Param("id") id: Long,
@@ -69,7 +69,7 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
      * 종료 확인과 선점 사이에 다른 요청이 채팅방을 삭제해도 그 뒤로 선점되지 않게 한다.
      */
     @Transactional
-    @Modifying(clearAutomatically = true)
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(
         "update Conversation c set c.cardGenerationStatus = :to, c.cardGenerationStatusUpdatedAt = :now " +
             "where c.id = :id and c.cardGenerationStatus in :fromAny and c.status <> :excludedStatus",
@@ -84,7 +84,7 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
 
     /** 배포 중단·서버 크래시 등으로 [olderThan]보다 오래 PENDING에 머문 고아 카드 생성 상태를 NONE으로 되돌린다. */
     @Transactional
-    @Modifying(clearAutomatically = true)
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(
         "update Conversation c set c.cardGenerationStatus = :to, " +
             "c.cardGenerationStatusUpdatedAt = null " +

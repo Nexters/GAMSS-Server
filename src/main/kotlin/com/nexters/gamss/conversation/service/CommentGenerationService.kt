@@ -221,6 +221,7 @@ class CommentGenerationService(
         userReply: String,
     ): ReplyGenerationOutput {
         val startedAt = System.currentTimeMillis()
+        val tokens = TokenUsageAccumulator()
         var lastError: CommentGenerationFailedException? = null
         repeat(LlmRetryPolicy.MAX_ATTEMPTS) { attempt ->
             try {
@@ -244,6 +245,7 @@ class CommentGenerationService(
                         output.outputTokens,
                     )
                 }
+                tokens.add(output)
                 generationLogRecorder.record(
                     type = GenerationType.REPLY,
                     success = true,
@@ -251,14 +253,15 @@ class CommentGenerationService(
                     latencyMs = System.currentTimeMillis() - startedAt,
                     memberId = memberId,
                     conversationId = conversationId,
-                    usedTokens = output.usedTokens,
-                    cachedTokens = output.cachedTokens,
-                    inputTokens = output.inputTokens,
-                    outputTokens = output.outputTokens,
+                    usedTokens = tokens.used,
+                    cachedTokens = tokens.cached,
+                    inputTokens = tokens.input,
+                    outputTokens = tokens.output,
                 )
                 return output
             } catch (e: CommentGenerationFailedException) {
                 lastError = e
+                tokens.addFailed(e)
                 log.warn("답글 생성 {}차 시도 실패: {}", attempt + 1, e.message)
             } catch (e: Exception) {
                 // 재시도 대상이 아닌 예외: 실패로 기록한 뒤 즉시 던진다(재시도하지 않음).
@@ -269,6 +272,10 @@ class CommentGenerationService(
                     latencyMs = System.currentTimeMillis() - startedAt,
                     memberId = memberId,
                     conversationId = conversationId,
+                    usedTokens = tokens.used,
+                    cachedTokens = tokens.cached,
+                    inputTokens = tokens.input,
+                    outputTokens = tokens.output,
                     failureReason = failureReasonOf(e),
                 )
                 throw e
@@ -281,10 +288,10 @@ class CommentGenerationService(
             latencyMs = System.currentTimeMillis() - startedAt,
             memberId = memberId,
             conversationId = conversationId,
-            usedTokens = lastError?.usedTokens,
-            cachedTokens = lastError?.cachedTokens,
-            inputTokens = lastError?.inputTokens,
-            outputTokens = lastError?.outputTokens,
+            usedTokens = tokens.used,
+            cachedTokens = tokens.cached,
+            inputTokens = tokens.input,
+            outputTokens = tokens.output,
             failureReason = failureReasonOf(lastError),
         )
         throw checkNotNull(lastError)
@@ -321,6 +328,7 @@ class CommentGenerationService(
                 eongttungTopic = eongttungTopic,
             )
         val startedAt = System.currentTimeMillis()
+        val tokens = TokenUsageAccumulator()
         var lastError: CommentGenerationFailedException? = null
         repeat(LlmRetryPolicy.MAX_ATTEMPTS) { attempt ->
             try {
@@ -338,6 +346,7 @@ class CommentGenerationService(
                         output.outputTokens,
                     )
                 }
+                tokens.add(output)
                 generationLogRecorder.record(
                     type = GenerationType.COMMENT,
                     success = true,
@@ -345,14 +354,15 @@ class CommentGenerationService(
                     latencyMs = System.currentTimeMillis() - startedAt,
                     memberId = memberId,
                     conversationId = conversationId,
-                    usedTokens = output.usedTokens,
-                    cachedTokens = output.cachedTokens,
-                    inputTokens = output.inputTokens,
-                    outputTokens = output.outputTokens,
+                    usedTokens = tokens.used,
+                    cachedTokens = tokens.cached,
+                    inputTokens = tokens.input,
+                    outputTokens = tokens.output,
                 )
                 return output
             } catch (e: CommentGenerationFailedException) {
                 lastError = e
+                tokens.addFailed(e)
                 log.warn("댓글 생성 {}차 시도 실패: {}", attempt + 1, e.message)
             } catch (e: Exception) {
                 // 재시도 대상이 아닌 예외: 실패로 기록한 뒤 즉시 던진다(재시도하지 않음).
@@ -363,6 +373,10 @@ class CommentGenerationService(
                     latencyMs = System.currentTimeMillis() - startedAt,
                     memberId = memberId,
                     conversationId = conversationId,
+                    usedTokens = tokens.used,
+                    cachedTokens = tokens.cached,
+                    inputTokens = tokens.input,
+                    outputTokens = tokens.output,
                     failureReason = failureReasonOf(e),
                 )
                 throw e
@@ -375,10 +389,10 @@ class CommentGenerationService(
             latencyMs = System.currentTimeMillis() - startedAt,
             memberId = memberId,
             conversationId = conversationId,
-            usedTokens = lastError?.usedTokens,
-            cachedTokens = lastError?.cachedTokens,
-            inputTokens = lastError?.inputTokens,
-            outputTokens = lastError?.outputTokens,
+            usedTokens = tokens.used,
+            cachedTokens = tokens.cached,
+            inputTokens = tokens.input,
+            outputTokens = tokens.output,
             failureReason = failureReasonOf(lastError),
         )
         throw checkNotNull(lastError)

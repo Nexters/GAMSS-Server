@@ -33,8 +33,16 @@ class CardServiceTest {
     private val cardMessageGenerator = mockk<CardMessageGenerator>()
     private val generationLogRecorder = mockk<GenerationLogRecorder>(relaxed = true)
     private val dailyTokenLimitService = mockk<DailyTokenLimitService> { every { isWithinLimit(any()) } returns true }
+    private val cardPersistenceService = mockk<CardPersistenceService>()
     private val service =
-        CardService(cardRepository, conversationRepository, cardMessageGenerator, generationLogRecorder, dailyTokenLimitService)
+        CardService(
+            cardRepository,
+            conversationRepository,
+            cardMessageGenerator,
+            generationLogRecorder,
+            dailyTokenLimitService,
+            cardPersistenceService,
+        )
 
     private val zone = ZoneId.of("Asia/Seoul")
 
@@ -67,10 +75,8 @@ class CardServiceTest {
         every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(conversation)
         stubClaimSuccess()
         every { cardMessageGenerator.generate(EmotionType.ANGER, "요약") } returns CardMessageOutput("얘 오늘 건들면 안 됨.", 10, 0)
-        every { conversationRepository.updateSummary(CONVERSATION_ID, "요약") } returns 1
-        stubMarkStatus(CardGenerationStatus.DONE)
         val saved = slot<Card>()
-        every { cardRepository.saveAndFlush(capture(saved)) } answers { firstArg() }
+        every { cardPersistenceService.save(capture(saved), CONVERSATION_ID, "요약") } answers { firstArg() }
 
         service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약")
 
@@ -78,21 +84,21 @@ class CardServiceTest {
         assertEquals("요약", saved.captured.summary)
         assertEquals("얘 오늘 건들면 안 됨.", saved.captured.message)
         assertEquals(conversation.createdAt, saved.captured.conversationCreatedAt)
-        verify(exactly = 1) { conversationRepository.updateSummary(CONVERSATION_ID, "요약") }
-        verify(exactly = 1) { conversationRepository.updateCardGenerationStatus(CONVERSATION_ID, CardGenerationStatus.DONE, any(), any()) }
+        verify(exactly = 1) { cardPersistenceService.save(any(), CONVERSATION_ID, "요약") }
     }
 
     @Test
-    fun `일일 토큰 상한을 넘으면 카드 생성을 막고 DAILY_TOKEN_LIMIT_EXCEEDED`() {
+    fun `일일 토큰 상한을 넘으면 선점 없이 카드 생성을 막고 DAILY_TOKEN_LIMIT_EXCEEDED`() {
         every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
-        stubClaimSuccess()
         every { dailyTokenLimitService.isWithinLimit(MEMBER_ID) } returns false
-        stubMarkStatus(CardGenerationStatus.FAILED)
 
         val exception = assertFailsWith<BusinessException> { service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약") }
 
         assertEquals(ErrorCode.DAILY_TOKEN_LIMIT_EXCEEDED, exception.errorCode)
         verify(exactly = 0) { cardMessageGenerator.generate(any(), any()) }
+        verify(
+            exactly = 0,
+        ) { conversationRepository.updateCardGenerationStatus(CONVERSATION_ID, CardGenerationStatus.PENDING, any(), any()) }
     }
 
     @Test
@@ -123,6 +129,16 @@ class CardServiceTest {
     }
 
     @Test
+    fun `종료 후 삭제된 대화면 CONVERSATION_NOT_ENDED가 아니라 CONVERSATION_ALREADY_DELETED`() {
+        val conversation = endedConversation().apply { delete() }
+        every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(conversation)
+
+        val exception = assertFailsWith<BusinessException> { service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약") }
+
+        assertEquals(ErrorCode.CONVERSATION_ALREADY_DELETED, exception.errorCode)
+    }
+
+    @Test
     fun `선점에 실패했는데 이미 카드가 있으면 LLM 호출 없이 CARD_ALREADY_EXISTS`() {
         every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
         every {
@@ -139,7 +155,6 @@ class CardServiceTest {
 
         assertEquals(ErrorCode.CARD_ALREADY_EXISTS, exception.errorCode)
         verify(exactly = 0) { cardMessageGenerator.generate(any(), any()) }
-        verify(exactly = 0) { conversationRepository.updateSummary(any(), any()) }
     }
 
     @Test
@@ -165,14 +180,15 @@ class CardServiceTest {
     fun `대사 생성에 실패하면 FAILED로 전이하고 CARD_GENERATION_FAILED`() {
         every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
         stubClaimSuccess()
-        every { cardMessageGenerator.generate(any(), any()) } throws CardGenerationFailedException("실패")
+        val generationFailure = CardGenerationFailedException("실패")
+        every { cardMessageGenerator.generate(any(), any()) } throws generationFailure
         stubMarkStatus(CardGenerationStatus.FAILED)
 
         val exception = assertFailsWith<BusinessException> { service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약") }
 
         assertEquals(ErrorCode.CARD_GENERATION_FAILED, exception.errorCode)
-        verify(exactly = 0) { conversationRepository.updateSummary(any(), any()) }
-        verify(exactly = 0) { cardRepository.saveAndFlush(any()) }
+        assertEquals(generationFailure, exception.cause)
+        verify(exactly = 0) { cardPersistenceService.save(any(), any(), any()) }
         verify(exactly = 1) {
             conversationRepository.updateCardGenerationStatus(CONVERSATION_ID, CardGenerationStatus.FAILED, any(), any())
         }
@@ -183,14 +199,15 @@ class CardServiceTest {
         every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
         stubClaimSuccess()
         every { cardMessageGenerator.generate(any(), any()) } returns CardMessageOutput("대사", 10, 0)
-        every { cardRepository.saveAndFlush(any()) } throws DataIntegrityViolationException("duplicate")
+        val saveFailure = DataIntegrityViolationException("duplicate")
+        every { cardPersistenceService.save(any(), any(), any()) } throws saveFailure
         every { cardRepository.existsByConversationId(CONVERSATION_ID) } returns true
         stubMarkStatus(CardGenerationStatus.DONE)
 
         val exception = assertFailsWith<BusinessException> { service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약") }
 
         assertEquals(ErrorCode.CARD_ALREADY_EXISTS, exception.errorCode)
-        verify(exactly = 0) { conversationRepository.updateSummary(any(), any()) }
+        assertEquals(saveFailure, exception.cause)
         verify(exactly = 1) {
             conversationRepository.updateCardGenerationStatus(CONVERSATION_ID, CardGenerationStatus.DONE, any(), any())
         }
@@ -202,7 +219,7 @@ class CardServiceTest {
         stubClaimSuccess()
         every { cardMessageGenerator.generate(any(), any()) } returns CardMessageOutput("대사", 10, 0)
         val saveFailure = DataIntegrityViolationException("not-null constraint")
-        every { cardRepository.saveAndFlush(any()) } throws saveFailure
+        every { cardPersistenceService.save(any(), any(), any()) } throws saveFailure
         every { cardRepository.existsByConversationId(CONVERSATION_ID) } returns false
         stubMarkStatus(CardGenerationStatus.FAILED)
 
@@ -212,10 +229,44 @@ class CardServiceTest {
             }
 
         assertEquals(saveFailure, exception)
-        verify(exactly = 0) { conversationRepository.updateSummary(any(), any()) }
         verify(exactly = 1) {
             conversationRepository.updateCardGenerationStatus(CONVERSATION_ID, CardGenerationStatus.FAILED, any(), any())
         }
+    }
+
+    @Test
+    fun `저장 시점 상태 전이가 채팅방 삭제로 실패하면 CONVERSATION_ALREADY_DELETED로 변환된다`() {
+        val activeConversation = endedConversation()
+        val deletedConversation = endedConversation().apply { delete() }
+        every { conversationRepository.findById(CONVERSATION_ID) } returnsMany
+            listOf(Optional.of(activeConversation), Optional.of(deletedConversation))
+        stubClaimSuccess()
+        every { cardMessageGenerator.generate(any(), any()) } returns CardMessageOutput("대사", 10, 0)
+        every {
+            cardPersistenceService.save(any(), any(), any())
+        } throws CardGenerationStateConflictException("conflict")
+
+        val exception = assertFailsWith<BusinessException> { service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약") }
+
+        assertEquals(ErrorCode.CONVERSATION_ALREADY_DELETED, exception.errorCode)
+        // 이미 PENDING이 아니라는 뜻(삭제됨)이라 되돌릴 대상 자체가 없다 — 되돌리기를 시도하지 않는다.
+        verify(exactly = 0) {
+            conversationRepository.updateCardGenerationStatus(CONVERSATION_ID, CardGenerationStatus.FAILED, any(), any())
+        }
+    }
+
+    @Test
+    fun `저장 시점 상태 전이가 삭제 아닌 이유로 실패하면(PENDING 타임아웃 리셋 등) CARD_GENERATION_FAILED로 변환된다`() {
+        every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
+        stubClaimSuccess()
+        every { cardMessageGenerator.generate(any(), any()) } returns CardMessageOutput("대사", 10, 0)
+        every {
+            cardPersistenceService.save(any(), any(), any())
+        } throws CardGenerationStateConflictException("conflict")
+
+        val exception = assertFailsWith<BusinessException> { service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약") }
+
+        assertEquals(ErrorCode.CARD_GENERATION_FAILED, exception.errorCode)
     }
 
     @Test

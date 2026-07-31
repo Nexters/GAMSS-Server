@@ -23,6 +23,7 @@ import com.nexters.gamss.llm.selection.CharacterSelection
 import com.nexters.gamss.llm.selection.CharacterSelector
 import com.nexters.gamss.llm.selection.EongttungTopicSelector
 import com.nexters.gamss.llm.selection.PastSummaryPolicy
+import com.nexters.gamss.monitoring.domain.GenerationType
 import com.nexters.gamss.monitoring.service.GenerationLogRecorder
 import com.nexters.gamss.tokenlimit.service.DailyTokenLimitService
 import io.mockk.every
@@ -259,6 +260,77 @@ class CommentGenerationServiceTest {
         assertEquals(null, result.usedTokens)
         verify(exactly = 2) { commentGenerator.generateComment(any()) }
         verify(exactly = 1) { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) }
+    }
+
+    @Test
+    fun `1차 실패 후 2차 성공하면 두 시도의 토큰을 합산해 기록한다`() {
+        val message = rootMessage()
+        every { messageRepository.findById(1L) } returns Optional.of(message)
+        every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
+        stubClaimSuccess()
+        val attempt1 = CommentGenerationOutput(feed(), usedTokens = 100, cachedTokens = 10, inputTokens = 80, outputTokens = 20)
+        val attempt2 = CommentGenerationOutput(feed(), usedTokens = 200, cachedTokens = 30, inputTokens = 150, outputTokens = 50)
+        every { commentGenerator.generateComment(any(), any(), any(), any(), any()) } returnsMany listOf(attempt1, attempt2)
+        // 1차 검증 실패 → 재시도, 2차 통과
+        var validateCall = 0
+        every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } answers {
+            validateCall++
+            if (validateCall == 1) throw CommentGenerationFailedException("검증 실패")
+        }
+        val saved =
+            listOf(Message(conversationId = 10L, senderType = SenderType.CHARACTER, emotionType = EmotionType.JOY, content = "댓글"))
+        every { commentPersistenceService.saveFeed(10L, 1L, feed()) } returns saved
+
+        val result = service.generateComments(memberId = 1L, messageId = 1L)
+
+        assertEquals(CommentGenerationOutcome.DONE, result.outcome)
+        // 성공 로그에 1차(100/10/80/20) + 2차(200/30/150/50) 합산이 남아야 한다(마지막 시도만 X)
+        verify {
+            generationLogRecorder.record(
+                type = GenerationType.COMMENT,
+                success = true,
+                attemptCount = 2,
+                latencyMs = any(),
+                memberId = 1L,
+                conversationId = 10L,
+                usedTokens = 300,
+                cachedTokens = 40,
+                inputTokens = 230,
+                outputTokens = 70,
+                failureReason = any(),
+            )
+        }
+    }
+
+    @Test
+    fun `두 시도 모두 검증 실패하면 두 시도의 토큰을 합산해 실패 로그에 기록한다`() {
+        val message = rootMessage()
+        every { messageRepository.findById(1L) } returns Optional.of(message)
+        every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
+        stubClaimSuccess()
+        val attempt1 = CommentGenerationOutput(feed(), usedTokens = 100, cachedTokens = 10, inputTokens = 80, outputTokens = 20)
+        val attempt2 = CommentGenerationOutput(feed(), usedTokens = 200, cachedTokens = 30, inputTokens = 150, outputTokens = 50)
+        every { commentGenerator.generateComment(any(), any(), any(), any(), any()) } returnsMany listOf(attempt1, attempt2)
+        every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } throws CommentGenerationFailedException("검증 실패")
+        every { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) } returns 1
+
+        service.generateComments(memberId = 1L, messageId = 1L)
+
+        verify {
+            generationLogRecorder.record(
+                type = GenerationType.COMMENT,
+                success = false,
+                attemptCount = 2,
+                latencyMs = any(),
+                memberId = 1L,
+                conversationId = 10L,
+                usedTokens = 300,
+                cachedTokens = 40,
+                inputTokens = 230,
+                outputTokens = 70,
+                failureReason = any(),
+            )
+        }
     }
 
     @Test

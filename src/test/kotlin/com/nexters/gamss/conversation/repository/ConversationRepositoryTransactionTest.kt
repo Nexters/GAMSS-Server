@@ -28,6 +28,16 @@ class ConversationRepositoryTransactionTest {
     }
 
     @Test
+    fun `서비스 트랜잭션 없이 직접 호출해도 대화 요약이 원자적으로 갱신된다`() {
+        val conversation = conversationRepository.save(Conversation(memberId = 1L))
+
+        val updatedCount = conversationRepository.updateSummary(conversation.id, "요약본")
+
+        assertEquals(1, updatedCount)
+        assertEquals("요약본", conversationRepository.findById(conversation.id).get().summary)
+    }
+
+    @Test
     fun `서비스 트랜잭션 없이 직접 호출해도 카드 생성 선점이 원자적으로 동작한다`() {
         val conversation = conversationRepository.save(Conversation(memberId = 1L))
 

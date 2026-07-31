@@ -17,7 +17,7 @@ firebase:
   project-id: gamss-test
 
 conversation:
-  comment-pending-timeout: PT3M
+  pending-generation-timeout: PT3M
 
 gemini:
   api-key: test-gemini-api-key-dummy-value
