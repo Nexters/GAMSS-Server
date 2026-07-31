@@ -2,6 +2,8 @@ package com.nexters.gamss.card.service
 
 import com.nexters.gamss.card.domain.Card
 import com.nexters.gamss.card.repository.CardRepository
+import com.nexters.gamss.conversation.domain.CardGenerationStatus
+import com.nexters.gamss.conversation.domain.Conversation
 import com.nexters.gamss.conversation.repository.ConversationRepository
 import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.support.TestcontainersConfig
@@ -54,6 +56,32 @@ class CardPersistenceServiceTest {
         }
 
         assertEquals(0, cardRepository.count())
+    }
+
+    @Test
+    fun `카드 생성 상태 전이가 성공하면 요약과 상태가 함께 반영된다`() {
+        val conversation = conversationRepository.save(Conversation(memberId = 1L))
+        conversationRepository.updateCardGenerationStatus(
+            conversation.id,
+            CardGenerationStatus.PENDING,
+            listOf(CardGenerationStatus.NONE),
+            Instant.now(),
+        )
+        val card =
+            Card(
+                memberId = 1L,
+                conversationId = conversation.id,
+                emotion = EmotionType.ANGER,
+                summary = "요약",
+                message = "대사",
+                conversationCreatedAt = Instant.now(),
+            )
+
+        cardPersistenceService.save(card, conversation.id, "요약")
+
+        val updatedConversation = conversationRepository.findById(conversation.id).get()
+        assertEquals(CardGenerationStatus.DONE, updatedConversation.cardGenerationStatus)
+        assertEquals("요약", updatedConversation.summary)
     }
 
     private companion object {
