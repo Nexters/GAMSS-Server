@@ -42,6 +42,24 @@ class Conversation(
     var status: ConversationStatus = ConversationStatus.ACTIVE
         protected set
 
+    /**
+     * 카드 생성 시점에 저장되는 이 대화 전체의 요약. 다른 대화방 댓글 생성 시 과거 맥락으로 참고한다.
+     * 값 자체는 [com.nexters.gamss.conversation.repository.ConversationRepository.updateSummary]로만 갱신한다.
+     */
+    @Column(name = "summary", columnDefinition = "TEXT")
+    var summary: String? = null
+        protected set
+
+    /** 카드 생성 LLM 호출 전 CAS 선점 상태([Message.commentStatus]와 같은 패턴). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "card_generation_status", length = 20, nullable = false)
+    var cardGenerationStatus: CardGenerationStatus = CardGenerationStatus.NONE
+        protected set
+
+    @Column(name = "card_generation_status_updated_at")
+    var cardGenerationStatusUpdatedAt: Instant? = null
+        protected set
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     var createdAt: Instant = Instant.now()
