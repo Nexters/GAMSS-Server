@@ -1,5 +1,6 @@
 package com.nexters.gamss.conversation.controller
 
+import com.nexters.gamss.conversation.controller.dto.GenerateCommentsRequest
 import com.nexters.gamss.conversation.controller.dto.SaveMessageRequest
 import com.nexters.gamss.conversation.domain.Message
 import com.nexters.gamss.conversation.domain.SenderType
@@ -133,5 +134,15 @@ class ConversationControllerTest {
         assertFailsWith<IllegalStateException> {
             controller.saveMessage(principal, SaveMessageRequest(content = "오늘 있었던 일"))
         }
+    }
+
+    @Test
+    fun `요청의 currentConversationSummary를 그대로 generateComments에 전달한다`() {
+        every { commentGenerationService.generateComments(1L, 5L, "재시도 요약") } returns
+            GenerationResult(CommentGenerationOutcome.DONE, emptyList(), usedTokens = 1)
+
+        controller.generateComments(principal, GenerateCommentsRequest(messageId = 5L, currentConversationSummary = "재시도 요약"))
+
+        verify(exactly = 1) { commentGenerationService.generateComments(1L, 5L, "재시도 요약") }
     }
 }

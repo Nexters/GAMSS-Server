@@ -67,15 +67,17 @@ class CommentGenerationService(
 
     /**
      * 실패 후 수동 재시도용(멱등). [messageId]가 본인 소유의 일기(사용자) 메시지인지 새로 검증한다.
-     * 이 엔드포인트는 요청 바디가 없어 프론트의 임시 요약을 다시 받을 수 없으므로 null로 재생성한다.
+     * [currentConversationSummary]는 프론트가 재시도 요청에도 함께 보내면 재생성에 반영되고,
+     * 생략하면(null) 맥락 없이 재생성한다.
      */
     fun generateComments(
         memberId: Long,
         messageId: Long,
+        currentConversationSummary: String?,
     ): GenerationResult {
         val rootMessage = getOwnedRootMessage(memberId, messageId)
         limitExceededOrNull(memberId)?.let { return it }
-        return generateCommentsInternal(memberId, rootMessage, messageId, null)
+        return generateCommentsInternal(memberId, rootMessage, messageId, currentConversationSummary)
     }
 
     /** 실패 후 수동 재시도용(멱등). [messageId]가 본인 소유의 답글(사용자) 메시지인지 새로 검증한다. */

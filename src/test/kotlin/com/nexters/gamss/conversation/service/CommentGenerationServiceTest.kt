@@ -139,11 +139,35 @@ class CommentGenerationServiceTest {
             listOf(Message(conversationId = 10L, senderType = SenderType.CHARACTER, emotionType = EmotionType.JOY, content = "댓글"))
         every { commentPersistenceService.saveFeed(10L, 1L, feed()) } returns savedMessages
 
-        val result = service.generateComments(memberId = 1L, messageId = 1L)
+        val result = service.generateComments(memberId = 1L, messageId = 1L, currentConversationSummary = null)
 
         assertEquals(CommentGenerationOutcome.DONE, result.outcome)
         assertEquals(savedMessages, result.messages)
         assertEquals(123, result.usedTokens)
+    }
+
+    @Test
+    fun `generateComments가 받은 currentConversationSummary를 그대로 LLM 호출에 전달한다`() {
+        val message = rootMessage()
+        every { messageRepository.findById(1L) } returns Optional.of(message)
+        every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
+        stubClaimSuccess()
+        every {
+            commentGenerator.generateComment(
+                promptContext(currentConversationSummary = "재시도 요약", diaryContent = message.content),
+            )
+        } returns CommentGenerationOutput(feed(), 123, 0)
+        every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } returns Unit
+        every { commentPersistenceService.saveFeed(10L, 1L, feed()) } returns emptyList()
+
+        val result = service.generateComments(memberId = 1L, messageId = 1L, currentConversationSummary = "재시도 요약")
+
+        assertEquals(CommentGenerationOutcome.DONE, result.outcome)
+        verify(exactly = 1) {
+            commentGenerator.generateComment(
+                promptContext(currentConversationSummary = "재시도 요약", diaryContent = message.content),
+            )
+        }
     }
 
     @Test
@@ -170,7 +194,7 @@ class CommentGenerationServiceTest {
         every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } returns Unit
         every { commentPersistenceService.saveFeed(10L, 1L, feed()) } returns emptyList()
 
-        val result = service.generateComments(memberId = 1L, messageId = 1L)
+        val result = service.generateComments(memberId = 1L, messageId = 1L, currentConversationSummary = null)
 
         assertEquals(CommentGenerationOutcome.DONE, result.outcome)
         verify(exactly = 1) {
@@ -187,7 +211,7 @@ class CommentGenerationServiceTest {
             messageRepository.updateCommentStatus(1L, CommentStatus.PENDING, listOf(CommentStatus.NONE, CommentStatus.FAILED), any())
         } returns 0
 
-        val result = service.generateComments(memberId = 1L, messageId = 1L)
+        val result = service.generateComments(memberId = 1L, messageId = 1L, currentConversationSummary = null)
 
         assertEquals(CommentGenerationOutcome.GENERATING, result.outcome)
         assertEquals(null, result.usedTokens)
@@ -212,7 +236,7 @@ class CommentGenerationServiceTest {
             listOf(Message(conversationId = 10L, senderType = SenderType.CHARACTER, emotionType = EmotionType.JOY, content = "이미 생성됨"))
         every { messageRepository.findAllByRootMessageIdOrderByIdAsc(1L) } returns existingComments
 
-        val result = service.generateComments(memberId = 1L, messageId = 1L)
+        val result = service.generateComments(memberId = 1L, messageId = 1L, currentConversationSummary = null)
 
         assertEquals(CommentGenerationOutcome.DONE, result.outcome)
         assertEquals(existingComments, result.messages)
@@ -229,7 +253,7 @@ class CommentGenerationServiceTest {
             CommentGenerationFailedException("LLM 호출 실패")
         every { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) } returns 1
 
-        val result = service.generateComments(memberId = 1L, messageId = 1L)
+        val result = service.generateComments(memberId = 1L, messageId = 1L, currentConversationSummary = null)
 
         assertEquals(CommentGenerationOutcome.FAILED, result.outcome)
         assertEquals(null, result.usedTokens)
@@ -248,7 +272,7 @@ class CommentGenerationServiceTest {
         every { commentPersistenceService.saveFeed(10L, 1L, feed()) } throws RuntimeException("DB 제약조건 위반")
         every { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) } returns 1
 
-        val result = service.generateComments(memberId = 1L, messageId = 1L)
+        val result = service.generateComments(memberId = 1L, messageId = 1L, currentConversationSummary = null)
 
         assertEquals(CommentGenerationOutcome.FAILED, result.outcome)
         assertEquals(null, result.usedTokens)
@@ -266,7 +290,10 @@ class CommentGenerationServiceTest {
         every { commentPersistenceService.saveFeed(10L, 1L, feed()) } throws BusinessException(ErrorCode.CONVERSATION_NOT_FOUND)
         every { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) } returns 1
 
-        val exception = assertFailsWith<BusinessException> { service.generateComments(memberId = 1L, messageId = 1L) }
+        val exception =
+            assertFailsWith<BusinessException> {
+                service.generateComments(memberId = 1L, messageId = 1L, currentConversationSummary = null)
+            }
 
         assertEquals(ErrorCode.CONVERSATION_NOT_FOUND, exception.errorCode)
         verify(exactly = 1) { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) }
@@ -304,7 +331,7 @@ class CommentGenerationServiceTest {
         every { commentFeedValidator.validate(quirkyFeed, charactersWithQuirky, 1) } returns Unit
         every { commentPersistenceService.saveFeed(10L, 1L, quirkyFeed) } returns emptyList()
 
-        val result = service.generateComments(memberId = 1L, messageId = 1L)
+        val result = service.generateComments(memberId = 1L, messageId = 1L, currentConversationSummary = null)
 
         assertEquals(CommentGenerationOutcome.DONE, result.outcome)
         assertEquals(456, result.usedTokens)
@@ -315,7 +342,10 @@ class CommentGenerationServiceTest {
     fun `존재하지 않는 메시지면 MESSAGE_NOT_FOUND`() {
         every { messageRepository.findById(99L) } returns Optional.empty()
 
-        val exception = assertFailsWith<BusinessException> { service.generateComments(memberId = 1L, messageId = 99L) }
+        val exception =
+            assertFailsWith<BusinessException> {
+                service.generateComments(memberId = 1L, messageId = 99L, currentConversationSummary = null)
+            }
 
         assertEquals(ErrorCode.MESSAGE_NOT_FOUND, exception.errorCode)
     }
@@ -331,7 +361,10 @@ class CommentGenerationServiceTest {
             )
         every { messageRepository.findById(1L) } returns Optional.of(characterMessage)
 
-        val exception = assertFailsWith<BusinessException> { service.generateComments(memberId = 1L, messageId = 1L) }
+        val exception =
+            assertFailsWith<BusinessException> {
+                service.generateComments(memberId = 1L, messageId = 1L, currentConversationSummary = null)
+            }
 
         assertEquals(ErrorCode.INVALID_COMMENT_TARGET, exception.errorCode)
     }
@@ -341,7 +374,10 @@ class CommentGenerationServiceTest {
         every { messageRepository.findById(1L) } returns Optional.of(rootMessage())
         every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 2L))
 
-        val exception = assertFailsWith<BusinessException> { service.generateComments(memberId = 1L, messageId = 1L) }
+        val exception =
+            assertFailsWith<BusinessException> {
+                service.generateComments(memberId = 1L, messageId = 1L, currentConversationSummary = null)
+            }
 
         assertEquals(ErrorCode.CONVERSATION_ACCESS_DENIED, exception.errorCode)
     }
@@ -351,7 +387,10 @@ class CommentGenerationServiceTest {
         every { messageRepository.findById(1L) } returns Optional.of(rootMessage())
         every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L).apply { delete() })
 
-        val exception = assertFailsWith<BusinessException> { service.generateComments(memberId = 1L, messageId = 1L) }
+        val exception =
+            assertFailsWith<BusinessException> {
+                service.generateComments(memberId = 1L, messageId = 1L, currentConversationSummary = null)
+            }
 
         assertEquals(ErrorCode.CONVERSATION_ALREADY_DELETED, exception.errorCode)
         verify(exactly = 0) { messageRepository.updateCommentStatus(any(), any(), any(), any()) }

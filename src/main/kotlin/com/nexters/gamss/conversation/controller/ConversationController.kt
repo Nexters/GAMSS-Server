@@ -169,6 +169,9 @@ class ConversationController(
                 "따로 호출할 필요가 없습니다. `POST /messages` 응답이 commentStatus=FAILED였을 때 같은 " +
                 "messageId로 재시도하는 용도로 남아 있습니다. 멱등한 엔드포인트로, " +
                 "재요청이 곧 결과 조회를 겸합니다 — GENERATING이면 잠시 후 같은 요청을 다시 보내면 됩니다.\n\n" +
+                "currentConversationSummary를 함께 보내면 재시도 생성에도 그 맥락이 반영됩니다(생략하면 맥락 없이 " +
+                "재생성). 단, 이미 DONE·GENERATING 상태라 선점에 실패해 상태 조회만 하는 경우엔 이 값이 쓰이지 " +
+                "않습니다.\n\n" +
                 "**status 값**\n\n" +
                 "| status | 의미 |\n" +
                 "|---|---|\n" +
@@ -179,7 +182,7 @@ class ConversationController(
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +
                 "| UNAUTHORIZED | 401 | 인증 필요 |\n" +
-                "| INVALID_INPUT | 400 | messageId 누락 |\n" +
+                "| INVALID_INPUT | 400 | messageId 누락, 또는 currentConversationSummary 2000자 초과 |\n" +
                 "| MESSAGE_NOT_FOUND | 404 | 존재하지 않는 메시지 |\n" +
                 "| INVALID_COMMENT_TARGET | 400 | 일기(사용자) 메시지가 아님 |\n" +
                 "| CONVERSATION_ACCESS_DENIED | 403 | 본인 채팅방이 아님 |\n" +
@@ -190,7 +193,12 @@ class ConversationController(
         @Parameter(hidden = true) @AuthenticationPrincipal principal: AuthPrincipal,
         @Valid @RequestBody request: GenerateCommentsRequest,
     ): ApiResponse<CommentGenerationResponse> {
-        val result = commentGenerationService.generateComments(principal.memberId, checkNotNull(request.messageId))
+        val result =
+            commentGenerationService.generateComments(
+                principal.memberId,
+                checkNotNull(request.messageId),
+                request.currentConversationSummary,
+            )
         val status = result.outcome.toResponseStatus()
         val comments =
             if (status == CommentGenerationStatus.DONE) result.messages.map { MessageResponse.from(it) } else null
