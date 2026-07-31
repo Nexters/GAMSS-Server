@@ -20,11 +20,8 @@ class PendingCommentCleanupScheduler(
 
     @Scheduled(fixedDelay = CHECK_INTERVAL_MILLIS)
     fun resetStalePending() {
-        val threshold = Instant.now().minus(properties.commentPendingTimeout)
-        val resetCount = messageRepository.resetStalePending(threshold)
-        if (resetCount > 0) {
-            log.warn("고아 PENDING {}건을 NONE으로 되돌림 (threshold={})", resetCount, threshold)
-        }
+        val threshold = Instant.now().minus(properties.pendingGenerationTimeout)
+        PendingCleanupSupport.resetStalePendingAndLog(log, threshold, "댓글 생성") { messageRepository.resetStalePending(it) }
     }
 
     companion object {

@@ -36,7 +36,7 @@ class QualityStatsService(
         val success = logs.count { it.success }.toLong()
         val retried = logs.count { it.attemptCount > 1 }.toLong()
         val latencies = logs.map { it.latencyMs }.sorted()
-        val stuckBefore = Instant.now().minus(conversationProperties.commentPendingTimeout)
+        val stuckBefore = Instant.now().minus(conversationProperties.pendingGenerationTimeout)
         val totalTokens = logs.sumOf { (it.usedTokens ?: 0).toLong() }
         val cachedTokens = logs.sumOf { (it.cachedTokens ?: 0).toLong() }
         // 캐시는 입력의 부분집합이라, 적중률은 입력 토큰 대비로 계산한다(출력은 캐시 대상이 아님).

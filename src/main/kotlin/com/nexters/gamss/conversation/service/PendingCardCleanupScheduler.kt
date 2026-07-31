@@ -20,11 +20,12 @@ class PendingCardCleanupScheduler(
 
     @Scheduled(fixedDelay = CHECK_INTERVAL_MILLIS)
     fun resetStalePending() {
-        val threshold = Instant.now().minus(properties.commentPendingTimeout)
-        val resetCount = conversationRepository.resetStaleCardGenerationPending(threshold)
-        if (resetCount > 0) {
-            log.warn("고아 카드 생성 PENDING {}건을 NONE으로 되돌림 (threshold={})", resetCount, threshold)
-        }
+        val threshold = Instant.now().minus(properties.pendingGenerationTimeout)
+        PendingCleanupSupport.resetStalePendingAndLog(
+            log,
+            threshold,
+            "카드 생성",
+        ) { conversationRepository.resetStaleCardGenerationPending(it) }
     }
 
     companion object {
