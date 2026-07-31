@@ -52,7 +52,10 @@ class SecurityConfig(
     companion object {
         private val PUBLIC_PATHS =
             arrayOf(
-                "/api/auth/**",
+                // 로그인·재발급만 공개다. 로그아웃은 인증이 필요하므로 /api/auth/** 로 뭉뚱그리지 않는다 —
+                // 앞으로 추가되는 인증 API 도 기본은 '보호'가 되게 한다.
+                "/api/auth/login",
+                "/api/auth/reissue",
                 // 관리자 로그인만 공개. /api/admin/** 의 나머지는 ROLE_ADMIN 을 요구한다.
                 "/api/admin/auth/login",
                 "/actuator/health",
