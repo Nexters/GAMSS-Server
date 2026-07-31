@@ -304,8 +304,9 @@ class CommentGenerationService(
         currentConversationSummary: String? = null,
         pastSummaries: List<String> = emptyList(),
     ): CommentGenerationOutput {
-        val characters = characterSelector.select()
-        val tikitakaCount = characterSelector.selectTikitakaCount()
+        val selection = characterSelector.select()
+        val characters = selection.characters
+        val tikitakaCount = selection.tikitakaCount
         val eongttungTopic = if (EmotionType.QUIRKY in characters) eongttungTopicSelector.select() else null
 
         val context =

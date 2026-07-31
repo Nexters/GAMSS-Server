@@ -19,6 +19,7 @@ import com.nexters.gamss.llm.parsing.CommentFeedValidator
 import com.nexters.gamss.llm.parsing.TikitakaDraft
 import com.nexters.gamss.llm.prompt.CommentPromptContext
 import com.nexters.gamss.llm.prompt.PastSummaries
+import com.nexters.gamss.llm.selection.CharacterSelection
 import com.nexters.gamss.llm.selection.CharacterSelector
 import com.nexters.gamss.llm.selection.EongttungTopicSelector
 import com.nexters.gamss.llm.selection.PastSummaryPolicy
@@ -113,8 +114,7 @@ class CommentGenerationServiceTest {
         every {
             messageRepository.updateCommentStatus(1L, CommentStatus.PENDING, listOf(CommentStatus.NONE, CommentStatus.FAILED), any())
         } returns 1
-        every { characterSelector.select() } returns characters
-        every { characterSelector.selectTikitakaCount() } returns tikitakaCount
+        every { characterSelector.select() } returns CharacterSelection(characters, tikitakaCount)
         every {
             conversationRepository.findRandomPastSummaries(
                 any(),
@@ -155,8 +155,7 @@ class CommentGenerationServiceTest {
         every {
             messageRepository.updateCommentStatus(1L, CommentStatus.PENDING, listOf(CommentStatus.NONE, CommentStatus.FAILED), any())
         } returns 1
-        every { characterSelector.select() } returns characters
-        every { characterSelector.selectTikitakaCount() } returns tikitakaCount
+        every { characterSelector.select() } returns CharacterSelection(characters, tikitakaCount)
         every {
             conversationRepository.findRandomPastSummaries(
                 1L,
@@ -282,8 +281,7 @@ class CommentGenerationServiceTest {
         every {
             messageRepository.updateCommentStatus(1L, CommentStatus.PENDING, listOf(CommentStatus.NONE, CommentStatus.FAILED), any())
         } returns 1
-        every { characterSelector.select() } returns charactersWithQuirky
-        every { characterSelector.selectTikitakaCount() } returns 1
+        every { characterSelector.select() } returns CharacterSelection(charactersWithQuirky, 1)
         every { eongttungTopicSelector.select() } returns "소재"
         every {
             conversationRepository.findRandomPastSummaries(
