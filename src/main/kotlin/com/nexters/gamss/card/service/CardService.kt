@@ -150,7 +150,7 @@ class CardService(
                     failureReason = (e.cause ?: e).javaClass.simpleName,
                 )
                 markCardGenerationStatus(conversationId, CardGenerationStatus.FAILED)
-                throw BusinessException(ErrorCode.CARD_GENERATION_FAILED, e.message)
+                throw BusinessException(ErrorCode.CARD_GENERATION_FAILED, e.message).apply { initCause(e) }
             }
         generationLogRecorder.record(
             type = GenerationType.CARD,

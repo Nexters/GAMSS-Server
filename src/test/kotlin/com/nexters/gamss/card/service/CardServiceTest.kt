@@ -180,12 +180,14 @@ class CardServiceTest {
     fun `대사 생성에 실패하면 FAILED로 전이하고 CARD_GENERATION_FAILED`() {
         every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
         stubClaimSuccess()
-        every { cardMessageGenerator.generate(any(), any()) } throws CardGenerationFailedException("실패")
+        val generationFailure = CardGenerationFailedException("실패")
+        every { cardMessageGenerator.generate(any(), any()) } throws generationFailure
         stubMarkStatus(CardGenerationStatus.FAILED)
 
         val exception = assertFailsWith<BusinessException> { service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약") }
 
         assertEquals(ErrorCode.CARD_GENERATION_FAILED, exception.errorCode)
+        assertEquals(generationFailure, exception.cause)
         verify(exactly = 0) { cardPersistenceService.save(any(), any(), any()) }
         verify(exactly = 1) {
             conversationRepository.updateCardGenerationStatus(CONVERSATION_ID, CardGenerationStatus.FAILED, any(), any())
