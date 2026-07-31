@@ -41,6 +41,7 @@ class CardController(
                 "| CONVERSATION_ACCESS_DENIED | 403 | 본인 채팅방이 아님 |\n" +
                 "| CONVERSATION_NOT_ENDED | 409 | 종료되지 않은 채팅방 |\n" +
                 "| CARD_ALREADY_EXISTS | 409 | 이미 카드가 생성된 채팅방 |\n" +
+                "| CARD_GENERATION_IN_PROGRESS | 409 | 카드 생성 중(재시도 가능) |\n" +
                 "| CARD_GENERATION_FAILED | 503 | 카드 대사 생성 실패(재시도 가능) |",
     )
     @PostMapping
