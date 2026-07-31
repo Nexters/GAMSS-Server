@@ -33,8 +33,16 @@ class CardServiceTest {
     private val cardMessageGenerator = mockk<CardMessageGenerator>()
     private val generationLogRecorder = mockk<GenerationLogRecorder>(relaxed = true)
     private val dailyTokenLimitService = mockk<DailyTokenLimitService> { every { isWithinLimit(any()) } returns true }
+    private val cardPersistenceService = mockk<CardPersistenceService>()
     private val service =
-        CardService(cardRepository, conversationRepository, cardMessageGenerator, generationLogRecorder, dailyTokenLimitService)
+        CardService(
+            cardRepository,
+            conversationRepository,
+            cardMessageGenerator,
+            generationLogRecorder,
+            dailyTokenLimitService,
+            cardPersistenceService,
+        )
 
     private val zone = ZoneId.of("Asia/Seoul")
 
@@ -67,10 +75,8 @@ class CardServiceTest {
         every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(conversation)
         stubClaimSuccess()
         every { cardMessageGenerator.generate(EmotionType.ANGER, "요약") } returns CardMessageOutput("얘 오늘 건들면 안 됨.", 10, 0)
-        every { conversationRepository.updateSummary(CONVERSATION_ID, "요약") } returns 1
-        stubMarkStatus(CardGenerationStatus.DONE)
         val saved = slot<Card>()
-        every { cardRepository.saveAndFlush(capture(saved)) } answers { firstArg() }
+        every { cardPersistenceService.save(capture(saved), CONVERSATION_ID, "요약") } answers { firstArg() }
 
         service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약")
 
@@ -78,8 +84,7 @@ class CardServiceTest {
         assertEquals("요약", saved.captured.summary)
         assertEquals("얘 오늘 건들면 안 됨.", saved.captured.message)
         assertEquals(conversation.createdAt, saved.captured.conversationCreatedAt)
-        verify(exactly = 1) { conversationRepository.updateSummary(CONVERSATION_ID, "요약") }
-        verify(exactly = 1) { conversationRepository.updateCardGenerationStatus(CONVERSATION_ID, CardGenerationStatus.DONE, any(), any()) }
+        verify(exactly = 1) { cardPersistenceService.save(any(), CONVERSATION_ID, "요약") }
     }
 
     @Test
@@ -139,7 +144,6 @@ class CardServiceTest {
 
         assertEquals(ErrorCode.CARD_ALREADY_EXISTS, exception.errorCode)
         verify(exactly = 0) { cardMessageGenerator.generate(any(), any()) }
-        verify(exactly = 0) { conversationRepository.updateSummary(any(), any()) }
     }
 
     @Test
@@ -171,8 +175,7 @@ class CardServiceTest {
         val exception = assertFailsWith<BusinessException> { service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약") }
 
         assertEquals(ErrorCode.CARD_GENERATION_FAILED, exception.errorCode)
-        verify(exactly = 0) { conversationRepository.updateSummary(any(), any()) }
-        verify(exactly = 0) { cardRepository.saveAndFlush(any()) }
+        verify(exactly = 0) { cardPersistenceService.save(any(), any(), any()) }
         verify(exactly = 1) {
             conversationRepository.updateCardGenerationStatus(CONVERSATION_ID, CardGenerationStatus.FAILED, any(), any())
         }
@@ -183,14 +186,13 @@ class CardServiceTest {
         every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
         stubClaimSuccess()
         every { cardMessageGenerator.generate(any(), any()) } returns CardMessageOutput("대사", 10, 0)
-        every { cardRepository.saveAndFlush(any()) } throws DataIntegrityViolationException("duplicate")
+        every { cardPersistenceService.save(any(), any(), any()) } throws DataIntegrityViolationException("duplicate")
         every { cardRepository.existsByConversationId(CONVERSATION_ID) } returns true
         stubMarkStatus(CardGenerationStatus.DONE)
 
         val exception = assertFailsWith<BusinessException> { service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약") }
 
         assertEquals(ErrorCode.CARD_ALREADY_EXISTS, exception.errorCode)
-        verify(exactly = 0) { conversationRepository.updateSummary(any(), any()) }
         verify(exactly = 1) {
             conversationRepository.updateCardGenerationStatus(CONVERSATION_ID, CardGenerationStatus.DONE, any(), any())
         }
@@ -202,7 +204,7 @@ class CardServiceTest {
         stubClaimSuccess()
         every { cardMessageGenerator.generate(any(), any()) } returns CardMessageOutput("대사", 10, 0)
         val saveFailure = DataIntegrityViolationException("not-null constraint")
-        every { cardRepository.saveAndFlush(any()) } throws saveFailure
+        every { cardPersistenceService.save(any(), any(), any()) } throws saveFailure
         every { cardRepository.existsByConversationId(CONVERSATION_ID) } returns false
         stubMarkStatus(CardGenerationStatus.FAILED)
 
@@ -212,7 +214,6 @@ class CardServiceTest {
             }
 
         assertEquals(saveFailure, exception)
-        verify(exactly = 0) { conversationRepository.updateSummary(any(), any()) }
         verify(exactly = 1) {
             conversationRepository.updateCardGenerationStatus(CONVERSATION_ID, CardGenerationStatus.FAILED, any(), any())
         }

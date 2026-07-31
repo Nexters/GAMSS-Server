@@ -11,6 +11,7 @@ import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.llm.error.CardGenerationFailedException
 import com.nexters.gamss.llm.generation.CardMessageGenerator
+import com.nexters.gamss.llm.generation.CardMessageOutput
 import com.nexters.gamss.monitoring.domain.GenerationType
 import com.nexters.gamss.monitoring.service.GenerationLogRecorder
 import com.nexters.gamss.tokenlimit.service.DailyTokenLimitService
@@ -33,6 +34,7 @@ class CardService(
     private val cardMessageGenerator: CardMessageGenerator,
     private val generationLogRecorder: GenerationLogRecorder,
     private val dailyTokenLimitService: DailyTokenLimitService,
+    private val cardPersistenceService: CardPersistenceService,
 ) {
     /**
      * 종료된 대화에 대해 대표 감정 캐릭터의 한 줄 대사를 생성해 카드를 저장한다. 외부 LLM 호출이 DB
@@ -47,6 +49,36 @@ class CardService(
         emotion: EmotionType,
         summary: String,
     ): Card {
+        val conversation = claimForGeneration(conversationId, memberId)
+        val output = generateMessage(emotion, summary, memberId, conversationId)
+        val card =
+            Card(
+                memberId = memberId,
+                conversationId = conversationId,
+                emotion = emotion,
+                summary = summary,
+                message = output.message,
+                conversationCreatedAt = conversation.createdAt,
+            )
+        return try {
+            cardPersistenceService.save(card, conversationId, summary)
+        } catch (e: DataIntegrityViolationException) {
+            if (cardRepository.existsByConversationId(conversationId)) {
+                // 카드는 이미 다른 요청이 저장을 마쳤다는 뜻이라 DONE으로 맞춰준다 — FAILED로 두면
+                // 재선점 때마다 LLM을 다시 부르고도 매번 같은 유니크 제약에 걸려 낭비만 반복된다.
+                markCardGenerationStatus(conversationId, CardGenerationStatus.DONE)
+                throw BusinessException(ErrorCode.CARD_ALREADY_EXISTS, e.message)
+            }
+            markCardGenerationStatus(conversationId, CardGenerationStatus.FAILED)
+            throw e
+        }
+    }
+
+    /** 소유권·종료 상태를 검증하고 [CardGenerationStatus]를 CAS로 선점한 뒤 토큰 상한을 확인한다. */
+    private fun claimForGeneration(
+        conversationId: Long,
+        memberId: Long,
+    ): Conversation {
         val conversation = getOwnedConversation(conversationId, memberId)
         if (conversation.status != ConversationStatus.ENDED) {
             throw BusinessException(ErrorCode.CONVERSATION_NOT_ENDED)
@@ -69,7 +101,16 @@ class CardService(
             markCardGenerationStatus(conversationId, CardGenerationStatus.FAILED)
             throw BusinessException(ErrorCode.DAILY_TOKEN_LIMIT_EXCEEDED)
         }
+        return conversation
+    }
 
+    /** LLM으로 카드 대사를 생성하고 생성 로그를 남긴다. 실패 시 상태를 FAILED로 되돌린 뒤 예외로 변환한다. */
+    private fun generateMessage(
+        emotion: EmotionType,
+        summary: String,
+        memberId: Long,
+        conversationId: Long,
+    ): CardMessageOutput {
         val startedAt = System.currentTimeMillis()
         val output =
             try {
@@ -103,31 +144,7 @@ class CardService(
             inputTokens = output.inputTokens,
             outputTokens = output.outputTokens,
         )
-        val card =
-            Card(
-                memberId = memberId,
-                conversationId = conversationId,
-                emotion = emotion,
-                summary = summary,
-                message = output.message,
-                conversationCreatedAt = conversation.createdAt,
-            )
-        val saved =
-            try {
-                cardRepository.saveAndFlush(card)
-            } catch (e: DataIntegrityViolationException) {
-                if (cardRepository.existsByConversationId(conversationId)) {
-                    // 카드는 이미 다른 요청이 저장을 마쳤다는 뜻이라 DONE으로 맞춰준다 — FAILED로 두면
-                    // 재선점 때마다 LLM을 다시 부르고도 매번 같은 유니크 제약에 걸려 낭비만 반복된다.
-                    markCardGenerationStatus(conversationId, CardGenerationStatus.DONE)
-                    throw BusinessException(ErrorCode.CARD_ALREADY_EXISTS, e.message)
-                }
-                markCardGenerationStatus(conversationId, CardGenerationStatus.FAILED)
-                throw e
-            }
-        conversationRepository.updateSummary(conversationId, summary)
-        markCardGenerationStatus(conversationId, CardGenerationStatus.DONE)
-        return saved
+        return output
     }
 
     private fun markCardGenerationStatus(
