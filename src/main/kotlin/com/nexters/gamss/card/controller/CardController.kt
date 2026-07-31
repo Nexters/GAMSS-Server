@@ -39,6 +39,7 @@ class CardController(
                 "| INVALID_INPUT | 400 | conversationId·emotion·summary 누락 또는 형식 오류 |\n" +
                 "| CONVERSATION_NOT_FOUND | 404 | 존재하지 않는 채팅방 |\n" +
                 "| CONVERSATION_ACCESS_DENIED | 403 | 본인 채팅방이 아님 |\n" +
+                "| CONVERSATION_ALREADY_DELETED | 409 | 이미 삭제된 채팅방 |\n" +
                 "| CONVERSATION_NOT_ENDED | 409 | 종료되지 않은 채팅방 |\n" +
                 "| CARD_ALREADY_EXISTS | 409 | 이미 카드가 생성된 채팅방 |\n" +
                 "| CARD_GENERATION_IN_PROGRESS | 409 | 카드 생성 중(재시도 가능) |\n" +
