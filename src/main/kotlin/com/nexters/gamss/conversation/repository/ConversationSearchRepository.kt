@@ -30,7 +30,8 @@ interface ConversationSearchRepository : JpaRepository<Conversation, Long> {
                       AND MATCH(m.content) AGAINST(:searchTerm IN BOOLEAN MODE)
                 )
               )
-            ORDER BY c.created_at DESC
+            -- created_at 동률이면 페이지 간 순서가 흔들려 중복·누락이 생기므로 id 로 결정론을 준다.
+            ORDER BY c.created_at DESC, c.id DESC
         """,
         countQuery = """
             SELECT COUNT(*)

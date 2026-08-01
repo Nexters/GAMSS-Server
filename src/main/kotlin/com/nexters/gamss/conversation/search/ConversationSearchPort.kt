@@ -9,7 +9,12 @@ import org.springframework.data.domain.Pageable
  */
 interface ConversationSearchPort {
     /**
-     * 회원 본인의 대화방 중 제목(카드 요약) 또는 채팅 내용이 [keyword]에 매칭되는 것을 찾는다.
+     * 회원 본인의 대화방 중 **클라이언트가 지정한 제목** 또는 채팅 내용이 [keyword]에 매칭되는 것을
+     * 최신순으로 찾는다. 카드 요약(`cards.summary`)은 카드에 표시할 문구이지 대화방 제목이 아니므로
+     * 검색 대상이 아니다 — 다른 구현체도 이 계약을 따라야 한다.
+     *
+     * 삭제된 대화방은 결과에 포함하지 않는다(목록·캘린더 등 다른 조회와 같은 규약).
+     * 결과의 title 은 제목을 아직 지정하지 않은 대화방이면 null 이다.
      *
      * @param keyword 정제된 검색어(공백 트림·최소 길이 검증은 호출 측 책임)
      */
