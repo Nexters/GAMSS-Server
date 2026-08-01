@@ -3,6 +3,7 @@ package com.nexters.gamss.conversation.controller
 import com.nexters.gamss.conversation.controller.dto.CommentGenerationResponse
 import com.nexters.gamss.conversation.controller.dto.CommentGenerationStatus
 import com.nexters.gamss.conversation.controller.dto.ConversationResponse
+import com.nexters.gamss.conversation.controller.dto.ConversationSearchResponse
 import com.nexters.gamss.conversation.controller.dto.GenerateCommentsRequest
 import com.nexters.gamss.conversation.controller.dto.MessageResponse
 import com.nexters.gamss.conversation.controller.dto.ReplyGenerationResponse
@@ -11,15 +12,20 @@ import com.nexters.gamss.conversation.controller.dto.SaveMessageResponse
 import com.nexters.gamss.conversation.controller.dto.UpdateConversationTitleRequest
 import com.nexters.gamss.conversation.controller.dto.toResponseStatus
 import com.nexters.gamss.conversation.service.CommentGenerationService
+import com.nexters.gamss.conversation.service.ConversationSearchService
 import com.nexters.gamss.conversation.service.ConversationService
 import com.nexters.gamss.global.response.ApiResponse
+import com.nexters.gamss.global.response.PageResponse
 import com.nexters.gamss.global.security.AuthPrincipal
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
+import jakarta.validation.constraints.Max
+import jakarta.validation.constraints.Min
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.validation.annotation.Validated
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
@@ -32,11 +38,13 @@ import org.springframework.web.bind.annotation.RestController
 import java.time.LocalDate
 
 @Tag(name = "대화", description = "감정 기록(채팅방·메시지) 저장·조회 API (모두 로그인 필요)")
+@Validated
 @RestController
 @RequestMapping("/api/conversations")
 class ConversationController(
     private val conversationService: ConversationService,
     private val commentGenerationService: CommentGenerationService,
+    private val conversationSearchService: ConversationSearchService,
 ) {
     @Operation(
         summary = "감정 기록 저장 + 캐릭터 댓글·답글 생성",
@@ -52,7 +60,8 @@ class ConversationController(
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +
-                "| UNAUTHORIZED | 401 | 인증 필요 |\n" +
+                "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·무효) |\n" +
+                "| EXPIRED_TOKEN | 401 | accessToken 만료 — 재발급 후 재시도 |\n" +
                 "| INVALID_INPUT | 400 | content 누락·140자 초과, 또는 잘못된 답장 대상 |\n" +
                 "| CONVERSATION_NOT_FOUND | 404 | 존재하지 않는 채팅방 |\n" +
                 "| CONVERSATION_ACCESS_DENIED | 403 | 본인 채팅방이 아님 |\n" +
@@ -70,7 +79,7 @@ class ConversationController(
                 content = request.content,
                 repliesToMessageId = request.repliesToMessageId,
             )
-        val result = commentGenerationService.generateFor(principal.memberId, message)
+        val result = commentGenerationService.generateFor(principal.memberId, message, request.currentConversationSummary)
         return ApiResponse.success(SaveMessageResponse.from(message, result))
     }
 
@@ -81,7 +90,8 @@ class ConversationController(
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +
-                "| UNAUTHORIZED | 401 | 인증 필요 |\n" +
+                "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·무효) |\n" +
+                "| EXPIRED_TOKEN | 401 | accessToken 만료 — 재발급 후 재시도 |\n" +
                 "| INVALID_INPUT | 400 | date 누락 또는 형식 오류 (yyyy-MM-dd) |",
     )
     @GetMapping
@@ -96,13 +106,38 @@ class ConversationController(
     }
 
     @Operation(
+        summary = "대화방 검색",
+        description =
+            "지정한 제목 또는 채팅 내용에 검색어가 포함된 본인 대화방을 최신순으로 조회합니다. " +
+                "삭제된 채팅방은 검색되지 않습니다.\n\n" +
+                "**실패 응답**\n\n" +
+                "| error.code | HTTP | 설명 |\n" +
+                "|---|---|---|\n" +
+                "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·무효) |\n" +
+                "| EXPIRED_TOKEN | 401 | accessToken 만료 — 재발급 후 재시도 |\n" +
+                "| INVALID_INPUT | 400 | 검색어가 2자 미만 |",
+    )
+    @GetMapping("/search")
+    fun searchConversations(
+        @Parameter(hidden = true) @AuthenticationPrincipal principal: AuthPrincipal,
+        @Parameter(description = "검색어(제목·채팅 내용)", example = "짜증")
+        @RequestParam keyword: String,
+        @RequestParam(defaultValue = "0") @Min(0) page: Int,
+        @RequestParam(defaultValue = "20") @Min(1) @Max(MAX_PAGE_SIZE) size: Int,
+    ): ApiResponse<PageResponse<ConversationSearchResponse>> {
+        val result = conversationSearchService.search(principal.memberId, keyword, page, size)
+        return ApiResponse.success(PageResponse.from(result, ConversationSearchResponse::from))
+    }
+
+    @Operation(
         summary = "채팅방 종료",
         description =
             "채팅방을 종료 상태로 만듭니다. 종료된 채팅방에는 더 이상 사용자 메시지를 추가할 수 없습니다.\n\n" +
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +
-                "| UNAUTHORIZED | 401 | 인증 필요 |\n" +
+                "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·무효) |\n" +
+                "| EXPIRED_TOKEN | 401 | accessToken 만료 — 재발급 후 재시도 |\n" +
                 "| CONVERSATION_NOT_FOUND | 404 | 존재하지 않는 채팅방 |\n" +
                 "| CONVERSATION_ACCESS_DENIED | 403 | 본인 채팅방이 아님 |\n" +
                 "| CONVERSATION_ALREADY_ENDED | 409 | 이미 종료된 채팅방 |\n" +
@@ -124,7 +159,8 @@ class ConversationController(
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +
-                "| UNAUTHORIZED | 401 | 인증 필요 |\n" +
+                "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·무효) |\n" +
+                "| EXPIRED_TOKEN | 401 | accessToken 만료 — 재발급 후 재시도 |\n" +
                 "| INVALID_INPUT | 400 | title 누락 |\n" +
                 "| INVALID_CONVERSATION_TITLE | 400 | 제목이 비어 있거나 100자 초과 |\n" +
                 "| CONVERSATION_NOT_FOUND | 404 | 존재하지 않는 채팅방 |\n" +
@@ -148,7 +184,8 @@ class ConversationController(
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +
-                "| UNAUTHORIZED | 401 | 인증 필요 |\n" +
+                "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·무효) |\n" +
+                "| EXPIRED_TOKEN | 401 | accessToken 만료 — 재발급 후 재시도 |\n" +
                 "| CONVERSATION_NOT_FOUND | 404 | 존재하지 않는 채팅방 |\n" +
                 "| CONVERSATION_ACCESS_DENIED | 403 | 본인 채팅방이 아님 |\n" +
                 "| CONVERSATION_ALREADY_DELETED | 409 | 삭제된 채팅방 |",
@@ -169,6 +206,9 @@ class ConversationController(
                 "따로 호출할 필요가 없습니다. `POST /messages` 응답이 commentStatus=FAILED였을 때 같은 " +
                 "messageId로 재시도하는 용도로 남아 있습니다. 멱등한 엔드포인트로, " +
                 "재요청이 곧 결과 조회를 겸합니다 — GENERATING이면 잠시 후 같은 요청을 다시 보내면 됩니다.\n\n" +
+                "currentConversationSummary를 함께 보내면 재시도 생성에도 그 맥락이 반영됩니다(생략하면 맥락 없이 " +
+                "재생성). 단, 이미 DONE·GENERATING 상태라 선점에 실패해 상태 조회만 하는 경우엔 이 값이 쓰이지 " +
+                "않습니다.\n\n" +
                 "**status 값**\n\n" +
                 "| status | 의미 |\n" +
                 "|---|---|\n" +
@@ -178,7 +218,8 @@ class ConversationController(
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +
-                "| UNAUTHORIZED | 401 | 인증 필요 |\n" +
+                "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·무효) |\n" +
+                "| EXPIRED_TOKEN | 401 | accessToken 만료 — 재발급 후 재시도 |\n" +
                 "| INVALID_INPUT | 400 | messageId 누락 |\n" +
                 "| MESSAGE_NOT_FOUND | 404 | 존재하지 않는 메시지 |\n" +
                 "| INVALID_COMMENT_TARGET | 400 | 일기(사용자) 메시지가 아님 |\n" +
@@ -190,9 +231,15 @@ class ConversationController(
         @Parameter(hidden = true) @AuthenticationPrincipal principal: AuthPrincipal,
         @Valid @RequestBody request: GenerateCommentsRequest,
     ): ApiResponse<CommentGenerationResponse> {
-        val result = commentGenerationService.generateComments(principal.memberId, checkNotNull(request.messageId))
+        val result =
+            commentGenerationService.generateComments(
+                principal.memberId,
+                checkNotNull(request.messageId),
+                request.currentConversationSummary,
+            )
         val status = result.outcome.toResponseStatus()
-        val comments = if (status == CommentGenerationStatus.DONE) result.messages.map { MessageResponse.from(it) } else null
+        val comments =
+            if (status == CommentGenerationStatus.DONE) result.messages.map { MessageResponse.from(it) } else null
         return ApiResponse.success(CommentGenerationResponse(status, comments, result.usedTokens))
     }
 
@@ -212,7 +259,8 @@ class ConversationController(
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +
-                "| UNAUTHORIZED | 401 | 인증 필요 |\n" +
+                "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·무효) |\n" +
+                "| EXPIRED_TOKEN | 401 | accessToken 만료 — 재발급 후 재시도 |\n" +
                 "| MESSAGE_NOT_FOUND | 404 | 존재하지 않는 메시지 |\n" +
                 "| INVALID_COMMENT_TARGET | 400 | 유저 답글이 아니거나, 답글 대상이 캐릭터 댓글이 아님 |\n" +
                 "| CONVERSATION_NOT_FOUND | 404 | 존재하지 않는 채팅방 |\n" +
@@ -226,7 +274,8 @@ class ConversationController(
     ): ApiResponse<ReplyGenerationResponse> {
         val result = commentGenerationService.generateReplyComment(principal.memberId, messageId)
         val status = result.outcome.toResponseStatus()
-        val comment = if (status == CommentGenerationStatus.DONE) MessageResponse.from(result.messages.single()) else null
+        val comment =
+            if (status == CommentGenerationStatus.DONE) MessageResponse.from(result.messages.single()) else null
         return ApiResponse.success(ReplyGenerationResponse(status, comment, result.usedTokens))
     }
 
@@ -238,7 +287,8 @@ class ConversationController(
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +
-                "| UNAUTHORIZED | 401 | 인증 필요 |\n" +
+                "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·무효) |\n" +
+                "| EXPIRED_TOKEN | 401 | accessToken 만료 — 재발급 후 재시도 |\n" +
                 "| CONVERSATION_NOT_FOUND | 404 | 존재하지 않는 채팅방 |\n" +
                 "| CONVERSATION_ACCESS_DENIED | 403 | 본인 채팅방이 아님 |\n" +
                 "| CONVERSATION_ALREADY_DELETED | 409 | 이미 삭제된 채팅방 |",
@@ -250,5 +300,9 @@ class ConversationController(
     ): ApiResponse<ConversationResponse> {
         val conversation = conversationService.deleteConversation(principal.memberId, conversationId)
         return ApiResponse.success(ConversationResponse.from(conversation))
+    }
+
+    companion object {
+        private const val MAX_PAGE_SIZE = 100L
     }
 }

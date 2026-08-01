@@ -10,9 +10,10 @@ import kotlin.test.assertFailsWith
 
 class AuthServiceTest {
     private val loginService = mockk<LoginService>()
+    private val logoutService = mockk<LogoutService>(relaxed = true)
 
     // 실제 재시도 정책을 그대로 사용해 위임이 올바른지 검증한다.
-    private val authService = AuthService(loginService, ConflictRetry())
+    private val authService = AuthService(loginService, logoutService, ConflictRetry())
 
     @Test
     fun `로그인은 LoginService에 위임하고 정상이면 재시도하지 않는다`() {
@@ -50,5 +51,12 @@ class AuthServiceTest {
         every { loginService.reissue("bad") } throws IllegalStateException("boom")
 
         assertFailsWith<IllegalStateException> { authService.reissue("bad") }
+    }
+
+    @Test
+    fun `로그아웃은 재시도 없이 LogoutService에 위임한다`() {
+        authService.logout(42L)
+
+        verify(exactly = 1) { logoutService.logout(42L) }
     }
 }

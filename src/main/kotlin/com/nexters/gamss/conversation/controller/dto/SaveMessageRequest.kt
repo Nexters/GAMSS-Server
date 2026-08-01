@@ -13,4 +13,11 @@ data class SaveMessageRequest(
     val content: String,
     @field:Schema(description = "답장 대상 메시지 ID (답장이 아니면 생략)", example = "3", nullable = true)
     val repliesToMessageId: Long? = null,
+    @field:Size(max = 2_000, message = "currentConversationSummary는 2000자 이하여야 합니다.")
+    @field:Schema(
+        description = "현재 채팅방 전체를 프론트가 압축한 임시 요약(저장하지 않고 생성 컨텍스트로만 사용, 최대 2000자)",
+        example = "아침에 커피 쏟음. 회사 지각함. 회사에서 바빴음.",
+        nullable = true,
+    )
+    val currentConversationSummary: String? = null,
 )

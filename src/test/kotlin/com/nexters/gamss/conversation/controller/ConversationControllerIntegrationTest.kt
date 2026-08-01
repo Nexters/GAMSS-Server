@@ -167,6 +167,38 @@ class ConversationControllerIntegrationTest {
     }
 
     @Test
+    fun `2000자를 넘는 현재 대화방 요약은 400을 반환한다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val tooLong = "가".repeat(2001)
+
+        mockMvc
+            .post("/api/conversations/messages") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"content":"오늘 있었던 일","currentConversationSummary":"$tooLong"}"""
+            }.andExpect {
+                status { isBadRequest() }
+                jsonPath("$.error.code") { value("INVALID_INPUT") }
+            }
+    }
+
+    @Test
+    fun `재시도 요청에서도 2000자를 넘는 현재 대화방 요약은 400을 반환한다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val tooLong = "가".repeat(2001)
+
+        mockMvc
+            .post("/api/conversations/messages/comments") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"messageId":1,"currentConversationSummary":"$tooLong"}"""
+            }.andExpect {
+                status { isBadRequest() }
+                jsonPath("$.error.code") { value("INVALID_INPUT") }
+            }
+    }
+
+    @Test
     fun `캐릭터 댓글에 답장하면 응답에 답장 대상이 담긴다`() {
         val member = memberRepository.save(Member("me@a.com"))
         val conversation = conversationRepository.save(Conversation(member.id))
@@ -828,6 +860,86 @@ class ConversationControllerIntegrationTest {
             }.andExpect {
                 status { isConflict() }
                 jsonPath("$.error.code") { value("CONVERSATION_ALREADY_DELETED") }
+            }
+    }
+
+    // ── 대화방 검색 ──
+    // 이 클래스는 @Transactional 롤백이라 InnoDB 풀텍스트 색인(커밋 시점 갱신)이 보이지 않는다.
+    // 그래서 여기서는 HTTP 계층(파라미터 바인딩·검증·인증·PageResponse 직렬화)만 검증하고,
+    // 실제 매칭·삭제된 방 제외는 커밋을 쓰는 MysqlConversationSearchIntegrationTest 가 담당한다.
+
+    @Test
+    fun `검색은 PageResponse 형태로 응답하고 요청한 페이지 정보를 그대로 돌려준다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+
+        mockMvc
+            .get("/api/conversations/search") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                param("keyword", "짜증")
+                param("page", "1")
+                param("size", "5")
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.success") { value(true) }
+                jsonPath("$.data.content") { isArray() }
+                // page·size 가 그대로 돌아오면 컨트롤러 -> 서비스 -> Pageable 배선이 이어진 것이다.
+                jsonPath("$.data.page") { value(1) }
+                jsonPath("$.data.size") { value(5) }
+                jsonPath("$.data.totalElements") { exists() }
+                jsonPath("$.data.totalPages") { exists() }
+            }
+    }
+
+    @Test
+    fun `검색어가 2자 미만이면 400과 INVALID_INPUT을 반환한다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+
+        mockMvc
+            .get("/api/conversations/search") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                param("keyword", " 짜 ")
+            }.andExpect {
+                status { isBadRequest() }
+                jsonPath("$.error.code") { value("INVALID_INPUT") }
+            }
+    }
+
+    @Test
+    fun `keyword 파라미터가 없으면 400을 반환한다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+
+        mockMvc
+            .get("/api/conversations/search") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isBadRequest() }
+                jsonPath("$.error.code") { value("INVALID_INPUT") }
+            }
+    }
+
+    @Test
+    fun `size 상한을 넘기면 400을 반환한다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+
+        mockMvc
+            .get("/api/conversations/search") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                param("keyword", "짜증")
+                param("size", "101")
+            }.andExpect {
+                status { isBadRequest() }
+                jsonPath("$.error.code") { value("INVALID_INPUT") }
+            }
+    }
+
+    @Test
+    fun `인증 없이 검색하면 401을 반환한다`() {
+        mockMvc
+            .get("/api/conversations/search") {
+                param("keyword", "짜증")
+            }.andExpect {
+                status { isUnauthorized() }
+                jsonPath("$.error.code") { value("UNAUTHORIZED") }
             }
     }
 

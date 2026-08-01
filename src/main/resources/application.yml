@@ -33,7 +33,7 @@ admin:
   emails: ${ADMIN_EMAILS:}
 
 conversation:
-  comment-pending-timeout: PT3M
+  pending-generation-timeout: PT3M
 
 gemini:
   api-key: ${GEMINI_API_KEY}

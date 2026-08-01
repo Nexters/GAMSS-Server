@@ -1,8 +1,8 @@
 package com.nexters.gamss.admin.controller
 
 import com.nexters.gamss.admin.controller.dto.MemberStatsResponse
-import com.nexters.gamss.admin.controller.dto.PageResponse
 import com.nexters.gamss.global.response.ApiResponse
+import com.nexters.gamss.global.response.PageResponse
 import com.nexters.gamss.member.controller.dto.MemberResponse
 import com.nexters.gamss.member.domain.MemberStatus
 import com.nexters.gamss.member.service.MemberService
@@ -61,7 +61,9 @@ class AdminMemberController(
     @Operation(
         summary = "회원 강제 탈퇴",
         description =
-            "관리자가 회원을 탈퇴 처리(소프트 삭제)합니다.\n\n" +
+            "관리자가 회원을 탈퇴 처리합니다. 회원 본인 탈퇴와 같은 처리로, 통계를 위해 회원 행은 남기되 " +
+                "이메일·닉네임 등 개인 식별정보는 비우고 소셜 계정 연결·리프레시 토큰은 삭제합니다. " +
+                "해당 소셜 계정으로 다시 로그인하면 이전 기록과 분리된 신규 회원으로 가입됩니다.\n\n" +
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +

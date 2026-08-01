@@ -1,16 +1,19 @@
 package com.nexters.gamss.conversation.controller
 
+import com.nexters.gamss.conversation.controller.dto.GenerateCommentsRequest
 import com.nexters.gamss.conversation.controller.dto.SaveMessageRequest
 import com.nexters.gamss.conversation.domain.Message
 import com.nexters.gamss.conversation.domain.SenderType
 import com.nexters.gamss.conversation.service.CommentGenerationOutcome
 import com.nexters.gamss.conversation.service.CommentGenerationService
+import com.nexters.gamss.conversation.service.ConversationSearchService
 import com.nexters.gamss.conversation.service.ConversationService
 import com.nexters.gamss.conversation.service.GenerationResult
 import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.global.security.AuthPrincipal
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import org.springframework.test.util.ReflectionTestUtils
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -27,7 +30,11 @@ import kotlin.test.assertTrue
 class ConversationControllerTest {
     private val conversationService = mockk<ConversationService>()
     private val commentGenerationService = mockk<CommentGenerationService>()
-    private val controller = ConversationController(conversationService, commentGenerationService)
+
+    // 검색은 이 테스트의 관심사가 아니라 생성자만 채운다(검증은 ConversationSearchServiceTest).
+    private val conversationSearchService = mockk<ConversationSearchService>()
+    private val controller =
+        ConversationController(conversationService, commentGenerationService, conversationSearchService)
 
     private val principal = AuthPrincipal(memberId = 1L)
 
@@ -58,7 +65,7 @@ class ConversationControllerTest {
         every {
             conversationService.saveUserMessage(memberId = 1L, conversationId = null, content = "오늘 있었던 일", repliesToMessageId = null)
         } returns saved
-        every { commentGenerationService.generateFor(1L, saved) } returns
+        every { commentGenerationService.generateFor(1L, saved, null) } returns
             GenerationResult(CommentGenerationOutcome.DONE, comments, usedTokens = 42)
 
         val response = controller.saveMessage(principal, SaveMessageRequest(content = "오늘 있었던 일"))
@@ -70,13 +77,30 @@ class ConversationControllerTest {
     }
 
     @Test
+    fun `요청의 currentConversationSummary를 그대로 generateFor에 전달한다`() {
+        val saved = message(id = 5L)
+        every {
+            conversationService.saveUserMessage(memberId = 1L, conversationId = null, content = "오늘 있었던 일", repliesToMessageId = null)
+        } returns saved
+        every { commentGenerationService.generateFor(1L, saved, "현재 요약") } returns
+            GenerationResult(CommentGenerationOutcome.DONE, emptyList(), usedTokens = 1)
+
+        controller.saveMessage(
+            principal,
+            SaveMessageRequest(content = "오늘 있었던 일", currentConversationSummary = "현재 요약"),
+        )
+
+        verify(exactly = 1) { commentGenerationService.generateFor(1L, saved, "현재 요약") }
+    }
+
+    @Test
     fun `답장을 저장하면 generateFor 결과의 comments를 그대로 응답에 담는다`() {
         val saved = message(id = 8L, repliesToMessageId = 5L)
         val reply = characterReply(id = 9L)
         every {
             conversationService.saveUserMessage(memberId = 1L, conversationId = 10L, content = "답장", repliesToMessageId = 5L)
         } returns saved
-        every { commentGenerationService.generateFor(1L, saved) } returns
+        every { commentGenerationService.generateFor(1L, saved, null) } returns
             GenerationResult(CommentGenerationOutcome.DONE, listOf(reply), usedTokens = 7)
 
         val response =
@@ -94,7 +118,7 @@ class ConversationControllerTest {
         every {
             conversationService.saveUserMessage(memberId = 1L, conversationId = null, content = "오늘 있었던 일", repliesToMessageId = null)
         } returns saved
-        every { commentGenerationService.generateFor(1L, saved) } returns GenerationResult(CommentGenerationOutcome.FAILED)
+        every { commentGenerationService.generateFor(1L, saved, null) } returns GenerationResult(CommentGenerationOutcome.FAILED)
 
         val response = controller.saveMessage(principal, SaveMessageRequest(content = "오늘 있었던 일"))
 
@@ -110,10 +134,20 @@ class ConversationControllerTest {
         every {
             conversationService.saveUserMessage(memberId = 1L, conversationId = null, content = "오늘 있었던 일", repliesToMessageId = null)
         } returns saved
-        every { commentGenerationService.generateFor(1L, saved) } returns GenerationResult(CommentGenerationOutcome.GENERATING)
+        every { commentGenerationService.generateFor(1L, saved, null) } returns GenerationResult(CommentGenerationOutcome.GENERATING)
 
         assertFailsWith<IllegalStateException> {
             controller.saveMessage(principal, SaveMessageRequest(content = "오늘 있었던 일"))
         }
+    }
+
+    @Test
+    fun `요청의 currentConversationSummary를 그대로 generateComments에 전달한다`() {
+        every { commentGenerationService.generateComments(1L, 5L, "재시도 요약") } returns
+            GenerationResult(CommentGenerationOutcome.DONE, emptyList(), usedTokens = 1)
+
+        controller.generateComments(principal, GenerateCommentsRequest(messageId = 5L, currentConversationSummary = "재시도 요약"))
+
+        verify(exactly = 1) { commentGenerationService.generateComments(1L, 5L, "재시도 요약") }
     }
 }
