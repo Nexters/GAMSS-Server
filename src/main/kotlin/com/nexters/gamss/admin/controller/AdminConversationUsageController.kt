@@ -1,9 +1,9 @@
 package com.nexters.gamss.admin.controller
 
 import com.nexters.gamss.admin.controller.dto.ConversationUsageResponse
-import com.nexters.gamss.admin.controller.dto.PageResponse
 import com.nexters.gamss.admin.service.ConversationUsageService
 import com.nexters.gamss.global.response.ApiResponse
+import com.nexters.gamss.global.response.PageResponse
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.constraints.Max

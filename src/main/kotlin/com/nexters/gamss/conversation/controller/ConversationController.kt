@@ -3,6 +3,7 @@ package com.nexters.gamss.conversation.controller
 import com.nexters.gamss.conversation.controller.dto.CommentGenerationResponse
 import com.nexters.gamss.conversation.controller.dto.CommentGenerationStatus
 import com.nexters.gamss.conversation.controller.dto.ConversationResponse
+import com.nexters.gamss.conversation.controller.dto.ConversationSearchResponse
 import com.nexters.gamss.conversation.controller.dto.GenerateCommentsRequest
 import com.nexters.gamss.conversation.controller.dto.MessageResponse
 import com.nexters.gamss.conversation.controller.dto.ReplyGenerationResponse
@@ -11,15 +12,20 @@ import com.nexters.gamss.conversation.controller.dto.SaveMessageResponse
 import com.nexters.gamss.conversation.controller.dto.UpdateConversationTitleRequest
 import com.nexters.gamss.conversation.controller.dto.toResponseStatus
 import com.nexters.gamss.conversation.service.CommentGenerationService
+import com.nexters.gamss.conversation.service.ConversationSearchService
 import com.nexters.gamss.conversation.service.ConversationService
 import com.nexters.gamss.global.response.ApiResponse
+import com.nexters.gamss.global.response.PageResponse
 import com.nexters.gamss.global.security.AuthPrincipal
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
+import jakarta.validation.constraints.Max
+import jakarta.validation.constraints.Min
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.validation.annotation.Validated
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
@@ -32,11 +38,13 @@ import org.springframework.web.bind.annotation.RestController
 import java.time.LocalDate
 
 @Tag(name = "대화", description = "감정 기록(채팅방·메시지) 저장·조회 API (모두 로그인 필요)")
+@Validated
 @RestController
 @RequestMapping("/api/conversations")
 class ConversationController(
     private val conversationService: ConversationService,
     private val commentGenerationService: CommentGenerationService,
+    private val conversationSearchService: ConversationSearchService,
 ) {
     @Operation(
         summary = "감정 기록 저장 + 캐릭터 댓글·답글 생성",
@@ -95,6 +103,30 @@ class ConversationController(
     ): ApiResponse<List<ConversationResponse>> {
         val conversations = conversationService.getConversations(principal.memberId, date)
         return ApiResponse.success(conversations.map { ConversationResponse.from(it) })
+    }
+
+    @Operation(
+        summary = "대화방 검색",
+        description =
+            "지정한 제목 또는 채팅 내용에 검색어가 포함된 본인 대화방을 최신순으로 조회합니다. " +
+                "삭제된 채팅방은 검색되지 않습니다.\n\n" +
+                "**실패 응답**\n\n" +
+                "| error.code | HTTP | 설명 |\n" +
+                "|---|---|---|\n" +
+                "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·무효) |\n" +
+                "| EXPIRED_TOKEN | 401 | accessToken 만료 — 재발급 후 재시도 |\n" +
+                "| INVALID_INPUT | 400 | 검색어가 2자 미만 |",
+    )
+    @GetMapping("/search")
+    fun searchConversations(
+        @Parameter(hidden = true) @AuthenticationPrincipal principal: AuthPrincipal,
+        @Parameter(description = "검색어(제목·채팅 내용)", example = "짜증")
+        @RequestParam keyword: String,
+        @RequestParam(defaultValue = "0") @Min(0) page: Int,
+        @RequestParam(defaultValue = "20") @Min(1) @Max(MAX_PAGE_SIZE) size: Int,
+    ): ApiResponse<PageResponse<ConversationSearchResponse>> {
+        val result = conversationSearchService.search(principal.memberId, keyword, page, size)
+        return ApiResponse.success(PageResponse.from(result, ConversationSearchResponse::from))
     }
 
     @Operation(
@@ -268,5 +300,9 @@ class ConversationController(
     ): ApiResponse<ConversationResponse> {
         val conversation = conversationService.deleteConversation(principal.memberId, conversationId)
         return ApiResponse.success(ConversationResponse.from(conversation))
+    }
+
+    companion object {
+        private const val MAX_PAGE_SIZE = 100L
     }
 }

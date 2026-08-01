@@ -6,6 +6,7 @@ import com.nexters.gamss.conversation.domain.Message
 import com.nexters.gamss.conversation.domain.SenderType
 import com.nexters.gamss.conversation.service.CommentGenerationOutcome
 import com.nexters.gamss.conversation.service.CommentGenerationService
+import com.nexters.gamss.conversation.service.ConversationSearchService
 import com.nexters.gamss.conversation.service.ConversationService
 import com.nexters.gamss.conversation.service.GenerationResult
 import com.nexters.gamss.emotion.domain.EmotionType
@@ -29,7 +30,11 @@ import kotlin.test.assertTrue
 class ConversationControllerTest {
     private val conversationService = mockk<ConversationService>()
     private val commentGenerationService = mockk<CommentGenerationService>()
-    private val controller = ConversationController(conversationService, commentGenerationService)
+
+    // 검색은 이 테스트의 관심사가 아니라 생성자만 채운다(검증은 ConversationSearchServiceTest).
+    private val conversationSearchService = mockk<ConversationSearchService>()
+    private val controller =
+        ConversationController(conversationService, commentGenerationService, conversationSearchService)
 
     private val principal = AuthPrincipal(memberId = 1L)
 

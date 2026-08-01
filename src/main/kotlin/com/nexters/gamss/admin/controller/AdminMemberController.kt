@@ -1,8 +1,8 @@
 package com.nexters.gamss.admin.controller
 
 import com.nexters.gamss.admin.controller.dto.MemberStatsResponse
-import com.nexters.gamss.admin.controller.dto.PageResponse
 import com.nexters.gamss.global.response.ApiResponse
+import com.nexters.gamss.global.response.PageResponse
 import com.nexters.gamss.member.controller.dto.MemberResponse
 import com.nexters.gamss.member.domain.MemberStatus
 import com.nexters.gamss.member.service.MemberService
