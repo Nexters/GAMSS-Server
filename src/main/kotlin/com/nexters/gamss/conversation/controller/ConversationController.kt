@@ -1,6 +1,5 @@
 package com.nexters.gamss.conversation.controller
 
-import com.nexters.gamss.admin.controller.dto.PageResponse
 import com.nexters.gamss.conversation.controller.dto.CommentGenerationResponse
 import com.nexters.gamss.conversation.controller.dto.CommentGenerationStatus
 import com.nexters.gamss.conversation.controller.dto.ConversationResponse
@@ -16,6 +15,7 @@ import com.nexters.gamss.conversation.service.CommentGenerationService
 import com.nexters.gamss.conversation.service.ConversationSearchService
 import com.nexters.gamss.conversation.service.ConversationService
 import com.nexters.gamss.global.response.ApiResponse
+import com.nexters.gamss.global.response.PageResponse
 import com.nexters.gamss.global.security.AuthPrincipal
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
