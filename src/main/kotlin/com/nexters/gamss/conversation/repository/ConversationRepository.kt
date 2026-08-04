@@ -38,6 +38,21 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
         @Param("id") id: Long,
     ): Optional<Conversation>
 
+    /**
+     * 지정한 채팅방들을 한 번에 삭제한다(soft delete). 카드 일괄 삭제가 대화방까지 지울 때 쓴다
+     * ([com.nexters.gamss.card.service.CardService.deleteCardsWithConversations]).
+     *
+     * 이미 삭제된 방은 건너뛴다. 단건 삭제([Conversation.delete])와 달리 예외를 던지지 않는다 —
+     * 일괄 삭제는 대상이 없어도 성공해야 하고, 여기서 막히면 나머지 방까지 못 지운다.
+     */
+    @Transactional
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update Conversation c set c.status = :deletedStatus where c.id in :ids and c.status <> :deletedStatus")
+    fun softDeleteByIds(
+        @Param("ids") ids: Collection<Long>,
+        @Param("deletedStatus") deletedStatus: ConversationStatus = ConversationStatus.DELETED,
+    ): Int
+
     /** [from, to) 사이 생성된 대화방 수. 대시보드의 '오늘 시작한 대화' KPI. */
     @Query("select count(c) from Conversation c where c.createdAt >= :from and c.createdAt < :to")
     fun countCreatedBetween(

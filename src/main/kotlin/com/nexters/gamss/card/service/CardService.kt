@@ -208,8 +208,8 @@ class CardService(
     }
 
     /**
-     * 본인 카드를 삭제한다(soft delete). 되돌릴 수 없다 — 카드 생성 상태가 DONE 으로 남아
-     * 같은 대화방에 카드를 다시 만들 수 없다.
+     * 본인 카드를 삭제한다(soft delete). **카드가 나온 채팅방도 함께 삭제한다.**
+     * 되돌릴 수 없다 — 카드 생성 상태가 DONE 으로 남아 같은 대화방에 카드를 다시 만들 수 없다.
      *
      * 백오피스 지표는 생성 이력이라 이 삭제로 변하지 않는다(사용자 조회에서만 감춰진다).
      *
@@ -229,20 +229,55 @@ class CardService(
             throw BusinessException(ErrorCode.CARD_ACCESS_DENIED)
         }
         card.delete()
+        deleteConversationOf(card)
     }
 
     /**
-     * 본인의 특정 감정 카드를 한 번에 삭제하고 삭제 건수를 돌려준다. 대상이 없어도 0 을 돌려주고
-     * 성공한다 — 연속 호출이 안전해야 한다.
+     * 카드가 나온 채팅방을 함께 삭제한다(soft delete). 카드는 그 대화의 결과물이라, 카드만 지우고
+     * 대화를 남기면 사용자가 지웠다고 여긴 내용이 채팅방 목록·검색에 그대로 남는다.
      *
-     * 단건 삭제와 달리 행을 잠그지 않는다 — `deletedAt is null` 조건을 건 단일 UPDATE 라
-     * 동시 요청이 와도 뒤늦은 쪽이 0건을 갱신하고 끝난다(중복 삭제가 발생하지 않는다).
+     * 이미 삭제된 방이면 넘어간다 — 채팅방을 먼저 지운 뒤 카드를 지우는 순서에서도 카드 삭제는
+     * 성공해야 한다([Conversation.delete] 는 이미 삭제된 방에 예외를 던진다).
+     */
+    private fun deleteConversationOf(card: Card) {
+        val conversation =
+            conversationRepository
+                .findByIdForUpdate(card.conversationId)
+                .orElseThrow { BusinessException(ErrorCode.CONVERSATION_NOT_FOUND) }
+        if (conversation.isDeleted()) {
+            return
+        }
+        conversation.delete()
+    }
+
+    /**
+     * 본인의 특정 감정 카드를 한 번에 삭제하고 삭제 건수를 돌려준다. 단건 삭제와 마찬가지로
+     * 카드가 나온 대화방도 함께 삭제한다. 대상이 없어도 0 을 돌려주고 성공한다 — 연속 호출이
+     * 안전해야 한다.
      */
     @Transactional
     fun deleteCardsByEmotion(
         memberId: Long,
         emotion: EmotionType,
-    ): Int = cardRepository.softDeleteByMemberIdAndEmotion(memberId, emotion, Instant.now())
+    ): Int = deleteCardsWithConversations(cardRepository.findDeletableConversationIdsByEmotion(memberId, emotion))
+
+    /**
+     * 확정된 대화방 집합의 카드와 대화방을 함께 삭제한다(soft delete).
+     *
+     * 대상을 id 로 먼저 확정해두고 두 UPDATE 를 날린다 — 카드를 먼저 지우면 `deletedAt is null` 이
+     * 깨져 대화방을 못 찾고, 대화방을 먼저 지우면 `status <> DELETED` 가 깨져 카드를 못 찾는다
+     * ([CardRepository.findDeletableConversationIdsByEmotion]).
+     *
+     * 단건 삭제와 달리 행을 잠그지 않는다 — `deletedAt is null` 조건을 건 UPDATE 라 동시 요청이
+     * 와도 뒤늦은 쪽이 0건을 갱신하고 끝난다(중복 삭제가 발생하지 않는다).
+     */
+    private fun deleteCardsWithConversations(conversationIds: List<Long>): Int {
+        if (conversationIds.isEmpty()) {
+            return 0
+        }
+        conversationRepository.softDeleteByIds(conversationIds)
+        return cardRepository.softDeleteByConversationIds(conversationIds, Instant.now())
+    }
 
     /**
      * 본인 카드를 한 번에 전부 삭제하고 삭제 건수를 돌려준다. 대상이 없어도 0 을 돌려주고 성공한다.

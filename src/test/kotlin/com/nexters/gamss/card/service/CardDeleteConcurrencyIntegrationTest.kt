@@ -2,6 +2,8 @@ package com.nexters.gamss.card.service
 
 import com.nexters.gamss.card.domain.Card
 import com.nexters.gamss.card.repository.CardRepository
+import com.nexters.gamss.conversation.domain.Conversation
+import com.nexters.gamss.conversation.repository.ConversationRepository
 import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
@@ -37,20 +39,26 @@ class CardDeleteConcurrencyIntegrationTest {
     @Autowired
     private lateinit var cardRepository: CardRepository
 
+    @Autowired
+    private lateinit var conversationRepository: ConversationRepository
+
     @AfterEach
     fun cleanUp() {
         // 실제 커밋으로 락 경합을 재현해야 해서 @Transactional 롤백을 쓸 수 없으므로 직접 정리한다.
         cardRepository.deleteAll()
+        conversationRepository.deleteAll()
     }
 
     @Test
     fun `같은 카드를 동시에 삭제해도 한 번만 성공한다`() {
         val memberId = 1L
+        // 카드 삭제가 대화방까지 지우므로(CardService.deleteConversationOf) 실제 대화방이 있어야 한다.
+        val conversation = conversationRepository.save(Conversation(memberId).apply { end() })
         val card =
             cardRepository.save(
                 Card(
                     memberId = memberId,
-                    conversationId = 10L,
+                    conversationId = conversation.id,
                     emotion = EmotionType.ANGER,
                     summary = "동시 삭제 대상",
                     message = "얘 오늘 건들면 안 됨.",
@@ -86,5 +94,9 @@ class CardDeleteConcurrencyIntegrationTest {
             "나머지는 CARD_ALREADY_DELETED 로 실패해야 한다: $failures",
         )
         assertNotNull(cardRepository.findById(card.id).orElseThrow().deletedAt)
+        assertTrue(
+            conversationRepository.findById(conversation.id).orElseThrow().isDeleted(),
+            "카드와 함께 대화방도 삭제돼야 한다",
+        )
     }
 }
