@@ -32,6 +32,7 @@ import java.time.ZoneId
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 @SpringBootTest
 @Import(TestcontainersConfig::class, FakeCardMessageGeneratorConfig::class)
@@ -327,6 +328,110 @@ class CardControllerIntegrationTest {
     fun `인증 없이 감정별 삭제를 호출하면 401을 반환한다`() {
         mockMvc
             .delete("/api/cards/emotions/ANGER")
+            .andExpect {
+                status { isUnauthorized() }
+                jsonPath("$.error.code") { value("UNAUTHORIZED") }
+            }
+    }
+
+    // ── 전체 삭제 ──
+
+    @Test
+    fun `전체 삭제하면 감정과 무관하게 모두 사라지고 건수를 돌려준다`() {
+        val member = memberRepository.save(Member("all@test.com"))
+        createCardVia(member, "분노", EmotionType.ANGER)
+        createCardVia(member, "기쁨", EmotionType.JOY)
+        createCardVia(member, "불안", EmotionType.ANXIETY)
+
+        mockMvc
+            .delete("/api/cards") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.deletedCount") { value(3) }
+            }
+        entityManager.flush()
+        entityManager.clear()
+
+        assertTrue(
+            cardRepository.findAll().filter { it.memberId == member.id }.all { it.isDeleted() },
+            "내 카드는 전부 삭제 상태여야 한다",
+        )
+    }
+
+    @Test
+    fun `전체 삭제는 대상이 없어도 성공하고 0을 돌려준다 - 연속 호출 안전`() {
+        val member = memberRepository.save(Member("allempty@test.com"))
+
+        repeat(2) {
+            mockMvc
+                .delete("/api/cards") {
+                    header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                }.andExpect {
+                    status { isOk() }
+                    jsonPath("$.data.deletedCount") { value(0) }
+                }
+        }
+    }
+
+    @Test
+    fun `전체 삭제는 다른 회원 카드를 건드리지 않는다`() {
+        val me = memberRepository.save(Member("me-all@test.com"))
+        val other = memberRepository.save(Member("other-all@test.com"))
+        createCardVia(me, "내 카드", EmotionType.ANGER)
+        val othersCard = createCardVia(other, "남의 카드", EmotionType.JOY)
+
+        mockMvc
+            .delete("/api/cards") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(me))
+            }.andExpect { jsonPath("$.data.deletedCount") { value(1) } }
+        entityManager.flush()
+        entityManager.clear()
+
+        assertNull(cardRepository.findById(othersCard.id).orElseThrow().deletedAt)
+    }
+
+    @Test
+    fun `전체 삭제 뒤 감정별 삭제를 호출하면 0을 돌려준다`() {
+        val member = memberRepository.save(Member("chain@test.com"))
+        createCardVia(member, "분노", EmotionType.ANGER)
+
+        mockMvc
+            .delete("/api/cards") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect { jsonPath("$.data.deletedCount") { value(1) } }
+        entityManager.flush()
+        entityManager.clear()
+
+        // 두 벌크 삭제가 같은 가시성 규칙(deletedAt is null)을 쓰는지 확인한다.
+        mockMvc
+            .delete("/api/cards/emotions/ANGER") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect { jsonPath("$.data.deletedCount") { value(0) } }
+    }
+
+    @Test
+    fun `전체 삭제해도 백오피스 생성 이력 집계는 그대로다`() {
+        val member = memberRepository.save(Member("allstat@test.com"))
+        val card = createCardVia(member, "통계 유지", EmotionType.ANGER)
+        val since = card.conversationCreatedAt.minusSeconds(60)
+        val before: Long = cardRepository.countByEmotionSince(since).sumOf { it.count }
+
+        mockMvc
+            .delete("/api/cards") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect { status { isOk() } }
+        entityManager.flush()
+        entityManager.clear()
+
+        assertEquals(before, cardRepository.countByEmotionSince(since).sumOf { it.count })
+        assertEquals(1, cardRepository.findCreatedAtsSince(since).size)
+    }
+
+    @Test
+    fun `인증 없이 전체 삭제를 호출하면 401을 반환한다`() {
+        mockMvc
+            .delete("/api/cards")
             .andExpect {
                 status { isUnauthorized() }
                 jsonPath("$.error.code") { value("UNAUTHORIZED") }

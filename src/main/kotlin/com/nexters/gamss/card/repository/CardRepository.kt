@@ -64,6 +64,26 @@ interface CardRepository : JpaRepository<Card, Long> {
     ): Int
 
     /**
+     * 회원의 카드를 한 번에 전부 삭제하고 삭제 건수를 돌려준다.
+     *
+     * 감정 조건만 없을 뿐 [softDeleteByMemberIdAndEmotion] 과 **같은 가시성 규칙**을 쓴다 —
+     * 이미 지운 카드와 삭제된 채팅방의 카드는 세지 않는다. 두 쿼리와 조회 쿼리
+     * ([findAllByMemberIdAndConversationCreatedAtInRange])의 가시성 조건은 항상 함께 바뀌어야 한다.
+     */
+    @Transactional
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(
+        "update Card c set c.deletedAt = :now " +
+            "where c.memberId = :memberId and c.deletedAt is null " +
+            "and c.conversationId in (select cv.id from Conversation cv where cv.status <> :excludedStatus)",
+    )
+    fun softDeleteAllByMemberId(
+        @Param("memberId") memberId: Long,
+        @Param("now") now: Instant,
+        @Param("excludedStatus") excludedStatus: ConversationStatus = ConversationStatus.DELETED,
+    ): Int
+
+    /**
      * [start, end) 사이(대화 생성시간 기준)에 속한 회원의 카드를 오래된 순으로 조회한다.
      * 삭제된 채팅방의 카드는 제외한다 — 카드는 대화 종료 여부와 무관하게 삭제될 수 있어(Conversation.delete),
      * 삭제 후에도 남은 카드가 캘린더·날짜별 조회에 계속 나타나는 걸 막는다.
