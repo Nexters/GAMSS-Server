@@ -72,6 +72,8 @@ class Conversation(
 
     fun isOwnedBy(memberId: Long): Boolean = this.memberId == memberId
 
+    fun isDeleted(): Boolean = status == ConversationStatus.DELETED
+
     /** 채팅방을 종료한다. 삭제된 방이거나 이미 종료된 방을 다시 종료하면 예외를 던진다. */
     fun end() {
         ensureNotDeleted()

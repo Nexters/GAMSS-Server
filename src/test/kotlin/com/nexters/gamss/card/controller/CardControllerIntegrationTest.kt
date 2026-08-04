@@ -3,6 +3,7 @@ package com.nexters.gamss.card.controller
 import com.nexters.gamss.card.domain.Card
 import com.nexters.gamss.card.repository.CardRepository
 import com.nexters.gamss.conversation.domain.Conversation
+import com.nexters.gamss.conversation.domain.ConversationStatus
 import com.nexters.gamss.conversation.repository.ConversationRepository
 import com.nexters.gamss.global.security.JwtIssuer
 import com.nexters.gamss.member.domain.Member
@@ -29,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.context.WebApplicationContext
 import java.time.ZoneId
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 
 @SpringBootTest
 @Import(TestcontainersConfig::class, FakeCardMessageGeneratorConfig::class)
@@ -125,6 +127,45 @@ class CardControllerIntegrationTest {
     }
 
     @Test
+    fun `카드를 삭제하면 카드가 나온 대화방도 함께 삭제된다`() {
+        val member = memberRepository.save(Member("cascade@test.com"))
+        val card = createCardVia(member, "대화방까지 삭제")
+
+        mockMvc
+            .delete("/api/cards/${card.id}") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect { status { isOk() } }
+        entityManager.flush()
+        entityManager.clear()
+
+        val conversation = conversationRepository.findById(card.conversationId).orElseThrow()
+        assertEquals(ConversationStatus.DELETED, conversation.status, "대화방도 삭제 상태여야 한다")
+    }
+
+    @Test
+    fun `대화방을 먼저 삭제한 뒤에도 카드를 삭제할 수 있다`() {
+        val member = memberRepository.save(Member("convfirst@test.com"))
+        val card = createCardVia(member, "대화방 먼저 삭제")
+
+        mockMvc
+            .delete("/api/conversations/${card.conversationId}") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect { status { isOk() } }
+        entityManager.flush()
+        entityManager.clear()
+
+        // 이미 삭제된 방을 다시 delete() 하면 예외라, 카드 삭제가 그 예외에 휘말리면 안 된다.
+        mockMvc
+            .delete("/api/cards/${card.id}") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect { status { isOk() } }
+        entityManager.flush()
+        entityManager.clear()
+
+        assertNotNull(cardRepository.findById(card.id).orElseThrow().deletedAt)
+    }
+
+    @Test
     fun `삭제해도 행은 남아 백오피스 생성 이력 집계는 그대로다`() {
         val member = memberRepository.save(Member("keep@test.com"))
         val card = createCardVia(member, "통계에 남을 카드")
@@ -151,7 +192,7 @@ class CardControllerIntegrationTest {
     }
 
     @Test
-    fun `삭제한 대화방에는 카드를 다시 만들 수 없다`() {
+    fun `삭제한 카드는 같은 대화방에 다시 만들 수 없다`() {
         val member = memberRepository.save(Member("recreate@test.com"))
         val card = createCardVia(member, "지웠다 다시")
 
@@ -168,8 +209,10 @@ class CardControllerIntegrationTest {
                 contentType = MediaType.APPLICATION_JSON
                 content = """{"conversationId":${card.conversationId},"emotion":"ANGER","summary":"다시 만들기"}"""
             }.andExpect {
+                // 카드 삭제가 대화방까지 지우므로 대화방 검증에서 먼저 걸린다. 대화방이 살아 있어도
+                // CARD_ALREADY_EXISTS 로 막히는 건 마찬가지고(uk_cards_conversation_id), 어느 쪽이든 409 다.
                 status { isConflict() }
-                jsonPath("$.error.code") { value("CARD_ALREADY_EXISTS") }
+                jsonPath("$.error.code") { value("CONVERSATION_ALREADY_DELETED") }
             }
     }
 

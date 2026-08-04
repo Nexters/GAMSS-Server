@@ -208,8 +208,8 @@ class CardService(
     }
 
     /**
-     * 본인 카드를 삭제한다(soft delete). 되돌릴 수 없다 — 카드 생성 상태가 DONE 으로 남아
-     * 같은 대화방에 카드를 다시 만들 수 없다.
+     * 본인 카드를 삭제한다(soft delete). **카드가 나온 채팅방도 함께 삭제한다.**
+     * 되돌릴 수 없다 — 카드 생성 상태가 DONE 으로 남아 같은 대화방에 카드를 다시 만들 수 없다.
      *
      * 백오피스 지표는 생성 이력이라 이 삭제로 변하지 않는다(사용자 조회에서만 감춰진다).
      *
@@ -229,6 +229,25 @@ class CardService(
             throw BusinessException(ErrorCode.CARD_ACCESS_DENIED)
         }
         card.delete()
+        deleteConversationOf(card)
+    }
+
+    /**
+     * 카드가 나온 채팅방을 함께 삭제한다(soft delete). 카드는 그 대화의 결과물이라, 카드만 지우고
+     * 대화를 남기면 사용자가 지웠다고 여긴 내용이 채팅방 목록·검색에 그대로 남는다.
+     *
+     * 이미 삭제된 방이면 넘어간다 — 채팅방을 먼저 지운 뒤 카드를 지우는 순서에서도 카드 삭제는
+     * 성공해야 한다([Conversation.delete] 는 이미 삭제된 방에 예외를 던진다).
+     */
+    private fun deleteConversationOf(card: Card) {
+        val conversation =
+            conversationRepository
+                .findByIdForUpdate(card.conversationId)
+                .orElseThrow { BusinessException(ErrorCode.CONVERSATION_NOT_FOUND) }
+        if (conversation.isDeleted()) {
+            return
+        }
+        conversation.delete()
     }
 
     private fun getOwnedConversation(
