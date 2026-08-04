@@ -1,0 +1,90 @@
+package com.nexters.gamss.card.service
+
+import com.nexters.gamss.card.domain.Card
+import com.nexters.gamss.card.repository.CardRepository
+import com.nexters.gamss.emotion.domain.EmotionType
+import com.nexters.gamss.global.exception.BusinessException
+import com.nexters.gamss.global.exception.ErrorCode
+import com.nexters.gamss.support.TestcontainersConfig
+import org.junit.jupiter.api.AfterEach
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.context.annotation.Import
+import java.time.Instant
+import java.util.Collections
+import java.util.concurrent.CyclicBarrier
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
+
+/**
+ * 같은 카드에 삭제 요청이 동시에 들어와도 한 번만 성공하는지 검증한다.
+ *
+ * [CardRepository.findByIdForUpdate] 가 PESSIMISTIC_WRITE 로 행을 잠그므로, 뒤이은 요청은
+ * 앞선 삭제가 커밋될 때까지 대기했다가 깨어나 `deletedAt` 이 채워진 상태를 다시 읽고
+ * CARD_ALREADY_DELETED 로 실패해야 한다. 락이 없다면 둘 다 '아직 안 지워짐' 을 읽어
+ * 모두 성공하고, 삭제 시각도 늦게 커밋된 쪽으로 덮인다.
+ */
+@SpringBootTest
+@Import(TestcontainersConfig::class)
+class CardDeleteConcurrencyIntegrationTest {
+    @Autowired
+    private lateinit var cardService: CardService
+
+    @Autowired
+    private lateinit var cardRepository: CardRepository
+
+    @AfterEach
+    fun cleanUp() {
+        // 실제 커밋으로 락 경합을 재현해야 해서 @Transactional 롤백을 쓸 수 없으므로 직접 정리한다.
+        cardRepository.deleteAll()
+    }
+
+    @Test
+    fun `같은 카드를 동시에 삭제해도 한 번만 성공한다`() {
+        val memberId = 1L
+        val card =
+            cardRepository.save(
+                Card(
+                    memberId = memberId,
+                    conversationId = 10L,
+                    emotion = EmotionType.ANGER,
+                    summary = "동시 삭제 대상",
+                    message = "얘 오늘 건들면 안 됨.",
+                    conversationCreatedAt = Instant.now(),
+                ),
+            )
+
+        val threadCount = 4
+        val startLine = CyclicBarrier(threadCount)
+        val executor = Executors.newFixedThreadPool(threadCount)
+        val failures = Collections.synchronizedList(mutableListOf<Throwable>())
+        var successCount = 0
+
+        val futures =
+            (1..threadCount).map {
+                executor.submit {
+                    startLine.await() // 모든 스레드를 동시에 출발시켜 경합을 유도한다
+                    try {
+                        cardService.deleteCard(memberId, card.id)
+                        synchronized(this) { successCount++ }
+                    } catch (e: Throwable) {
+                        failures.add(e)
+                    }
+                }
+            }
+        futures.forEach { it.get(30, TimeUnit.SECONDS) }
+        executor.shutdown()
+
+        assertEquals(1, successCount, "삭제는 한 번만 성공해야 한다")
+        assertEquals(threadCount - 1, failures.size)
+        assertTrue(
+            failures.all { it is BusinessException && it.errorCode == ErrorCode.CARD_ALREADY_DELETED },
+            "나머지는 CARD_ALREADY_DELETED 로 실패해야 한다: $failures",
+        )
+        assertNotNull(cardRepository.findById(card.id).orElseThrow().deletedAt)
+    }
+}

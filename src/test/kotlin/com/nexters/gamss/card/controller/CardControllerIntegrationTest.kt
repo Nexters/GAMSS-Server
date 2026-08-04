@@ -130,6 +130,7 @@ class CardControllerIntegrationTest {
         val card = createCardVia(member, "통계에 남을 카드")
         val since = card.conversationCreatedAt.minusSeconds(60)
         val before: Long = cardRepository.countByEmotionSince(since).sumOf { it.count }
+        val todayCountBefore = cardRepository.countCreatedBetween(since, card.conversationCreatedAt.plusSeconds(60))
 
         mockMvc
             .delete("/api/cards/${card.id}") {
@@ -139,8 +140,14 @@ class CardControllerIntegrationTest {
         entityManager.clear()
 
         val after: Long = cardRepository.countByEmotionSince(since).sumOf { it.count }
-        assertEquals(before, after)
-        assertEquals(1, cardRepository.findCreatedAtsSince(since).size)
+        assertEquals(before, after, "감정 분포")
+        assertEquals(1, cardRepository.findCreatedAtsSince(since).size, "일별 추이")
+        // '오늘 카드 수' KPI 도 생성 이력이라 삭제로 줄면 안 된다.
+        assertEquals(
+            todayCountBefore,
+            cardRepository.countCreatedBetween(since, card.conversationCreatedAt.plusSeconds(60)),
+            "오늘 카드 수",
+        )
     }
 
     @Test

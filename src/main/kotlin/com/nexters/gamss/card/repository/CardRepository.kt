@@ -3,12 +3,27 @@ package com.nexters.gamss.card.repository
 import com.nexters.gamss.card.domain.Card
 import com.nexters.gamss.conversation.domain.Conversation
 import com.nexters.gamss.conversation.domain.ConversationStatus
+import jakarta.persistence.LockModeType
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Lock
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 import java.time.Instant
+import java.util.Optional
 
 interface CardRepository : JpaRepository<Card, Long> {
+    /**
+     * 상태를 바꾸는 요청(삭제)에서 사용한다. 행을 잠가 다른 삭제 요청이 커밋될 때까지 대기시킨다 —
+     * 잠금 없이 읽으면 동시 요청 둘이 모두 `deletedAt == null` 을 보고 둘 다 성공해, 두 번째가
+     * CARD_ALREADY_DELETED 대신 200 을 받고 삭제 시각도 늦은 쪽으로 덮인다
+     * ([com.nexters.gamss.conversation.repository.ConversationRepository.findByIdForUpdate] 와 같은 이유).
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select c from Card c where c.id = :id")
+    fun findByIdForUpdate(
+        @Param("id") id: Long,
+    ): Optional<Card>
+
     /**
      * 카드 재생성 차단용. **삭제된 카드도 '존재'로 센다** — 카드 삭제는 되돌릴 수 없고
      * (conversation_id UNIQUE), 같은 대화방에 카드를 다시 만들 수 없어야 하기 때문이다.

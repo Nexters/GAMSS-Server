@@ -212,6 +212,9 @@ class CardService(
      * 같은 대화방에 카드를 다시 만들 수 없다.
      *
      * 백오피스 지표는 생성 이력이라 이 삭제로 변하지 않는다(사용자 조회에서만 감춰진다).
+     *
+     * 행을 잠그고 읽는다([CardRepository.findByIdForUpdate]) — 동시 삭제 요청이 같은 카드를
+     * 각자 '아직 안 지워짐' 으로 읽어 둘 다 성공하는 것을 막는다.
      */
     @Transactional
     fun deleteCard(
@@ -220,7 +223,7 @@ class CardService(
     ) {
         val card =
             cardRepository
-                .findById(cardId)
+                .findByIdForUpdate(cardId)
                 .orElseThrow { BusinessException(ErrorCode.CARD_NOT_FOUND) }
         if (!card.isOwnedBy(memberId)) {
             throw BusinessException(ErrorCode.CARD_ACCESS_DENIED)
