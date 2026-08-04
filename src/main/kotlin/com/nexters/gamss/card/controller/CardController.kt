@@ -12,7 +12,9 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
@@ -104,5 +106,30 @@ class CardController(
     ): ApiResponse<List<CardCalendarResponse>> {
         val cards = cardService.getCardsByMonth(principal.memberId, yearMonth)
         return ApiResponse.success(CardCalendarResponse.listFrom(cards))
+    }
+
+    @Operation(
+        summary = "카드 삭제",
+        description =
+            "본인 카드를 삭제합니다. 삭제된 카드는 날짜별·월별 조회에서 더 이상 보이지 않습니다.\n\n" +
+                "- **되돌릴 수 없습니다.** 채팅방당 카드는 하나뿐이고, 삭제 후 같은 채팅방에 카드를 " +
+                "다시 만들 수 없습니다(`CARD_ALREADY_EXISTS`).\n" +
+                "- 대화 내용과 채팅방은 지워지지 않습니다. 카드만 사라집니다.\n\n" +
+                "**실패 응답**\n\n" +
+                "| error.code | HTTP | 설명 |\n" +
+                "|---|---|---|\n" +
+                "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·무효) |\n" +
+                "| EXPIRED_TOKEN | 401 | accessToken 만료 — 재발급 후 재시도 |\n" +
+                "| CARD_NOT_FOUND | 404 | 존재하지 않는 카드 |\n" +
+                "| CARD_ACCESS_DENIED | 403 | 본인 카드가 아님 |\n" +
+                "| CARD_ALREADY_DELETED | 409 | 이미 삭제된 카드 |",
+    )
+    @DeleteMapping("/{cardId}")
+    fun delete(
+        @Parameter(hidden = true) @AuthenticationPrincipal principal: AuthPrincipal,
+        @PathVariable cardId: Long,
+    ): ApiResponse<Unit> {
+        cardService.deleteCard(principal.memberId, cardId)
+        return ApiResponse.success()
     }
 }
