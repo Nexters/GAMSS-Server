@@ -44,12 +44,20 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
      *
      * 이미 삭제된 방은 건너뛴다. 단건 삭제([Conversation.delete])와 달리 예외를 던지지 않는다 —
      * 일괄 삭제는 대상이 없어도 성공해야 하고, 여기서 막히면 나머지 방까지 못 지운다.
+     *
+     * [Conversation.updatedAt] 을 직접 갱신한다 — 벌크 UPDATE 는 엔티티를 거치지 않아
+     * `@LastModifiedDate` 감사 리스너가 돌지 않는다. 넣지 않으면 같은 '채팅방 삭제'인데
+     * 단건 경로만 변경 시각이 남아 두 경로가 서로 다른 데이터를 만든다.
      */
     @Transactional
     @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query("update Conversation c set c.status = :deletedStatus where c.id in :ids and c.status <> :deletedStatus")
+    @Query(
+        "update Conversation c set c.status = :deletedStatus, c.updatedAt = :now " +
+            "where c.id in :ids and c.status <> :deletedStatus",
+    )
     fun softDeleteByIds(
         @Param("ids") ids: Collection<Long>,
+        @Param("now") now: Instant,
         @Param("deletedStatus") deletedStatus: ConversationStatus = ConversationStatus.DELETED,
     ): Int
 

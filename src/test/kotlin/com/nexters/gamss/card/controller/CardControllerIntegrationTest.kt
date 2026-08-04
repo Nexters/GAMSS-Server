@@ -33,6 +33,7 @@ import java.time.ZoneId
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 @SpringBootTest
 @Import(TestcontainersConfig::class, FakeCardMessageGeneratorConfig::class)
@@ -382,6 +383,25 @@ class CardControllerIntegrationTest {
                 status { isBadRequest() }
                 jsonPath("$.error.code") { value("INVALID_INPUT") }
             }
+    }
+
+    @Test
+    fun `일괄 삭제도 채팅방의 변경 시각을 남긴다`() {
+        val member = memberRepository.save(Member("touched@test.com"))
+        val card = createCardVia(member, "분노", EmotionType.ANGER)
+        val before = conversationRepository.findById(card.conversationId).orElseThrow().updatedAt
+
+        mockMvc
+            .delete("/api/cards/emotions/ANGER") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect { status { isOk() } }
+        entityManager.flush()
+        entityManager.clear()
+
+        // 벌크 UPDATE 는 엔티티를 거치지 않아 @LastModifiedDate 가 돌지 않는다 — 쿼리가 직접
+        // 갱신하지 않으면 단건 삭제와 달리 변경 시각이 그대로 남는다.
+        val after = conversationRepository.findById(card.conversationId).orElseThrow().updatedAt
+        assertTrue(after > before, "삭제 시각이 updatedAt 에 반영되어야 한다")
     }
 
     @Test
