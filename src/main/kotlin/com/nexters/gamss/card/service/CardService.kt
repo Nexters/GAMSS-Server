@@ -280,13 +280,11 @@ class CardService(
     }
 
     /**
-     * 본인 카드를 한 번에 전부 삭제하고 삭제 건수를 돌려준다. 대상이 없어도 0 을 돌려주고 성공한다.
-     *
-     * [deleteCardsByEmotion] 과 마찬가지로 행 잠금이 필요 없다 — `deletedAt is null` 조건을 건
-     * 단일 UPDATE 라 동시 요청이 와도 뒤늦은 쪽은 0건을 갱신하고 끝난다.
+     * 본인 카드를 한 번에 전부 삭제하고 삭제 건수를 돌려준다. 단건·감정별 삭제와 마찬가지로
+     * 카드가 나온 대화방도 함께 삭제한다. 대상이 없어도 0 을 돌려주고 성공한다.
      */
     @Transactional
-    fun deleteAllCards(memberId: Long): Int = cardRepository.softDeleteAllByMemberId(memberId, Instant.now())
+    fun deleteAllCards(memberId: Long): Int = deleteCardsWithConversations(cardRepository.findDeletableConversationIds(memberId))
 
     private fun getOwnedConversation(
         conversationId: Long,

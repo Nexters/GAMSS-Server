@@ -421,6 +421,31 @@ class CardControllerIntegrationTest {
     }
 
     @Test
+    fun `전체 삭제하면 카드가 나온 대화방도 모두 함께 삭제된다`() {
+        val member = memberRepository.save(Member("allcascade@test.com"))
+        val anger = createCardVia(member, "분노", EmotionType.ANGER)
+        val joy = createCardVia(member, "기쁨", EmotionType.JOY)
+        // 카드가 없는 대화방은 삭제 대상이 아니다 — 전체 삭제는 어디까지나 '카드' 삭제다.
+        val cardless = conversationRepository.save(Conversation(member.id).apply { end() })
+
+        mockMvc
+            .delete("/api/cards") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect { status { isOk() } }
+        entityManager.flush()
+        entityManager.clear()
+
+        listOf(anger.conversationId, joy.conversationId).forEach {
+            assertEquals(ConversationStatus.DELETED, conversationRepository.findById(it).orElseThrow().status)
+        }
+        assertEquals(
+            ConversationStatus.ENDED,
+            conversationRepository.findById(cardless.id).orElseThrow().status,
+            "카드 없는 대화방은 그대로여야 한다",
+        )
+    }
+
+    @Test
     fun `전체 삭제는 대상이 없어도 성공하고 0을 돌려준다 - 연속 호출 안전`() {
         val member = memberRepository.save(Member("allempty@test.com"))
 
