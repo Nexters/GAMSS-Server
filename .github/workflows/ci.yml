@@ -1,8 +1,10 @@
 name: CI
 
 on:
+  # base 브랜치를 가리지 않는다. stacked PR(base 가 피처 브랜치)도 CI 를 받게 하려는 것이며,
+  # 이때 검증되는 건 'head 를 그 base 에 머지한 상태' 라 dev 기준 통과를 뜻하지는 않는다.
+  # dev 로 base 를 옮기면 그때 진짜 검증이 다시 돈다.
   pull_request:
-    branches: [dev, prod]
   # dev·prod push 시에는 Build & Deploy 가 이 워크플로를 호출한다.
   # 여기에 push 트리거를 두면 테스트가 두 번 돌고, 무엇보다 배포와 병렬로 돌아서
   # 테스트가 깨져도 배포를 막지 못한다.
