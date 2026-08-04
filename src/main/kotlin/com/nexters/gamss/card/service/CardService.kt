@@ -275,8 +275,11 @@ class CardService(
         if (conversationIds.isEmpty()) {
             return 0
         }
-        conversationRepository.softDeleteByIds(conversationIds)
-        return cardRepository.softDeleteByConversationIds(conversationIds, Instant.now())
+        // 카드와 대화방에 같은 시각을 찍는다 — 한 번의 삭제로 사라진 짝이라 나중에 이력을 볼 때
+        // 두 UPDATE 사이의 미세한 시차로 다른 요청처럼 보이지 않아야 한다.
+        val now = Instant.now()
+        conversationRepository.softDeleteByIds(conversationIds, now)
+        return cardRepository.softDeleteByConversationIds(conversationIds, now)
     }
 
     /**

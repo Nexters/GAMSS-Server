@@ -386,6 +386,49 @@ class CardControllerIntegrationTest {
     }
 
     @Test
+    fun `채팅방이 먼저 삭제된 카드는 세지도 지우지도 않는다`() {
+        val member = memberRepository.save(Member("predeleted@test.com"))
+        val hidden = createCardVia(member, "방부터 지운 분노", EmotionType.ANGER)
+        val visible = createCardVia(member, "남아 있는 분노", EmotionType.ANGER)
+        conversationRepository.findById(hidden.conversationId).orElseThrow().delete()
+        entityManager.flush()
+        entityManager.clear()
+
+        mockMvc
+            .delete("/api/cards/emotions/ANGER") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.deletedCount") { value(1) }
+            }
+        entityManager.flush()
+        entityManager.clear()
+
+        // 캘린더에 이미 안 보이는 카드다 — 세면 사용자가 화면에서 본 장수와 응답이 어긋난다.
+        assertNull(cardRepository.findById(hidden.id).orElseThrow().deletedAt, "안 보이던 카드는 대상이 아니다")
+        assertNotNull(cardRepository.findById(visible.id).orElseThrow().deletedAt, "보이던 카드는 삭제됨")
+    }
+
+    @Test
+    fun `일괄 삭제도 채팅방의 변경 시각을 남긴다`() {
+        val member = memberRepository.save(Member("touched@test.com"))
+        val card = createCardVia(member, "분노", EmotionType.ANGER)
+        val before = conversationRepository.findById(card.conversationId).orElseThrow().updatedAt
+
+        mockMvc
+            .delete("/api/cards/emotions/ANGER") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect { status { isOk() } }
+        entityManager.flush()
+        entityManager.clear()
+
+        // 벌크 UPDATE 는 엔티티를 거치지 않아 @LastModifiedDate 가 돌지 않는다 — 쿼리가 직접
+        // 갱신하지 않으면 단건 삭제와 달리 변경 시각이 그대로 남는다.
+        val after = conversationRepository.findById(card.conversationId).orElseThrow().updatedAt
+        assertTrue(after > before, "삭제 시각이 updatedAt 에 반영되어야 한다")
+    }
+
+    @Test
     fun `인증 없이 감정별 삭제를 호출하면 401을 반환한다`() {
         mockMvc
             .delete("/api/cards/emotions/ANGER")
