@@ -558,6 +558,47 @@ class CardControllerIntegrationTest {
     }
 
     @Test
+    fun `전체 삭제도 채팅방이 먼저 삭제된 카드는 세지도 지우지도 않는다`() {
+        val member = memberRepository.save(Member("allpredeleted@test.com"))
+        val hidden = createCardVia(member, "방부터 지운 카드", EmotionType.ANGER)
+        val visible = createCardVia(member, "남아 있는 카드", EmotionType.JOY)
+        conversationRepository.findById(hidden.conversationId).orElseThrow().delete()
+        entityManager.flush()
+        entityManager.clear()
+
+        mockMvc
+            .delete("/api/cards") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.deletedCount") { value(1) }
+            }
+        entityManager.flush()
+        entityManager.clear()
+
+        // 감정별 삭제와 같은 가시성 규칙이다 — 두 쿼리의 조건은 항상 함께 움직여야 한다.
+        assertNull(cardRepository.findById(hidden.id).orElseThrow().deletedAt, "안 보이던 카드는 대상이 아니다")
+        assertNotNull(cardRepository.findById(visible.id).orElseThrow().deletedAt, "보이던 카드는 삭제됨")
+    }
+
+    @Test
+    fun `전체 삭제도 채팅방의 변경 시각을 남긴다`() {
+        val member = memberRepository.save(Member("alltouched@test.com"))
+        val card = createCardVia(member, "분노", EmotionType.ANGER)
+        val before = conversationRepository.findById(card.conversationId).orElseThrow().updatedAt
+
+        mockMvc
+            .delete("/api/cards") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect { status { isOk() } }
+        entityManager.flush()
+        entityManager.clear()
+
+        val after = conversationRepository.findById(card.conversationId).orElseThrow().updatedAt
+        assertTrue(after > before, "삭제 시각이 updatedAt 에 반영되어야 한다")
+    }
+
+    @Test
     fun `인증 없이 전체 삭제를 호출하면 401을 반환한다`() {
         mockMvc
             .delete("/api/cards")
