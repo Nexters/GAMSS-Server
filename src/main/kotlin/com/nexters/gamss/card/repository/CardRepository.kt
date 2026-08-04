@@ -9,6 +9,10 @@ import org.springframework.data.repository.query.Param
 import java.time.Instant
 
 interface CardRepository : JpaRepository<Card, Long> {
+    /**
+     * 카드 재생성 차단용. **삭제된 카드도 '존재'로 센다** — 카드 삭제는 되돌릴 수 없고
+     * (conversation_id UNIQUE), 같은 대화방에 카드를 다시 만들 수 없어야 하기 때문이다.
+     */
     fun existsByConversationId(conversationId: Long): Boolean
 
     /** 카드가 생성된 대화방 id들만 골라 반환한다(백오피스 대화방 사용량 페이지의 카드 생성 여부 배치 조회). */
@@ -21,12 +25,17 @@ interface CardRepository : JpaRepository<Card, Long> {
      * [start, end) 사이(대화 생성시간 기준)에 속한 회원의 카드를 오래된 순으로 조회한다.
      * 삭제된 채팅방의 카드는 제외한다 — 카드는 대화 종료 여부와 무관하게 삭제될 수 있어(Conversation.delete),
      * 삭제 후에도 남은 카드가 캘린더·날짜별 조회에 계속 나타나는 걸 막는다.
+     * 사용자가 직접 지운 카드(deletedAt)도 제외한다.
+     *
+     * 이 필터는 **사용자 조회에만** 적용한다 — 백오피스 지표(countCreatedBetween·countByEmotionSince·
+     * findCreatedAtsSince)는 생성 이력이라 사용자 삭제로 소급 변동하면 추이가 왜곡된다.
      */
     @Query(
         "select c from Card c, Conversation cv " +
             "where cv.id = c.conversationId and c.memberId = :memberId " +
             "and c.conversationCreatedAt >= :start and c.conversationCreatedAt < :end " +
             "and cv.status <> :excludedStatus " +
+            "and c.deletedAt is null " +
             "order by c.conversationCreatedAt asc, c.id asc",
     )
     fun findAllByMemberIdAndConversationCreatedAtInRange(

@@ -1,5 +1,6 @@
 package com.nexters.gamss.card.controller
 
+import com.nexters.gamss.card.domain.Card
 import com.nexters.gamss.card.repository.CardRepository
 import com.nexters.gamss.conversation.domain.Conversation
 import com.nexters.gamss.conversation.repository.ConversationRepository
@@ -19,11 +20,14 @@ import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.delete
+import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.context.WebApplicationContext
+import java.time.ZoneId
 import kotlin.test.assertEquals
 
 @SpringBootTest
@@ -84,5 +88,163 @@ class CardControllerIntegrationTest {
         assertEquals(1, cardRepository.count())
     }
 
+    // ── 카드 삭제 ──
+
+    @Test
+    fun `카드를 삭제하면 날짜별·월별 조회에서 사라진다`() {
+        val member = memberRepository.save(Member("del@test.com"))
+        val card = createCardVia(member, "삭제될 카드")
+        val date = card.conversationCreatedAt.atZone(KST).toLocalDate()
+
+        mockMvc
+            .delete("/api/cards/${card.id}") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.success") { value(true) }
+            }
+        entityManager.flush()
+        entityManager.clear()
+
+        mockMvc
+            .get("/api/cards") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                param("date", date.toString())
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.length()") { value(0) }
+            }
+        mockMvc
+            .get("/api/cards/monthly") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                param("yearMonth", "%04d-%02d".format(date.year, date.monthValue))
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.length()") { value(0) }
+            }
+    }
+
+    @Test
+    fun `삭제해도 행은 남아 백오피스 생성 이력 집계는 그대로다`() {
+        val member = memberRepository.save(Member("keep@test.com"))
+        val card = createCardVia(member, "통계에 남을 카드")
+        val since = card.conversationCreatedAt.minusSeconds(60)
+        val before: Long = cardRepository.countByEmotionSince(since).sumOf { it.count }
+
+        mockMvc
+            .delete("/api/cards/${card.id}") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect { status { isOk() } }
+        entityManager.flush()
+        entityManager.clear()
+
+        val after: Long = cardRepository.countByEmotionSince(since).sumOf { it.count }
+        assertEquals(before, after)
+        assertEquals(1, cardRepository.findCreatedAtsSince(since).size)
+    }
+
+    @Test
+    fun `삭제한 대화방에는 카드를 다시 만들 수 없다`() {
+        val member = memberRepository.save(Member("recreate@test.com"))
+        val card = createCardVia(member, "지웠다 다시")
+
+        mockMvc
+            .delete("/api/cards/${card.id}") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect { status { isOk() } }
+        entityManager.flush()
+        entityManager.clear()
+
+        mockMvc
+            .post("/api/cards") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"conversationId":${card.conversationId},"emotion":"ANGER","summary":"다시 만들기"}"""
+            }.andExpect {
+                status { isConflict() }
+                jsonPath("$.error.code") { value("CARD_ALREADY_EXISTS") }
+            }
+    }
+
+    @Test
+    fun `이미 삭제한 카드를 또 삭제하면 409를 반환한다`() {
+        val member = memberRepository.save(Member("twice@test.com"))
+        val card = createCardVia(member, "두 번 삭제")
+
+        mockMvc
+            .delete("/api/cards/${card.id}") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect { status { isOk() } }
+        entityManager.flush()
+        entityManager.clear()
+
+        mockMvc
+            .delete("/api/cards/${card.id}") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isConflict() }
+                jsonPath("$.error.code") { value("CARD_ALREADY_DELETED") }
+            }
+    }
+
+    @Test
+    fun `남의 카드를 삭제하면 403을 반환한다`() {
+        val owner = memberRepository.save(Member("owner@test.com"))
+        val other = memberRepository.save(Member("other@test.com"))
+        val card = createCardVia(owner, "남의 카드")
+
+        mockMvc
+            .delete("/api/cards/${card.id}") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(other))
+            }.andExpect {
+                status { isForbidden() }
+                jsonPath("$.error.code") { value("CARD_ACCESS_DENIED") }
+            }
+    }
+
+    @Test
+    fun `없는 카드를 삭제하면 404를 반환한다`() {
+        val member = memberRepository.save(Member("nope@test.com"))
+
+        mockMvc
+            .delete("/api/cards/999999") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isNotFound() }
+                jsonPath("$.error.code") { value("CARD_NOT_FOUND") }
+            }
+    }
+
+    @Test
+    fun `인증 없이 카드를 삭제하면 401을 반환한다`() {
+        mockMvc
+            .delete("/api/cards/1")
+            .andExpect {
+                status { isUnauthorized() }
+                jsonPath("$.error.code") { value("UNAUTHORIZED") }
+            }
+    }
+
+    /** 실제 생성 엔드포인트로 카드를 만들어, 삭제 대상이 운영 경로와 같은 상태가 되게 한다. */
+    private fun createCardVia(
+        member: Member,
+        summary: String,
+    ): Card {
+        val conversation = conversationRepository.save(Conversation(member.id).apply { end() })
+        mockMvc
+            .post("/api/cards") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"conversationId":${conversation.id},"emotion":"ANGER","summary":"$summary"}"""
+            }.andExpect { status { isOk() } }
+        entityManager.flush()
+        entityManager.clear()
+        return cardRepository.findAll().single { it.conversationId == conversation.id }
+    }
+
     private fun bearerFor(member: Member): String = "Bearer ${jwtIssuer.issueAccessToken(member.id)}"
+
+    companion object {
+        private val KST = ZoneId.of("Asia/Seoul")
+    }
 }

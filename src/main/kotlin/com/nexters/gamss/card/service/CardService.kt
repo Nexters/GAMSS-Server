@@ -207,6 +207,27 @@ class CardService(
         return cardRepository.findAllByMemberIdAndConversationCreatedAtInRange(memberId, start, end)
     }
 
+    /**
+     * 본인 카드를 삭제한다(soft delete). 되돌릴 수 없다 — 카드 생성 상태가 DONE 으로 남아
+     * 같은 대화방에 카드를 다시 만들 수 없다.
+     *
+     * 백오피스 지표는 생성 이력이라 이 삭제로 변하지 않는다(사용자 조회에서만 감춰진다).
+     */
+    @Transactional
+    fun deleteCard(
+        memberId: Long,
+        cardId: Long,
+    ) {
+        val card =
+            cardRepository
+                .findById(cardId)
+                .orElseThrow { BusinessException(ErrorCode.CARD_NOT_FOUND) }
+        if (!card.isOwnedBy(memberId)) {
+            throw BusinessException(ErrorCode.CARD_ACCESS_DENIED)
+        }
+        card.delete()
+    }
+
     private fun getOwnedConversation(
         conversationId: Long,
         memberId: Long,
