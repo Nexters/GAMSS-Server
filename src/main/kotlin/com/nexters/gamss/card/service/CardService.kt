@@ -231,6 +231,19 @@ class CardService(
         card.delete()
     }
 
+    /**
+     * 본인의 특정 감정 카드를 한 번에 삭제하고 삭제 건수를 돌려준다. 대상이 없어도 0 을 돌려주고
+     * 성공한다 — 연속 호출이 안전해야 한다.
+     *
+     * 단건 삭제와 달리 행을 잠그지 않는다 — `deletedAt is null` 조건을 건 단일 UPDATE 라
+     * 동시 요청이 와도 뒤늦은 쪽이 0건을 갱신하고 끝난다(중복 삭제가 발생하지 않는다).
+     */
+    @Transactional
+    fun deleteCardsByEmotion(
+        memberId: Long,
+        emotion: EmotionType,
+    ): Int = cardRepository.softDeleteByMemberIdAndEmotion(memberId, emotion, Instant.now())
+
     private fun getOwnedConversation(
         conversationId: Long,
         memberId: Long,
