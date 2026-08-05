@@ -31,8 +31,13 @@ interface CardRepository : JpaRepository<Card, Long> {
      * 삭제된 채팅방의 카드는 제외한다. 두 조건이 갈라지면 캘린더에 없는 카드가 id 로는 열리는
      * 모순이 생기므로 **항상 함께 바뀌어야 한다**.
      *
-     * 소유자를 조건에 넣지 않는다 — 남의 카드는 '없음'(404)이 아니라 CARD_ACCESS_DENIED(403)로
-     * 구분해 돌려줘야 해서, 소유권은 조회한 뒤 서비스에서 판별한다([CardService.getCard]).
+     * 소유자를 조건에 넣지 않는다 — **보이는** 카드가 남의 것이면 '없음'(404)이 아니라
+     * CARD_ACCESS_DENIED(403)로 구분해야 해서, 소유권은 조회한 뒤 서비스에서 판별한다
+     * ([CardService.getCard]).
+     *
+     * 가시성을 먼저 거르므로 **남이 이미 지운 카드는 403 이 아니라 404** 가 된다. 단건 삭제
+     * ([CardService.deleteCard])는 소유권을 먼저 봐서 같은 카드에 403 을 주므로 두 API 가
+     * 갈린다 — 읽기에서까지 남의 삭제 여부를 알려줄 이유가 없어 이쪽을 택했다.
      */
     @Query(
         "select c from Card c, Conversation cv " +

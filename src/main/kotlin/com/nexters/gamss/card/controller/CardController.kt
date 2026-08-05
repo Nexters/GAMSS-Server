@@ -119,6 +119,7 @@ class CardController(
                 "|---|---|---|\n" +
                 "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·무효) |\n" +
                 "| EXPIRED_TOKEN | 401 | accessToken 만료 — 재발급 후 재시도 |\n" +
+                "| INVALID_INPUT | 400 | cardId 가 숫자가 아님 |\n" +
                 "| CARD_NOT_FOUND | 404 | 존재하지 않거나 이미 사라진 카드 |\n" +
                 "| CARD_ACCESS_DENIED | 403 | 본인 카드가 아님 |",
     )
