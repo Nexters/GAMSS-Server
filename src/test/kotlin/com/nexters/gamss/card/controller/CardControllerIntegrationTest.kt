@@ -28,6 +28,7 @@ import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.context.WebApplicationContext
+import tools.jackson.databind.ObjectMapper
 import java.time.ZoneId
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -51,6 +52,9 @@ class CardControllerIntegrationTest {
 
     @Autowired
     private lateinit var jwtIssuer: JwtIssuer
+
+    @Autowired
+    private lateinit var objectMapper: ObjectMapper
 
     @PersistenceContext
     private lateinit var entityManager: EntityManager
@@ -284,16 +288,45 @@ class CardControllerIntegrationTest {
         val card = createCardVia(member, "조회할 카드")
         val date = card.conversationCreatedAt.atZone(KST).toLocalDate()
 
+        // 두 엔드포인트가 같은 카드를 같은 형태로 돌려주는지가 이 API 의 계약이다 — 필드를 하나씩
+        // 확인하면 나중에 CardResponse 가 갈라져도 알 수 없어서 응답 자체를 비교한다.
+        val fromDateQuery =
+            mockMvc
+                .get("/api/cards") {
+                    header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                    param("date", date.toString())
+                }.andExpect { status { isOk() } }
+                .andReturn()
+                .response
+                .contentAsString
+                .let { objectMapper.readTree(it).path("data").single() }
+
+        val fromIdQuery =
+            mockMvc
+                .get("/api/cards/${card.id}") {
+                    header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                }.andExpect {
+                    status { isOk() }
+                    jsonPath("$.data.id") { value(card.id) }
+                    jsonPath("$.data.summary") { value("조회할 카드") }
+                }.andReturn()
+                .response
+                .contentAsString
+                .let { objectMapper.readTree(it).path("data") }
+
+        assertEquals(fromDateQuery, fromIdQuery, "id 조회와 날짜별 조회의 카드 표현이 같아야 한다")
+    }
+
+    @Test
+    fun `카드 id 형식이 잘못되면 400을 반환한다`() {
+        val member = memberRepository.save(Member("getbadid@test.com"))
+
         mockMvc
-            .get("/api/cards/${card.id}") {
+            .get("/api/cards/not-a-number") {
                 header(HttpHeaders.AUTHORIZATION, bearerFor(member))
             }.andExpect {
-                status { isOk() }
-                jsonPath("$.data.id") { value(card.id) }
-                jsonPath("$.data.conversationId") { value(card.conversationId) }
-                jsonPath("$.data.emotion") { value("ANGER") }
-                jsonPath("$.data.summary") { value("조회할 카드") }
-                jsonPath("$.data.date") { value(date.toString()) }
+                status { isBadRequest() }
+                jsonPath("$.error.code") { value("INVALID_INPUT") }
             }
     }
 
