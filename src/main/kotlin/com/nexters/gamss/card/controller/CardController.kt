@@ -111,6 +111,30 @@ class CardController(
     }
 
     @Operation(
+        summary = "카드 단건 조회",
+        description =
+            "id 로 본인 카드 한 장을 조회합니다. 날짜를 몰라도 카드 상세를 열 수 있습니다.\n\n" +
+                "- 날짜별·월별 조회와 **같은 카드만 보입니다** — 삭제한 카드와 삭제된 채팅방의 " +
+                "카드는 `CARD_NOT_FOUND` 로 응답합니다.\n\n" +
+                "**실패 응답**\n\n" +
+                "| error.code | HTTP | 설명 |\n" +
+                "|---|---|---|\n" +
+                "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·무효) |\n" +
+                "| EXPIRED_TOKEN | 401 | accessToken 만료 — 재발급 후 재시도 |\n" +
+                "| INVALID_INPUT | 400 | cardId 가 숫자가 아님 |\n" +
+                "| CARD_NOT_FOUND | 404 | 존재하지 않거나 이미 사라진 카드 |\n" +
+                "| CARD_ACCESS_DENIED | 403 | 본인 카드가 아님 |",
+    )
+    @GetMapping("/{cardId}")
+    fun getById(
+        @Parameter(hidden = true) @AuthenticationPrincipal principal: AuthPrincipal,
+        @PathVariable cardId: Long,
+    ): ApiResponse<CardResponse> {
+        val card = cardService.getCard(principal.memberId, cardId)
+        return ApiResponse.success(CardResponse.from(card))
+    }
+
+    @Operation(
         summary = "카드 삭제",
         description =
             "본인 카드를 삭제합니다. 삭제된 카드는 날짜별·월별 조회에서 더 이상 보이지 않습니다.\n\n" +
