@@ -30,6 +30,17 @@ class CharacterSelectorTest {
     }
 
     @Test
+    fun `캐릭터가 2명 이상이면 티키타카가 나오는 경우도 있다`() {
+        val hasTikitaka =
+            (1..1_000).any {
+                val selection = selector.select()
+                selection.tikitakaCount > 0
+            }
+
+        assertTrue(hasTikitaka, "1000번을 돌려도 티키타카가 한 번도 안 나옴")
+    }
+
+    @Test
     fun `선택된 캐릭터는 중복이 없다`() {
         repeat(1_000) {
             val selection = selector.select()
