@@ -183,6 +183,29 @@ class CardService(
         }
     }
 
+    /**
+     * 본인 카드 한 장을 id 로 조회한다.
+     *
+     * 지운 카드와 삭제된 채팅방의 카드는 **없는 것으로 취급한다**(CARD_NOT_FOUND) — 날짜별·월별
+     * 조회에서 이미 사라진 카드라, id 로만 열리면 사용자가 보는 목록과 어긋난다. 삭제 API 가
+     * CARD_ALREADY_DELETED(409)를 쓰는 것은 재호출을 구분해야 하는 변경 요청이기 때문이고,
+     * 읽기에는 그 구분이 필요 없다.
+     */
+    @Transactional(readOnly = true)
+    fun getCard(
+        memberId: Long,
+        cardId: Long,
+    ): Card {
+        val card =
+            cardRepository
+                .findVisibleById(cardId)
+                .orElseThrow { BusinessException(ErrorCode.CARD_NOT_FOUND) }
+        if (!card.isOwnedBy(memberId)) {
+            throw BusinessException(ErrorCode.CARD_ACCESS_DENIED)
+        }
+        return card
+    }
+
     /** 날짜(KST 자정~자정)에 속한 카드를 조회한다. */
     @Transactional(readOnly = true)
     fun getCardsByDate(

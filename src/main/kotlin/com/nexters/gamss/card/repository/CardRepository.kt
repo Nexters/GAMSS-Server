@@ -28,6 +28,31 @@ interface CardRepository : JpaRepository<Card, Long> {
     ): Optional<Card>
 
     /**
+     * 사용자에게 **보이는** 카드 한 장을 id 로 조회한다.
+     *
+     * 가시성 조건은 [findAllByMemberIdAndConversationCreatedAtInRange] 와 같다 — 이미 지운 카드와
+     * 삭제된 채팅방의 카드는 제외한다. 두 조건이 갈라지면 캘린더에 없는 카드가 id 로는 열리는
+     * 모순이 생기므로 **항상 함께 바뀌어야 한다**.
+     *
+     * 소유자를 조건에 넣지 않는다 — **보이는** 카드가 남의 것이면 '없음'(404)이 아니라
+     * CARD_ACCESS_DENIED(403)로 구분해야 해서, 소유권은 조회한 뒤 서비스에서 판별한다
+     * ([CardService.getCard]).
+     *
+     * 가시성을 먼저 거르므로 **남이 이미 지운 카드는 403 이 아니라 404** 가 된다. 단건 삭제
+     * ([CardService.deleteCard])는 소유권을 먼저 봐서 같은 카드에 403 을 주므로 두 API 가
+     * 갈린다 — 읽기에서까지 남의 삭제 여부를 알려줄 이유가 없어 이쪽을 택했다.
+     */
+    @Query(
+        "select c from Card c, Conversation cv " +
+            "where cv.id = c.conversationId and c.id = :id " +
+            "and cv.status <> :excludedStatus and c.deletedAt is null",
+    )
+    fun findVisibleById(
+        @Param("id") id: Long,
+        @Param("excludedStatus") excludedStatus: ConversationStatus = ConversationStatus.DELETED,
+    ): Optional<Card>
+
+    /**
      * 카드 재생성 차단용. **삭제된 카드도 '존재'로 센다** — 카드 삭제는 되돌릴 수 없고
      * (conversation_id UNIQUE), 같은 대화방에 카드를 다시 만들 수 없어야 하기 때문이다.
      */
