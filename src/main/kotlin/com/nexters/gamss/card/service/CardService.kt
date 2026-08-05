@@ -270,6 +270,9 @@ class CardService(
      *
      * 단건 삭제와 달리 행을 잠그지 않는다 — `deletedAt is null` 조건을 건 UPDATE 라 동시 요청이
      * 와도 뒤늦은 쪽이 0건을 갱신하고 끝난다(중복 삭제가 발생하지 않는다).
+     *
+     * 카드를 먼저 지우는 순서는 단건 삭제([deleteCard])와 맞춘 것이다 — 두 경로가 서로 반대
+     * 순서로 행을 잡으면 동시에 들어온 요청이 상대가 잡은 행을 기다리다 데드락으로 죽는다.
      */
     private fun deleteCardsWithConversations(conversationIds: List<Long>): Int {
         if (conversationIds.isEmpty()) {
@@ -278,8 +281,9 @@ class CardService(
         // 카드와 대화방에 같은 시각을 찍는다 — 한 번의 삭제로 사라진 짝이라 나중에 이력을 볼 때
         // 두 UPDATE 사이의 미세한 시차로 다른 요청처럼 보이지 않아야 한다.
         val now = Instant.now()
+        val deletedCards = cardRepository.softDeleteByConversationIds(conversationIds, now)
         conversationRepository.softDeleteByIds(conversationIds, now)
-        return cardRepository.softDeleteByConversationIds(conversationIds, now)
+        return deletedCards
     }
 
     /**
