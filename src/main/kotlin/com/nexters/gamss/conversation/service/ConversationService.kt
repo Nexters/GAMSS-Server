@@ -115,6 +115,16 @@ class ConversationService(
         return conversationRepository.findAllByMemberIdAndCreatedAtInRange(memberId, start, end)
     }
 
+    /**
+     * 아직 진행 중인(쓰다 만) 대화방을 최신순으로 조회한다. 날짜를 몰라도 이어쓸 방을 찾게 하는
+     * 목록이라 날짜 조건을 걸지 않는다.
+     *
+     * 삭제된 방과 카드가 생성된 방은 조회 조건에서 이미 빠진다
+     * ([ConversationRepository.findAllInProgressByMemberId] 에 근거를 적어뒀다).
+     */
+    @Transactional(readOnly = true)
+    fun getInProgressConversations(memberId: Long): List<Conversation> = conversationRepository.findAllInProgressByMemberId(memberId)
+
     @Transactional(readOnly = true)
     fun getMessages(
         memberId: Long,
