@@ -8,6 +8,7 @@ import com.nexters.gamss.monitoring.domain.GenerationLog
 import com.nexters.gamss.monitoring.domain.GenerationType
 import com.nexters.gamss.monitoring.repository.GenerationLogRepository
 import com.nexters.gamss.support.TestcontainersConfig
+import org.hamcrest.Matchers.nullValue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -180,7 +181,7 @@ class MemberControllerIntegrationTest {
             }.andExpect {
                 status { isOk() }
                 jsonPath("$.data.usedTokens") { value(300) }
-                jsonPath("$.data.dailyLimit") { doesNotExist() }
+                jsonPath("$.data.dailyLimit", nullValue())
                 jsonPath("$.data.exceeded") { value(false) }
             }
     }
