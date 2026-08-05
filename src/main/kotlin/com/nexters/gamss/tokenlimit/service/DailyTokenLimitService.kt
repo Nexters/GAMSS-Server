@@ -31,6 +31,19 @@ class DailyTokenLimitService(
         return used < policy.dailyTokenLimit
     }
 
+    /**
+     * 이 회원의 오늘(정책 리셋 시각 기준) 토큰 사용량. 상한이 꺼진 환경([enabled]=false)이면
+     * [TokenUsage.dailyLimit]이 null(무제한)이고 [TokenUsage.exceeded]는 항상 false다.
+     */
+    fun usageFor(memberId: Long): TokenUsage {
+        val policy = tokenPolicyService.current()
+        val used = generationLogRepository.sumUsedTokensByMemberSince(memberId, windowStart(policy.resetHour))
+        if (!enabled) {
+            return TokenUsage(usedTokens = used, dailyLimit = null, exceeded = false)
+        }
+        return TokenUsage(usedTokens = used, dailyLimit = policy.dailyTokenLimit, exceeded = used >= policy.dailyTokenLimit)
+    }
+
     /** 현재 시점이 속한 일일 구간의 시작(KST 리셋 시각). 아직 오늘 리셋 시각 전이면 어제 리셋 시각이 시작이다. */
     private fun windowStart(resetHour: Int): Instant {
         val now = ZonedDateTime.now(ZONE)
@@ -43,3 +56,10 @@ class DailyTokenLimitService(
         private val ZONE: ZoneId = ZoneId.of("Asia/Seoul")
     }
 }
+
+/** [memberId]의 오늘 사용 토큰과 일일 상한. [dailyLimit]이 null이면 상한 미적용(무제한) 환경이다. */
+data class TokenUsage(
+    val usedTokens: Long,
+    val dailyLimit: Long?,
+    val exceeded: Boolean,
+)
