@@ -31,6 +31,7 @@ import org.springframework.web.context.WebApplicationContext
 import java.time.ZoneId
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
 @SpringBootTest
 @Import(TestcontainersConfig::class, FakeCardMessageGeneratorConfig::class)
@@ -269,6 +270,127 @@ class CardControllerIntegrationTest {
     fun `인증 없이 카드를 삭제하면 401을 반환한다`() {
         mockMvc
             .delete("/api/cards/1")
+            .andExpect {
+                status { isUnauthorized() }
+                jsonPath("$.error.code") { value("UNAUTHORIZED") }
+            }
+    }
+
+    // ── 카드 단건 조회 ──
+
+    @Test
+    fun `id로 본인 카드를 조회하면 날짜별 조회와 같은 내용을 돌려준다`() {
+        val member = memberRepository.save(Member("getone@test.com"))
+        val card = createCardVia(member, "조회할 카드")
+        val date = card.conversationCreatedAt.atZone(KST).toLocalDate()
+
+        mockMvc
+            .get("/api/cards/${card.id}") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.id") { value(card.id) }
+                jsonPath("$.data.conversationId") { value(card.conversationId) }
+                jsonPath("$.data.emotion") { value("ANGER") }
+                jsonPath("$.data.summary") { value("조회할 카드") }
+                jsonPath("$.data.date") { value(date.toString()) }
+            }
+    }
+
+    @Test
+    fun `없는 카드를 조회하면 404를 반환한다`() {
+        val member = memberRepository.save(Member("getnope@test.com"))
+
+        mockMvc
+            .get("/api/cards/999999") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isNotFound() }
+                jsonPath("$.error.code") { value("CARD_NOT_FOUND") }
+            }
+    }
+
+    @Test
+    fun `남의 카드를 조회하면 403을 반환한다`() {
+        val me = memberRepository.save(Member("getme@test.com"))
+        val other = memberRepository.save(Member("getother@test.com"))
+        val othersCard = createCardVia(other, "남의 카드")
+
+        mockMvc
+            .get("/api/cards/${othersCard.id}") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(me))
+            }.andExpect {
+                status { isForbidden() }
+                jsonPath("$.error.code") { value("CARD_ACCESS_DENIED") }
+            }
+    }
+
+    @Test
+    fun `삭제한 카드를 id로 조회하면 404를 반환한다`() {
+        val member = memberRepository.save(Member("getdeleted@test.com"))
+        val card = createCardVia(member, "지워질 카드")
+
+        mockMvc
+            .delete("/api/cards/${card.id}") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect { status { isOk() } }
+        entityManager.flush()
+        entityManager.clear()
+
+        // 날짜별 조회에서 사라진 카드가 id 로만 열리면 사용자가 보는 목록과 어긋난다.
+        mockMvc
+            .get("/api/cards/${card.id}") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isNotFound() }
+                jsonPath("$.error.code") { value("CARD_NOT_FOUND") }
+            }
+    }
+
+    @Test
+    fun `채팅방이 삭제된 카드를 id로 조회하면 404를 반환한다`() {
+        val member = memberRepository.save(Member("getconvdeleted@test.com"))
+        val card = createCardVia(member, "방이 지워질 카드")
+
+        mockMvc
+            .delete("/api/conversations/${card.conversationId}") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect { status { isOk() } }
+        entityManager.flush()
+        entityManager.clear()
+
+        // 카드 자체는 deletedAt 이 null 이지만 캘린더에는 이미 나오지 않는다 — 같은 규칙을 따른다.
+        assertNull(cardRepository.findById(card.id).orElseThrow().deletedAt)
+        mockMvc
+            .get("/api/cards/${card.id}") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isNotFound() }
+                jsonPath("$.error.code") { value("CARD_NOT_FOUND") }
+            }
+    }
+
+    @Test
+    fun `단건 조회 경로가 월별 조회 경로를 가리지 않는다`() {
+        val member = memberRepository.save(Member("getmonthly@test.com"))
+        val card = createCardVia(member, "캘린더에 뜰 카드")
+        val date = card.conversationCreatedAt.atZone(KST).toLocalDate()
+
+        // GET /api/cards/{cardId} 가 생기면서 /monthly 가 cardId 로 잡히면 400 이 된다.
+        mockMvc
+            .get("/api/cards/monthly") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                param("yearMonth", "%04d-%02d".format(date.year, date.monthValue))
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.length()") { value(1) }
+            }
+    }
+
+    @Test
+    fun `인증 없이 카드를 조회하면 401을 반환한다`() {
+        mockMvc
+            .get("/api/cards/1")
             .andExpect {
                 status { isUnauthorized() }
                 jsonPath("$.error.code") { value("UNAUTHORIZED") }
