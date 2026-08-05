@@ -1,9 +1,11 @@
 package com.nexters.gamss.card.controller
 
 import com.nexters.gamss.card.controller.dto.CardCalendarResponse
+import com.nexters.gamss.card.controller.dto.CardDeleteResponse
 import com.nexters.gamss.card.controller.dto.CardResponse
 import com.nexters.gamss.card.controller.dto.CreateCardRequest
 import com.nexters.gamss.card.service.CardService
+import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.global.response.ApiResponse
 import com.nexters.gamss.global.security.AuthPrincipal
 import io.swagger.v3.oas.annotations.Operation
@@ -114,7 +116,8 @@ class CardController(
             "본인 카드를 삭제합니다. 삭제된 카드는 날짜별·월별 조회에서 더 이상 보이지 않습니다.\n\n" +
                 "- **되돌릴 수 없습니다.** 채팅방당 카드는 하나뿐이고, 삭제 후 같은 채팅방에 카드를 " +
                 "다시 만들 수 없습니다(`CARD_ALREADY_EXISTS`).\n" +
-                "- 대화 내용과 채팅방은 지워지지 않습니다. 카드만 사라집니다.\n\n" +
+                "- **카드가 나온 채팅방도 함께 삭제됩니다.** 그 채팅방은 목록·검색에서 사라지고 " +
+                "대화를 이어갈 수 없습니다.\n\n" +
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +
@@ -131,5 +134,29 @@ class CardController(
     ): ApiResponse<Unit> {
         cardService.deleteCard(principal.memberId, cardId)
         return ApiResponse.success()
+    }
+
+    @Operation(
+        summary = "감정별 카드 일괄 삭제",
+        description =
+            "본인 카드 중 해당 감정인 것을 한 번에 삭제하고, 삭제된 장수를 돌려줍니다.\n\n" +
+                "- 대상이 0장이어도 **성공**합니다(`deletedCount: 0`). 연속 호출해도 안전합니다.\n" +
+                "- 이미 삭제한 카드는 다시 세지 않습니다.\n" +
+                "- **되돌릴 수 없습니다.** 삭제한 채팅방에는 카드를 다시 만들 수 없습니다.\n\n" +
+                "**실패 응답**\n\n" +
+                "| error.code | HTTP | 설명 |\n" +
+                "|---|---|---|\n" +
+                "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·무효) |\n" +
+                "| EXPIRED_TOKEN | 401 | accessToken 만료 — 재발급 후 재시도 |\n" +
+                "| INVALID_INPUT | 400 | 지원하지 않는 감정 값 |",
+    )
+    @DeleteMapping("/emotions/{emotion}")
+    fun deleteByEmotion(
+        @Parameter(hidden = true) @AuthenticationPrincipal principal: AuthPrincipal,
+        @Parameter(description = "삭제할 카드의 감정", example = "ANGER")
+        @PathVariable emotion: EmotionType,
+    ): ApiResponse<CardDeleteResponse> {
+        val deletedCount = cardService.deleteCardsByEmotion(principal.memberId, emotion)
+        return ApiResponse.success(CardDeleteResponse(deletedCount))
     }
 }

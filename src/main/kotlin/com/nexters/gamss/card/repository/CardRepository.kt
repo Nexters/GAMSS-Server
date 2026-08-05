@@ -3,11 +3,14 @@ package com.nexters.gamss.card.repository
 import com.nexters.gamss.card.domain.Card
 import com.nexters.gamss.conversation.domain.Conversation
 import com.nexters.gamss.conversation.domain.ConversationStatus
+import com.nexters.gamss.emotion.domain.EmotionType
 import jakarta.persistence.LockModeType
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Lock
+import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
+import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
 import java.util.Optional
 
@@ -35,6 +38,43 @@ interface CardRepository : JpaRepository<Card, Long> {
     fun findConversationIdsIn(
         @Param("conversationIds") conversationIds: Collection<Long>,
     ): List<Long>
+
+    /**
+     * 회원의 특정 감정 카드 중 **일괄 삭제 대상**인 카드의 대화방 id 를 모은다.
+     *
+     * 대상은 **사용자가 볼 수 있는 카드**로 한정한다 — 이미 지운 카드(deletedAt)와 삭제된 채팅방의
+     * 카드는 캘린더에 나타나지 않으므로 세지 않는다. 그래야 응답의 삭제 건수가 사용자가 화면에서
+     * 본 장수와 일치한다([findAllByMemberIdAndConversationCreatedAtInRange] 와 같은 가시성 규칙).
+     *
+     * 카드를 바로 UPDATE 하지 않고 id 부터 모으는 이유는 대화방도 함께 지워야 하기 때문이다.
+     * 카드를 먼저 지우면 `deletedAt is null` 이 깨져 대화방을 찾을 수 없고, 대화방을 먼저 지우면
+     * `status <> DELETED` 가 깨져 카드를 찾을 수 없다. 두 UPDATE 가 같은 대상을 보게 하려면
+     * 대상 집합을 먼저 확정해야 한다([CardService.deleteCardsWithConversations]).
+     */
+    @Query(
+        "select c.conversationId from Card c, Conversation cv " +
+            "where cv.id = c.conversationId and c.memberId = :memberId and c.emotion = :emotion " +
+            "and c.deletedAt is null and cv.status <> :excludedStatus",
+    )
+    fun findDeletableConversationIdsByEmotion(
+        @Param("memberId") memberId: Long,
+        @Param("emotion") emotion: EmotionType,
+        @Param("excludedStatus") excludedStatus: ConversationStatus = ConversationStatus.DELETED,
+    ): List<Long>
+
+    /**
+     * 지정한 대화방들의 카드를 한 번에 삭제하고 삭제 건수를 돌려준다.
+     *
+     * 행 잠금이 필요 없다 — `deletedAt is null` 조건을 건 단일 UPDATE 라 동시 요청이 와도
+     * 뒤늦은 쪽은 0건을 갱신하고 끝난다.
+     */
+    @Transactional
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update Card c set c.deletedAt = :now where c.conversationId in :conversationIds and c.deletedAt is null")
+    fun softDeleteByConversationIds(
+        @Param("conversationIds") conversationIds: Collection<Long>,
+        @Param("now") now: Instant,
+    ): Int
 
     /**
      * [start, end) 사이(대화 생성시간 기준)에 속한 회원의 카드를 오래된 순으로 조회한다.

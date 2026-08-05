@@ -250,6 +250,42 @@ class CardService(
         conversation.delete()
     }
 
+    /**
+     * 본인의 특정 감정 카드를 한 번에 삭제하고 삭제 건수를 돌려준다. 단건 삭제와 마찬가지로
+     * 카드가 나온 대화방도 함께 삭제한다. 대상이 없어도 0 을 돌려주고 성공한다 — 연속 호출이
+     * 안전해야 한다.
+     */
+    @Transactional
+    fun deleteCardsByEmotion(
+        memberId: Long,
+        emotion: EmotionType,
+    ): Int = deleteCardsWithConversations(cardRepository.findDeletableConversationIdsByEmotion(memberId, emotion))
+
+    /**
+     * 확정된 대화방 집합의 카드와 대화방을 함께 삭제한다(soft delete).
+     *
+     * 대상을 id 로 먼저 확정해두고 두 UPDATE 를 날린다 — 카드를 먼저 지우면 `deletedAt is null` 이
+     * 깨져 대화방을 못 찾고, 대화방을 먼저 지우면 `status <> DELETED` 가 깨져 카드를 못 찾는다
+     * ([CardRepository.findDeletableConversationIdsByEmotion]).
+     *
+     * 단건 삭제와 달리 행을 잠그지 않는다 — `deletedAt is null` 조건을 건 UPDATE 라 동시 요청이
+     * 와도 뒤늦은 쪽이 0건을 갱신하고 끝난다(중복 삭제가 발생하지 않는다).
+     *
+     * 카드를 먼저 지우는 순서는 단건 삭제([deleteCard])와 맞춘 것이다 — 두 경로가 서로 반대
+     * 순서로 행을 잡으면 동시에 들어온 요청이 상대가 잡은 행을 기다리다 데드락으로 죽는다.
+     */
+    private fun deleteCardsWithConversations(conversationIds: List<Long>): Int {
+        if (conversationIds.isEmpty()) {
+            return 0
+        }
+        // 카드와 대화방에 같은 시각을 찍는다 — 한 번의 삭제로 사라진 짝이라 나중에 이력을 볼 때
+        // 두 UPDATE 사이의 미세한 시차로 다른 요청처럼 보이지 않아야 한다.
+        val now = Instant.now()
+        val deletedCards = cardRepository.softDeleteByConversationIds(conversationIds, now)
+        conversationRepository.softDeleteByIds(conversationIds, now)
+        return deletedCards
+    }
+
     private fun getOwnedConversation(
         conversationId: Long,
         memberId: Long,
