@@ -106,6 +106,29 @@ class ConversationController(
     }
 
     @Operation(
+        summary = "미완성(진행 중) 대화방 목록 조회",
+        description =
+            "아직 종료하지 않은 본인 대화방을 최신순으로 반환합니다. 날짜를 몰라도 쓰다 만 " +
+                "대화방을 이어서 열 수 있습니다.\n\n" +
+                "- 종료한 대화방과 삭제한 대화방은 나오지 않습니다.\n" +
+                "- 카드가 만들어진 대화방도 나오지 않습니다 — 카드는 종료한 대화방에만 생기므로 " +
+                "진행 중인 대화방에는 카드가 없습니다.\n" +
+                "- 대상이 없으면 빈 배열을 돌려줍니다.\n\n" +
+                "**실패 응답**\n\n" +
+                "| error.code | HTTP | 설명 |\n" +
+                "|---|---|---|\n" +
+                "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·무효) |\n" +
+                "| EXPIRED_TOKEN | 401 | accessToken 만료 — 재발급 후 재시도 |",
+    )
+    @GetMapping("/incomplete")
+    fun getIncompleteConversations(
+        @Parameter(hidden = true) @AuthenticationPrincipal principal: AuthPrincipal,
+    ): ApiResponse<List<ConversationResponse>> {
+        val conversations = conversationService.getInProgressConversations(principal.memberId)
+        return ApiResponse.success(conversations.map { ConversationResponse.from(it) })
+    }
+
+    @Operation(
         summary = "대화방 검색",
         description =
             "지정한 제목 또는 채팅 내용에 검색어가 포함된 본인 대화방을 최신순으로 조회합니다. " +
