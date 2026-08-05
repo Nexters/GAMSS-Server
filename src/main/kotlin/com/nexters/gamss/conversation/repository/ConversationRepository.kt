@@ -29,25 +29,20 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
     ): List<Conversation>
 
     /**
-     * 회원의 **아직 진행 중인** 대화방을 최신순으로 조회한다(이어쓰기 목록).
+     * 회원의 대화방을 상태로 걸러 최신순으로 조회한다. **어떤 상태가 무슨 의미인지는 호출자가 정한다** —
+     * 여기서는 걸러낸다는 사실만 안다.
      *
-     * `status = ACTIVE` 하나로 "삭제되지 않았고 카드도 없는 방"이 모두 충족된다 —
-     * 상태 전이가 `ACTIVE → ENDED → DELETED` 단방향이고([Conversation.end]·[Conversation.delete]
-     * 외에 status 를 바꾸는 코드가 없다), 카드 생성은 ENDED 를 요구하므로
-     * ([com.nexters.gamss.card.service.CardService] 의 claimForGeneration) **ACTIVE 방은 카드를
-     * 가질 수 없다.** 그래서 cards 를 조인하지 않는다 — 걸러질 행이 없고, 읽는 사람에게
-     * 'ACTIVE 인데 카드가 있을 수 있다'는 잘못된 인상만 준다.
-     *
-     * 종료한 방을 다시 열 수 있게 되면 이 전제가 깨지므로, 그때는 카드 존재 여부를 함께 봐야 한다.
+     * `createdAt` 만으로 정렬하지 않는다 — `DATETIME(6)` 이라 한 요청 안에서 연달아 만든 방이 같은
+     * 마이크로초를 가질 수 있고, 그러면 순서가 실행마다 흔들린다. id 로 타이브레이크한다.
      */
     @Query(
         "select c from Conversation c " +
             "where c.memberId = :memberId and c.status = :status " +
             "order by c.createdAt desc, c.id desc",
     )
-    fun findAllInProgressByMemberId(
+    fun findAllByMemberIdAndStatus(
         @Param("memberId") memberId: Long,
-        @Param("status") status: ConversationStatus = ConversationStatus.ACTIVE,
+        @Param("status") status: ConversationStatus,
     ): List<Conversation>
 
     /**
