@@ -28,13 +28,14 @@ class LoginService(
     private val tokenHasher: TokenHasher,
 ) {
     @Transactional
-    fun login(idToken: String): TokenResult {
+    fun login(idToken: String): LoginResult {
         val user = socialTokenVerifier.verify(idToken)
-        val member = socialAccountService.resolveMember(user.provider, user.uid, user.email, user.name)
-        if (member.isWithdrawn()) {
+        val resolved = socialAccountService.resolveMember(user.provider, user.uid, user.email, user.name)
+        if (resolved.member.isWithdrawn()) {
             throw BusinessException(ErrorCode.WITHDRAWN_MEMBER)
         }
-        return issueTokens(member.id)
+        val tokens = issueTokens(resolved.member.id)
+        return LoginResult(tokens.accessToken, tokens.refreshToken, isFirstLogin = resolved.isNewMember)
     }
 
     @Transactional

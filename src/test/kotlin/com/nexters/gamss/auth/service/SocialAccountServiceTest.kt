@@ -11,7 +11,9 @@ import io.mockk.verify
 import org.springframework.dao.DataIntegrityViolationException
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertSame
+import kotlin.test.assertTrue
 
 class SocialAccountServiceTest {
     private val socialAccountRepository = mockk<SocialAccountRepository>()
@@ -27,7 +29,8 @@ class SocialAccountServiceTest {
 
         val result = socialAccountService.resolveMember(SocialProvider.GOOGLE, "sub-1", "a@a.com", "홍길동")
 
-        assertSame(member, result)
+        assertSame(member, result.member)
+        assertFalse(result.isNewMember)
         verify(exactly = 0) { memberService.create(any(), any()) }
     }
 
@@ -40,7 +43,8 @@ class SocialAccountServiceTest {
 
         val result = socialAccountService.resolveMember(SocialProvider.APPLE, "sub-2", "b@a.com", "홍길동")
 
-        assertSame(member, result)
+        assertSame(member, result.member)
+        assertTrue(result.isNewMember)
         verify {
             socialAccountRepository.save(
                 match { it.memberId == 9L && it.provider == "APPLE" && it.providerId == "sub-2" },

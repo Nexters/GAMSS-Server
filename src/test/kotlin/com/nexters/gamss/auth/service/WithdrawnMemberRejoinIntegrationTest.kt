@@ -23,6 +23,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * 탈퇴 → 재가입 흐름 검증. 탈퇴가 소셜 계정 연결을 끊지 않으면 같은 소셜 계정으로 다시 로그인해도
@@ -80,6 +81,8 @@ class WithdrawnMemberRejoinIntegrationTest {
         assertEquals(MemberStatus.WITHDRAWN, members.first().status)
         assertEquals(MemberStatus.ACTIVE, members.last().status)
         assertNotEquals(first.accessToken, second.accessToken)
+        assertTrue(first.isFirstLogin, "최초 로그인은 신규 가입이다")
+        assertTrue(second.isFirstLogin, "재가입도 신규 가입으로 응답해야 한다")
         assertEquals(1L, socialAccountRepository.count(), "소셜 계정은 새 회원 것 하나만 남아야 한다")
         assertEquals(members.last().id, socialAccountRepository.findAll().single().memberId)
     }
@@ -105,6 +108,7 @@ class WithdrawnMemberRejoinIntegrationTest {
 
         val withdrawn = memberRepository.findById(memberId).orElseThrow()
         assertNull(withdrawn.email, "이메일은 비워져야 한다")
+        assertNull(withdrawn.name, "이름은 비워져야 한다")
         assertNull(withdrawn.nickname, "닉네임은 비워져야 한다")
         assertEquals(MemberStatus.WITHDRAWN, withdrawn.status)
         assertEquals(1L, memberRepository.countByStatus(MemberStatus.WITHDRAWN), "탈퇴자 통계는 유지돼야 한다")
