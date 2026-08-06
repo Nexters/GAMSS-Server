@@ -56,7 +56,7 @@ class WithdrawnMemberRejoinIntegrationTest {
         @Primary
         fun stubSocialTokenVerifier(): SocialTokenVerifier =
             object : SocialTokenVerifier {
-                override fun verify(idToken: String) = SocialUser("rejoin-uid", SocialProvider.GOOGLE, "rejoin@a.com")
+                override fun verify(idToken: String) = SocialUser("rejoin-uid", SocialProvider.GOOGLE, "rejoin@a.com", "재가입")
             }
     }
 

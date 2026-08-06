@@ -39,7 +39,7 @@ class LoginServiceTest {
 
     @Test
     fun `로그인 시 신규 회원이면 리프레시 토큰을 저장한다`() {
-        every { socialTokenVerifier.verify("idtok") } returns SocialUser("uid-1", SocialProvider.GOOGLE, "a@a.com")
+        every { socialTokenVerifier.verify("idtok") } returns SocialUser("uid-1", SocialProvider.GOOGLE, "a@a.com", "홍길동")
         val member =
             mockk<Member> {
                 every { id } returns 100L
@@ -65,7 +65,7 @@ class LoginServiceTest {
 
     @Test
     fun `로그인 시 기존 리프레시 토큰이 있으면 회전한다`() {
-        every { socialTokenVerifier.verify("t") } returns SocialUser("uid", SocialProvider.APPLE, "e@e.com")
+        every { socialTokenVerifier.verify("t") } returns SocialUser("uid", SocialProvider.APPLE, "e@e.com", "홍길동")
         val member =
             mockk<Member> {
                 every { id } returns 1L
@@ -85,7 +85,7 @@ class LoginServiceTest {
 
     @Test
     fun `탈퇴한 회원이 로그인하면 WITHDRAWN_MEMBER`() {
-        every { socialTokenVerifier.verify("idtok") } returns SocialUser("uid-1", SocialProvider.GOOGLE, "a@a.com")
+        every { socialTokenVerifier.verify("idtok") } returns SocialUser("uid-1", SocialProvider.GOOGLE, "a@a.com", "홍길동")
         val member = mockk<Member> { every { isWithdrawn() } returns true }
         every { socialAccountService.resolveMember(SocialProvider.GOOGLE, "uid-1", "a@a.com") } returns member
 

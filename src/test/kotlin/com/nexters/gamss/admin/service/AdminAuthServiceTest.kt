@@ -32,7 +32,7 @@ class AdminAuthServiceTest {
     @Test
     fun `허용목록에 있는 이메일이면 관리자 토큰을 발급한다`() {
         every { socialTokenVerifier.verify("idtok") } returns
-            SocialUser("uid-1", SocialProvider.GOOGLE, "Admin@Gamss.KR")
+            SocialUser("uid-1", SocialProvider.GOOGLE, "Admin@Gamss.KR", null)
         every { jwtIssuer.issueAdminToken("admin@gamss.kr") } returns "admin-token"
 
         val token = service(bootstrapEmails = listOf("admin@gamss.kr")).login("idtok")
@@ -43,7 +43,7 @@ class AdminAuthServiceTest {
     @Test
     fun `DB에 등록된 이메일이면 관리자 토큰을 발급한다`() {
         every { socialTokenVerifier.verify("idtok") } returns
-            SocialUser("uid-1", SocialProvider.GOOGLE, "DB-Admin@Gamss.kr")
+            SocialUser("uid-1", SocialProvider.GOOGLE, "DB-Admin@Gamss.kr", null)
         every { jwtIssuer.issueAdminToken("db-admin@gamss.kr") } returns "admin-token"
 
         val token = service(dbEmails = setOf("db-admin@gamss.kr")).login("idtok")
@@ -54,7 +54,7 @@ class AdminAuthServiceTest {
     @Test
     fun `허용목록에 없는 이메일이면 NOT_ADMIN 예외를 던진다`() {
         every { socialTokenVerifier.verify("idtok") } returns
-            SocialUser("uid-1", SocialProvider.GOOGLE, "intruder@evil.com")
+            SocialUser("uid-1", SocialProvider.GOOGLE, "intruder@evil.com", null)
 
         val exception = assertFailsWith<BusinessException> { service(bootstrapEmails = listOf("admin@gamss.kr")).login("idtok") }
 
@@ -64,7 +64,7 @@ class AdminAuthServiceTest {
     @Test
     fun `구글이 아닌 제공자면 허용목록에 있어도 NOT_ADMIN 예외를 던진다`() {
         every { socialTokenVerifier.verify("idtok") } returns
-            SocialUser("uid-1", SocialProvider.APPLE, "admin@gamss.kr")
+            SocialUser("uid-1", SocialProvider.APPLE, "admin@gamss.kr", null)
 
         val exception = assertFailsWith<BusinessException> { service(bootstrapEmails = listOf("admin@gamss.kr")).login("idtok") }
 
@@ -74,7 +74,7 @@ class AdminAuthServiceTest {
     @Test
     fun `토큰에 이메일이 없으면 NOT_ADMIN 예외를 던진다`() {
         every { socialTokenVerifier.verify("idtok") } returns
-            SocialUser("uid-1", SocialProvider.GOOGLE, null)
+            SocialUser("uid-1", SocialProvider.GOOGLE, null, null)
 
         val exception = assertFailsWith<BusinessException> { service(bootstrapEmails = listOf("admin@gamss.kr")).login("idtok") }
 

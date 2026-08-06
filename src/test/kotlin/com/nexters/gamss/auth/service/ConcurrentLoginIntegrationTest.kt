@@ -50,7 +50,7 @@ class ConcurrentLoginIntegrationTest {
         @Primary
         fun stubSocialTokenVerifier(): SocialTokenVerifier =
             object : SocialTokenVerifier {
-                override fun verify(idToken: String) = SocialUser("concurrent-uid", SocialProvider.GOOGLE, "u@a.com")
+                override fun verify(idToken: String) = SocialUser("concurrent-uid", SocialProvider.GOOGLE, "u@a.com", "동시로그인")
             }
     }
 
