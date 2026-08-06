@@ -30,7 +30,7 @@ class LoginService(
     @Transactional
     fun login(idToken: String): TokenResult {
         val user = socialTokenVerifier.verify(idToken)
-        val member = socialAccountService.resolveMember(user.provider, user.uid, user.email)
+        val member = socialAccountService.resolveMember(user.provider, user.uid, user.email, user.name)
         if (member.isWithdrawn()) {
             throw BusinessException(ErrorCode.WITHDRAWN_MEMBER)
         }

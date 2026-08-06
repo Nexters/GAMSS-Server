@@ -25,20 +25,20 @@ class SocialAccountServiceTest {
         val member = mockk<Member>()
         every { memberService.getById(5L) } returns member
 
-        val result = socialAccountService.resolveMember(SocialProvider.GOOGLE, "sub-1", "a@a.com")
+        val result = socialAccountService.resolveMember(SocialProvider.GOOGLE, "sub-1", "a@a.com", "홍길동")
 
         assertSame(member, result)
-        verify(exactly = 0) { memberService.create(any()) }
+        verify(exactly = 0) { memberService.create(any(), any()) }
     }
 
     @Test
     fun `소셜 계정이 없으면 회원을 생성하고 연결한다`() {
         every { socialAccountRepository.findByProviderAndProviderId("APPLE", "sub-2") } returns null
         val member = mockk<Member> { every { id } returns 9L }
-        every { memberService.create("b@a.com") } returns member
+        every { memberService.create("b@a.com", "홍길동") } returns member
         every { socialAccountRepository.save(any()) } answers { firstArg() }
 
-        val result = socialAccountService.resolveMember(SocialProvider.APPLE, "sub-2", "b@a.com")
+        val result = socialAccountService.resolveMember(SocialProvider.APPLE, "sub-2", "b@a.com", "홍길동")
 
         assertSame(member, result)
         verify {
@@ -51,11 +51,11 @@ class SocialAccountServiceTest {
     @Test
     fun `소셜 계정 저장이 유니크 제약에 걸리면 도메인 예외로 번역한다`() {
         every { socialAccountRepository.findByProviderAndProviderId("GOOGLE", "sub-3") } returns null
-        every { memberService.create("c@a.com") } returns mockk { every { id } returns 3L }
+        every { memberService.create("c@a.com", null) } returns mockk { every { id } returns 3L }
         every { socialAccountRepository.save(any()) } throws DataIntegrityViolationException("duplicate")
 
         assertFailsWith<ConcurrentRegistrationException> {
-            socialAccountService.resolveMember(SocialProvider.GOOGLE, "sub-3", "c@a.com")
+            socialAccountService.resolveMember(SocialProvider.GOOGLE, "sub-3", "c@a.com", null)
         }
     }
 }

@@ -14,6 +14,7 @@ import java.util.Optional
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
@@ -23,13 +24,35 @@ class MemberServiceTest {
     private val memberService = MemberService(memberRepository, WithdrawnMemberCleaners(listOf(cleaner)))
 
     @Test
-    fun `회원을 생성한다`() {
+    fun `회원을 생성하면 닉네임 초기값은 이름이다`() {
         every { memberRepository.save(any()) } answers { firstArg() }
 
-        val member = memberService.create("a@example.com")
+        val member = memberService.create("a@example.com", "홍길동")
 
         assertEquals("a@example.com", member.email)
+        assertEquals("홍길동", member.name)
+        assertEquals(Nickname("홍길동"), member.nickname)
         verify(exactly = 1) { memberRepository.save(any()) }
+    }
+
+    @Test
+    fun `이름이 없으면 이름·닉네임 없이 생성한다`() {
+        every { memberRepository.save(any()) } answers { firstArg() }
+
+        val member = memberService.create("a@example.com", null)
+
+        assertNull(member.name)
+        assertNull(member.nickname)
+    }
+
+    @Test
+    fun `이름이 닉네임 규칙에 어긋나면 이름만 저장하고 닉네임은 비워 둔다`() {
+        every { memberRepository.save(any()) } answers { firstArg() }
+
+        val member = memberService.create("a@example.com", "김")
+
+        assertEquals("김", member.name)
+        assertNull(member.nickname)
     }
 
     @Test
