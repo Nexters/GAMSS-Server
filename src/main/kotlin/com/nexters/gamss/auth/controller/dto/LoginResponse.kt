@@ -12,7 +12,6 @@ data class LoginResponse(
     val isFirstLogin: Boolean,
 ) {
     companion object {
-        fun from(result: LoginResult): LoginResponse =
-            LoginResponse(result.accessToken, result.refreshToken, result.isFirstLogin)
+        fun from(result: LoginResult): LoginResponse = LoginResponse(result.accessToken, result.refreshToken, result.isFirstLogin)
     }
 }
