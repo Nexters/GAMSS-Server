@@ -7,6 +7,8 @@ import io.mockk.verify
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class AuthServiceTest {
     private val loginService = mockk<LoginService>()
@@ -22,6 +24,7 @@ class AuthServiceTest {
         val result = authService.login("token")
 
         assertEquals("a", result.accessToken)
+        assertFalse(result.isFirstLogin)
         verify(exactly = 1) { loginService.login("token") }
     }
 
@@ -33,6 +36,7 @@ class AuthServiceTest {
         val result = authService.login("token")
 
         assertEquals("a", result.accessToken)
+        assertTrue(result.isFirstLogin)
         verify(exactly = 2) { loginService.login("token") }
     }
 

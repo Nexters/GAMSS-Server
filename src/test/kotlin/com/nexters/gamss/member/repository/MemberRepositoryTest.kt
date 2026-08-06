@@ -45,7 +45,7 @@ class MemberRepositoryTest : RepositoryTest() {
         memberRepository.save(Member("hana@example.com", "이하늘", Nickname("하늘")))
 
         val byEmail = memberRepository.search("bada", null, PageRequest.of(0, 10))
-        val byName = memberRepository.search("김바다", null, PageRequest.of(0, 10))
+        val byName = memberRepository.search("김", null, PageRequest.of(0, 10))
         val byNickname = memberRepository.search("하늘", null, PageRequest.of(0, 10))
 
         assertEquals(1, byEmail.totalElements)
