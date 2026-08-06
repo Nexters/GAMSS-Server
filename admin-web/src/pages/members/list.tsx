@@ -84,7 +84,7 @@ export function MemberList() {
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               className="pl-8"
-              placeholder="이메일·닉네임 검색"
+              placeholder="이메일·이름·닉네임 검색"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -116,6 +116,7 @@ export function MemberList() {
             <TableRow className="hover:bg-transparent">
               <TableHead className="w-16">ID</TableHead>
               <TableHead>이메일</TableHead>
+              <TableHead>이름</TableHead>
               <TableHead>닉네임</TableHead>
               <TableHead className="w-28">상태</TableHead>
               <TableHead className="w-48">가입일</TableHead>
@@ -132,6 +133,9 @@ export function MemberList() {
                     <Skeleton className="h-4 w-40" />
                   </TableCell>
                   <TableCell>
+                    <Skeleton className="h-4 w-20" />
+                  </TableCell>
+                  <TableCell>
                     <Skeleton className="h-4 w-24" />
                   </TableCell>
                   <TableCell>
@@ -144,7 +148,7 @@ export function MemberList() {
               ))
             ) : members.length === 0 ? (
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={5} className="py-16">
+                <TableCell colSpan={6} className="py-16">
                   <div className="flex flex-col items-center gap-2 text-center">
                     <div className="flex size-10 items-center justify-center rounded-full bg-muted">
                       <Users className="size-5 text-muted-foreground" />
@@ -166,6 +170,9 @@ export function MemberList() {
                   <TableCell className="font-mono text-xs text-muted-foreground">{member.id}</TableCell>
                   <TableCell className="font-medium">
                     {member.email ?? <span className="font-normal text-muted-foreground">—</span>}
+                  </TableCell>
+                  <TableCell>
+                    {member.name ?? <span className="text-muted-foreground">미제공</span>}
                   </TableCell>
                   <TableCell>
                     {member.nickname ?? <span className="text-muted-foreground">미설정</span>}

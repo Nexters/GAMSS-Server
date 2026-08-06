@@ -35,7 +35,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 export function MemberShow() {
   const { query } = useShow<Member>({ resource: 'members' })
   const member = query.data?.data
-  const displayName = member?.nickname ?? member?.email ?? `회원 #${member?.id ?? ''}`
+  const displayName = member?.nickname ?? member?.name ?? member?.email ?? `회원 #${member?.id ?? ''}`
 
   const { mutate: withdraw } = useCustomMutation()
   const onWithdraw = () => {
@@ -125,6 +125,9 @@ export function MemberShow() {
               </Field>
               <Field label="이메일">
                 {member.email ?? <span className="text-muted-foreground">미제공</span>}
+              </Field>
+              <Field label="이름">
+                {member.name ?? <span className="text-muted-foreground">미제공</span>}
               </Field>
               <Field label="닉네임">
                 {member.nickname ?? <span className="text-muted-foreground">미설정</span>}
