@@ -25,6 +25,8 @@ import java.time.Instant
 class Member(
     @Column(name = "email")
     var email: String? = null,
+    @Column(name = "name")
+    var name: String? = null,
     @Embedded
     var nickname: Nickname? = null,
 ) {
@@ -74,6 +76,7 @@ class Member(
 
     private fun anonymize() {
         email = null
+        name = null
         nickname = null
     }
 }
