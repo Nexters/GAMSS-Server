@@ -5,6 +5,7 @@ import com.nexters.gamss.global.exception.ErrorCode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 
 class NicknameTest {
     @Test
@@ -55,5 +56,21 @@ class NicknameTest {
     @Test
     fun `값이 같으면 동등하다`() {
         assertEquals(Nickname("바다"), Nickname("바다"))
+    }
+
+    @Test
+    fun `tryCreate는 유효한 값이면 닉네임을 만든다`() {
+        assertEquals(Nickname("바다"), Nickname.tryCreate("바다"))
+    }
+
+    @Test
+    fun `tryCreate는 규칙에 어긋나면 null을 돌려준다`() {
+        assertNull(Nickname.tryCreate("가"))
+        assertNull(Nickname.tryCreate("시발이"))
+    }
+
+    @Test
+    fun `tryCreate는 null이면 null을 돌려준다`() {
+        assertNull(Nickname.tryCreate(null))
     }
 }
