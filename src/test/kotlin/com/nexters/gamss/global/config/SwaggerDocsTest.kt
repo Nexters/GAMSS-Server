@@ -48,6 +48,18 @@ class SwaggerDocsTest {
     }
 
     @Test
+    fun `그룹 드롭다운에서 서비스 문서가 첫 번째로 온다`() {
+        // 드롭다운은 표시명 순 정렬이라, 표시명 숫자 접두사가 순서를 고정한다.
+        mockMvc
+            .get("/v3/api-docs/swagger-config")
+            .andExpect {
+                status { isOk() }
+                jsonPath("$.urls[0].name") { value("1. 서비스 API (앱)") }
+                jsonPath("$.urls[1].name") { value("2. 백오피스 API") }
+            }
+    }
+
+    @Test
     fun `백오피스 그룹 문서에는 어드민 API만 노출된다`() {
         mockMvc
             .get("/v3/api-docs/2-admin")
