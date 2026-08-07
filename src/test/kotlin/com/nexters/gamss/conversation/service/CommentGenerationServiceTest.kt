@@ -245,6 +245,44 @@ class CommentGenerationServiceTest {
     }
 
     @Test
+    fun `선점에 실패하고 현재 상태가 DONE이면 티키타카를 답장 대상 댓글 바로 다음으로 재배치해서 반환한다`() {
+        val comment =
+            Message(conversationId = 10L, senderType = SenderType.CHARACTER, emotionType = EmotionType.JOY, content = "댓글")
+                .also { ReflectionTestUtils.setField(it, "id", 10L) }
+        val otherComment =
+            Message(conversationId = 10L, senderType = SenderType.CHARACTER, emotionType = EmotionType.WARM, content = "댓글2")
+                .also { ReflectionTestUtils.setField(it, "id", 11L) }
+        val tikitaka =
+            Message(
+                conversationId = 10L,
+                senderType = SenderType.CHARACTER,
+                emotionType = EmotionType.GRUMPY,
+                content = "티키타카",
+                repliesToMessageId = 10L,
+            ).also { ReflectionTestUtils.setField(it, "id", 12L) }
+        val doneMessage =
+            Message(
+                conversationId = 10L,
+                senderType = SenderType.USER,
+                content = "내용",
+                commentStatus = CommentStatus.DONE,
+            )
+        every { messageRepository.findById(1L) } returnsMany listOf(Optional.of(rootMessage()), Optional.of(doneMessage))
+        every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
+        every {
+            messageRepository.updateCommentStatus(1L, CommentStatus.PENDING, listOf(CommentStatus.NONE, CommentStatus.FAILED), any())
+        } returns 0
+        // DB는 저장 순서(1라운드 댓글 전부 -> 2라운드 티키타카 전부) 그대로인 id ASC를 내려주지만,
+        // 재조회 응답은 saveFeed와 동일하게 재배치되어야 한다.
+        every { messageRepository.findAllByRootMessageIdOrderByIdAsc(1L) } returns listOf(comment, otherComment, tikitaka)
+
+        val result = service.generateComments(memberId = 1L, messageId = 1L, currentConversationSummary = null)
+
+        assertEquals(CommentGenerationOutcome.DONE, result.outcome)
+        assertEquals(listOf(10L, 12L, 11L), result.messages.map { it.id })
+    }
+
+    @Test
     fun `LLM 호출이 재시도까지 실패하면 FAILED로 마킹하고 FAILED를 반환한다`() {
         val message = rootMessage()
         every { messageRepository.findById(1L) } returns Optional.of(message)

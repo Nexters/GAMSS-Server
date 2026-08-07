@@ -407,7 +407,7 @@ class CommentGenerationService(
             CommentStatus.DONE -> {
                 GenerationResult(
                     CommentGenerationOutcome.DONE,
-                    messageRepository.findAllByRootMessageIdOrderByIdAsc(messageId),
+                    MessageThreadOrder.reorderTikitakaAfterTarget(messageRepository.findAllByRootMessageIdOrderByIdAsc(messageId)),
                 )
             }
 

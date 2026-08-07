@@ -80,8 +80,7 @@ class CommentPersistenceService(
             )
         check(updated == 1) { "댓글 저장 중 상태 전이가 실패했습니다. rootMessageId=$rootMessageId" }
 
-        val tikitakaByTarget = savedTikitaka.groupBy { it.repliesToMessageId }
-        return savedComments.flatMap { comment -> listOf(comment) + tikitakaByTarget[comment.id].orEmpty() }
+        return MessageThreadOrder.reorderTikitakaAfterTarget(savedComments + savedTikitaka)
     }
 
     /** 유저의 답글([repliesToMessageId])에 캐릭터([characterId])가 다시 응답한 메시지 1개를 저장한다. */
