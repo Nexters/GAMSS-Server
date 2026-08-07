@@ -97,6 +97,44 @@ class CardControllerIntegrationTest {
         assertEquals(1, cardRepository.count())
     }
 
+    @Test
+    fun `summary가 2000자면 카드가 생성된다`() {
+        val member = memberRepository.save(Member("summary-2000@test.com"))
+        val conversation = conversationRepository.save(Conversation(member.id).apply { end() })
+        val summary = "가".repeat(2000)
+
+        mockMvc
+            .post("/api/cards") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content =
+                    """{"conversationId":${conversation.id},"emotion":"ANGER","summary":"$summary"}"""
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.summary") { value(summary) }
+            }
+    }
+
+    @Test
+    fun `summary가 2000자를 넘으면 400을 반환한다`() {
+        val member = memberRepository.save(Member("summary-2001@test.com"))
+        val conversation = conversationRepository.save(Conversation(member.id).apply { end() })
+        val summary = "가".repeat(2001)
+
+        mockMvc
+            .post("/api/cards") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content =
+                    """{"conversationId":${conversation.id},"emotion":"ANGER","summary":"$summary"}"""
+            }.andExpect {
+                status { isBadRequest() }
+                jsonPath("$.error.code") { value("INVALID_INPUT") }
+            }
+
+        assertEquals(0, cardRepository.count())
+    }
+
     // ── 카드 삭제 ──
 
     @Test
