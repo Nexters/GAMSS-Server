@@ -102,6 +102,23 @@ interface CardRepository : JpaRepository<Card, Long> {
     ): Int
 
     /**
+     * 회원의 카드 중 **전체 삭제 대상**인 카드의 대화방 id 를 모은다.
+     *
+     * 감정 조건만 없을 뿐 [findDeletableConversationIdsByEmotion] 과 **같은 가시성 규칙**을 쓴다 —
+     * 이미 지운 카드와 삭제된 채팅방의 카드는 세지 않는다. 두 쿼리와 조회 쿼리
+     * ([findAllByMemberIdAndConversationCreatedAtInRange])의 가시성 조건은 항상 함께 바뀌어야 한다.
+     */
+    @Query(
+        "select c.conversationId from Card c, Conversation cv " +
+            "where cv.id = c.conversationId and c.memberId = :memberId " +
+            "and c.deletedAt is null and cv.status <> :excludedStatus",
+    )
+    fun findDeletableConversationIds(
+        @Param("memberId") memberId: Long,
+        @Param("excludedStatus") excludedStatus: ConversationStatus = ConversationStatus.DELETED,
+    ): List<Long>
+
+    /**
      * [start, end) 사이(대화 생성시간 기준)에 속한 회원의 카드를 오래된 순으로 조회한다.
      * 삭제된 채팅방의 카드는 제외한다 — 카드는 대화 종료 여부와 무관하게 삭제될 수 있어(Conversation.delete),
      * 삭제 후에도 남은 카드가 캘린더·날짜별 조회에 계속 나타나는 걸 막는다.

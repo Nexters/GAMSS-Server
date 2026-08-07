@@ -166,7 +166,9 @@ class CardController(
             "본인 카드 중 해당 감정인 것을 한 번에 삭제하고, 삭제된 장수를 돌려줍니다.\n\n" +
                 "- 대상이 0장이어도 **성공**합니다(`deletedCount: 0`). 연속 호출해도 안전합니다.\n" +
                 "- 이미 삭제한 카드는 다시 세지 않습니다.\n" +
-                "- **되돌릴 수 없습니다.** 삭제한 채팅방에는 카드를 다시 만들 수 없습니다.\n\n" +
+                "- **되돌릴 수 없습니다.** 삭제한 채팅방에는 카드를 다시 만들 수 없습니다.\n" +
+                "- **카드가 나온 채팅방도 모두 함께 삭제됩니다.** 그 채팅방들은 목록·검색에서 " +
+                "사라지고 대화를 이어갈 수 없습니다.\n\n" +
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +
@@ -181,6 +183,30 @@ class CardController(
         @PathVariable emotion: EmotionType,
     ): ApiResponse<CardDeleteResponse> {
         val deletedCount = cardService.deleteCardsByEmotion(principal.memberId, emotion)
+        return ApiResponse.success(CardDeleteResponse(deletedCount))
+    }
+
+    @Operation(
+        summary = "카드 전체 삭제",
+        description =
+            "본인 카드를 전부 삭제하고, 삭제된 장수를 돌려줍니다.\n\n" +
+                "- **되돌릴 수 없습니다.** 삭제한 채팅방에는 카드를 다시 만들 수 없으니, " +
+                "호출 전에 사용자 확인 단계를 두는 것을 권장합니다.\n" +
+                "- 대상이 0장이어도 **성공**합니다(`deletedCount: 0`). 연속 호출해도 안전합니다.\n" +
+                "- 이미 삭제한 카드는 다시 세지 않습니다.\n" +
+                "- **카드가 나온 채팅방도 모두 함께 삭제됩니다.** 그 채팅방들은 목록·검색에서 " +
+                "사라지고 대화를 이어갈 수 없습니다.\n\n" +
+                "**실패 응답**\n\n" +
+                "| error.code | HTTP | 설명 |\n" +
+                "|---|---|---|\n" +
+                "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·무효) |\n" +
+                "| EXPIRED_TOKEN | 401 | accessToken 만료 — 재발급 후 재시도 |",
+    )
+    @DeleteMapping
+    fun deleteAll(
+        @Parameter(hidden = true) @AuthenticationPrincipal principal: AuthPrincipal,
+    ): ApiResponse<CardDeleteResponse> {
+        val deletedCount = cardService.deleteAllCards(principal.memberId)
         return ApiResponse.success(CardDeleteResponse(deletedCount))
     }
 }

@@ -442,6 +442,206 @@ class CardControllerIntegrationTest {
             }
     }
 
+    // ── 전체 삭제 ──
+
+    @Test
+    fun `전체 삭제하면 감정과 무관하게 모두 사라지고 건수를 돌려준다`() {
+        val member = memberRepository.save(Member("all@test.com"))
+        createCardVia(member, "분노", EmotionType.ANGER)
+        createCardVia(member, "기쁨", EmotionType.JOY)
+        createCardVia(member, "불안", EmotionType.ANXIETY)
+
+        mockMvc
+            .delete("/api/cards") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.deletedCount") { value(3) }
+            }
+        entityManager.flush()
+        entityManager.clear()
+
+        assertTrue(
+            cardRepository.findAll().filter { it.memberId == member.id }.all { it.isDeleted() },
+            "내 카드는 전부 삭제 상태여야 한다",
+        )
+    }
+
+    @Test
+    fun `전체 삭제하면 카드가 나온 대화방도 모두 함께 삭제된다`() {
+        val member = memberRepository.save(Member("allcascade@test.com"))
+        val anger = createCardVia(member, "분노", EmotionType.ANGER)
+        val joy = createCardVia(member, "기쁨", EmotionType.JOY)
+        // 카드가 없는 대화방은 삭제 대상이 아니다 — 전체 삭제는 어디까지나 '카드' 삭제다.
+        val cardless = conversationRepository.save(Conversation(member.id).apply { end() })
+
+        mockMvc
+            .delete("/api/cards") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect { status { isOk() } }
+        entityManager.flush()
+        entityManager.clear()
+
+        listOf(anger.conversationId, joy.conversationId).forEach {
+            assertEquals(ConversationStatus.DELETED, conversationRepository.findById(it).orElseThrow().status)
+        }
+        assertEquals(
+            ConversationStatus.ENDED,
+            conversationRepository.findById(cardless.id).orElseThrow().status,
+            "카드 없는 대화방은 그대로여야 한다",
+        )
+    }
+
+    @Test
+    fun `전체 삭제는 대상이 없어도 성공하고 0을 돌려준다 - 연속 호출 안전`() {
+        val member = memberRepository.save(Member("allempty@test.com"))
+
+        repeat(2) {
+            mockMvc
+                .delete("/api/cards") {
+                    header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                }.andExpect {
+                    status { isOk() }
+                    jsonPath("$.data.deletedCount") { value(0) }
+                }
+        }
+    }
+
+    @Test
+    fun `전체 삭제는 다른 회원 카드를 건드리지 않는다`() {
+        val me = memberRepository.save(Member("me-all@test.com"))
+        val other = memberRepository.save(Member("other-all@test.com"))
+        createCardVia(me, "내 카드", EmotionType.ANGER)
+        val othersCard = createCardVia(other, "남의 카드", EmotionType.JOY)
+
+        mockMvc
+            .delete("/api/cards") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(me))
+            }.andExpect { jsonPath("$.data.deletedCount") { value(1) } }
+        entityManager.flush()
+        entityManager.clear()
+
+        assertNull(cardRepository.findById(othersCard.id).orElseThrow().deletedAt)
+    }
+
+    @Test
+    fun `전체 삭제 뒤 감정별 삭제를 호출하면 0을 돌려준다`() {
+        val member = memberRepository.save(Member("chain@test.com"))
+        createCardVia(member, "분노", EmotionType.ANGER)
+
+        mockMvc
+            .delete("/api/cards") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect { jsonPath("$.data.deletedCount") { value(1) } }
+        entityManager.flush()
+        entityManager.clear()
+
+        // 두 벌크 삭제가 같은 가시성 규칙(deletedAt is null)을 쓰는지 확인한다.
+        mockMvc
+            .delete("/api/cards/emotions/ANGER") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect { jsonPath("$.data.deletedCount") { value(0) } }
+    }
+
+    @Test
+    fun `감정별 삭제해도 백오피스 생성 이력 집계는 그대로다`() {
+        val member = memberRepository.save(Member("emostat@test.com"))
+        val card = createCardVia(member, "감정별 통계 유지", EmotionType.ANGER)
+        val since = card.conversationCreatedAt.minusSeconds(60)
+        val before: Long = cardRepository.countByEmotionSince(since).sumOf { it.count }
+        val todayCountBefore = cardRepository.countCreatedBetween(since, card.conversationCreatedAt.plusSeconds(60))
+
+        mockMvc
+            .delete("/api/cards/emotions/ANGER") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect { status { isOk() } }
+        entityManager.flush()
+        entityManager.clear()
+
+        assertEquals(before, cardRepository.countByEmotionSince(since).sumOf { it.count }, "감정 분포")
+        assertEquals(1, cardRepository.findCreatedAtsSince(since).size, "일별 추이")
+        assertEquals(
+            todayCountBefore,
+            cardRepository.countCreatedBetween(since, card.conversationCreatedAt.plusSeconds(60)),
+            "오늘 카드 수",
+        )
+    }
+
+    @Test
+    fun `전체 삭제해도 백오피스 생성 이력 집계는 그대로다`() {
+        val member = memberRepository.save(Member("allstat@test.com"))
+        val card = createCardVia(member, "통계 유지", EmotionType.ANGER)
+        val since = card.conversationCreatedAt.minusSeconds(60)
+        val before: Long = cardRepository.countByEmotionSince(since).sumOf { it.count }
+        val todayCountBefore = cardRepository.countCreatedBetween(since, card.conversationCreatedAt.plusSeconds(60))
+
+        mockMvc
+            .delete("/api/cards") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect { status { isOk() } }
+        entityManager.flush()
+        entityManager.clear()
+
+        assertEquals(before, cardRepository.countByEmotionSince(since).sumOf { it.count }, "감정 분포")
+        assertEquals(1, cardRepository.findCreatedAtsSince(since).size, "일별 추이")
+        assertEquals(
+            todayCountBefore,
+            cardRepository.countCreatedBetween(since, card.conversationCreatedAt.plusSeconds(60)),
+            "오늘 카드 수",
+        )
+    }
+
+    @Test
+    fun `전체 삭제도 채팅방이 먼저 삭제된 카드는 세지도 지우지도 않는다`() {
+        val member = memberRepository.save(Member("allpredeleted@test.com"))
+        val hidden = createCardVia(member, "방부터 지운 카드", EmotionType.ANGER)
+        val visible = createCardVia(member, "남아 있는 카드", EmotionType.JOY)
+        conversationRepository.findById(hidden.conversationId).orElseThrow().delete()
+        entityManager.flush()
+        entityManager.clear()
+
+        mockMvc
+            .delete("/api/cards") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.deletedCount") { value(1) }
+            }
+        entityManager.flush()
+        entityManager.clear()
+
+        // 감정별 삭제와 같은 가시성 규칙이다 — 두 쿼리의 조건은 항상 함께 움직여야 한다.
+        assertNull(cardRepository.findById(hidden.id).orElseThrow().deletedAt, "안 보이던 카드는 대상이 아니다")
+        assertNotNull(cardRepository.findById(visible.id).orElseThrow().deletedAt, "보이던 카드는 삭제됨")
+    }
+
+    @Test
+    fun `전체 삭제도 채팅방의 변경 시각을 남긴다`() {
+        val member = memberRepository.save(Member("alltouched@test.com"))
+        val card = createCardVia(member, "분노", EmotionType.ANGER)
+        val before = conversationRepository.findById(card.conversationId).orElseThrow().updatedAt
+
+        mockMvc
+            .delete("/api/cards") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect { status { isOk() } }
+        entityManager.flush()
+        entityManager.clear()
+
+        val after = conversationRepository.findById(card.conversationId).orElseThrow().updatedAt
+        assertTrue(after > before, "삭제 시각이 updatedAt 에 반영되어야 한다")
+    }
+
+    @Test
+    fun `인증 없이 전체 삭제를 호출하면 401을 반환한다`() {
+        mockMvc
+            .delete("/api/cards")
+            .andExpect {
+                status { isUnauthorized() }
+                jsonPath("$.error.code") { value("UNAUTHORIZED") }
+            }
+    }
+
     // ── 카드 단건 조회 ──
 
     @Test

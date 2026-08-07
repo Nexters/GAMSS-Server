@@ -99,4 +99,75 @@ class CardDeleteConcurrencyIntegrationTest {
             "카드와 함께 대화방도 삭제돼야 한다",
         )
     }
+
+    /**
+     * 단건 삭제(행 잠금)와 벌크 삭제(조건부 UPDATE)가 같은 카드를 동시에 건드리는 경로 검증.
+     *
+     * 단건이 먼저 커밋되면 벌크의 `deletedAt is null` UPDATE 가 0건으로 끝나고, 벌크가 먼저
+     * 커밋되면 단건이 CARD_ALREADY_DELETED 로 실패해야 한다 — 어느 쪽이든 삭제는 정확히 한 번만
+     * 집계된다. 두 경로가 카드 → 대화방 순서로 행을 잡으므로 데드락도 없어야 한다
+     * ([CardService.deleteCardsWithConversations] KDoc 의 잠금 순서 설명).
+     */
+    @Test
+    fun `단건 삭제와 벌크 삭제가 같은 카드에 동시에 들어와도 삭제는 한 번만 집계된다`() {
+        val memberId = 1L
+        val conversation = conversationRepository.save(Conversation(memberId).apply { end() })
+        val card =
+            cardRepository.save(
+                Card(
+                    memberId = memberId,
+                    conversationId = conversation.id,
+                    emotion = EmotionType.ANGER,
+                    summary = "단건·벌크 동시 삭제 대상",
+                    message = "오늘은 다들 나만 찾네.",
+                    conversationCreatedAt = Instant.now(),
+                ),
+            )
+        val unexpectedFailures = Collections.synchronizedList(mutableListOf<Throwable>())
+        // 각 작업은 자신이 지운 카드 수를 돌려준다. 단건 삭제의 CARD_ALREADY_DELETED 는
+        // 경합에서 진 정상 결과라 0으로 친다.
+        val deleteOnce: () -> Int = {
+            try {
+                cardService.deleteCard(memberId, card.id)
+                1
+            } catch (e: BusinessException) {
+                if (e.errorCode != ErrorCode.CARD_ALREADY_DELETED) {
+                    unexpectedFailures.add(e)
+                }
+                0
+            }
+        }
+        val tasks: List<() -> Int> =
+            listOf(
+                deleteOnce,
+                deleteOnce,
+                { cardService.deleteAllCards(memberId) },
+                { cardService.deleteCardsByEmotion(memberId, EmotionType.ANGER) },
+            )
+
+        val startLine = CyclicBarrier(tasks.size)
+        val executor = Executors.newFixedThreadPool(tasks.size)
+        val futures =
+            tasks.map { task ->
+                executor.submit<Int> {
+                    startLine.await() // 모든 스레드를 동시에 출발시켜 경합을 유도한다
+                    try {
+                        task()
+                    } catch (e: Throwable) {
+                        unexpectedFailures.add(e)
+                        0
+                    }
+                }
+            }
+        val deletedTotal = futures.sumOf { it.get(30, TimeUnit.SECONDS) }
+        executor.shutdown()
+
+        assertTrue(unexpectedFailures.isEmpty(), "예상 밖 실패(데드락 등)가 없어야 한다: $unexpectedFailures")
+        assertEquals(1, deletedTotal, "네 경로가 동시에 지워도 삭제는 한 번만 집계돼야 한다")
+        assertNotNull(cardRepository.findById(card.id).orElseThrow().deletedAt)
+        assertTrue(
+            conversationRepository.findById(conversation.id).orElseThrow().isDeleted(),
+            "카드와 함께 대화방도 삭제돼야 한다",
+        )
+    }
 }
