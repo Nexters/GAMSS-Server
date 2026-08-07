@@ -4,6 +4,7 @@ import com.nexters.gamss.emotion.domain.EmotionType
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class CharacterSelectorTest {
@@ -91,6 +92,13 @@ class CharacterSelectorTest {
             val selection = selector.select(excluded)
 
             assertTrue(selection.characters.size in 1..2, "캐릭터 수가 후보 풀(2명)을 벗어남: ${selection.characters}")
+        }
+    }
+
+    @Test
+    fun `전체 캐릭터를 제외하면 IllegalArgumentException`() {
+        assertFailsWith<IllegalArgumentException> {
+            selector.select(EmotionType.entries.toSet())
         }
     }
 }

@@ -25,6 +25,7 @@ class CharacterSelector(
 ) {
     fun select(excludedCharacters: Set<EmotionType> = emptySet()): CharacterSelection {
         val candidates = EmotionType.entries.filterNot { it in excludedCharacters }
+        require(candidates.isNotEmpty()) { "excludedCharacters가 전체 캐릭터를 제외했습니다: $excludedCharacters" }
         val poolSize = candidates.size
         val total =
             if (poolSize < MIN_CHARACTERS_FOR_TIKITAKA) {
