@@ -1,5 +1,6 @@
 package com.nexters.gamss.llm.selection
 
+import com.nexters.gamss.emotion.domain.EmotionType
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -59,6 +60,37 @@ class CharacterSelectorTest {
             val selection = selector.select()
 
             assertEquals(selection.characters.size, selection.characters.toSet().size)
+        }
+    }
+
+    @Test
+    fun `제외한 캐릭터는 선택되지 않는다`() {
+        val excluded = setOf(EmotionType.ANGER, EmotionType.ANXIETY, EmotionType.GRUMPY)
+        repeat(1_000) {
+            val selection = selector.select(excluded)
+
+            assertTrue(selection.characters.none { it in excluded }, "제외한 캐릭터가 선택됨: ${selection.characters}")
+        }
+    }
+
+    @Test
+    fun `후보가 1명으로 좁혀지면 그 캐릭터만 뽑히고 티키타카는 0이다`() {
+        val excluded = EmotionType.entries.drop(1).toSet()
+        repeat(1_000) {
+            val selection = selector.select(excluded)
+
+            assertEquals(listOf(EmotionType.JOY), selection.characters)
+            assertEquals(0, selection.tikitakaCount)
+        }
+    }
+
+    @Test
+    fun `후보가 2명으로 좁혀지면 캐릭터 수는 후보 수를 넘지 않는다`() {
+        val excluded = EmotionType.entries.drop(2).toSet()
+        repeat(1_000) {
+            val selection = selector.select(excluded)
+
+            assertTrue(selection.characters.size in 1..2, "캐릭터 수가 후보 풀(2명)을 벗어남: ${selection.characters}")
         }
     }
 }
