@@ -285,6 +285,75 @@ class ConversationControllerIntegrationTest {
     }
 
     @Test
+    fun `excludeCharacters를 지정하면 생성된 댓글에 제외한 캐릭터가 없다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+
+        mockMvc
+            .post("/api/conversations/messages") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content =
+                    """
+                    {"content":"오늘 억울한 일이 있었어",
+                     "excludeCharacters":["ANGER","ANXIETY","GRUMPY","WARM","QUIRKY"]}
+                    """.trimIndent()
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.commentStatus") { value("DONE") }
+                // 5종을 제외하면 JOY만 남으므로 후보가 1명 -> 항상 JOY 1명만, 티키타카 없이 뽑힌다.
+                jsonPath("$.data.comments.length()") { value(1) }
+                jsonPath("$.data.comments[0].emotionType") { value("JOY") }
+            }
+
+        val conversation = conversationRepository.findAll().single()
+        assertEquals(
+            listOf(EmotionType.ANGER, EmotionType.ANXIETY, EmotionType.GRUMPY, EmotionType.WARM, EmotionType.QUIRKY),
+            conversation.excludedEmotionTypes,
+        )
+    }
+
+    @Test
+    fun `excludeCharacters로 전체 캐릭터를 제외하면 400을 반환한다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+
+        mockMvc
+            .post("/api/conversations/messages") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content =
+                    """
+                    {"content":"오늘 억울한 일이 있었어",
+                     "excludeCharacters":["JOY","ANGER","ANXIETY","GRUMPY","WARM","QUIRKY"]}
+                    """.trimIndent()
+            }.andExpect {
+                status { isBadRequest() }
+                jsonPath("$.error.code") { value("INVALID_INPUT") }
+            }
+
+        assertEquals(0, conversationRepository.count())
+    }
+
+    @Test
+    fun `기존 채팅방에 이어서 보낼 때 excludeCharacters를 보내도 최초 설정이 유지된다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val conversation =
+            conversationRepository.save(Conversation(member.id, listOf(EmotionType.ANGER)))
+
+        mockMvc
+            .post("/api/conversations/messages") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content =
+                    """{"conversationId":${conversation.id},"content":"이어서 씀","excludeCharacters":["JOY"]}"""
+            }.andExpect {
+                status { isOk() }
+            }
+
+        val reloaded = conversationRepository.findById(conversation.id).get()
+        assertEquals(listOf(EmotionType.ANGER), reloaded.excludedEmotionTypes)
+    }
+
+    @Test
     fun `답글을 저장하면 같은 요청 안에서 캐릭터 재응답까지 생성되어 함께 반환된다`() {
         val member = memberRepository.save(Member("me@a.com"))
         val conversation = conversationRepository.save(Conversation(member.id))
