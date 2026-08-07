@@ -6,6 +6,7 @@ import com.nexters.gamss.conversation.domain.Message
 import com.nexters.gamss.conversation.domain.SenderType
 import com.nexters.gamss.conversation.repository.ConversationRepository
 import com.nexters.gamss.conversation.repository.MessageRepository
+import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import org.springframework.stereotype.Service
@@ -18,20 +19,26 @@ class ConversationService(
     private val conversationRepository: ConversationRepository,
     private val messageRepository: MessageRepository,
 ) {
-    /** 사용자 메시지를 저장한다. conversationId가 없으면 새 채팅방을 만들어 담는다. */
+    /**
+     * 사용자 메시지를 저장한다. conversationId가 없으면 새 채팅방을 만들어 담는다.
+     *
+     * [excludeCharacters]는 새 채팅방을 만들 때만 반영된다 — 기존 채팅방(conversationId 있음)에
+     * 이어서 보내는 요청에 함께 와도 조용히 무시하고 최초 설정을 그대로 둔다.
+     */
     @Transactional
     fun saveUserMessage(
         memberId: Long,
         conversationId: Long?,
         content: String,
         repliesToMessageId: Long? = null,
+        excludeCharacters: List<EmotionType>? = null,
     ): Message {
         if (conversationId == null && repliesToMessageId != null) {
             throw BusinessException(ErrorCode.INVALID_INPUT, "새 채팅방을 만들면서 답장할 수 없습니다.")
         }
         val conversation =
             conversationId?.let { getOwnedConversationForUpdate(it, memberId) }
-                ?: conversationRepository.save(Conversation(memberId))
+                ?: conversationRepository.save(Conversation(memberId, resolveExcludedEmotionTypes(excludeCharacters)))
         conversation.ensureActive()
         if (repliesToMessageId != null) {
             validateReplyTarget(repliesToMessageId, conversation.id)
@@ -82,6 +89,21 @@ class ConversationService(
         val conversation = getOwnedConversationForUpdate(conversationId, memberId)
         conversation.rename(ConversationTitle(title))
         return conversation
+    }
+
+    /**
+     * 제외 요청 캐릭터 목록을 검증한다. 전체(6종)를 다 제외하면 [com.nexters.gamss.llm.selection.CharacterSelector]가
+     * 뽑을 캐릭터가 하나도 남지 않으므로 거부한다.
+     */
+    private fun resolveExcludedEmotionTypes(excludeCharacters: List<EmotionType>?): List<EmotionType> {
+        if (excludeCharacters.isNullOrEmpty()) {
+            return emptyList()
+        }
+        val distinct = excludeCharacters.distinct()
+        if (distinct.size >= EmotionType.entries.size) {
+            throw BusinessException(ErrorCode.INVALID_INPUT, "excludeCharacters는 최대 ${EmotionType.entries.size - 1}종까지만 지정할 수 있습니다.")
+        }
+        return distinct
     }
 
     /** 답장 대상 메시지가 실제로 해당 채팅방에 존재하는지 확인한다. */

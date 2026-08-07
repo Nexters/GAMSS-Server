@@ -51,6 +51,73 @@ class ConversationServiceTest {
     }
 
     @Test
+    fun `excludeCharacters를 지정하면 새 채팅방의 제외 목록으로 저장된다`() {
+        val savedConversation = slot<Conversation>()
+        every { conversationRepository.save(capture(savedConversation)) } answers { firstArg() }
+        every { messageRepository.save(any()) } answers { firstArg() }
+
+        conversationService.saveUserMessage(
+            1L,
+            null,
+            "오늘 억울한 일이 있었어",
+            excludeCharacters = listOf(EmotionType.ANGER, EmotionType.ANXIETY),
+        )
+
+        assertEquals(listOf(EmotionType.ANGER, EmotionType.ANXIETY), savedConversation.captured.excludedEmotionTypes)
+    }
+
+    @Test
+    fun `excludeCharacters에 중복이 있으면 중복을 제거하고 저장한다`() {
+        val savedConversation = slot<Conversation>()
+        every { conversationRepository.save(capture(savedConversation)) } answers { firstArg() }
+        every { messageRepository.save(any()) } answers { firstArg() }
+
+        conversationService.saveUserMessage(
+            1L,
+            null,
+            "내용",
+            excludeCharacters = listOf(EmotionType.ANGER, EmotionType.ANGER, EmotionType.ANXIETY),
+        )
+
+        assertEquals(listOf(EmotionType.ANGER, EmotionType.ANXIETY), savedConversation.captured.excludedEmotionTypes)
+    }
+
+    @Test
+    fun `excludeCharacters로 전체 캐릭터를 제외하면 INVALID_INPUT`() {
+        val exception =
+            assertFailsWith<BusinessException> {
+                conversationService.saveUserMessage(1L, null, "내용", excludeCharacters = EmotionType.entries.toList())
+            }
+
+        assertEquals(ErrorCode.INVALID_INPUT, exception.errorCode)
+        verify(exactly = 0) { conversationRepository.save(any()) }
+    }
+
+    @Test
+    fun `excludeCharacters로 5종(1종만 남기고)까지는 제외할 수 있다`() {
+        val savedConversation = slot<Conversation>()
+        every { conversationRepository.save(capture(savedConversation)) } answers { firstArg() }
+        every { messageRepository.save(any()) } answers { firstArg() }
+        val excludeFiveTypes = EmotionType.entries.drop(1)
+
+        conversationService.saveUserMessage(1L, null, "내용", excludeCharacters = excludeFiveTypes)
+
+        assertEquals(excludeFiveTypes, savedConversation.captured.excludedEmotionTypes)
+    }
+
+    @Test
+    fun `기존 채팅방에 이어서 보낼 때 excludeCharacters를 보내도 무시된다`() {
+        val conversation = Conversation(memberId = 1L)
+        every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
+        every { messageRepository.save(any()) } answers { firstArg() }
+
+        conversationService.saveUserMessage(1L, 10L, "이어서 쓰는 말", excludeCharacters = listOf(EmotionType.ANGER))
+
+        assertEquals(emptyList(), conversation.excludedEmotionTypes)
+        verify(exactly = 0) { conversationRepository.save(any()) }
+    }
+
+    @Test
     fun `없는 채팅방에 저장하면 CONVERSATION_NOT_FOUND`() {
         every { conversationRepository.findByIdForUpdate(99L) } returns Optional.empty()
 
