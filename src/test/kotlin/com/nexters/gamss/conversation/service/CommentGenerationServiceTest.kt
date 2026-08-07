@@ -2,6 +2,7 @@ package com.nexters.gamss.conversation.service
 
 import com.nexters.gamss.conversation.domain.CommentStatus
 import com.nexters.gamss.conversation.domain.Conversation
+import com.nexters.gamss.conversation.domain.ExcludedEmotionTypes
 import com.nexters.gamss.conversation.domain.Message
 import com.nexters.gamss.conversation.domain.SenderType
 import com.nexters.gamss.conversation.repository.ConversationRepository
@@ -115,7 +116,8 @@ class CommentGenerationServiceTest {
         every {
             messageRepository.updateCommentStatus(1L, CommentStatus.PENDING, listOf(CommentStatus.NONE, CommentStatus.FAILED), any())
         } returns 1
-        every { characterSelector.select() } returns CharacterSelection(characters, tikitakaCount)
+        every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
+        every { characterSelector.select(emptySet()) } returns CharacterSelection(characters, tikitakaCount)
         every {
             conversationRepository.findRandomPastSummaries(
                 any(),
@@ -180,7 +182,7 @@ class CommentGenerationServiceTest {
         every {
             messageRepository.updateCommentStatus(1L, CommentStatus.PENDING, listOf(CommentStatus.NONE, CommentStatus.FAILED), any())
         } returns 1
-        every { characterSelector.select() } returns CharacterSelection(characters, tikitakaCount)
+        every { characterSelector.select(emptySet()) } returns CharacterSelection(characters, tikitakaCount)
         every {
             conversationRepository.findRandomPastSummaries(
                 1L,
@@ -242,6 +244,44 @@ class CommentGenerationServiceTest {
         assertEquals(CommentGenerationOutcome.DONE, result.outcome)
         assertEquals(existingComments, result.messages)
         assertEquals(null, result.usedTokens)
+    }
+
+    @Test
+    fun `선점에 실패하고 현재 상태가 DONE이면 티키타카를 답장 대상 댓글 바로 다음으로 재배치해서 반환한다`() {
+        val comment =
+            Message(conversationId = 10L, senderType = SenderType.CHARACTER, emotionType = EmotionType.JOY, content = "댓글")
+                .also { ReflectionTestUtils.setField(it, "id", 10L) }
+        val otherComment =
+            Message(conversationId = 10L, senderType = SenderType.CHARACTER, emotionType = EmotionType.WARM, content = "댓글2")
+                .also { ReflectionTestUtils.setField(it, "id", 11L) }
+        val tikitaka =
+            Message(
+                conversationId = 10L,
+                senderType = SenderType.CHARACTER,
+                emotionType = EmotionType.GRUMPY,
+                content = "티키타카",
+                repliesToMessageId = 10L,
+            ).also { ReflectionTestUtils.setField(it, "id", 12L) }
+        val doneMessage =
+            Message(
+                conversationId = 10L,
+                senderType = SenderType.USER,
+                content = "내용",
+                commentStatus = CommentStatus.DONE,
+            )
+        every { messageRepository.findById(1L) } returnsMany listOf(Optional.of(rootMessage()), Optional.of(doneMessage))
+        every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
+        every {
+            messageRepository.updateCommentStatus(1L, CommentStatus.PENDING, listOf(CommentStatus.NONE, CommentStatus.FAILED), any())
+        } returns 0
+        // DB는 저장 순서(1라운드 댓글 전부 -> 2라운드 티키타카 전부) 그대로인 id ASC를 내려주지만,
+        // 재조회 응답은 saveFeed와 동일하게 재배치되어야 한다.
+        every { messageRepository.findAllByRootMessageIdOrderByIdAsc(1L) } returns listOf(comment, otherComment, tikitaka)
+
+        val result = service.generateComments(memberId = 1L, messageId = 1L, currentConversationSummary = null)
+
+        assertEquals(CommentGenerationOutcome.DONE, result.outcome)
+        assertEquals(listOf(10L, 12L, 11L), result.messages.map { it.id })
     }
 
     @Test
@@ -380,7 +420,7 @@ class CommentGenerationServiceTest {
         every {
             messageRepository.updateCommentStatus(1L, CommentStatus.PENDING, listOf(CommentStatus.NONE, CommentStatus.FAILED), any())
         } returns 1
-        every { characterSelector.select() } returns CharacterSelection(charactersWithQuirky, 1)
+        every { characterSelector.select(emptySet()) } returns CharacterSelection(charactersWithQuirky, 1)
         every { eongttungTopicSelector.select() } returns "소재"
         every {
             conversationRepository.findRandomPastSummaries(
@@ -408,6 +448,38 @@ class CommentGenerationServiceTest {
         assertEquals(CommentGenerationOutcome.DONE, result.outcome)
         assertEquals(456, result.usedTokens)
         verify(exactly = 1) { eongttungTopicSelector.select() }
+    }
+
+    @Test
+    fun `채팅방에 제외 캐릭터가 저장되어 있으면 CharacterSelector에 그대로 전달한다`() {
+        val message = rootMessage()
+        val excluded = setOf(EmotionType.ANGER, EmotionType.ANXIETY)
+        every { messageRepository.findById(1L) } returns Optional.of(message)
+        every {
+            conversationRepository.findById(10L)
+        } returns Optional.of(Conversation(memberId = 1L, initialExcludedEmotionTypes = ExcludedEmotionTypes.of(excluded.toList())))
+        every {
+            messageRepository.updateCommentStatus(1L, CommentStatus.PENDING, listOf(CommentStatus.NONE, CommentStatus.FAILED), any())
+        } returns 1
+        every { characterSelector.select(excluded) } returns CharacterSelection(characters, tikitakaCount)
+        every {
+            conversationRepository.findRandomPastSummaries(
+                any(),
+                any(),
+                PastSummaryPolicy.POOL_SIZE,
+                PastSummaryPolicy.PICK_COUNT,
+            )
+        } returns emptyList()
+        every {
+            commentGenerator.generateComment(promptContext(diaryContent = message.content))
+        } returns CommentGenerationOutput(feed(), 123, 0)
+        every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } returns Unit
+        every { commentPersistenceService.saveFeed(10L, 1L, feed()) } returns emptyList()
+
+        val result = service.generateComments(memberId = 1L, messageId = 1L, currentConversationSummary = null)
+
+        assertEquals(CommentGenerationOutcome.DONE, result.outcome)
+        verify(exactly = 1) { characterSelector.select(excluded) }
     }
 
     @Test

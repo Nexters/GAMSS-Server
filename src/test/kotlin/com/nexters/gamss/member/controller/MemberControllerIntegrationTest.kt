@@ -4,7 +4,11 @@ import com.nexters.gamss.global.security.JwtIssuer
 import com.nexters.gamss.member.domain.Member
 import com.nexters.gamss.member.domain.Nickname
 import com.nexters.gamss.member.repository.MemberRepository
+import com.nexters.gamss.monitoring.domain.GenerationLog
+import com.nexters.gamss.monitoring.domain.GenerationType
+import com.nexters.gamss.monitoring.repository.GenerationLogRepository
 import com.nexters.gamss.support.TestcontainersConfig
+import org.hamcrest.Matchers.nullValue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -15,11 +19,13 @@ import org.springframework.http.MediaType
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.delete
+import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.patch
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.context.WebApplicationContext
+import java.time.Instant
 import kotlin.test.assertTrue
 
 @SpringBootTest
@@ -34,6 +40,9 @@ class MemberControllerIntegrationTest {
 
     @Autowired
     private lateinit var jwtIssuer: JwtIssuer
+
+    @Autowired
+    private lateinit var generationLogRepository: GenerationLogRepository
 
     private lateinit var mockMvc: MockMvc
 
@@ -159,6 +168,63 @@ class MemberControllerIntegrationTest {
                 status { isUnauthorized() }
             }
     }
+
+    @Test
+    fun `오늘 소비한 토큰 합을 조회하고 상한 비활성 환경(dev)에서는 상한이 null로 내려간다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        generationLogRepository.save(generationLog(member.id, usedTokens = 100))
+        generationLogRepository.save(generationLog(member.id, usedTokens = 200))
+
+        mockMvc
+            .get("/api/members/me/token-usage") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.usedTokens") { value(300) }
+                jsonPath("$.data.dailyLimit", nullValue())
+                jsonPath("$.data.exceeded") { value(false) }
+            }
+    }
+
+    @Test
+    fun `다른 회원의 생성 로그는 내 토큰 사용량에 합산되지 않는다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val other = memberRepository.save(Member("other@a.com"))
+        generationLogRepository.save(generationLog(member.id, usedTokens = 100))
+        generationLogRepository.save(generationLog(other.id, usedTokens = 900))
+
+        mockMvc
+            .get("/api/members/me/token-usage") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.usedTokens") { value(100) }
+            }
+    }
+
+    @Test
+    fun `인증 없이 토큰 사용량을 조회하면 401을 반환한다`() {
+        mockMvc
+            .get("/api/members/me/token-usage")
+            .andExpect {
+                status { isUnauthorized() }
+            }
+    }
+
+    private fun generationLog(
+        memberId: Long,
+        usedTokens: Int,
+    ): GenerationLog =
+        GenerationLog(
+            generationType = GenerationType.COMMENT,
+            model = "test-model",
+            memberId = memberId,
+            success = true,
+            attemptCount = 1,
+            usedTokens = usedTokens,
+            latencyMs = 100,
+            createdAt = Instant.now(),
+        )
 
     private fun bearerFor(member: Member): String = "Bearer ${jwtIssuer.issueAccessToken(member.id)}"
 }

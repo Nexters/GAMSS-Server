@@ -65,7 +65,7 @@ class LogoutIntegrationTest {
         @Primary
         fun stubSocialTokenVerifier(): SocialTokenVerifier =
             object : SocialTokenVerifier {
-                override fun verify(idToken: String) = SocialUser("logout-uid", SocialProvider.GOOGLE, "logout@a.com")
+                override fun verify(idToken: String) = SocialUser("logout-uid", SocialProvider.GOOGLE, "logout@a.com", "로그아웃")
             }
     }
 

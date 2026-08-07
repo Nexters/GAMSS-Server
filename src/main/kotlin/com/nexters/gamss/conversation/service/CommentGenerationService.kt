@@ -120,6 +120,12 @@ class CommentGenerationService(
         }
 
         return try {
+            // 대화방이 새로 생성될 때 지정한 제외 캐릭터 목록을 읽어오기 위한 조회다(소유권은 이미 검증된
+            // 상태라 재검증 목적이 아니다 — generateFor는 저장 시점에, generateComments는 getOwnedRootMessage에서 확인함).
+            val conversation =
+                conversationRepository
+                    .findById(rootMessage.conversationId)
+                    .orElseThrow { BusinessException(ErrorCode.CONVERSATION_NOT_FOUND) }
             val pastSummaries =
                 conversationRepository.findRandomPastSummaries(
                     memberId,
@@ -128,7 +134,14 @@ class CommentGenerationService(
                     PastSummaryPolicy.PICK_COUNT,
                 )
             val output =
-                generateWithRetry(memberId, rootMessage.conversationId, rootMessage.content, currentConversationSummary, pastSummaries)
+                generateWithRetry(
+                    memberId,
+                    rootMessage.conversationId,
+                    rootMessage.content,
+                    currentConversationSummary,
+                    pastSummaries,
+                    conversation.excludedEmotionTypes.toSet(),
+                )
             val saved = commentPersistenceService.saveFeed(rootMessage.conversationId, messageId, output.feed)
             GenerationResult(CommentGenerationOutcome.DONE, saved, output.usedTokens)
         } catch (e: Exception) {
@@ -147,6 +160,11 @@ class CommentGenerationService(
         }
     }
 
+    /**
+     * 답글은 새로 캐릭터를 뽑지 않고 [characterMessage]가 이미 가진 emotionType을 그대로 재사용한다 —
+     * 그 메시지 자체가 애초에 [CharacterSelector]로 제외 캐릭터를 걸러낸 뒤 뽑힌 결과라, 여기서 다시
+     * 제외 목록을 확인할 필요가 없다(제외된 캐릭터가 답글로 되살아날 여지 자체가 없음).
+     */
     private fun generateReplyInternal(
         memberId: Long,
         userReplyMessage: Message,
@@ -312,8 +330,9 @@ class CommentGenerationService(
         diaryContent: String,
         currentConversationSummary: String?,
         pastSummaries: List<String>,
+        excludedCharacters: Set<EmotionType>,
     ): CommentGenerationOutput {
-        val selection = characterSelector.select()
+        val selection = characterSelector.select(excludedCharacters)
         val characters = selection.characters
         val tikitakaCount = selection.tikitakaCount
         val eongttungTopic = if (EmotionType.QUIRKY in characters) eongttungTopicSelector.select() else null
@@ -407,7 +426,7 @@ class CommentGenerationService(
             CommentStatus.DONE -> {
                 GenerationResult(
                     CommentGenerationOutcome.DONE,
-                    messageRepository.findAllByRootMessageIdOrderByIdAsc(messageId),
+                    MessageThreadOrder.reorderTikitakaAfterTarget(messageRepository.findAllByRootMessageIdOrderByIdAsc(messageId)),
                 )
             }
 

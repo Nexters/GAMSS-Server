@@ -1,22 +1,58 @@
 package com.nexters.gamss.llm.selection
 
+import com.nexters.gamss.emotion.domain.EmotionType
+import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class CharacterSelectorTest {
     private val selector = CharacterSelector()
 
     @Test
-    fun `캐릭터 수와 티키타카 수의 합은 항상 4~6이고 티키타카는 최소 1개다`() {
+    fun `뽑힌 total은 characterCount와 tikitakaCount로 항상 전부 소진된다`() {
+        repeat(1_000) { seed ->
+            // select()가 가장 먼저 뽑는 값과 동일한 시드로 total(1~3)을 독립적으로 재현한다.
+            val expectedTotal = Random(seed.toLong()).nextInt(1, 4)
+            val selection = CharacterSelector(Random(seed.toLong())).select()
+
+            val actualTotal = selection.characters.size + selection.tikitakaCount
+            assertEquals(expectedTotal, actualTotal, "seed=$seed: total=$expectedTotal 인데 실제로는 $actualTotal 만 채워짐")
+        }
+    }
+
+    @Test
+    fun `캐릭터 수와 티키타카 수의 합은 항상 1~3이다`() {
         repeat(1_000) {
             val selection = selector.select()
 
             val total = selection.characters.size + selection.tikitakaCount
-            assertTrue(total in 4..6, "총합이 4~6 범위를 벗어남: $total")
-            assertTrue(selection.tikitakaCount >= 1, "티키타카가 0개로 나옴")
-            assertTrue(selection.characters.size >= 3, "캐릭터 수가 3 미만으로 나옴")
+            assertTrue(total in 1..3, "총합이 1~3 범위를 벗어남: $total")
+            assertTrue(selection.characters.size >= 1, "캐릭터 수가 1 미만으로 나옴")
         }
+    }
+
+    @Test
+    fun `캐릭터가 2명 미만이면 티키타카는 0개다`() {
+        repeat(1_000) {
+            val selection = selector.select()
+
+            if (selection.characters.size < 2) {
+                assertEquals(0, selection.tikitakaCount, "캐릭터가 2명 미만인데 티키타카가 존재함")
+            }
+        }
+    }
+
+    @Test
+    fun `캐릭터가 2명 이상이면 티키타카가 나오는 경우도 있다`() {
+        val hasTikitaka =
+            (1..1_000).any {
+                val selection = selector.select()
+                selection.tikitakaCount > 0
+            }
+
+        assertTrue(hasTikitaka, "1000번을 돌려도 티키타카가 한 번도 안 나옴")
     }
 
     @Test
@@ -25,6 +61,44 @@ class CharacterSelectorTest {
             val selection = selector.select()
 
             assertEquals(selection.characters.size, selection.characters.toSet().size)
+        }
+    }
+
+    @Test
+    fun `제외한 캐릭터는 선택되지 않는다`() {
+        val excluded = setOf(EmotionType.ANGER, EmotionType.ANXIETY, EmotionType.GRUMPY)
+        repeat(1_000) {
+            val selection = selector.select(excluded)
+
+            assertTrue(selection.characters.none { it in excluded }, "제외한 캐릭터가 선택됨: ${selection.characters}")
+        }
+    }
+
+    @Test
+    fun `후보가 1명으로 좁혀지면 그 캐릭터만 뽑히고 티키타카는 0이다`() {
+        val excluded = EmotionType.entries.drop(1).toSet()
+        repeat(1_000) {
+            val selection = selector.select(excluded)
+
+            assertEquals(listOf(EmotionType.JOY), selection.characters)
+            assertEquals(0, selection.tikitakaCount)
+        }
+    }
+
+    @Test
+    fun `후보가 2명으로 좁혀지면 캐릭터 수는 후보 수를 넘지 않는다`() {
+        val excluded = EmotionType.entries.drop(2).toSet()
+        repeat(1_000) {
+            val selection = selector.select(excluded)
+
+            assertTrue(selection.characters.size in 1..2, "캐릭터 수가 후보 풀(2명)을 벗어남: ${selection.characters}")
+        }
+    }
+
+    @Test
+    fun `전체 캐릭터를 제외하면 IllegalArgumentException`() {
+        assertFailsWith<IllegalArgumentException> {
+            selector.select(EmotionType.entries.toSet())
         }
     }
 }

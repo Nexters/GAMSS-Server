@@ -1,11 +1,14 @@
 package com.nexters.gamss.conversation.service
 
 import com.nexters.gamss.conversation.domain.Conversation
+import com.nexters.gamss.conversation.domain.ConversationStatus
 import com.nexters.gamss.conversation.domain.ConversationTitle
+import com.nexters.gamss.conversation.domain.ExcludedEmotionTypes
 import com.nexters.gamss.conversation.domain.Message
 import com.nexters.gamss.conversation.domain.SenderType
 import com.nexters.gamss.conversation.repository.ConversationRepository
 import com.nexters.gamss.conversation.repository.MessageRepository
+import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import org.springframework.stereotype.Service
@@ -18,20 +21,26 @@ class ConversationService(
     private val conversationRepository: ConversationRepository,
     private val messageRepository: MessageRepository,
 ) {
-    /** 사용자 메시지를 저장한다. conversationId가 없으면 새 채팅방을 만들어 담는다. */
+    /**
+     * 사용자 메시지를 저장한다. conversationId가 없으면 새 채팅방을 만들어 담는다.
+     *
+     * [excludeCharacters]는 새 채팅방을 만들 때만 반영된다 — 기존 채팅방(conversationId 있음)에
+     * 이어서 보내는 요청에 함께 와도 조용히 무시하고 최초 설정을 그대로 둔다.
+     */
     @Transactional
     fun saveUserMessage(
         memberId: Long,
         conversationId: Long?,
         content: String,
         repliesToMessageId: Long? = null,
+        excludeCharacters: List<EmotionType>? = null,
     ): Message {
         if (conversationId == null && repliesToMessageId != null) {
             throw BusinessException(ErrorCode.INVALID_INPUT, "새 채팅방을 만들면서 답장할 수 없습니다.")
         }
         val conversation =
             conversationId?.let { getOwnedConversationForUpdate(it, memberId) }
-                ?: conversationRepository.save(Conversation(memberId))
+                ?: conversationRepository.save(Conversation(memberId, resolveExcludedEmotionTypes(excludeCharacters)))
         conversation.ensureActive()
         if (repliesToMessageId != null) {
             validateReplyTarget(repliesToMessageId, conversation.id)
@@ -84,6 +93,14 @@ class ConversationService(
         return conversation
     }
 
+    /**
+     * 제외 요청 캐릭터 목록을 검증한다(중복 제거·최대 개수는 [ExcludedEmotionTypes]가 담당). 전체를
+     * 다 제외하면 [com.nexters.gamss.llm.selection.CharacterSelector]가 뽑을 캐릭터가 하나도 남지
+     * 않으므로 거부한다.
+     */
+    private fun resolveExcludedEmotionTypes(excludeCharacters: List<EmotionType>?): ExcludedEmotionTypes =
+        if (excludeCharacters.isNullOrEmpty()) ExcludedEmotionTypes.EMPTY else ExcludedEmotionTypes.of(excludeCharacters)
+
     /** 답장 대상 메시지가 실제로 해당 채팅방에 존재하는지 확인한다. */
     private fun validateReplyTarget(
         repliesToMessageId: Long,
@@ -115,6 +132,24 @@ class ConversationService(
         return conversationRepository.findAllByMemberIdAndCreatedAtInRange(memberId, start, end)
     }
 
+    /**
+     * 아직 진행 중인(쓰다 만) 대화방을 최신순으로 조회한다. 날짜를 몰라도 이어쓸 방을 찾게 하는
+     * 목록이라 날짜 조건을 걸지 않는다.
+     *
+     * **'미완성' 을 [ConversationStatus.ACTIVE] 로 정의하는 판단이 여기에 있다.** 요구사항은
+     * "삭제되지 않았고 카드도 생성되지 않은 방"이지만 ACTIVE 하나로 둘 다 충족된다 — 상태 전이가
+     * `ACTIVE → ENDED → DELETED` 단방향이고([Conversation.end]·[Conversation.delete] 외에 status 를
+     * 바꾸는 코드가 없다), 카드 생성은 ENDED 를 요구하므로([com.nexters.gamss.card.service.CardService]
+     * 의 claimForGeneration) **ACTIVE 방은 카드를 가질 수 없다.**
+     *
+     * 그래서 cards 를 조인하지 않는다 — 걸러질 행이 없고, 읽는 사람에게 'ACTIVE 인데 카드가 있을 수
+     * 있다'는 잘못된 인상만 준다. 종료한 방을 다시 열 수 있게 되면 이 전제가 깨지므로, 그때는 카드
+     * 존재 여부를 함께 봐야 한다.
+     */
+    @Transactional(readOnly = true)
+    fun getInProgressConversations(memberId: Long): List<Conversation> =
+        conversationRepository.findAllByMemberIdAndStatus(memberId, ConversationStatus.ACTIVE)
+
     @Transactional(readOnly = true)
     fun getMessages(
         memberId: Long,
@@ -122,7 +157,7 @@ class ConversationService(
     ): List<Message> {
         val conversation = getOwnedConversation(conversationId, memberId)
         conversation.ensureNotDeleted()
-        return messageRepository.findAllByConversationIdOrderByIdAsc(conversationId)
+        return MessageThreadOrder.reorderTikitakaAfterTarget(messageRepository.findAllByConversationIdOrderByIdAsc(conversationId))
     }
 
     private fun getOwnedConversation(

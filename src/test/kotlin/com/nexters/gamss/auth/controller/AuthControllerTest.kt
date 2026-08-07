@@ -1,6 +1,7 @@
 package com.nexters.gamss.auth.controller
 
 import com.nexters.gamss.auth.service.AuthService
+import com.nexters.gamss.auth.service.LoginResult
 import com.nexters.gamss.auth.service.TokenResult
 import com.nexters.gamss.global.exception.GlobalExceptionHandler
 import io.mockk.every
@@ -21,8 +22,8 @@ class AuthControllerTest {
             .build()
 
     @Test
-    fun `로그인에 성공하면 토큰을 반환한다`() {
-        every { authService.login("idtok") } returns TokenResult("access", "refresh")
+    fun `로그인에 성공하면 토큰과 최초 가입 여부를 반환한다`() {
+        every { authService.login("idtok") } returns LoginResult("access", "refresh", isFirstLogin = true)
 
         mockMvc
             .post("/api/auth/login") {
@@ -33,6 +34,7 @@ class AuthControllerTest {
                 jsonPath("$.success") { value(true) }
                 jsonPath("$.data.accessToken") { value("access") }
                 jsonPath("$.data.refreshToken") { value("refresh") }
+                jsonPath("$.data.isFirstLogin") { value(true) }
             }
     }
 

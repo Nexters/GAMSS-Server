@@ -183,6 +183,29 @@ class CardService(
         }
     }
 
+    /**
+     * 본인 카드 한 장을 id 로 조회한다.
+     *
+     * 지운 카드와 삭제된 채팅방의 카드는 **없는 것으로 취급한다**(CARD_NOT_FOUND) — 날짜별·월별
+     * 조회에서 이미 사라진 카드라, id 로만 열리면 사용자가 보는 목록과 어긋난다. 삭제 API 가
+     * CARD_ALREADY_DELETED(409)를 쓰는 것은 재호출을 구분해야 하는 변경 요청이기 때문이고,
+     * 읽기에는 그 구분이 필요 없다.
+     */
+    @Transactional(readOnly = true)
+    fun getCard(
+        memberId: Long,
+        cardId: Long,
+    ): Card {
+        val card =
+            cardRepository
+                .findVisibleById(cardId)
+                .orElseThrow { BusinessException(ErrorCode.CARD_NOT_FOUND) }
+        if (!card.isOwnedBy(memberId)) {
+            throw BusinessException(ErrorCode.CARD_ACCESS_DENIED)
+        }
+        return card
+    }
+
     /** 날짜(KST 자정~자정)에 속한 카드를 조회한다. */
     @Transactional(readOnly = true)
     fun getCardsByDate(
@@ -206,6 +229,96 @@ class CardService(
         val end = nextMonthFirstDay.atStartOfDay(ZONE).toInstant()
         return cardRepository.findAllByMemberIdAndConversationCreatedAtInRange(memberId, start, end)
     }
+
+    /**
+     * 본인 카드를 삭제한다(soft delete). **카드가 나온 채팅방도 함께 삭제한다.**
+     * 되돌릴 수 없다 — 카드 생성 상태가 DONE 으로 남아 같은 대화방에 카드를 다시 만들 수 없다.
+     *
+     * 백오피스 지표는 생성 이력이라 이 삭제로 변하지 않는다(사용자 조회에서만 감춰진다).
+     *
+     * 행을 잠그고 읽는다([CardRepository.findByIdForUpdate]) — 동시 삭제 요청이 같은 카드를
+     * 각자 '아직 안 지워짐' 으로 읽어 둘 다 성공하는 것을 막는다.
+     */
+    @Transactional
+    fun deleteCard(
+        memberId: Long,
+        cardId: Long,
+    ) {
+        val card =
+            cardRepository
+                .findByIdForUpdate(cardId)
+                .orElseThrow { BusinessException(ErrorCode.CARD_NOT_FOUND) }
+        if (!card.isOwnedBy(memberId)) {
+            throw BusinessException(ErrorCode.CARD_ACCESS_DENIED)
+        }
+        card.delete()
+        deleteConversationOf(card)
+    }
+
+    /**
+     * 카드가 나온 채팅방을 함께 삭제한다(soft delete). 카드는 그 대화의 결과물이라, 카드만 지우고
+     * 대화를 남기면 사용자가 지웠다고 여긴 내용이 채팅방 목록·검색에 그대로 남는다.
+     *
+     * 이미 삭제된 방이면 넘어간다 — 채팅방을 먼저 지운 뒤 카드를 지우는 순서에서도 카드 삭제는
+     * 성공해야 한다([Conversation.delete] 는 이미 삭제된 방에 예외를 던진다).
+     */
+    private fun deleteConversationOf(card: Card) {
+        val conversation =
+            conversationRepository
+                .findByIdForUpdate(card.conversationId)
+                .orElseThrow { BusinessException(ErrorCode.CONVERSATION_NOT_FOUND) }
+        if (conversation.isDeleted()) {
+            return
+        }
+        conversation.delete()
+    }
+
+    /**
+     * 본인의 특정 감정 카드를 한 번에 삭제하고 삭제 건수를 돌려준다. 단건 삭제와 마찬가지로
+     * 카드가 나온 대화방도 함께 삭제한다. 대상이 없어도 0 을 돌려주고 성공한다 — 연속 호출이
+     * 안전해야 한다.
+     */
+    @Transactional
+    fun deleteCardsByEmotion(
+        memberId: Long,
+        emotion: EmotionType,
+    ): Int = deleteCardsWithConversations(cardRepository.findDeletableConversationIdsByEmotion(memberId, emotion))
+
+    /**
+     * 확정된 대화방 집합의 카드와 대화방을 함께 삭제한다(soft delete).
+     *
+     * 대상을 id 로 먼저 확정해두고 두 UPDATE 를 날린다 — 카드를 먼저 지우면 `deletedAt is null` 이
+     * 깨져 대화방을 못 찾고, 대화방을 먼저 지우면 `status <> DELETED` 가 깨져 카드를 못 찾는다
+     * ([CardRepository.findDeletableConversationIdsByEmotion] ·
+     * [CardRepository.findDeletableConversationIds]).
+     *
+     * 감정별 삭제([deleteCardsByEmotion])와 전체 삭제([deleteAllCards])가 공유한다. **넘어오는 id 는
+     * 이미 소유권으로 걸러져 있어야 한다** — 여기서는 memberId 를 다시 확인하지 않는다.
+     *
+     * 단건 삭제와 달리 행을 잠그지 않는다 — `deletedAt is null` 조건을 건 UPDATE 라 동시 요청이
+     * 와도 뒤늦은 쪽이 0건을 갱신하고 끝난다(중복 삭제가 발생하지 않는다).
+     *
+     * 카드를 먼저 지우는 순서는 단건 삭제([deleteCard])와 맞춘 것이다 — 두 경로가 서로 반대
+     * 순서로 행을 잡으면 동시에 들어온 요청이 상대가 잡은 행을 기다리다 데드락으로 죽는다.
+     */
+    private fun deleteCardsWithConversations(conversationIds: List<Long>): Int {
+        if (conversationIds.isEmpty()) {
+            return 0
+        }
+        // 카드와 대화방에 같은 시각을 찍는다 — 한 번의 삭제로 사라진 짝이라 나중에 이력을 볼 때
+        // 두 UPDATE 사이의 미세한 시차로 다른 요청처럼 보이지 않아야 한다.
+        val now = Instant.now()
+        val deletedCards = cardRepository.softDeleteByConversationIds(conversationIds, now)
+        conversationRepository.softDeleteByIds(conversationIds, now)
+        return deletedCards
+    }
+
+    /**
+     * 본인 카드를 한 번에 전부 삭제하고 삭제 건수를 돌려준다. 단건·감정별 삭제와 마찬가지로
+     * 카드가 나온 대화방도 함께 삭제한다. 대상이 없어도 0 을 돌려주고 성공한다.
+     */
+    @Transactional
+    fun deleteAllCards(memberId: Long): Int = deleteCardsWithConversations(cardRepository.findDeletableConversationIds(memberId))
 
     private fun getOwnedConversation(
         conversationId: Long,

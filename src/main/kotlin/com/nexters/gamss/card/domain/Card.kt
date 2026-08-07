@@ -1,6 +1,8 @@
 package com.nexters.gamss.card.domain
 
 import com.nexters.gamss.emotion.domain.EmotionType
+import com.nexters.gamss.global.exception.BusinessException
+import com.nexters.gamss.global.exception.ErrorCode
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
@@ -45,5 +47,26 @@ class Card(
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long = 0L
 
+    /**
+     * 삭제 시각. 행을 물리 삭제하지 않고 시각만 남겨 사용자 조회에서만 감춘다 —
+     * 백오피스의 생성 이력 통계(오늘 카드 수·감정 분포·일별 추이)는 소급 변동하면 안 되기 때문이다.
+     */
+    @Column(name = "deleted_at")
+    var deletedAt: Instant? = null
+        protected set
+
     fun isOwnedBy(memberId: Long): Boolean = this.memberId == memberId
+
+    fun isDeleted(): Boolean = deletedAt != null
+
+    /**
+     * 삭제 처리. 되돌릴 수 없다 — 대화방당 카드는 하나뿐이고(conversation_id UNIQUE),
+     * 카드 생성 상태도 DONE 으로 남아 같은 대화방에 카드를 다시 만들 수 없다.
+     */
+    fun delete() {
+        if (isDeleted()) {
+            throw BusinessException(ErrorCode.CARD_ALREADY_DELETED)
+        }
+        deletedAt = Instant.now()
+    }
 }

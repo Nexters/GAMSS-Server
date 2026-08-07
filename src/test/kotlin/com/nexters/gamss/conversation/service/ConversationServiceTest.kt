@@ -13,6 +13,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
+import org.springframework.test.util.ReflectionTestUtils
 import java.time.Instant
 import java.time.LocalDate
 import java.util.Optional
@@ -47,6 +48,73 @@ class ConversationServiceTest {
 
         verify(exactly = 0) { conversationRepository.save(any()) }
         verify(exactly = 1) { messageRepository.save(any()) }
+    }
+
+    @Test
+    fun `excludeCharacters를 지정하면 새 채팅방의 제외 목록으로 저장된다`() {
+        val savedConversation = slot<Conversation>()
+        every { conversationRepository.save(capture(savedConversation)) } answers { firstArg() }
+        every { messageRepository.save(any()) } answers { firstArg() }
+
+        conversationService.saveUserMessage(
+            1L,
+            null,
+            "오늘 억울한 일이 있었어",
+            excludeCharacters = listOf(EmotionType.ANGER, EmotionType.ANXIETY),
+        )
+
+        assertEquals(listOf(EmotionType.ANGER, EmotionType.ANXIETY), savedConversation.captured.excludedEmotionTypes.values)
+    }
+
+    @Test
+    fun `excludeCharacters에 중복이 있으면 중복을 제거하고 저장한다`() {
+        val savedConversation = slot<Conversation>()
+        every { conversationRepository.save(capture(savedConversation)) } answers { firstArg() }
+        every { messageRepository.save(any()) } answers { firstArg() }
+
+        conversationService.saveUserMessage(
+            1L,
+            null,
+            "내용",
+            excludeCharacters = listOf(EmotionType.ANGER, EmotionType.ANGER, EmotionType.ANXIETY),
+        )
+
+        assertEquals(listOf(EmotionType.ANGER, EmotionType.ANXIETY), savedConversation.captured.excludedEmotionTypes.values)
+    }
+
+    @Test
+    fun `excludeCharacters로 전체 캐릭터를 제외하면 INVALID_INPUT`() {
+        val exception =
+            assertFailsWith<BusinessException> {
+                conversationService.saveUserMessage(1L, null, "내용", excludeCharacters = EmotionType.entries.toList())
+            }
+
+        assertEquals(ErrorCode.INVALID_INPUT, exception.errorCode)
+        verify(exactly = 0) { conversationRepository.save(any()) }
+    }
+
+    @Test
+    fun `excludeCharacters로 5종(1종만 남기고)까지는 제외할 수 있다`() {
+        val savedConversation = slot<Conversation>()
+        every { conversationRepository.save(capture(savedConversation)) } answers { firstArg() }
+        every { messageRepository.save(any()) } answers { firstArg() }
+        val excludeFiveTypes = EmotionType.entries.drop(1)
+
+        conversationService.saveUserMessage(1L, null, "내용", excludeCharacters = excludeFiveTypes)
+
+        assertEquals(excludeFiveTypes, savedConversation.captured.excludedEmotionTypes.values)
+    }
+
+    @Test
+    fun `기존 채팅방에 이어서 보낼 때 excludeCharacters를 보내도 무시된다`() {
+        val conversation = Conversation(memberId = 1L)
+        every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
+        every { messageRepository.save(any()) } answers { firstArg() }
+
+        conversationService.saveUserMessage(1L, 10L, "이어서 쓰는 말", excludeCharacters = listOf(EmotionType.ANGER))
+
+        assertEquals(emptyList(), conversation.excludedEmotionTypes.values)
+        verify(exactly = 0) { conversationRepository.save(any()) }
     }
 
     @Test
@@ -171,6 +239,31 @@ class ConversationServiceTest {
         every { messageRepository.findAllByConversationIdOrderByIdAsc(10L) } returns messages
 
         assertEquals(messages, conversationService.getMessages(1L, 10L))
+    }
+
+    @Test
+    fun `채팅방 메시지 조회는 티키타카를 답장 대상 댓글 바로 다음으로 재배치한다`() {
+        val conversation = Conversation(memberId = 1L)
+        val comment =
+            Message(conversationId = 10L, senderType = SenderType.CHARACTER, emotionType = EmotionType.JOY, content = "댓글")
+                .also { ReflectionTestUtils.setField(it, "id", 1L) }
+        val otherComment =
+            Message(conversationId = 10L, senderType = SenderType.CHARACTER, emotionType = EmotionType.ANGER, content = "댓글2")
+                .also { ReflectionTestUtils.setField(it, "id", 2L) }
+        val tikitaka =
+            Message(
+                conversationId = 10L,
+                senderType = SenderType.CHARACTER,
+                emotionType = EmotionType.ANXIETY,
+                content = "티키타카",
+                repliesToMessageId = 1L,
+            ).also { ReflectionTestUtils.setField(it, "id", 3L) }
+        every { conversationRepository.findById(10L) } returns Optional.of(conversation)
+        every { messageRepository.findAllByConversationIdOrderByIdAsc(10L) } returns listOf(comment, otherComment, tikitaka)
+
+        val messages = conversationService.getMessages(1L, 10L)
+
+        assertEquals(listOf(1L, 3L, 2L), messages.map { it.id })
     }
 
     @Test

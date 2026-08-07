@@ -26,7 +26,7 @@ interface MemberRepository : JpaRepository<Member, Long> {
     ): Long
 
     /**
-     * 백오피스 회원 검색. keyword 가 null 이면 전체를, 있으면 이메일·닉네임 부분 일치로 조회한다.
+     * 백오피스 회원 검색. keyword 가 null 이면 전체를, 있으면 이메일·이름·닉네임 부분 일치로 조회한다.
      * status 가 null 이면 모든 상태를, 있으면 해당 상태만 조회한다.
      */
     @Query(
@@ -34,6 +34,7 @@ interface MemberRepository : JpaRepository<Member, Long> {
         select m from Member m
         where (:keyword is null
                or lower(m.email) like lower(concat('%', :keyword, '%'))
+               or lower(m.name) like lower(concat('%', :keyword, '%'))
                or lower(m.nickname.value) like lower(concat('%', :keyword, '%')))
           and (:status is null or m.status = :status)
         """,

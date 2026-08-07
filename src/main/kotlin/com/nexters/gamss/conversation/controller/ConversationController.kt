@@ -57,12 +57,14 @@ class ConversationController(
                 "재시도할 수 있습니다.\n\n" +
                 "유저의 일일 토큰 상한(prod 전용)을 넘긴 경우에도 저장은 유지되고 생성만 건너뜁니다 — " +
                 "이 경우 commentStatus=LIMIT_EXCEEDED, comments는 빈 리스트로 반환됩니다(리셋 이후 재시도 가능).\n\n" +
+                "excludeCharacters로 새 채팅방에서 반응하지 않을 캐릭터를 지정할 수 있습니다(전체 제외는 불가). " +
+                "이 채팅방에 이어서 보내는 이후 요청에 다시 실려 와도 무시되고 최초 설정이 유지됩니다.\n\n" +
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +
                 "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·무효) |\n" +
                 "| EXPIRED_TOKEN | 401 | accessToken 만료 — 재발급 후 재시도 |\n" +
-                "| INVALID_INPUT | 400 | content 누락·140자 초과, 또는 잘못된 답장 대상 |\n" +
+                "| INVALID_INPUT | 400 | content 누락·140자 초과, 잘못된 답장 대상, 또는 excludeCharacters가 전체 캐릭터를 제외함 |\n" +
                 "| CONVERSATION_NOT_FOUND | 404 | 존재하지 않는 채팅방 |\n" +
                 "| CONVERSATION_ACCESS_DENIED | 403 | 본인 채팅방이 아님 |\n" +
                 "| CONVERSATION_ALREADY_DELETED | 409 | 삭제된 채팅방 |",
@@ -78,6 +80,7 @@ class ConversationController(
                 conversationId = request.conversationId,
                 content = request.content,
                 repliesToMessageId = request.repliesToMessageId,
+                excludeCharacters = request.excludeCharacters,
             )
         val result = commentGenerationService.generateFor(principal.memberId, message, request.currentConversationSummary)
         return ApiResponse.success(SaveMessageResponse.from(message, result))
@@ -102,6 +105,29 @@ class ConversationController(
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) date: LocalDate,
     ): ApiResponse<List<ConversationResponse>> {
         val conversations = conversationService.getConversations(principal.memberId, date)
+        return ApiResponse.success(conversations.map { ConversationResponse.from(it) })
+    }
+
+    @Operation(
+        summary = "미완성(진행 중) 대화방 목록 조회",
+        description =
+            "아직 종료하지 않은 본인 대화방을 최신순으로 반환합니다. 날짜를 몰라도 쓰다 만 " +
+                "대화방을 이어서 열 수 있습니다.\n\n" +
+                "- 종료한 대화방과 삭제한 대화방은 나오지 않습니다.\n" +
+                "- 카드가 만들어진 대화방도 나오지 않습니다 — 카드는 종료한 대화방에만 생기므로 " +
+                "진행 중인 대화방에는 카드가 없습니다.\n" +
+                "- 대상이 없으면 빈 배열을 돌려줍니다.\n\n" +
+                "**실패 응답**\n\n" +
+                "| error.code | HTTP | 설명 |\n" +
+                "|---|---|---|\n" +
+                "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·무효) |\n" +
+                "| EXPIRED_TOKEN | 401 | accessToken 만료 — 재발급 후 재시도 |",
+    )
+    @GetMapping("/incomplete")
+    fun getIncompleteConversations(
+        @Parameter(hidden = true) @AuthenticationPrincipal principal: AuthPrincipal,
+    ): ApiResponse<List<ConversationResponse>> {
+        val conversations = conversationService.getInProgressConversations(principal.memberId)
         return ApiResponse.success(conversations.map { ConversationResponse.from(it) })
     }
 
@@ -180,7 +206,9 @@ class ConversationController(
     @Operation(
         summary = "채팅방 메시지 전체 조회",
         description =
-            "채팅방의 메시지를 작성순으로 반환합니다.\n\n" +
+            "채팅방의 메시지를 기본적으로 작성순으로 반환하되, 캐릭터끼리 주고받는 티키타카는 자신이 답장한 " +
+                "댓글 바로 다음에 오도록 재배치합니다(대화 스레드처럼 보이도록). 그 외 메시지(유저 메시지, " +
+                "유저 답글에 대한 캐릭터 응답 등)는 작성 시각 순서 그대로입니다.\n\n" +
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +

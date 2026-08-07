@@ -29,6 +29,23 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
     ): List<Conversation>
 
     /**
+     * 회원의 대화방을 상태로 걸러 최신순으로 조회한다. **어떤 상태가 무슨 의미인지는 호출자가 정한다** —
+     * 여기서는 걸러낸다는 사실만 안다.
+     *
+     * `createdAt` 만으로 정렬하지 않는다 — `DATETIME(6)` 이라 한 요청 안에서 연달아 만든 방이 같은
+     * 마이크로초를 가질 수 있고, 그러면 순서가 실행마다 흔들린다. id 로 타이브레이크한다.
+     */
+    @Query(
+        "select c from Conversation c " +
+            "where c.memberId = :memberId and c.status = :status " +
+            "order by c.createdAt desc, c.id desc",
+    )
+    fun findAllByMemberIdAndStatus(
+        @Param("memberId") memberId: Long,
+        @Param("status") status: ConversationStatus,
+    ): List<Conversation>
+
+    /**
      * 상태를 바꾸는 요청(메시지 저장·종료·삭제)에서 사용한다. 행을 잠가 다른 상태 변경 요청이
      * 커밋될 때까지 대기하게 만들어, 삭제 이후 작업 차단 계약이 경합으로 깨지지 않도록 한다.
      */
@@ -37,6 +54,29 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
     fun findByIdForUpdate(
         @Param("id") id: Long,
     ): Optional<Conversation>
+
+    /**
+     * 지정한 채팅방들을 한 번에 삭제한다(soft delete). 카드 일괄 삭제가 대화방까지 지울 때 쓴다
+     * ([com.nexters.gamss.card.service.CardService.deleteCardsWithConversations]).
+     *
+     * 이미 삭제된 방은 건너뛴다. 단건 삭제([Conversation.delete])와 달리 예외를 던지지 않는다 —
+     * 일괄 삭제는 대상이 없어도 성공해야 하고, 여기서 막히면 나머지 방까지 못 지운다.
+     *
+     * [Conversation.updatedAt] 을 직접 갱신한다 — 벌크 UPDATE 는 엔티티를 거치지 않아
+     * `@LastModifiedDate` 감사 리스너가 돌지 않는다. 넣지 않으면 같은 '채팅방 삭제'인데
+     * 단건 경로만 변경 시각이 남아 두 경로가 서로 다른 데이터를 만든다.
+     */
+    @Transactional
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(
+        "update Conversation c set c.status = :deletedStatus, c.updatedAt = :now " +
+            "where c.id in :ids and c.status <> :deletedStatus",
+    )
+    fun softDeleteByIds(
+        @Param("ids") ids: Collection<Long>,
+        @Param("now") now: Instant,
+        @Param("deletedStatus") deletedStatus: ConversationStatus = ConversationStatus.DELETED,
+    ): Int
 
     /** [from, to) 사이 생성된 대화방 수. 대시보드의 '오늘 시작한 대화' KPI. */
     @Query("select count(c) from Conversation c where c.createdAt >= :from and c.createdAt < :to")
