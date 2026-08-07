@@ -544,11 +544,36 @@ class CardControllerIntegrationTest {
     }
 
     @Test
+    fun `감정별 삭제해도 백오피스 생성 이력 집계는 그대로다`() {
+        val member = memberRepository.save(Member("emostat@test.com"))
+        val card = createCardVia(member, "감정별 통계 유지", EmotionType.ANGER)
+        val since = card.conversationCreatedAt.minusSeconds(60)
+        val before: Long = cardRepository.countByEmotionSince(since).sumOf { it.count }
+        val todayCountBefore = cardRepository.countCreatedBetween(since, card.conversationCreatedAt.plusSeconds(60))
+
+        mockMvc
+            .delete("/api/cards/emotions/ANGER") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect { status { isOk() } }
+        entityManager.flush()
+        entityManager.clear()
+
+        assertEquals(before, cardRepository.countByEmotionSince(since).sumOf { it.count }, "감정 분포")
+        assertEquals(1, cardRepository.findCreatedAtsSince(since).size, "일별 추이")
+        assertEquals(
+            todayCountBefore,
+            cardRepository.countCreatedBetween(since, card.conversationCreatedAt.plusSeconds(60)),
+            "오늘 카드 수",
+        )
+    }
+
+    @Test
     fun `전체 삭제해도 백오피스 생성 이력 집계는 그대로다`() {
         val member = memberRepository.save(Member("allstat@test.com"))
         val card = createCardVia(member, "통계 유지", EmotionType.ANGER)
         val since = card.conversationCreatedAt.minusSeconds(60)
         val before: Long = cardRepository.countByEmotionSince(since).sumOf { it.count }
+        val todayCountBefore = cardRepository.countCreatedBetween(since, card.conversationCreatedAt.plusSeconds(60))
 
         mockMvc
             .delete("/api/cards") {
@@ -557,8 +582,13 @@ class CardControllerIntegrationTest {
         entityManager.flush()
         entityManager.clear()
 
-        assertEquals(before, cardRepository.countByEmotionSince(since).sumOf { it.count })
-        assertEquals(1, cardRepository.findCreatedAtsSince(since).size)
+        assertEquals(before, cardRepository.countByEmotionSince(since).sumOf { it.count }, "감정 분포")
+        assertEquals(1, cardRepository.findCreatedAtsSince(since).size, "일별 추이")
+        assertEquals(
+            todayCountBefore,
+            cardRepository.countCreatedBetween(since, card.conversationCreatedAt.plusSeconds(60)),
+            "오늘 카드 수",
+        )
     }
 
     @Test
