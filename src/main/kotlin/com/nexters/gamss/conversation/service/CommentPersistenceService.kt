@@ -26,6 +26,9 @@ class CommentPersistenceService(
      * 1라운드(comments)를 먼저 저장해 character_id -> messageId 맵을 만들고, 그 맵으로 2라운드(tikitaka)의
      * replyTo(character_id)를 실제 repliesToMessageId(PK)로 치환해 저장한다. 저장 순서가 중요한 이유는
      * 2라운드 행의 FK 값 자체가 1라운드 INSERT 결과(생성된 PK)에 의존하기 때문이다.
+     *
+     * 반환 순서는 저장 순서와 다르다 — 각 티키타카를 자신이 답장한 1라운드 댓글 바로 뒤에 끼워 넣어,
+     * 클라이언트가 받는 목록이 실제 대화 스레드처럼 읽히게 한다.
      */
     @Transactional
     fun saveFeed(
@@ -77,7 +80,7 @@ class CommentPersistenceService(
             )
         check(updated == 1) { "댓글 저장 중 상태 전이가 실패했습니다. rootMessageId=$rootMessageId" }
 
-        return savedComments + savedTikitaka
+        return MessageThreadOrder.reorderTikitakaAfterTarget(savedComments + savedTikitaka)
     }
 
     /** 유저의 답글([repliesToMessageId])에 캐릭터([characterId])가 다시 응답한 메시지 1개를 저장한다. */

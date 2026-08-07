@@ -13,6 +13,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
+import org.springframework.test.util.ReflectionTestUtils
 import java.time.Instant
 import java.time.LocalDate
 import java.util.Optional
@@ -171,6 +172,31 @@ class ConversationServiceTest {
         every { messageRepository.findAllByConversationIdOrderByIdAsc(10L) } returns messages
 
         assertEquals(messages, conversationService.getMessages(1L, 10L))
+    }
+
+    @Test
+    fun `채팅방 메시지 조회는 티키타카를 답장 대상 댓글 바로 다음으로 재배치한다`() {
+        val conversation = Conversation(memberId = 1L)
+        val comment =
+            Message(conversationId = 10L, senderType = SenderType.CHARACTER, emotionType = EmotionType.JOY, content = "댓글")
+                .also { ReflectionTestUtils.setField(it, "id", 1L) }
+        val otherComment =
+            Message(conversationId = 10L, senderType = SenderType.CHARACTER, emotionType = EmotionType.ANGER, content = "댓글2")
+                .also { ReflectionTestUtils.setField(it, "id", 2L) }
+        val tikitaka =
+            Message(
+                conversationId = 10L,
+                senderType = SenderType.CHARACTER,
+                emotionType = EmotionType.ANXIETY,
+                content = "티키타카",
+                repliesToMessageId = 1L,
+            ).also { ReflectionTestUtils.setField(it, "id", 3L) }
+        every { conversationRepository.findById(10L) } returns Optional.of(conversation)
+        every { messageRepository.findAllByConversationIdOrderByIdAsc(10L) } returns listOf(comment, otherComment, tikitaka)
+
+        val messages = conversationService.getMessages(1L, 10L)
+
+        assertEquals(listOf(1L, 3L, 2L), messages.map { it.id })
     }
 
     @Test

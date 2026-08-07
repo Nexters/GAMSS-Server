@@ -122,7 +122,7 @@ class ConversationService(
     ): List<Message> {
         val conversation = getOwnedConversation(conversationId, memberId)
         conversation.ensureNotDeleted()
-        return messageRepository.findAllByConversationIdOrderByIdAsc(conversationId)
+        return MessageThreadOrder.reorderTikitakaAfterTarget(messageRepository.findAllByConversationIdOrderByIdAsc(conversationId))
     }
 
     private fun getOwnedConversation(
