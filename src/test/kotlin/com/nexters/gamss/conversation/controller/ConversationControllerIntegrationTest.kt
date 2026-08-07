@@ -3,6 +3,7 @@ package com.nexters.gamss.conversation.controller
 import com.nexters.gamss.card.domain.Card
 import com.nexters.gamss.card.repository.CardRepository
 import com.nexters.gamss.conversation.domain.Conversation
+import com.nexters.gamss.conversation.domain.ExcludedEmotionTypes
 import com.nexters.gamss.conversation.domain.Message
 import com.nexters.gamss.conversation.domain.SenderType
 import com.nexters.gamss.conversation.repository.ConversationRepository
@@ -313,7 +314,7 @@ class ConversationControllerIntegrationTest {
         val conversation = conversationRepository.findAll().single()
         assertEquals(
             listOf(EmotionType.ANGER, EmotionType.ANXIETY, EmotionType.GRUMPY, EmotionType.WARM, EmotionType.QUIRKY),
-            conversation.excludedEmotionTypes,
+            conversation.excludedEmotionTypes.values,
         )
     }
 
@@ -342,7 +343,7 @@ class ConversationControllerIntegrationTest {
     fun `기존 채팅방에 이어서 보낼 때 excludeCharacters를 보내도 최초 설정이 유지된다`() {
         val member = memberRepository.save(Member("me@a.com"))
         val conversation =
-            conversationRepository.save(Conversation(member.id, listOf(EmotionType.ANGER)))
+            conversationRepository.save(Conversation(member.id, ExcludedEmotionTypes.of(listOf(EmotionType.ANGER))))
 
         mockMvc
             .post("/api/conversations/messages") {
@@ -355,7 +356,7 @@ class ConversationControllerIntegrationTest {
             }
 
         val reloaded = conversationRepository.findById(conversation.id).get()
-        assertEquals(listOf(EmotionType.ANGER), reloaded.excludedEmotionTypes)
+        assertEquals(listOf(EmotionType.ANGER), reloaded.excludedEmotionTypes.values)
     }
 
     @Test

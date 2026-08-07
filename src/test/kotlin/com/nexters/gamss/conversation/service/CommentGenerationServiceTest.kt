@@ -2,6 +2,7 @@ package com.nexters.gamss.conversation.service
 
 import com.nexters.gamss.conversation.domain.CommentStatus
 import com.nexters.gamss.conversation.domain.Conversation
+import com.nexters.gamss.conversation.domain.ExcludedEmotionTypes
 import com.nexters.gamss.conversation.domain.Message
 import com.nexters.gamss.conversation.domain.SenderType
 import com.nexters.gamss.conversation.repository.ConversationRepository
@@ -456,7 +457,7 @@ class CommentGenerationServiceTest {
         every { messageRepository.findById(1L) } returns Optional.of(message)
         every {
             conversationRepository.findById(10L)
-        } returns Optional.of(Conversation(memberId = 1L, initialExcludedEmotionTypes = excluded.toList()))
+        } returns Optional.of(Conversation(memberId = 1L, initialExcludedEmotionTypes = ExcludedEmotionTypes.of(excluded.toList())))
         every {
             messageRepository.updateCommentStatus(1L, CommentStatus.PENDING, listOf(CommentStatus.NONE, CommentStatus.FAILED), any())
         } returns 1

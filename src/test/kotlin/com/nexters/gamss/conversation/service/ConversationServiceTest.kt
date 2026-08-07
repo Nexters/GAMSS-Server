@@ -63,7 +63,7 @@ class ConversationServiceTest {
             excludeCharacters = listOf(EmotionType.ANGER, EmotionType.ANXIETY),
         )
 
-        assertEquals(listOf(EmotionType.ANGER, EmotionType.ANXIETY), savedConversation.captured.excludedEmotionTypes)
+        assertEquals(listOf(EmotionType.ANGER, EmotionType.ANXIETY), savedConversation.captured.excludedEmotionTypes.values)
     }
 
     @Test
@@ -79,7 +79,7 @@ class ConversationServiceTest {
             excludeCharacters = listOf(EmotionType.ANGER, EmotionType.ANGER, EmotionType.ANXIETY),
         )
 
-        assertEquals(listOf(EmotionType.ANGER, EmotionType.ANXIETY), savedConversation.captured.excludedEmotionTypes)
+        assertEquals(listOf(EmotionType.ANGER, EmotionType.ANXIETY), savedConversation.captured.excludedEmotionTypes.values)
     }
 
     @Test
@@ -102,7 +102,7 @@ class ConversationServiceTest {
 
         conversationService.saveUserMessage(1L, null, "내용", excludeCharacters = excludeFiveTypes)
 
-        assertEquals(excludeFiveTypes, savedConversation.captured.excludedEmotionTypes)
+        assertEquals(excludeFiveTypes, savedConversation.captured.excludedEmotionTypes.values)
     }
 
     @Test
@@ -113,7 +113,7 @@ class ConversationServiceTest {
 
         conversationService.saveUserMessage(1L, 10L, "이어서 쓰는 말", excludeCharacters = listOf(EmotionType.ANGER))
 
-        assertEquals(emptyList(), conversation.excludedEmotionTypes)
+        assertEquals(emptyList(), conversation.excludedEmotionTypes.values)
         verify(exactly = 0) { conversationRepository.save(any()) }
     }
 

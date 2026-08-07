@@ -3,6 +3,7 @@ package com.nexters.gamss.conversation.service
 import com.nexters.gamss.conversation.domain.Conversation
 import com.nexters.gamss.conversation.domain.ConversationStatus
 import com.nexters.gamss.conversation.domain.ConversationTitle
+import com.nexters.gamss.conversation.domain.ExcludedEmotionTypes
 import com.nexters.gamss.conversation.domain.Message
 import com.nexters.gamss.conversation.domain.SenderType
 import com.nexters.gamss.conversation.repository.ConversationRepository
@@ -93,19 +94,12 @@ class ConversationService(
     }
 
     /**
-     * 제외 요청 캐릭터 목록을 검증한다. 전체(6종)를 다 제외하면 [com.nexters.gamss.llm.selection.CharacterSelector]가
-     * 뽑을 캐릭터가 하나도 남지 않으므로 거부한다.
+     * 제외 요청 캐릭터 목록을 검증한다(중복 제거·최대 개수는 [ExcludedEmotionTypes]가 담당). 전체를
+     * 다 제외하면 [com.nexters.gamss.llm.selection.CharacterSelector]가 뽑을 캐릭터가 하나도 남지
+     * 않으므로 거부한다.
      */
-    private fun resolveExcludedEmotionTypes(excludeCharacters: List<EmotionType>?): List<EmotionType> {
-        if (excludeCharacters.isNullOrEmpty()) {
-            return emptyList()
-        }
-        val distinct = excludeCharacters.distinct()
-        if (distinct.size >= EmotionType.entries.size) {
-            throw BusinessException(ErrorCode.INVALID_INPUT, "excludeCharacters는 최대 ${EmotionType.entries.size - 1}종까지만 지정할 수 있습니다.")
-        }
-        return distinct
-    }
+    private fun resolveExcludedEmotionTypes(excludeCharacters: List<EmotionType>?): ExcludedEmotionTypes =
+        if (excludeCharacters.isNullOrEmpty()) ExcludedEmotionTypes.EMPTY else ExcludedEmotionTypes.of(excludeCharacters)
 
     /** 답장 대상 메시지가 실제로 해당 채팅방에 존재하는지 확인한다. */
     private fun validateReplyTarget(
