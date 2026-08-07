@@ -29,6 +29,23 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
     ): List<Conversation>
 
     /**
+     * 회원의 대화방을 상태로 걸러 최신순으로 조회한다. **어떤 상태가 무슨 의미인지는 호출자가 정한다** —
+     * 여기서는 걸러낸다는 사실만 안다.
+     *
+     * `createdAt` 만으로 정렬하지 않는다 — `DATETIME(6)` 이라 한 요청 안에서 연달아 만든 방이 같은
+     * 마이크로초를 가질 수 있고, 그러면 순서가 실행마다 흔들린다. id 로 타이브레이크한다.
+     */
+    @Query(
+        "select c from Conversation c " +
+            "where c.memberId = :memberId and c.status = :status " +
+            "order by c.createdAt desc, c.id desc",
+    )
+    fun findAllByMemberIdAndStatus(
+        @Param("memberId") memberId: Long,
+        @Param("status") status: ConversationStatus,
+    ): List<Conversation>
+
+    /**
      * 상태를 바꾸는 요청(메시지 저장·종료·삭제)에서 사용한다. 행을 잠가 다른 상태 변경 요청이
      * 커밋될 때까지 대기하게 만들어, 삭제 이후 작업 차단 계약이 경합으로 깨지지 않도록 한다.
      */

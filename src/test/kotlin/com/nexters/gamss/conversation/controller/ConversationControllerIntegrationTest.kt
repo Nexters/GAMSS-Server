@@ -1,5 +1,7 @@
 package com.nexters.gamss.conversation.controller
 
+import com.nexters.gamss.card.domain.Card
+import com.nexters.gamss.card.repository.CardRepository
 import com.nexters.gamss.conversation.domain.Conversation
 import com.nexters.gamss.conversation.domain.Message
 import com.nexters.gamss.conversation.domain.SenderType
@@ -54,6 +56,9 @@ class ConversationControllerIntegrationTest {
 
     @Autowired
     private lateinit var messageRepository: MessageRepository
+
+    @Autowired
+    private lateinit var cardRepository: CardRepository
 
     @Autowired
     private lateinit var jwtIssuer: JwtIssuer
@@ -938,6 +943,128 @@ class ConversationControllerIntegrationTest {
             .get("/api/conversations/search") {
                 param("keyword", "짜증")
             }.andExpect {
+                status { isUnauthorized() }
+                jsonPath("$.error.code") { value("UNAUTHORIZED") }
+            }
+    }
+
+    // ── 미완성(진행 중) 대화방 목록 조회 ──
+
+    @Test
+    fun `진행 중인 대화방만 최신순으로 조회된다`() {
+        val member = memberRepository.save(Member("inprogress@test.com"))
+        val older = conversationRepository.save(Conversation(member.id))
+        val newer = conversationRepository.save(Conversation(member.id))
+        conversationRepository.save(Conversation(member.id).apply { end() })
+        conversationRepository.save(Conversation(member.id).apply { delete() })
+        entityManager.flush()
+        entityManager.clear()
+
+        mockMvc
+            .get("/api/conversations/incomplete") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.length()") { value(2) }
+                jsonPath("$.data[0].id") { value(newer.id) }
+                jsonPath("$.data[0].status") { value("ACTIVE") }
+                jsonPath("$.data[1].id") { value(older.id) }
+            }
+    }
+
+    @Test
+    fun `카드가 만들어진 대화방은 조회되지 않는다`() {
+        val member = memberRepository.save(Member("carded@test.com"))
+        val active = conversationRepository.save(Conversation(member.id))
+        // 카드는 종료한 방에만 생긴다 — 카드가 있는 방은 ENDED 라 조회 조건에서 이미 빠진다.
+        // 그 전제를 실제 카드 행으로 확인한다(ENDED 만 만들어두면 카드는 검증되지 않는다).
+        val ended = conversationRepository.save(Conversation(member.id).apply { end() })
+        cardRepository.save(
+            Card(
+                memberId = member.id,
+                conversationId = ended.id,
+                emotion = EmotionType.ANGER,
+                summary = "카드가 있는 방",
+                message = "얘 오늘 건들면 안 됨.",
+                conversationCreatedAt = ended.createdAt,
+            ),
+        )
+        entityManager.flush()
+        entityManager.clear()
+
+        mockMvc
+            .get("/api/conversations/incomplete") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.length()") { value(1) }
+                jsonPath("$.data[0].id") { value(active.id) }
+            }
+    }
+
+    @Test
+    fun `다른 회원의 진행 중인 대화방은 조회되지 않는다`() {
+        val me = memberRepository.save(Member("mine-inprogress@test.com"))
+        val other = memberRepository.save(Member("others-inprogress@test.com"))
+        val mine = conversationRepository.save(Conversation(me.id))
+        conversationRepository.save(Conversation(other.id))
+        entityManager.flush()
+        entityManager.clear()
+
+        mockMvc
+            .get("/api/conversations/incomplete") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(me))
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.length()") { value(1) }
+                jsonPath("$.data[0].id") { value(mine.id) }
+            }
+    }
+
+    @Test
+    fun `진행 중인 대화방이 없으면 빈 배열을 돌려준다`() {
+        val member = memberRepository.save(Member("noneinprogress@test.com"))
+        conversationRepository.save(Conversation(member.id).apply { end() })
+        entityManager.flush()
+        entityManager.clear()
+
+        mockMvc
+            .get("/api/conversations/incomplete") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.length()") { value(0) }
+            }
+    }
+
+    @Test
+    fun `대화방을 종료하면 진행 중 목록에서 사라진다`() {
+        val member = memberRepository.save(Member("endthenlist@test.com"))
+        val conversation = conversationRepository.save(Conversation(member.id))
+        entityManager.flush()
+        entityManager.clear()
+
+        mockMvc
+            .post("/api/conversations/${conversation.id}/end") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect { status { isOk() } }
+        entityManager.flush()
+        entityManager.clear()
+
+        mockMvc
+            .get("/api/conversations/incomplete") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.length()") { value(0) }
+            }
+    }
+
+    @Test
+    fun `인증 없이 미완성 대화방을 조회하면 401을 반환한다`() {
+        mockMvc
+            .get("/api/conversations/incomplete")
+            .andExpect {
                 status { isUnauthorized() }
                 jsonPath("$.error.code") { value("UNAUTHORIZED") }
             }
