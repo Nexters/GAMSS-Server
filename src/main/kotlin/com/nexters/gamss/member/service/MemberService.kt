@@ -18,8 +18,12 @@ class MemberService(
     private val memberRepository: MemberRepository,
     private val withdrawnMemberCleaners: WithdrawnMemberCleaners,
 ) {
+    // 닉네임 초기값은 소셜 이름. 이름이 닉네임 규칙(길이·금칙어)에 어긋나면 미설정(null)으로 둔다.
     @Transactional
-    fun create(email: String?): Member = memberRepository.save(Member(email))
+    fun create(
+        email: String?,
+        name: String?,
+    ): Member = memberRepository.save(Member(email, name, Nickname.tryCreate(name)))
 
     @Transactional(readOnly = true)
     fun getById(id: Long): Member =

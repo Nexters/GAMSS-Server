@@ -8,4 +8,5 @@ data class SocialUser(
     val uid: String,
     val provider: SocialProvider,
     val email: String?,
+    val name: String?,
 )

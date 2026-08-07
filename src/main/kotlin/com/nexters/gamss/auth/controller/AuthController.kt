@@ -1,6 +1,7 @@
 package com.nexters.gamss.auth.controller
 
 import com.nexters.gamss.auth.controller.dto.LoginRequest
+import com.nexters.gamss.auth.controller.dto.LoginResponse
 import com.nexters.gamss.auth.controller.dto.ReissueRequest
 import com.nexters.gamss.auth.controller.dto.TokenResponse
 import com.nexters.gamss.auth.service.AuthService
@@ -26,7 +27,8 @@ class AuthController(
         summary = "소셜 로그인",
         description =
             "앱이 Firebase Authentication으로 발급받은 ID 토큰을 검증해 회원을 조회·가입하고 " +
-                "서비스 토큰(accessToken·refreshToken)을 발급합니다. 최초 로그인 시 회원이 자동 생성됩니다. " +
+                "서비스 토큰(accessToken·refreshToken)을 발급합니다. 최초 로그인 시 회원이 자동 생성되며, " +
+                "응답의 isFirstLogin으로 최초 가입 여부를 알 수 있습니다. " +
                 "로그인 수단(구글·애플)은 토큰에서 판별하므로 별도로 지정하지 않습니다.\n\n" +
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
@@ -39,9 +41,9 @@ class AuthController(
     @PostMapping("/login")
     fun login(
         @Valid @RequestBody request: LoginRequest,
-    ): ApiResponse<TokenResponse> {
+    ): ApiResponse<LoginResponse> {
         val result = authService.login(request.idToken)
-        return ApiResponse.success(TokenResponse.from(result))
+        return ApiResponse.success(LoginResponse.from(result))
     }
 
     @Operation(

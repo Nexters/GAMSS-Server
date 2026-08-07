@@ -29,7 +29,7 @@ class AdminMemberController(
 ) {
     @Operation(
         summary = "회원 목록 조회",
-        description = "가입 회원을 최신순으로 조회합니다. search 로 이메일·닉네임 부분 검색, status 로 상태 필터가 가능합니다.",
+        description = "가입 회원을 최신순으로 조회합니다. search 로 이메일·이름·닉네임 부분 검색, status 로 상태 필터가 가능합니다.",
     )
     @GetMapping
     fun list(

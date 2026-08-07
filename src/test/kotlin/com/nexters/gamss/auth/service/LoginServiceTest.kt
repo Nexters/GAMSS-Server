@@ -17,6 +17,8 @@ import io.mockk.verify
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class LoginServiceTest {
     private val socialTokenVerifier = mockk<SocialTokenVerifier>()
@@ -39,13 +41,15 @@ class LoginServiceTest {
 
     @Test
     fun `로그인 시 신규 회원이면 리프레시 토큰을 저장한다`() {
-        every { socialTokenVerifier.verify("idtok") } returns SocialUser("uid-1", SocialProvider.GOOGLE, "a@a.com")
+        every { socialTokenVerifier.verify("idtok") } returns SocialUser("uid-1", SocialProvider.GOOGLE, "a@a.com", "홍길동")
         val member =
             mockk<Member> {
                 every { id } returns 100L
                 every { isWithdrawn() } returns false
             }
-        every { socialAccountService.resolveMember(SocialProvider.GOOGLE, "uid-1", "a@a.com") } returns member
+        every {
+            socialAccountService.resolveMember(SocialProvider.GOOGLE, "uid-1", "a@a.com", "홍길동")
+        } returns ResolvedMember(member, isNewMember = true)
         every { jwtIssuer.issueAccessToken(100L) } returns "access"
         every { jwtIssuer.issueRefreshToken(100L) } returns "refresh"
         every { refreshTokenRepository.findByMemberId(100L) } returns null
@@ -56,6 +60,7 @@ class LoginServiceTest {
         assertEquals("access", result.accessToken)
         // 클라이언트에는 원본 토큰을, DB에는 해시를 저장한다.
         assertEquals("refresh", result.refreshToken)
+        assertTrue(result.isFirstLogin)
         verify {
             refreshTokenRepository.save(
                 match { it.memberId == 100L && it.token == tokenHasher.hash("refresh") },
@@ -65,19 +70,23 @@ class LoginServiceTest {
 
     @Test
     fun `로그인 시 기존 리프레시 토큰이 있으면 회전한다`() {
-        every { socialTokenVerifier.verify("t") } returns SocialUser("uid", SocialProvider.APPLE, "e@e.com")
+        every { socialTokenVerifier.verify("t") } returns SocialUser("uid", SocialProvider.APPLE, "e@e.com", "홍길동")
         val member =
             mockk<Member> {
                 every { id } returns 1L
                 every { isWithdrawn() } returns false
             }
-        every { socialAccountService.resolveMember(SocialProvider.APPLE, "uid", "e@e.com") } returns member
+        every {
+            socialAccountService.resolveMember(SocialProvider.APPLE, "uid", "e@e.com", "홍길동")
+        } returns ResolvedMember(member, isNewMember = false)
         every { jwtIssuer.issueAccessToken(1L) } returns "a"
         every { jwtIssuer.issueRefreshToken(1L) } returns "r"
         val stored = mockk<RefreshToken>(relaxed = true)
         every { refreshTokenRepository.findByMemberId(1L) } returns stored
 
-        loginService.login("t")
+        val result = loginService.login("t")
+
+        assertFalse(result.isFirstLogin)
 
         verify { stored.rotate(tokenHasher.hash("r")) }
         verify(exactly = 0) { refreshTokenRepository.save(any()) }
@@ -85,9 +94,11 @@ class LoginServiceTest {
 
     @Test
     fun `탈퇴한 회원이 로그인하면 WITHDRAWN_MEMBER`() {
-        every { socialTokenVerifier.verify("idtok") } returns SocialUser("uid-1", SocialProvider.GOOGLE, "a@a.com")
+        every { socialTokenVerifier.verify("idtok") } returns SocialUser("uid-1", SocialProvider.GOOGLE, "a@a.com", "홍길동")
         val member = mockk<Member> { every { isWithdrawn() } returns true }
-        every { socialAccountService.resolveMember(SocialProvider.GOOGLE, "uid-1", "a@a.com") } returns member
+        every {
+            socialAccountService.resolveMember(SocialProvider.GOOGLE, "uid-1", "a@a.com", "홍길동")
+        } returns ResolvedMember(member, isNewMember = false)
 
         val exception = assertFailsWith<BusinessException> { loginService.login("idtok") }
 

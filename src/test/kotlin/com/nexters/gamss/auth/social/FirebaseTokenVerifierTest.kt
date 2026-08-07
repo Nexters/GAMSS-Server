@@ -33,6 +33,7 @@ class FirebaseTokenVerifierTest {
         assertEquals("firebase-uid-1", user.uid)
         assertEquals(SocialProvider.GOOGLE, user.provider)
         assertEquals("user@example.com", user.email)
+        assertEquals("홍길동", user.name)
     }
 
     @Test
@@ -47,6 +48,13 @@ class FirebaseTokenVerifierTest {
         val user = verifier.verify(signedToken(email = null))
 
         assertNull(user.email)
+    }
+
+    @Test
+    fun `이름 클레임이 없어도 검증에 성공한다`() {
+        val user = verifier.verify(signedToken(name = null))
+
+        assertNull(user.name)
     }
 
     @Test
@@ -97,6 +105,7 @@ class FirebaseTokenVerifierTest {
         iss: String = issuer,
         aud: String = projectId,
         email: String? = "user@example.com",
+        name: String? = "홍길동",
         signInProvider: String? = "google.com",
         expiresAt: Date = Date.from(Instant.now().plusSeconds(300)),
         signingKey: RSAKey = rsaKey,
@@ -110,6 +119,7 @@ class FirebaseTokenVerifierTest {
                 .issueTime(Date())
         if (subject != null) builder.subject(subject)
         if (email != null) builder.claim("email", email)
+        if (name != null) builder.claim("name", name)
         if (signInProvider != null) builder.claim("firebase", mapOf("sign_in_provider" to signInProvider))
         val jwt = SignedJWT(JWSHeader.Builder(JWSAlgorithm.RS256).keyID(signingKey.keyID).build(), builder.build())
         jwt.sign(RSASSASigner(signingKey))

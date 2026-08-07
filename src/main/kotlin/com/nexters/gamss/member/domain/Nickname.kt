@@ -61,5 +61,20 @@ class Nickname(
 
         // 금칙어 시작 목록. 필요 시 확장한다.
         private val BANNED_WORDS = setOf("시발", "씨발", "새끼", "병신", "지랄", "좆", "썅")
+
+        /**
+         * 검증 실패를 예외 대신 null 로 돌려준다. 소셜 이름처럼 규칙에 맞으면 쓰고
+         * 아니면 미설정으로 두는 흐름용. 검증 실패 외의 예외는 그대로 전파한다.
+         */
+        fun tryCreate(value: String?): Nickname? {
+            if (value == null) {
+                return null
+            }
+            return try {
+                Nickname(value)
+            } catch (e: BusinessException) {
+                null
+            }
+        }
     }
 }

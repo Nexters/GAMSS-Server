@@ -7,6 +7,8 @@ import io.mockk.verify
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class AuthServiceTest {
     private val loginService = mockk<LoginService>()
@@ -17,22 +19,24 @@ class AuthServiceTest {
 
     @Test
     fun `로그인은 LoginService에 위임하고 정상이면 재시도하지 않는다`() {
-        every { loginService.login("token") } returns TokenResult("a", "r")
+        every { loginService.login("token") } returns LoginResult("a", "r", isFirstLogin = false)
 
         val result = authService.login("token")
 
         assertEquals("a", result.accessToken)
+        assertFalse(result.isFirstLogin)
         verify(exactly = 1) { loginService.login("token") }
     }
 
     @Test
     fun `동시 가입 경합이 나면 재시도해 성공한다`() {
         every { loginService.login("token") } throws
-            ConcurrentRegistrationException(SocialProvider.GOOGLE, "uid") andThen TokenResult("a", "r")
+            ConcurrentRegistrationException(SocialProvider.GOOGLE, "uid") andThen LoginResult("a", "r", isFirstLogin = true)
 
         val result = authService.login("token")
 
         assertEquals("a", result.accessToken)
+        assertTrue(result.isFirstLogin)
         verify(exactly = 2) { loginService.login("token") }
     }
 
