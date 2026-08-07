@@ -68,13 +68,14 @@ class ConcurrentLoginIntegrationTest {
         val startLine = CyclicBarrier(threadCount)
         val executor = Executors.newFixedThreadPool(threadCount)
         val errors = Collections.synchronizedList(mutableListOf<Throwable>())
+        val results = Collections.synchronizedList(mutableListOf<LoginResult>())
 
         val futures =
             (1..threadCount).map {
                 executor.submit {
                     try {
                         startLine.await() // 모든 스레드를 동시에 출발시켜 경합을 유도한다
-                        authService.login("idtok")
+                        results.add(authService.login("idtok"))
                     } catch (t: Throwable) {
                         errors.add(t)
                     }
@@ -87,5 +88,8 @@ class ConcurrentLoginIntegrationTest {
         assertEquals(1, memberRepository.count(), "회원은 하나만 생성돼야 한다")
         assertEquals(1, socialAccountRepository.count(), "소셜 계정은 하나만 생성돼야 한다")
         assertEquals(1, refreshTokenRepository.count(), "리프레시 토큰은 하나만 남아야 한다")
+        // 경합에서 이긴 한 명만 신규 가입이고, 재시도로 성공한 나머지는 기존 회원 로그인이어야 한다.
+        assertEquals(1, results.count { it.isFirstLogin }, "isFirstLogin=true 는 정확히 한 명이어야 한다")
+        assertEquals(threadCount - 1, results.count { !it.isFirstLogin })
     }
 }
