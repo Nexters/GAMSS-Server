@@ -21,12 +21,7 @@ class CharacterSelector(
 ) {
     fun select(): CharacterSelection {
         val total = random.nextInt(TOTAL_MIN, TOTAL_MAX + 1)
-        val characterCount =
-            if (total < MIN_CHARACTERS_FOR_TIKITAKA) {
-                total
-            } else {
-                random.nextInt(MIN_CHARACTERS_FOR_TIKITAKA, total + 1)
-            }
+        val characterCount = random.nextInt(minOf(MIN_CHARACTERS_FOR_TIKITAKA, total), total + 1)
         val tikitakaCount = total - characterCount
         val characters = EmotionType.entries.shuffled(random).take(characterCount)
         return CharacterSelection(characters, tikitakaCount)
