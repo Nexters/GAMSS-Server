@@ -28,6 +28,7 @@ import java.time.Instant
 class Conversation(
     @Column(name = "member_id", nullable = false)
     val memberId: Long,
+    initialExcludedEmotionTypes: List<EmotionType> = emptyList(),
 ) {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -36,6 +37,18 @@ class Conversation(
     @Embedded
     var title: ConversationTitle? = null
         protected set
+
+    /**
+     * 새 채팅방을 만들 때 지정한, 반응하지 않을 캐릭터 목록. 이후로는 바뀌지 않는다(이 채팅방에
+     * 이어서 보내는 요청에 다시 실려 와도 무시됨 — [com.nexters.gamss.conversation.service.ConversationService]).
+     * [EmotionType.name]을 콤마로 이어붙인 문자열로 저장한다.
+     */
+    @Column(name = "excluded_emotion_types", length = 255)
+    private val excludedEmotionTypesRaw: String? =
+        initialExcludedEmotionTypes.takeIf { it.isNotEmpty() }?.joinToString(",") { it.name }
+
+    val excludedEmotionTypes: List<EmotionType>
+        get() = excludedEmotionTypesRaw?.split(",")?.map(EmotionType::valueOf) ?: emptyList()
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 20, nullable = false)
