@@ -40,15 +40,18 @@ class MemberRepositoryTest : RepositoryTest() {
     }
 
     @Test
-    fun `검색어로 이메일과 닉네임을 부분 일치 조회한다`() {
-        memberRepository.save(Member("bada@example.com", Nickname("바다")))
-        memberRepository.save(Member("hana@example.com", Nickname("하늘")))
+    fun `검색어로 이메일·이름·닉네임을 부분 일치 조회한다`() {
+        memberRepository.save(Member("bada@example.com", "김바다", Nickname("바다")))
+        memberRepository.save(Member("hana@example.com", "이하늘", Nickname("하늘")))
 
         val byEmail = memberRepository.search("bada", null, PageRequest.of(0, 10))
+        val byName = memberRepository.search("김", null, PageRequest.of(0, 10))
         val byNickname = memberRepository.search("하늘", null, PageRequest.of(0, 10))
 
         assertEquals(1, byEmail.totalElements)
         assertEquals("bada@example.com", byEmail.content.first().email)
+        assertEquals(1, byName.totalElements)
+        assertEquals("김바다", byName.content.first().name)
         assertEquals(1, byNickname.totalElements)
         val nicknameHit = byNickname.content.first()
         assertEquals("하늘", nicknameHit.nickname?.value)

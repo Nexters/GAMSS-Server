@@ -289,7 +289,11 @@ class CardService(
      *
      * 대상을 id 로 먼저 확정해두고 두 UPDATE 를 날린다 — 카드를 먼저 지우면 `deletedAt is null` 이
      * 깨져 대화방을 못 찾고, 대화방을 먼저 지우면 `status <> DELETED` 가 깨져 카드를 못 찾는다
-     * ([CardRepository.findDeletableConversationIdsByEmotion]).
+     * ([CardRepository.findDeletableConversationIdsByEmotion] ·
+     * [CardRepository.findDeletableConversationIds]).
+     *
+     * 감정별 삭제([deleteCardsByEmotion])와 전체 삭제([deleteAllCards])가 공유한다. **넘어오는 id 는
+     * 이미 소유권으로 걸러져 있어야 한다** — 여기서는 memberId 를 다시 확인하지 않는다.
      *
      * 단건 삭제와 달리 행을 잠그지 않는다 — `deletedAt is null` 조건을 건 UPDATE 라 동시 요청이
      * 와도 뒤늦은 쪽이 0건을 갱신하고 끝난다(중복 삭제가 발생하지 않는다).
@@ -308,6 +312,13 @@ class CardService(
         conversationRepository.softDeleteByIds(conversationIds, now)
         return deletedCards
     }
+
+    /**
+     * 본인 카드를 한 번에 전부 삭제하고 삭제 건수를 돌려준다. 단건·감정별 삭제와 마찬가지로
+     * 카드가 나온 대화방도 함께 삭제한다. 대상이 없어도 0 을 돌려주고 성공한다.
+     */
+    @Transactional
+    fun deleteAllCards(memberId: Long): Int = deleteCardsWithConversations(cardRepository.findDeletableConversationIds(memberId))
 
     private fun getOwnedConversation(
         conversationId: Long,

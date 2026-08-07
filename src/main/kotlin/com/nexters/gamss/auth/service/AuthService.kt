@@ -15,7 +15,7 @@ class AuthService(
     private val logoutService: LogoutService,
     private val conflictRetry: ConflictRetry,
 ) {
-    fun login(idToken: String): TokenResult = conflictRetry.execute { loginService.login(idToken) }
+    fun login(idToken: String): LoginResult = conflictRetry.execute { loginService.login(idToken) }
 
     fun reissue(refreshToken: String): TokenResult = loginService.reissue(refreshToken)
 

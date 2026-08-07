@@ -23,13 +23,14 @@ class SocialAccountService(
         provider: SocialProvider,
         providerId: String,
         email: String?,
-    ): Member {
+        name: String?,
+    ): ResolvedMember {
         val storedProvider = provider.name
         val socialAccount = socialAccountRepository.findByProviderAndProviderId(storedProvider, providerId)
         if (socialAccount != null) {
-            return memberService.getById(socialAccount.memberId)
+            return ResolvedMember(memberService.getById(socialAccount.memberId), isNewMember = false)
         }
-        val member = memberService.create(email)
+        val member = memberService.create(email, name)
         // 동시 최초 로그인 시 (provider, providerId) 유니크 제약에 걸릴 수 있다.
         // 영속성 예외를 도메인 예외로 번역해, 재시도 판단이 특정 영속성 기술에 의존하지 않게 한다.
         try {
@@ -37,6 +38,6 @@ class SocialAccountService(
         } catch (e: DataIntegrityViolationException) {
             throw ConcurrentRegistrationException(provider, providerId)
         }
-        return member
+        return ResolvedMember(member, isNewMember = true)
     }
 }

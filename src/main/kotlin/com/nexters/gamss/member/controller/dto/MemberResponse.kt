@@ -9,6 +9,8 @@ data class MemberResponse(
     val id: Long,
     @field:Schema(description = "이메일 (소셜 제공자가 제공하지 않으면 null)", example = "user@example.com")
     val email: String?,
+    @field:Schema(description = "이름 (소셜 제공자가 제공하지 않으면 null)", example = "홍길동")
+    val name: String?,
     @field:Schema(description = "닉네임 (설정 전이면 null)", example = "바다")
     val nickname: String?,
     @field:Schema(description = "회원 상태", example = "ACTIVE", allowableValues = ["ACTIVE", "WITHDRAWN"])
@@ -21,6 +23,7 @@ data class MemberResponse(
             MemberResponse(
                 id = member.id,
                 email = member.email,
+                name = member.name,
                 nickname = member.nickname?.value,
                 status = member.status.name,
                 createdAt = member.createdAt,

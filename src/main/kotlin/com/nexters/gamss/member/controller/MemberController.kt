@@ -30,7 +30,7 @@ class MemberController(
     @Operation(
         summary = "내 정보 조회",
         description =
-            "로그인한 회원의 정보(이메일·닉네임·가입일·상태)를 반환합니다.\n\n" +
+            "로그인한 회원의 정보(이메일·이름·닉네임·가입일·상태)를 반환합니다.\n\n" +
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +

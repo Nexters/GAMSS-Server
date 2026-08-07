@@ -1,6 +1,7 @@
 package com.nexters.gamss.conversation.service
 
 import com.nexters.gamss.conversation.domain.Conversation
+import com.nexters.gamss.conversation.domain.ConversationStatus
 import com.nexters.gamss.conversation.domain.ConversationTitle
 import com.nexters.gamss.conversation.domain.Message
 import com.nexters.gamss.conversation.domain.SenderType
@@ -136,6 +137,24 @@ class ConversationService(
         val end = date.plusDays(1).atStartOfDay(ZONE).toInstant()
         return conversationRepository.findAllByMemberIdAndCreatedAtInRange(memberId, start, end)
     }
+
+    /**
+     * 아직 진행 중인(쓰다 만) 대화방을 최신순으로 조회한다. 날짜를 몰라도 이어쓸 방을 찾게 하는
+     * 목록이라 날짜 조건을 걸지 않는다.
+     *
+     * **'미완성' 을 [ConversationStatus.ACTIVE] 로 정의하는 판단이 여기에 있다.** 요구사항은
+     * "삭제되지 않았고 카드도 생성되지 않은 방"이지만 ACTIVE 하나로 둘 다 충족된다 — 상태 전이가
+     * `ACTIVE → ENDED → DELETED` 단방향이고([Conversation.end]·[Conversation.delete] 외에 status 를
+     * 바꾸는 코드가 없다), 카드 생성은 ENDED 를 요구하므로([com.nexters.gamss.card.service.CardService]
+     * 의 claimForGeneration) **ACTIVE 방은 카드를 가질 수 없다.**
+     *
+     * 그래서 cards 를 조인하지 않는다 — 걸러질 행이 없고, 읽는 사람에게 'ACTIVE 인데 카드가 있을 수
+     * 있다'는 잘못된 인상만 준다. 종료한 방을 다시 열 수 있게 되면 이 전제가 깨지므로, 그때는 카드
+     * 존재 여부를 함께 봐야 한다.
+     */
+    @Transactional(readOnly = true)
+    fun getInProgressConversations(memberId: Long): List<Conversation> =
+        conversationRepository.findAllByMemberIdAndStatus(memberId, ConversationStatus.ACTIVE)
 
     @Transactional(readOnly = true)
     fun getMessages(

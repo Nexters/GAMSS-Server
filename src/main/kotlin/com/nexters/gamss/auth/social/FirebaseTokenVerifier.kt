@@ -47,7 +47,12 @@ class FirebaseTokenVerifier(
         val claims = parseClaims(idToken)
         val uid = claims.subject ?: throw BusinessException(ErrorCode.INVALID_SOCIAL_TOKEN)
         val provider = SocialProvider.fromFirebase(signInProvider(claims))
-        return SocialUser(uid = uid, provider = provider, email = claims.getStringClaim("email"))
+        return SocialUser(
+            uid = uid,
+            provider = provider,
+            email = claims.getStringClaim("email"),
+            name = claims.getStringClaim("name"),
+        )
     }
 
     private fun signInProvider(claims: JWTClaimsSet): String? {
