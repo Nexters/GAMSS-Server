@@ -1,5 +1,6 @@
 package com.nexters.gamss.conversation.controller.dto
 
+import com.nexters.gamss.emotion.domain.EmotionType
 import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
@@ -20,4 +21,12 @@ data class SaveMessageRequest(
         nullable = true,
     )
     val currentConversationSummary: String? = null,
+    @field:Schema(
+        description =
+            "새 채팅방을 만들 때 반응하지 않길 원하는 캐릭터 목록(선택, 최대 5종 — 전체 제외는 불가). " +
+                "conversationId가 있으면(기존 채팅방에 이어서 보내는 요청) 무시됩니다.",
+        example = "[\"ANGER\", \"ANXIETY\"]",
+        nullable = true,
+    )
+    val excludeCharacters: List<EmotionType>? = null,
 )

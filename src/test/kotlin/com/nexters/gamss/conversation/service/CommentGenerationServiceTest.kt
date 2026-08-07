@@ -2,6 +2,7 @@ package com.nexters.gamss.conversation.service
 
 import com.nexters.gamss.conversation.domain.CommentStatus
 import com.nexters.gamss.conversation.domain.Conversation
+import com.nexters.gamss.conversation.domain.ExcludedEmotionTypes
 import com.nexters.gamss.conversation.domain.Message
 import com.nexters.gamss.conversation.domain.SenderType
 import com.nexters.gamss.conversation.repository.ConversationRepository
@@ -115,7 +116,8 @@ class CommentGenerationServiceTest {
         every {
             messageRepository.updateCommentStatus(1L, CommentStatus.PENDING, listOf(CommentStatus.NONE, CommentStatus.FAILED), any())
         } returns 1
-        every { characterSelector.select() } returns CharacterSelection(characters, tikitakaCount)
+        every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
+        every { characterSelector.select(emptySet()) } returns CharacterSelection(characters, tikitakaCount)
         every {
             conversationRepository.findRandomPastSummaries(
                 any(),
@@ -180,7 +182,7 @@ class CommentGenerationServiceTest {
         every {
             messageRepository.updateCommentStatus(1L, CommentStatus.PENDING, listOf(CommentStatus.NONE, CommentStatus.FAILED), any())
         } returns 1
-        every { characterSelector.select() } returns CharacterSelection(characters, tikitakaCount)
+        every { characterSelector.select(emptySet()) } returns CharacterSelection(characters, tikitakaCount)
         every {
             conversationRepository.findRandomPastSummaries(
                 1L,
@@ -418,7 +420,7 @@ class CommentGenerationServiceTest {
         every {
             messageRepository.updateCommentStatus(1L, CommentStatus.PENDING, listOf(CommentStatus.NONE, CommentStatus.FAILED), any())
         } returns 1
-        every { characterSelector.select() } returns CharacterSelection(charactersWithQuirky, 1)
+        every { characterSelector.select(emptySet()) } returns CharacterSelection(charactersWithQuirky, 1)
         every { eongttungTopicSelector.select() } returns "소재"
         every {
             conversationRepository.findRandomPastSummaries(
@@ -446,6 +448,38 @@ class CommentGenerationServiceTest {
         assertEquals(CommentGenerationOutcome.DONE, result.outcome)
         assertEquals(456, result.usedTokens)
         verify(exactly = 1) { eongttungTopicSelector.select() }
+    }
+
+    @Test
+    fun `채팅방에 제외 캐릭터가 저장되어 있으면 CharacterSelector에 그대로 전달한다`() {
+        val message = rootMessage()
+        val excluded = setOf(EmotionType.ANGER, EmotionType.ANXIETY)
+        every { messageRepository.findById(1L) } returns Optional.of(message)
+        every {
+            conversationRepository.findById(10L)
+        } returns Optional.of(Conversation(memberId = 1L, initialExcludedEmotionTypes = ExcludedEmotionTypes.of(excluded.toList())))
+        every {
+            messageRepository.updateCommentStatus(1L, CommentStatus.PENDING, listOf(CommentStatus.NONE, CommentStatus.FAILED), any())
+        } returns 1
+        every { characterSelector.select(excluded) } returns CharacterSelection(characters, tikitakaCount)
+        every {
+            conversationRepository.findRandomPastSummaries(
+                any(),
+                any(),
+                PastSummaryPolicy.POOL_SIZE,
+                PastSummaryPolicy.PICK_COUNT,
+            )
+        } returns emptyList()
+        every {
+            commentGenerator.generateComment(promptContext(diaryContent = message.content))
+        } returns CommentGenerationOutput(feed(), 123, 0)
+        every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } returns Unit
+        every { commentPersistenceService.saveFeed(10L, 1L, feed()) } returns emptyList()
+
+        val result = service.generateComments(memberId = 1L, messageId = 1L, currentConversationSummary = null)
+
+        assertEquals(CommentGenerationOutcome.DONE, result.outcome)
+        verify(exactly = 1) { characterSelector.select(excluded) }
     }
 
     @Test
