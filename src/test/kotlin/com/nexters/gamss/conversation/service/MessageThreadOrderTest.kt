@@ -45,6 +45,19 @@ class MessageThreadOrderTest {
     }
 
     @Test
+    fun `캐릭터 댓글에 대한 유저 답장은 재배치 대상이 아니라 원래 순서를 유지한다`() {
+        val comment1 = message(1L, SenderType.CHARACTER, emotionType = EmotionType.JOY)
+        val comment2 = message(2L, SenderType.CHARACTER, emotionType = EmotionType.ANGER)
+        val userReplyToComment1 = message(3L, SenderType.USER, repliesToMessageId = 1L)
+        val characterReplyToUserReply = message(4L, SenderType.CHARACTER, repliesToMessageId = 3L, emotionType = EmotionType.WARM)
+
+        val result =
+            MessageThreadOrder.reorderTikitakaAfterTarget(listOf(comment1, comment2, userReplyToComment1, characterReplyToUserReply))
+
+        assertEquals(listOf(1L, 2L, 3L, 4L), result.map { it.id })
+    }
+
+    @Test
     fun `티키타카가 없으면 원래 순서를 그대로 유지한다`() {
         val messages = listOf(message(1L, SenderType.USER), message(2L, SenderType.CHARACTER, emotionType = EmotionType.JOY))
 
