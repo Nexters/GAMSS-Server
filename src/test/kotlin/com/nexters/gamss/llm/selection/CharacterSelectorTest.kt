@@ -1,11 +1,24 @@
 package com.nexters.gamss.llm.selection
 
+import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class CharacterSelectorTest {
     private val selector = CharacterSelector()
+
+    @Test
+    fun `뽑힌 total은 characterCount와 tikitakaCount로 항상 전부 소진된다`() {
+        repeat(1_000) { seed ->
+            // select()가 가장 먼저 뽑는 값과 동일한 시드로 total(1~3)을 독립적으로 재현한다.
+            val expectedTotal = Random(seed.toLong()).nextInt(1, 4)
+            val selection = CharacterSelector(Random(seed.toLong())).select()
+
+            val actualTotal = selection.characters.size + selection.tikitakaCount
+            assertEquals(expectedTotal, actualTotal, "seed=$seed: total=$expectedTotal 인데 실제로는 $actualTotal 만 채워짐")
+        }
+    }
 
     @Test
     fun `캐릭터 수와 티키타카 수의 합은 항상 1~3이다`() {

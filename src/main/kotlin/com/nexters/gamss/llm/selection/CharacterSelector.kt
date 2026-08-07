@@ -12,8 +12,8 @@ import kotlin.random.Random
  *
  * 캐릭터 수와 티키타카 수는 각각 뽑지 않고, 둘의 합([TOTAL_MIN]~[TOTAL_MAX])을 먼저 정한 뒤 그 안에서
  * 나눈다. 티키타카는 캐릭터끼리 주고받는 것이라 캐릭터가 [MIN_CHARACTERS_FOR_TIKITAKA]명 미만이면
- * 성립할 수 없으므로 그 경우 0개로 고정한다 — 즉 티키타카는 총량 예산 안에서만 등장하고 항상 보장되지는
- * 않는다.
+ * 성립할 수 없다 — 이 제약을 나중에 걸러내면 남은 예산이 갈 곳을 잃고 증발하므로, characterCount를
+ * 뽑는 범위 자체에 미리 반영해 total이 항상 그대로 소진되게 한다.
  */
 @Component
 class CharacterSelector(
@@ -21,8 +21,13 @@ class CharacterSelector(
 ) {
     fun select(): CharacterSelection {
         val total = random.nextInt(TOTAL_MIN, TOTAL_MAX + 1)
-        val characterCount = random.nextInt(MIN_CHARACTER_COUNT, total + 1)
-        val tikitakaCount = if (characterCount >= MIN_CHARACTERS_FOR_TIKITAKA) total - characterCount else 0
+        val characterCount =
+            if (total < MIN_CHARACTERS_FOR_TIKITAKA) {
+                total
+            } else {
+                random.nextInt(MIN_CHARACTERS_FOR_TIKITAKA, total + 1)
+            }
+        val tikitakaCount = total - characterCount
         val characters = EmotionType.entries.shuffled(random).take(characterCount)
         return CharacterSelection(characters, tikitakaCount)
     }
@@ -30,7 +35,6 @@ class CharacterSelector(
     companion object {
         private const val TOTAL_MIN = 1
         private const val TOTAL_MAX = 3
-        private const val MIN_CHARACTER_COUNT = 1
         private const val MIN_CHARACTERS_FOR_TIKITAKA = 2
     }
 }
