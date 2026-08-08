@@ -14,9 +14,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener
 import java.time.Instant
 
 /**
- * 운영 중 백오피스에서 바꾸는 LLM 생성 설정(모델·시스템 프롬프트). [promptType]당 행이 최대 1개다
- * (unique 제약, V6 마이그레이션 참고). 행이 없으면 코드 기본값(GeminiProperties.model /
- * PromptProvider의 타입별 프롬프트)을 쓴다 — [LlmSettingsService] 참고.
+ * 운영 중 백오피스에서 바꾸는 LLM 생성 설정(모델·시스템 프롬프트). [promptType]당 행이 정확히 1개다
+ * (unique 제약 + V23 시딩). 프롬프트의 단일 원본은 이 테이블이며 코드 폴백은 없다 — [LlmSettingsService] 참고.
  */
 @Entity
 @Table(name = "llm_settings")
