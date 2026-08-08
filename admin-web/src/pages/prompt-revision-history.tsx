@@ -82,9 +82,10 @@ function RevisionDetailPanel({
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>v{revision.version}으로 복원할까요?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    현재 프롬프트가 이 버전의 내용으로 바뀌고 <span className="font-medium text-foreground">다음 생성부터 즉시 적용</span>
-                    됩니다. 복원도 새 리비전으로 기록되므로 언제든 다시 되돌릴 수 있습니다.
+                  <AlertDialogDescription className="break-keep">
+                    현재 프롬프트가 이 버전의 내용으로 바뀌고{' '}
+                    <span className="font-medium text-foreground">다음 생성부터 즉시 적용됩니다.</span> 복원도 새
+                    리비전으로 기록되므로 언제든 다시 되돌릴 수 있습니다.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
