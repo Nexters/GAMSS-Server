@@ -7,6 +7,7 @@ import { Select } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { PageHeader } from '@/components/page-header'
+import { PromptRevisionHistory } from '@/pages/prompt-revision-history'
 import { cn } from '@/lib/utils'
 
 type PromptType = 'COMMON' | 'COMMENT' | 'REPLY' | 'CARD'
@@ -271,6 +272,18 @@ function PromptSection() {
             {error && <span className="text-sm text-destructive">저장에 실패했습니다</span>}
           </div>
         </Card>
+      )}
+
+      {ready && (
+        <PromptRevisionHistory
+          type={type}
+          refreshKey={savedPrompt}
+          onLoadToEditor={(content) => setPrompt(content)}
+          onRestored={(content) => {
+            setPrompt(content)
+            setSavedPrompt(content)
+          }}
+        />
       )}
     </div>
   )
