@@ -166,7 +166,7 @@ export function PromptRevisionHistory({ type, currentPrompt, onLoadToEditor, onR
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="w-36">버전</TableHead>
+                <TableHead className="whitespace-nowrap">버전</TableHead>
                 <TableHead className="w-56">저장자</TableHead>
                 <TableHead className="w-44">저장 시각</TableHead>
                 <TableHead>내용</TableHead>
@@ -187,16 +187,16 @@ export function PromptRevisionHistory({ type, currentPrompt, onLoadToEditor, onR
                         <Badge variant="outline" className="whitespace-nowrap tabular-nums">
                           v{revision.version}
                         </Badge>
+                        {revision.restoredFromVersion !== null && (
+                          <Badge variant="secondary" className="gap-1 whitespace-nowrap text-[10px] font-normal text-muted-foreground">
+                            <RotateCcw className="size-3" />
+                            v{revision.restoredFromVersion}에서 복원
+                          </Badge>
+                        )}
                         {revision.version === total && (
                           <Badge className="whitespace-nowrap text-[10px]">현재 적용 중</Badge>
                         )}
                       </div>
-                      {revision.restoredFromVersion !== null && (
-                        <p className="mt-1 flex items-center gap-1 whitespace-nowrap text-[11px] text-muted-foreground">
-                          <RotateCcw className="size-3" />
-                          v{revision.restoredFromVersion}에서 복원됨
-                        </p>
-                      )}
                     </TableCell>
                     <TableCell className="text-sm">
                       {revision.savedBy ?? <span className="text-muted-foreground">시스템</span>}
