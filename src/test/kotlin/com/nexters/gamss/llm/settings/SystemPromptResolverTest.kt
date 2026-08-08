@@ -5,6 +5,7 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class SystemPromptResolverTest {
     private val llmSettingsService = mockk<LlmSettingsService>()
@@ -28,5 +29,10 @@ class SystemPromptResolverTest {
         val result = resolver.resolve(PromptType.COMMON)
 
         assertEquals("공통규칙", result.systemPrompt)
+    }
+
+    @Test
+    fun `소재 목록 타입은 시스템 프롬프트로 조립할 수 없다`() {
+        assertFailsWith<IllegalArgumentException> { resolver.resolve(PromptType.EONGTTUNG_TOPIC) }
     }
 }
