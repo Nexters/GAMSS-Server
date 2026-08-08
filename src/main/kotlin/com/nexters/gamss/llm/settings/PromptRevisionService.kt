@@ -65,13 +65,14 @@ class PromptRevisionService(
             .findById(id)
             .orElseThrow { BusinessException(ErrorCode.PROMPT_REVISION_NOT_FOUND) }
 
+    // 최신 리비전 행을 잠가 같은 타입의 채번을 직렬화한다([PromptRevisionRepository.findLatestForUpdate]).
     private fun record(
         promptType: PromptType,
         systemPrompt: String,
         savedBy: String,
         restoredFromVersion: Int?,
     ) {
-        val nextVersion = (promptRevisionRepository.findMaxVersion(promptType) ?: 0) + 1
+        val nextVersion = (promptRevisionRepository.findLatestForUpdate(promptType)?.version ?: 0) + 1
         promptRevisionRepository.save(PromptRevision(promptType, nextVersion, systemPrompt, savedBy, restoredFromVersion))
     }
 }

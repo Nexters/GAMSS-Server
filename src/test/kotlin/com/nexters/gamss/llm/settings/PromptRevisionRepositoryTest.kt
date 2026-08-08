@@ -6,30 +6,30 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.data.domain.PageRequest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
 
+// 시딩(V22 이후) 여부와 무관하게 동작하도록, 테스트 리비전은 항상 현재 최신 버전 위에 쌓는다.
 class PromptRevisionRepositoryTest : RepositoryTest() {
     @Autowired
     lateinit var promptRevisionRepository: PromptRevisionRepository
 
     @Test
     fun `타입별 리비전을 최신 버전부터 페이지로 조회한다`() {
-        promptRevisionRepository.save(PromptRevision(PromptType.COMMENT, 1, "v1", null))
-        promptRevisionRepository.save(PromptRevision(PromptType.COMMENT, 2, "v2", "a@gamss.kr"))
-        promptRevisionRepository.save(PromptRevision(PromptType.CARD, 1, "카드 v1", "a@gamss.kr"))
+        val base = latestVersion(PromptType.COMMENT)
+        promptRevisionRepository.save(PromptRevision(PromptType.COMMENT, base + 1, "새 버전", "a@gamss.kr"))
+        promptRevisionRepository.save(PromptRevision(PromptType.COMMENT, base + 2, "더 새 버전", "a@gamss.kr"))
 
-        val page = promptRevisionRepository.findAllByPromptTypeOrderByVersionDesc(PromptType.COMMENT, PageRequest.of(0, 10))
+        val page = promptRevisionRepository.findAllByPromptTypeOrderByVersionDesc(PromptType.COMMENT, PageRequest.of(0, 2))
 
-        assertEquals(2, page.totalElements)
-        assertEquals(listOf(2, 1), page.content.map { it.version })
+        assertEquals(listOf(base + 2, base + 1), page.content.map { it.version })
     }
 
     @Test
-    fun `최대 버전을 조회하고 리비전이 없으면 null이다`() {
-        promptRevisionRepository.save(PromptRevision(PromptType.COMMENT, 1, "v1", null))
-        promptRevisionRepository.save(PromptRevision(PromptType.COMMENT, 2, "v2", null))
+    fun `최신 리비전을 잠그고 조회한다 - 다음 버전 채번의 기준`() {
+        val base = latestVersion(PromptType.CARD)
+        promptRevisionRepository.save(PromptRevision(PromptType.CARD, base + 1, "새 버전", null))
 
-        assertEquals(2, promptRevisionRepository.findMaxVersion(PromptType.COMMENT))
-        assertNull(promptRevisionRepository.findMaxVersion(PromptType.REPLY))
+        assertEquals(base + 1, promptRevisionRepository.findLatestForUpdate(PromptType.CARD)?.version)
     }
+
+    private fun latestVersion(promptType: PromptType): Int = promptRevisionRepository.findLatestForUpdate(promptType)?.version ?: 0
 }

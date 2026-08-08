@@ -22,7 +22,8 @@ class PromptRevisionServiceTest {
     fun `저장하면 현재값을 갱신하고 다음 버전 리비전을 남긴다`() {
         every { llmSettingsService.currentPrompt(PromptType.COMMENT) } returns "이전 프롬프트"
         every { llmSettingsService.updatePrompt(PromptType.COMMENT, "새 프롬프트") } returns Unit
-        every { promptRevisionRepository.findMaxVersion(PromptType.COMMENT) } returns 3
+        every { promptRevisionRepository.findLatestForUpdate(PromptType.COMMENT) } returns
+            PromptRevision(PromptType.COMMENT, 3, "이전 프롬프트", null)
         val saved = slot<PromptRevision>()
         every { promptRevisionRepository.save(capture(saved)) } answers { firstArg() }
 
@@ -39,7 +40,7 @@ class PromptRevisionServiceTest {
     fun `리비전이 하나도 없으면 버전 1로 기록한다`() {
         every { llmSettingsService.currentPrompt(PromptType.CARD) } returns "이전"
         every { llmSettingsService.updatePrompt(PromptType.CARD, "새 값") } returns Unit
-        every { promptRevisionRepository.findMaxVersion(PromptType.CARD) } returns null
+        every { promptRevisionRepository.findLatestForUpdate(PromptType.CARD) } returns null
         val saved = slot<PromptRevision>()
         every { promptRevisionRepository.save(capture(saved)) } answers { firstArg() }
 
@@ -64,7 +65,8 @@ class PromptRevisionServiceTest {
         every { promptRevisionRepository.findById(10L) } returns Optional.of(target)
         every { llmSettingsService.currentPrompt(PromptType.COMMENT) } returns "현재 프롬프트"
         every { llmSettingsService.updatePrompt(PromptType.COMMENT, "v2 프롬프트") } returns Unit
-        every { promptRevisionRepository.findMaxVersion(PromptType.COMMENT) } returns 5
+        every { promptRevisionRepository.findLatestForUpdate(PromptType.COMMENT) } returns
+            PromptRevision(PromptType.COMMENT, 5, "현재 프롬프트", null)
         val saved = slot<PromptRevision>()
         every { promptRevisionRepository.save(capture(saved)) } answers { firstArg() }
 
