@@ -58,6 +58,9 @@ enum class ErrorCode(
     ADMIN_ACCOUNT_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 등록된 관리자입니다."),
     ADMIN_ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "관리자를 찾을 수 없습니다."),
     CANNOT_REMOVE_SELF(HttpStatus.CONFLICT, "자기 자신은 관리자에서 삭제할 수 없습니다."),
+
+    // 프롬프트 리비전
+    PROMPT_REVISION_NOT_FOUND(HttpStatus.NOT_FOUND, "프롬프트 리비전을 찾을 수 없습니다."),
     ;
 
     val code: String get() = name
