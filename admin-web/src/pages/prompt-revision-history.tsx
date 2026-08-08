@@ -39,6 +39,7 @@ function RevisionDetailPanel({
   onLoadToEditor,
   onRestore,
   restoring,
+  restoreFailed,
   onClose,
 }: {
   revision: PromptRevision
@@ -46,14 +47,27 @@ function RevisionDetailPanel({
   onLoadToEditor: (content: string) => void
   onRestore: (revisionId: number) => void
   restoring: boolean
+  restoreFailed: boolean
   onClose: () => void
 }) {
-  const { data, isLoading } = useCustom<PromptRevisionDetail>({
+  const { data, isLoading, isError, refetch } = useCustom<PromptRevisionDetail>({
     url: `/api/admin/llm-settings/prompt/revisions/${revision.id}`,
     method: 'get',
   })
   const detail = data?.data
   const isCurrentContent = detail?.systemPrompt === currentPrompt
+
+  if (isError && !detail) {
+    return (
+      <div className="flex items-center gap-3 border-t bg-muted/20 p-4">
+        <p className="text-sm text-muted-foreground">리비전 내용을 불러오지 못했습니다.</p>
+        <Button variant="outline" size="sm" onClick={() => refetch()}>
+          <RotateCcw className="size-4" />
+          다시 시도
+        </Button>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-3 border-t bg-muted/20 p-4">
@@ -70,6 +84,7 @@ function RevisionDetailPanel({
                 ? '현재 적용 중인 내용과 같아 복원할 것이 없습니다.'
                 : '에디터로 불러오면 저장 전에 검토·수정할 수 있고, 복원은 즉시 현재 프롬프트로 반영됩니다.'}
             </p>
+            {restoreFailed && <span className="text-sm text-destructive">복원에 실패했습니다</span>}
             <Button variant="outline" size="sm" onClick={onClose}>
               <X className="size-4" />
               닫기
@@ -110,30 +125,33 @@ export function PromptRevisionHistory({ type, currentPrompt, onLoadToEditor, onR
   const [page, setPage] = useState(0)
   const [expandedId, setExpandedId] = useState<number | null>(null)
 
-  const { data, isLoading, refetch } = useCustom<PromptRevisionPage>({
+  const { data, isLoading } = useCustom<PromptRevisionPage>({
     url: `/api/admin/llm-settings/prompt/revisions?promptType=${type}&page=${page}&size=${PAGE_SIZE}`,
     method: 'get',
     queryOptions: { queryKey: ['prompt-revisions', type, page, currentPrompt] },
   })
   const { mutate: restore, isLoading: restoring } = useCustomMutation()
+  const [restoreFailed, setRestoreFailed] = useState(false)
 
   const revisions = data?.data?.content ?? []
   const totalPages = data?.data?.totalPages ?? 0
   const total = data?.data?.totalElements ?? 0
 
   const onRestore = (revisionId: number) => {
+    setRestoreFailed(false)
     restore(
       { url: `/api/admin/llm-settings/prompt/revisions/${revisionId}/restore`, method: 'post', values: {} },
       {
         onSuccess: (result) => {
           const updated = (result.data as { systemPrompt?: string } | undefined)?.systemPrompt
           if (updated !== undefined) {
+            // currentPrompt prop이 바뀌면 쿼리 키가 갱신돼 목록도 다시 불러온다(별도 refetch 불필요).
             onRestored(updated)
           }
           setExpandedId(null)
           setPage(0)
-          refetch()
         },
+        onError: () => setRestoreFailed(true),
       },
     )
   }
@@ -187,7 +205,7 @@ export function PromptRevisionHistory({ type, currentPrompt, onLoadToEditor, onR
                         <Badge variant="outline" className="whitespace-nowrap tabular-nums">
                           v{revision.version}
                         </Badge>
-                        {revision.restoredFromVersion !== null && (
+                        {revision.restoredFromVersion != null && (
                           <Badge variant="secondary" className="gap-1 whitespace-nowrap text-[10px] font-normal text-muted-foreground">
                             <RotateCcw className="size-3" />
                             v{revision.restoredFromVersion}에서 복원
@@ -221,6 +239,7 @@ export function PromptRevisionHistory({ type, currentPrompt, onLoadToEditor, onR
                           onLoadToEditor={onLoadToEditor}
                           onRestore={onRestore}
                           restoring={restoring}
+                          restoreFailed={restoreFailed}
                           onClose={() => setExpandedId(null)}
                         />
                       </TableCell>

@@ -276,6 +276,7 @@ function PromptSection() {
 
       {ready && (
         <PromptRevisionHistory
+          key={type}
           type={type}
           currentPrompt={savedPrompt}
           onLoadToEditor={(content) => setPrompt(content)}
