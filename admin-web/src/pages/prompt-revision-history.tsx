@@ -160,7 +160,7 @@ export function PromptRevisionHistory({ type, refreshKey, onLoadToEditor, onRest
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="w-24">버전</TableHead>
+                <TableHead className="w-36">버전</TableHead>
                 <TableHead className="w-56">저장자</TableHead>
                 <TableHead className="w-44">저장 시각</TableHead>
                 <TableHead>내용</TableHead>
@@ -177,12 +177,12 @@ export function PromptRevisionHistory({ type, refreshKey, onLoadToEditor, onRest
                     onClick={() => setExpandedId(expandedId === revision.id ? null : revision.id)}
                   >
                     <TableCell>
-                      <div className="flex items-center gap-1.5">
-                        <Badge variant="outline" className="tabular-nums">
+                      <div className="flex flex-nowrap items-center gap-1.5">
+                        <Badge variant="outline" className="whitespace-nowrap tabular-nums">
                           v{revision.version}
                         </Badge>
                         {revision.restoredFromVersion !== null && (
-                          <Badge variant="secondary" className="text-[10px]">
+                          <Badge variant="secondary" className="whitespace-nowrap text-[10px]">
                             v{revision.restoredFromVersion} 복원
                           </Badge>
                         )}
