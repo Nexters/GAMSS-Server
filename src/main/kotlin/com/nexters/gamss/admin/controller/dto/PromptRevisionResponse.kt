@@ -20,11 +20,12 @@ data class PromptRevisionResponse(
     val createdAt: Instant,
     @field:Schema(description = "프롬프트 전체 길이(자)", example = "1840")
     val length: Int,
-    @field:Schema(description = "본문 미리보기(개행 제거, 앞 100자)")
+    @field:Schema(description = "본문 미리보기(공백 정규화, 앞 100자)")
     val preview: String,
 ) {
     companion object {
         private const val PREVIEW_LENGTH = 100
+        private val WHITESPACE = Regex("\\s+")
 
         fun from(revision: PromptRevision): PromptRevisionResponse =
             PromptRevisionResponse(
@@ -35,7 +36,11 @@ data class PromptRevisionResponse(
                 restoredFromVersion = revision.restoredFromVersion,
                 createdAt = revision.createdAt,
                 length = revision.systemPrompt.length,
-                preview = revision.systemPrompt.replace('\n', ' ').take(PREVIEW_LENGTH),
+                preview =
+                    revision.systemPrompt
+                        .replace(WHITESPACE, " ")
+                        .trim()
+                        .take(PREVIEW_LENGTH),
             )
     }
 }
