@@ -24,8 +24,8 @@ const PAGE_SIZE = 5
 
 interface Props {
   type: string
-  /** 값이 바뀌면 목록을 다시 불러온다(저장·복원 직후 최신 리비전 반영). */
-  refreshKey: string
+  /** 현재 적용(저장)된 프롬프트. 같은 내용의 리비전은 복원 대상이 아니고, 값이 바뀌면 목록을 다시 불러온다. */
+  currentPrompt: string
   /** 리비전 전문을 에디터에 올려 저장 전 검토·수정할 수 있게 한다. */
   onLoadToEditor: (content: string) => void
   /** 복원 성공 시 서버가 돌려준 새 현재 프롬프트. */
@@ -35,12 +35,14 @@ interface Props {
 /** 리비전 한 건의 전문 조회 + 검토·복원 액션. 펼쳤을 때만 마운트되어 전문을 불러온다. */
 function RevisionDetailPanel({
   revision,
+  currentPrompt,
   onLoadToEditor,
   onRestore,
   restoring,
   onClose,
 }: {
   revision: PromptRevision
+  currentPrompt: string
   onLoadToEditor: (content: string) => void
   onRestore: (revisionId: number) => void
   restoring: boolean
@@ -51,6 +53,7 @@ function RevisionDetailPanel({
     method: 'get',
   })
   const detail = data?.data
+  const isCurrentContent = detail?.systemPrompt === currentPrompt
 
   return (
     <div className="space-y-3 border-t bg-muted/20 p-4">
@@ -63,7 +66,9 @@ function RevisionDetailPanel({
           </pre>
           <div className="flex flex-wrap items-center gap-2">
             <p className="mr-auto text-xs text-muted-foreground">
-              에디터로 불러오면 저장 전에 검토·수정할 수 있고, 복원은 즉시 현재 프롬프트로 반영됩니다.
+              {isCurrentContent
+                ? '현재 적용 중인 내용과 같아 복원할 것이 없습니다.'
+                : '에디터로 불러오면 저장 전에 검토·수정할 수 있고, 복원은 즉시 현재 프롬프트로 반영됩니다.'}
             </p>
             <Button variant="outline" size="sm" onClick={onClose}>
               <X className="size-4" />
@@ -75,7 +80,7 @@ function RevisionDetailPanel({
             </Button>
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button size="sm" disabled={restoring}>
+                <Button size="sm" disabled={restoring || isCurrentContent}>
                   <RotateCcw className="size-4" />이 버전으로 복원
                 </Button>
               </AlertDialogTrigger>
@@ -101,14 +106,14 @@ function RevisionDetailPanel({
   )
 }
 
-export function PromptRevisionHistory({ type, refreshKey, onLoadToEditor, onRestored }: Props) {
+export function PromptRevisionHistory({ type, currentPrompt, onLoadToEditor, onRestored }: Props) {
   const [page, setPage] = useState(0)
   const [expandedId, setExpandedId] = useState<number | null>(null)
 
   const { data, isLoading, refetch } = useCustom<PromptRevisionPage>({
     url: `/api/admin/llm-settings/prompt/revisions?promptType=${type}&page=${page}&size=${PAGE_SIZE}`,
     method: 'get',
-    queryOptions: { queryKey: ['prompt-revisions', type, page, refreshKey] },
+    queryOptions: { queryKey: ['prompt-revisions', type, page, currentPrompt] },
   })
   const { mutate: restore, isLoading: restoring } = useCustomMutation()
 
@@ -187,6 +192,9 @@ export function PromptRevisionHistory({ type, refreshKey, onLoadToEditor, onRest
                             v{revision.restoredFromVersion} 복원
                           </Badge>
                         )}
+                        {revision.version === total && (
+                          <Badge className="whitespace-nowrap text-[10px]">현재 적용 중</Badge>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell className="text-sm">
@@ -208,6 +216,7 @@ export function PromptRevisionHistory({ type, refreshKey, onLoadToEditor, onRest
                       <TableCell colSpan={6} className="p-0">
                         <RevisionDetailPanel
                           revision={revision}
+                          currentPrompt={currentPrompt}
                           onLoadToEditor={onLoadToEditor}
                           onRestore={onRestore}
                           restoring={restoring}
