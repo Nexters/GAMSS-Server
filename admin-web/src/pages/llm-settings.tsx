@@ -10,13 +10,14 @@ import { PageHeader } from '@/components/page-header'
 import { PromptRevisionHistory } from '@/pages/prompt-revision-history'
 import { cn } from '@/lib/utils'
 
-type PromptType = 'COMMON' | 'COMMENT' | 'REPLY' | 'CARD'
+type PromptType = 'COMMON' | 'COMMENT' | 'REPLY' | 'CARD' | 'EONGTTUNG_TOPIC'
 
 const TABS: { value: PromptType; label: string; hint: string }[] = [
   { value: 'COMMON', label: '공통', hint: '세 타입이 공유하는 톤·경계·말맛지침·보이스카드. 여기를 바꾸면 댓글·답글·카드에 모두 반영됩니다.' },
   { value: 'COMMENT', label: '댓글', hint: '여러 감정 캐릭터가 일기에 코멘트를 달고 서로 티키타카하는 생성.' },
   { value: 'REPLY', label: '답글', hint: '유저가 캐릭터 댓글에 답글을 달면 그 캐릭터 1명이 재응답하는 생성.' },
   { value: 'CARD', label: '카드', hint: '대화 종료 시 대표 캐릭터가 유저를 대신해 남기는 한 줄 카드 대사.' },
+  { value: 'EONGTTUNG_TOPIC', label: '엉뚱이 소재', hint: '엉뚱이가 꺼낼 소재 목록. 한 줄에 하나씩 적으면 생성 시 서버가 무작위로 한 줄을 고릅니다.' },
 ]
 
 function SavedFlash({ show }: { show: boolean }) {
@@ -192,14 +193,16 @@ function PromptSection() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2 rounded-lg border bg-muted/40 p-2.5 text-xs text-muted-foreground">
-        <Layers className="size-4 shrink-0 text-muted-foreground/70" />
-        <span>
-          실제 시스템 프롬프트는 <span className="font-medium text-foreground">공통</span> +{' '}
-          <span className="font-medium text-foreground">타입(댓글·답글·카드)</span> 으로 조립됩니다. 캐릭터 성격 등
-          공통 부분은 <span className="font-medium text-foreground">공통</span> 탭에서 한 번에 바꾸세요.
-        </span>
-      </div>
+      {type !== 'EONGTTUNG_TOPIC' && (
+        <div className="flex items-center gap-2 rounded-lg border bg-muted/40 p-2.5 text-xs text-muted-foreground">
+          <Layers className="size-4 shrink-0 text-muted-foreground/70" />
+          <span>
+            실제 시스템 프롬프트는 <span className="font-medium text-foreground">공통</span> +{' '}
+            <span className="font-medium text-foreground">타입(댓글·답글·카드)</span> 으로 조립됩니다. 캐릭터 성격 등
+            공통 부분은 <span className="font-medium text-foreground">공통</span> 탭에서 한 번에 바꾸세요.
+          </span>
+        </div>
+      )}
 
       <div className="inline-flex items-center rounded-lg border bg-muted/40 p-1">
         {TABS.map((tab) => (
@@ -237,7 +240,7 @@ function PromptSection() {
         <Card className="space-y-3 p-6">
           <div className="flex items-baseline justify-between">
             <label htmlFor="prompt" className="text-sm font-medium">
-              {type === 'COMMON' ? '공통 프롬프트' : '타입 프롬프트'}
+              {type === 'COMMON' ? '공통 프롬프트' : type === 'EONGTTUNG_TOPIC' ? '소재 목록 (한 줄에 하나)' : '타입 프롬프트'}
             </label>
             <span className="text-xs tabular-nums text-muted-foreground">{prompt.length.toLocaleString()}자</span>
           </div>
@@ -252,7 +255,9 @@ function PromptSection() {
             <p className="mr-auto text-xs text-muted-foreground">
               {type === 'COMMON'
                 ? '캐릭터 보이스카드·말맛지침 등 세 타입이 공유하는 부분입니다. 신중히 수정하세요.'
-                : '이 타입의 역할·규칙·출력형식입니다. 생성 시 공통 프롬프트 뒤에 붙습니다.'}
+                : type === 'EONGTTUNG_TOPIC'
+                  ? '빈 줄은 무시됩니다. 최소 한 줄은 있어야 엉뚱이가 등장할 수 있습니다.'
+                  : '이 타입의 역할·규칙·출력형식입니다. 생성 시 공통 프롬프트 뒤에 붙습니다.'}
             </p>
             <SavedFlash show={flash} />
             <Button size="sm" onClick={onSave} disabled={!dirty || saving || !prompt.trim()}>
