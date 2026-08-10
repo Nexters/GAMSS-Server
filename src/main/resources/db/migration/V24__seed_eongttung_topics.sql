@@ -1,7 +1,9 @@
 -- 엉뚱이 소재 목록을 코드에서 DB로 이관한다(한 줄에 소재 하나). 프롬프트와 같은 저장소를 쓰므로
 -- 백오피스 편집·버전 이력·복원이 그대로 적용된다. 이미 값이 있으면 건드리지 않는다.
+-- model은 COMMON 행만 읽히는 자리표시자라 상수 대신 그 시점의 COMMON 값을 참조한다(V23 주석 참고).
+-- COMMON 행은 V23이 보장하므로 서브쿼리는 NULL이 될 수 없다.
 INSERT INTO llm_settings (prompt_type, model, system_prompt, updated_at)
-SELECT 'EONGTTUNG_TOPIC', 'gemini-3.1-flash-lite', '오늘따라 유독 피곤하다
+SELECT 'EONGTTUNG_TOPIC', (SELECT s2.model FROM (SELECT model FROM llm_settings WHERE prompt_type = 'COMMON') s2), '오늘따라 유독 피곤하다
 배고프다
 커피 마실지 말지 고민된다
 옷 사고 싶다
