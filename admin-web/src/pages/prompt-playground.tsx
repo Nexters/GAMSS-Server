@@ -127,10 +127,10 @@ function CharacterChip({ value }: { value: string }) {
   )
 }
 
-function FeedBubble({ comment, indent }: { comment: PreviewComment & { replyTo?: string }; indent: boolean }) {
+function FeedBubble({ comment }: { comment: PreviewComment & { replyTo?: string } }) {
   const character = characterOf(comment.characterId)
   return (
-    <div className={cn('flex gap-2.5', indent && 'ml-10')}>
+    <div className="flex gap-2.5">
       <div className="flex size-8 shrink-0 items-center justify-center rounded-full border bg-background text-base">
         {character?.emoji ?? '🙂'}
       </div>
@@ -413,10 +413,10 @@ export function PromptPlaygroundPage() {
                 {result.comments ? (
                   <div className="space-y-3.5">
                     {result.comments.map((comment, i) => (
-                      <FeedBubble key={`c-${i}`} comment={comment} indent={false} />
+                      <FeedBubble key={`c-${i}`} comment={comment} />
                     ))}
                     {result.tikitaka?.map((t, i) => (
-                      <FeedBubble key={`t-${i}`} comment={t} indent />
+                      <FeedBubble key={`t-${i}`} comment={t} />
                     ))}
                   </div>
                 ) : (
