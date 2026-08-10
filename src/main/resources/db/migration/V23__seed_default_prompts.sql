@@ -1,6 +1,11 @@
 -- 코드에 있던 기본 프롬프트를 DB로 이관한다. 이후 프롬프트의 단일 원본은 DB(백오피스)이며
 -- 코드 폴백은 제거된다. 이미 값이 있는 타입(운영 DB에서 편집된 프롬프트)은 건드리지 않는다.
+--
 -- model 컬럼은 COMMON 행에서만 의미가 있고(앱 전체 모델), 그 외 타입에선 자리표시자다.
+-- 자리표시자에 상수를 넣으면 이후 모델 변경(COMMON만 갱신) 시 어긋난 값이 남으므로,
+-- 비-COMMON 행은 그 시점의 COMMON model을 참조해 넣는다.
+-- ⚠️ 따라서 COMMON INSERT가 반드시 맨 먼저여야 한다 — 순서가 바뀌면 서브쿼리가 NULL이 되어
+-- NOT NULL 제약으로 마이그레이션이 실패한다.
 
 INSERT INTO llm_settings (prompt_type, model, system_prompt, updated_at)
 SELECT 'COMMON', 'gemini-3.1-flash-lite', '제품 톤: 유머러스·자기인식·살짝 삐딱. 무조건 위로하는 착한 봇이 아니다. 놀리되 마지막엔 은근히 챙긴다.
@@ -84,7 +89,7 @@ FROM DUAL
 WHERE NOT EXISTS (SELECT 1 FROM llm_settings s WHERE s.prompt_type = 'COMMON');
 
 INSERT INTO llm_settings (prompt_type, model, system_prompt, updated_at)
-SELECT 'COMMENT', 'gemini-3.1-flash-lite', '[이번 타입: 댓글 생성]
+SELECT 'COMMENT', (SELECT s2.model FROM (SELECT model FROM llm_settings WHERE prompt_type = 'COMMON') s2), '[이번 타입: 댓글 생성]
 너는 감정일기 앱 ''걱정인형의 방''의 캐릭터 생성기다.
 유저가 하루 한 줄 일기를 쓰면, 서로 개성이 뚜렷한 캐릭터들이 코멘트를 달고 서로 대댓글(티키타카)로 티격태격한다.
 - 유저는 ''너''라고 부르거나 상황에 맞는 호칭을 붙인다(캐릭터 이름은 금지).
@@ -106,7 +111,7 @@ FROM DUAL
 WHERE NOT EXISTS (SELECT 1 FROM llm_settings s WHERE s.prompt_type = 'COMMENT');
 
 INSERT INTO llm_settings (prompt_type, model, system_prompt, updated_at)
-SELECT 'REPLY', 'gemini-3.1-flash-lite', '[이번 타입: 답글 생성]
+SELECT 'REPLY', (SELECT s2.model FROM (SELECT model FROM llm_settings WHERE prompt_type = 'COMMON') s2), '[이번 타입: 답글 생성]
 너는 감정일기 앱 ''걱정인형의 방''의 캐릭터다.
 유저가 네(캐릭터)가 단 댓글에 답글을 달았고, 너는 그 답글에 대해 다시 한 번 반응한다.
 - 유저는 ''너''라고 부르거나 상황에 맞는 호칭을 붙인다(캐릭터 이름은 금지).
@@ -119,7 +124,7 @@ FROM DUAL
 WHERE NOT EXISTS (SELECT 1 FROM llm_settings s WHERE s.prompt_type = 'REPLY');
 
 INSERT INTO llm_settings (prompt_type, model, system_prompt, updated_at)
-SELECT 'CARD', 'gemini-3.1-flash-lite', '[이번 타입: 카드 대사 생성]
+SELECT 'CARD', (SELECT s2.model FROM (SELECT model FROM llm_settings WHERE prompt_type = 'COMMON') s2), '[이번 타입: 카드 대사 생성]
 너는 감정일기 앱 ''걱정인형의 방''의 ''카드 대사'' 생성기다.
 유저가 하루치 대화를 마치면, 그 대화를 대표하는 감정 캐릭터 1명이 카드에 한 줄을 남긴다 — 이게 카드 대사다.
 핵심 컨셉(가장 중요): 카드 대사는 캐릭터가 유저를 ''대신해서'' 불특정 다수(주변 사람들, 세상)에게 유저의 상태를 알리는 ''공개 한 마디''다.

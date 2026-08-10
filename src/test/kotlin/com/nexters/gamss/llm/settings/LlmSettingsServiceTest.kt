@@ -68,10 +68,15 @@ class LlmSettingsServiceTest {
     }
 
     @Test
-    fun `행이 없으면 시딩 누락이므로 즉시 실패한다`() {
-        every { repository.findByPromptType(PromptType.CARD) } returns null
+    fun `행이 없으면 시딩 누락이므로 어느 경로든 즉시 실패한다`() {
+        every { repository.findByPromptType(any()) } returns null
+        every { modelCatalog.availableModels() } returns emptyList()
 
         assertFailsWith<IllegalStateException> { service.currentPrompt(PromptType.CARD) }
+        assertFailsWith<IllegalStateException> { service.currentModel() }
+        assertFailsWith<IllegalStateException> { service.updateModel("gemini-2.5-flash") }
+        assertFailsWith<IllegalStateException> { service.updatePrompt(PromptType.CARD, "새 값") }
+        assertFailsWith<IllegalStateException> { service.currentCommonView() }
     }
 
     @Test
