@@ -13,6 +13,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class PromptRevisionServiceTest {
     private val promptRevisionRepository = mockk<PromptRevisionRepository>()
@@ -102,6 +103,16 @@ class PromptRevisionServiceTest {
     }
 
     @Test
+    fun `현재값에 공백이 섞여 있어도 같은 내용이면 기록하지 않는다`() {
+        every { llmSettingsService.currentPromptForUpdate(PromptType.COMMENT) } returns "  같은 프롬프트  "
+
+        service.savePrompt(PromptType.COMMENT, "같은 프롬프트", "admin@gamss.kr")
+
+        verify(exactly = 0) { llmSettingsService.updatePrompt(any(), any()) }
+        verify(exactly = 0) { promptRevisionRepository.saveAndFlush(any()) }
+    }
+
+    @Test
     fun `저장 전에 앞뒤 공백을 다듬어 기록한다`() {
         every { llmSettingsService.currentPromptForUpdate(PromptType.COMMENT) } returns "이전"
         every { llmSettingsService.updatePrompt(PromptType.COMMENT, "새 프롬프트") } returns Unit
@@ -132,6 +143,9 @@ class PromptRevisionServiceTest {
         every { promptRevisionRepository.findMaxVersion(PromptType.CARD) } returns null
         every { promptRevisionRepository.saveAndFlush(any<PromptRevision>()) } throws DataIntegrityViolationException("duplicate")
 
-        assertFailsWith<PromptRevisionConflictException> { service.savePrompt(PromptType.CARD, "새 값", "admin@gamss.kr") }
+        val exception = assertFailsWith<PromptRevisionConflictException> { service.savePrompt(PromptType.CARD, "새 값", "admin@gamss.kr") }
+
+        // 재시도 소진 후 원인(유니크 위반인지 데드락인지)을 로그로 구분할 수 있어야 한다.
+        assertTrue(exception.cause is DataIntegrityViolationException)
     }
 }

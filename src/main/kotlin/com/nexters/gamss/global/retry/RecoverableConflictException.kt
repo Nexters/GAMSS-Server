@@ -8,4 +8,5 @@ package com.nexters.gamss.global.retry
  */
 abstract class RecoverableConflictException(
     message: String,
-) : RuntimeException(message)
+    cause: Throwable? = null,
+) : RuntimeException(message, cause)

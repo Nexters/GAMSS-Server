@@ -10,4 +10,5 @@ import com.nexters.gamss.llm.prompt.PromptType
  */
 class PromptRevisionConflictException(
     promptType: PromptType,
-) : RecoverableConflictException("프롬프트 리비전 채번 경합: promptType=$promptType")
+    cause: Throwable,
+) : RecoverableConflictException("프롬프트 리비전 채번 경합: promptType=$promptType", cause)

@@ -78,10 +78,11 @@ class PromptRevisionService(
     /**
      * 설정 행을 잠가 같은 타입의 채번을 직렬화한 뒤 현재값을 읽는다.
      * 행이 없으면(최초 기록) 잠금 없이 코드 기본값과 비교한다 — 이 좁은 창구의 경합은
-     * 유니크 제약 + 재시도가 막는다.
+     * 유니크 제약 + 재시도가 막는다. 과거에 공백이 섞여 저장된 값과도 같은 기준으로 비교되게
+     * 현재값 역시 다듬어 돌려준다.
      */
     private fun lockedCurrentPrompt(promptType: PromptType): String =
-        llmSettingsService.currentPromptForUpdate(promptType) ?: llmSettingsService.currentPrompt(promptType)
+        (llmSettingsService.currentPromptForUpdate(promptType) ?: llmSettingsService.currentPrompt(promptType)).trim()
 
     // 현재값 갱신과 리비전 기록을 함께 커밋한다. 즉시 flush해 유니크 위반이 이 안에서 잡히게 한다
     // (커밋 시점으로 미루면 번역할 기회가 없다). 최초 기록 경합은 유니크 위반뿐 아니라
@@ -97,9 +98,9 @@ class PromptRevisionService(
             val nextVersion = (promptRevisionRepository.findMaxVersion(promptType) ?: 0) + 1
             promptRevisionRepository.saveAndFlush(PromptRevision(promptType, nextVersion, systemPrompt, savedBy, restoredFromVersion))
         } catch (e: DataIntegrityViolationException) {
-            throw PromptRevisionConflictException(promptType)
+            throw PromptRevisionConflictException(promptType, e)
         } catch (e: ConcurrencyFailureException) {
-            throw PromptRevisionConflictException(promptType)
+            throw PromptRevisionConflictException(promptType, e)
         }
     }
 }
