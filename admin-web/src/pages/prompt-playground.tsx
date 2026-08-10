@@ -14,6 +14,7 @@ import {
   Play,
   Sigma,
 } from 'lucide-react'
+import type { PreviewComment, PreviewResult } from '@/types/promptPreview'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -36,36 +37,6 @@ const CHARACTERS: { value: Emotion; label: string; emoji: string }[] = [
 ]
 
 const characterOf = (value: string) => CHARACTERS.find((c) => c.value === value)
-
-interface PreviewComment {
-  characterId: string
-  text: string
-}
-
-interface PreviewTikitaka {
-  characterId: string
-  replyTo: string
-  text: string
-}
-
-interface PreviewResult {
-  model: string
-  systemPrompt: string
-  userContent: string
-  characters: string[]
-  tikitakaCount: number
-  eongttungTopic: string | null
-  comments: PreviewComment[] | null
-  tikitaka: PreviewTikitaka[] | null
-  validationError: string | null
-  generationError: string | null
-  usedTokens: number
-  cachedTokens: number
-  inputTokens: number
-  outputTokens: number
-  estimatedCostUsd: number
-  latencyMs: number
-}
 
 /** 접이식 프롬프트 오버라이드 에디터. 비워두면 저장된 현재값으로 생성된다. */
 function PromptOverrideEditor({
