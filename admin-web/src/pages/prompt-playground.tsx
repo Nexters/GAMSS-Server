@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useCustom, useCustomMutation } from '@refinedev/core'
 import {
   AlertTriangle,
@@ -265,6 +265,13 @@ export function PromptPlaygroundPage() {
 
   const { mutate: run, isLoading: running } = useCustomMutation()
 
+  // 말풍선 id는 단조 증가 카운터로 발급한다 - 세션 길이 기반 오프셋은 길어지면 충돌한다.
+  const idRef = useRef(0)
+  const nextId = () => {
+    idRef.current += 1
+    return idRef.current
+  }
+
   const toggleCharacter = (value: Emotion) => {
     setSelected((prev) => {
       const next = prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
@@ -277,10 +284,10 @@ export function PromptPlaygroundPage() {
 
   const canStart = diary.trim().length > 0 && !running && selected.length > 0
 
-  const feedToItems = (result: PreviewResult, startId: number): SessionItem[] => [
-    ...(result.comments ?? []).map((c, i) => ({ id: startId + i, kind: 'character' as const, text: c.text, characterId: c.characterId })),
-    ...(result.tikitaka ?? []).map((t, i) => ({
-      id: startId + 100 + i,
+  const feedToItems = (result: PreviewResult): SessionItem[] => [
+    ...(result.comments ?? []).map((c) => ({ id: nextId(), kind: 'character' as const, text: c.text, characterId: c.characterId })),
+    ...(result.tikitaka ?? []).map((t) => ({
+      id: nextId(),
       kind: 'character' as const,
       text: t.text,
       characterId: t.characterId,
@@ -327,7 +334,7 @@ export function PromptPlaygroundPage() {
         onSuccess: (response) => {
           const result = response.data as unknown as PreviewResult
           setFirstDiary(diary)
-          setSession([{ id: 0, kind: 'user', text: diary }, ...feedToItems(result, 1)])
+          setSession([{ id: nextId(), kind: 'user', text: diary }, ...feedToItems(result)])
           setSessionCost(result.estimatedCostUsd)
           setLastRun({
             meta: metaOf(result),
@@ -368,13 +375,13 @@ export function PromptPlaygroundPage() {
         {
           onSuccess: (response) => {
             const result = response.data as unknown as ReplyPreviewResult
-            setSession((prev) => [
-              ...prev,
-              { id: prev.length + 200, kind: 'user', text, replyTo: replyTarget.characterId },
+            const newItems: SessionItem[] = [
+              { id: nextId(), kind: 'user', text, replyTo: replyTarget.characterId },
               ...(result.replyText !== null
-                ? [{ id: prev.length + 201, kind: 'character' as const, text: result.replyText, characterId: result.character }]
+                ? [{ id: nextId(), kind: 'character' as const, text: result.replyText, characterId: result.character }]
                 : []),
-            ])
+            ]
+            setSession((prev) => [...prev, ...newItems])
             setSessionCost((cost) => cost + result.estimatedCostUsd)
             setLastRun({
               meta: metaOf(result),
@@ -408,7 +415,8 @@ export function PromptPlaygroundPage() {
       {
         onSuccess: (response) => {
           const result = response.data as unknown as PreviewResult
-          setSession((prev) => [...prev, { id: prev.length + 300, kind: 'user', text }, ...feedToItems(result, prev.length + 301)])
+          const newItems: SessionItem[] = [{ id: nextId(), kind: 'user', text }, ...feedToItems(result)]
+          setSession((prev) => [...prev, ...newItems])
           setSessionCost((cost) => cost + result.estimatedCostUsd)
           setLastRun({
             meta: metaOf(result),
