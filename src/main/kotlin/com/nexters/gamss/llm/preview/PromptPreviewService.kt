@@ -92,8 +92,8 @@ class PromptPreviewService(
         }
     }
 
-    // 캐릭터를 고정하지 않으면 실제 생성처럼 서버가 무작위로 고른다. 고정하면 선택 규칙
-    // (중복 제거·티키타카는 2명 이상)을 검증해 계약 위반 프롬프트 시험이 무의미해지지 않게 한다.
+    // 캐릭터를 고정하지 않으면 실제 생성처럼 서버가 무작위로 고른다. 고정 선택의 불변식은
+    // [CharacterSelection.of]가 보장하고, 여기서는 잘못된 입력을 400으로 번역만 한다.
     private fun resolveSelection(
         characters: List<EmotionType>?,
         tikitakaCount: Int?,
@@ -101,18 +101,11 @@ class PromptPreviewService(
         if (characters == null) {
             return characterSelector.select()
         }
-        val distinct = characters.distinct()
-        if (distinct.isEmpty()) {
-            throw BusinessException(ErrorCode.INVALID_INPUT, "캐릭터를 1명 이상 지정해야 합니다.")
+        return try {
+            CharacterSelection.of(characters, tikitakaCount ?: 0)
+        } catch (e: IllegalArgumentException) {
+            throw BusinessException(ErrorCode.INVALID_INPUT, e.message ?: "잘못된 캐릭터 조건입니다.")
         }
-        val count = tikitakaCount ?: 0
-        if (count < 0) {
-            throw BusinessException(ErrorCode.INVALID_INPUT, "tikitakaCount는 0 이상이어야 합니다.")
-        }
-        if (count > 0 && distinct.size < 2) {
-            throw BusinessException(ErrorCode.INVALID_INPUT, "티키타카는 캐릭터가 2명 이상일 때만 지정할 수 있습니다.")
-        }
-        return CharacterSelection(distinct, count)
     }
 
     private fun validationError(

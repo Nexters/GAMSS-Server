@@ -50,4 +50,21 @@ class CharacterSelector(
 data class CharacterSelection(
     val characters: List<EmotionType>,
     val tikitakaCount: Int,
-)
+) {
+    companion object {
+        /**
+         * 고정 선택용 팩토리(플레이그라운드 등). 중복을 제거하고 선택 불변식 - 캐릭터 1명 이상,
+         * 티키타카는 캐릭터 2명 이상일 때만 - 을 [CharacterSelector]의 무작위 선택과 똑같이 보장한다.
+         */
+        fun of(
+            characters: List<EmotionType>,
+            tikitakaCount: Int,
+        ): CharacterSelection {
+            val distinct = characters.distinct()
+            require(distinct.isNotEmpty()) { "캐릭터를 1명 이상 지정해야 합니다." }
+            require(tikitakaCount >= 0) { "tikitakaCount는 0 이상이어야 합니다." }
+            require(tikitakaCount == 0 || distinct.size >= 2) { "티키타카는 캐릭터가 2명 이상일 때만 지정할 수 있습니다." }
+            return CharacterSelection(distinct, tikitakaCount)
+        }
+    }
+}
