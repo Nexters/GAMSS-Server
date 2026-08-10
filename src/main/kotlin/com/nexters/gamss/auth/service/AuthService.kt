@@ -1,5 +1,6 @@
 package com.nexters.gamss.auth.service
 
+import com.nexters.gamss.global.retry.ConflictRetry
 import org.springframework.stereotype.Service
 
 /**

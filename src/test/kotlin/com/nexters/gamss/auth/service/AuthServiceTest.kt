@@ -1,6 +1,7 @@
 package com.nexters.gamss.auth.service
 
 import com.nexters.gamss.auth.social.SocialProvider
+import com.nexters.gamss.global.retry.ConflictRetry
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
