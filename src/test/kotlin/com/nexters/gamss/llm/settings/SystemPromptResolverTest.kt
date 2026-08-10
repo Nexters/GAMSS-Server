@@ -5,6 +5,7 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class SystemPromptResolverTest {
     private val llmSettingsService = mockk<LlmSettingsService>()
@@ -48,5 +49,12 @@ class SystemPromptResolverTest {
         assertEquals("저장 공통\n\n저장 댓글", resolver.resolveForPreview(PromptType.COMMENT, null, null).systemPrompt)
         assertEquals("저장 공통\n\n댓글 시험", resolver.resolveForPreview(PromptType.COMMENT, null, "댓글 시험").systemPrompt)
         assertEquals("공통 시험\n\n저장 댓글", resolver.resolveForPreview(PromptType.COMMENT, "공통 시험", null).systemPrompt)
+    }
+
+    @Test
+    fun `미리보기 조립에 COMMON을 넘기면 실패한다 - 조립할 타입이 없다`() {
+        assertFailsWith<IllegalArgumentException> {
+            resolver.resolveForPreview(PromptType.COMMON, "공통 시험", null)
+        }
     }
 }
