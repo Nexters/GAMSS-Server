@@ -18,8 +18,10 @@ import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.context.WebApplicationContext
+import tools.jackson.databind.JsonNode
 import tools.jackson.databind.ObjectMapper
 
+// 시딩(V22 이후) 여부와 무관하게 동작하도록, 버전은 절대값 대신 현재 최신 버전에 상대적으로 검증한다.
 @SpringBootTest
 @Import(TestcontainersConfig::class)
 @Transactional
@@ -46,48 +48,34 @@ class AdminLlmSettingsControllerIntegrationTest {
 
     @Test
     fun `프롬프트를 저장하면 로그인한 관리자가 리비전 기록자로 남는다`() {
-        mockMvc
-            .put("/api/admin/llm-settings/prompt") {
-                header(HttpHeaders.AUTHORIZATION, adminBearer())
-                contentType = MediaType.APPLICATION_JSON
-                content = """{"promptType":"COMMENT","systemPrompt":"통합 테스트 프롬프트"}"""
-            }.andExpect {
-                status { isOk() }
-                jsonPath("$.data.systemPrompt") { value("통합 테스트 프롬프트") }
-            }
+        val base = latestVersion()
+
+        savePrompt("통합 테스트 프롬프트")
 
         mockMvc
             .get("/api/admin/llm-settings/prompt/revisions?promptType=COMMENT") {
                 header(HttpHeaders.AUTHORIZATION, adminBearer())
             }.andExpect {
                 status { isOk() }
-                jsonPath("$.data.content[0].version") { value(1) }
+                jsonPath("$.data.content[0].version") { value(base + 1) }
                 jsonPath("$.data.content[0].savedBy") { value("admin@gamss.kr") }
             }
     }
 
     @Test
     fun `리비전을 복원하면 현재 프롬프트가 그 버전 내용으로 바뀌고 출처가 남는다`() {
+        val base = latestVersion()
         savePrompt("첫 번째 프롬프트")
         savePrompt("두 번째 프롬프트")
 
-        val listJson =
-            mockMvc
-                .get("/api/admin/llm-settings/prompt/revisions?promptType=COMMENT") {
-                    header(HttpHeaders.AUTHORIZATION, adminBearer())
-                }.andReturn()
-                .response
-                .contentAsString
-        val v1Id =
-            objectMapper
-                .readTree(listJson)
-                .path("data")
+        val firstRevisionId =
+            revisions()
                 .path("content")[1]
                 .path("id")
                 .asLong()
 
         mockMvc
-            .post("/api/admin/llm-settings/prompt/revisions/$v1Id/restore") {
+            .post("/api/admin/llm-settings/prompt/revisions/$firstRevisionId/restore") {
                 header(HttpHeaders.AUTHORIZATION, adminBearer())
             }.andExpect {
                 status { isOk() }
@@ -98,8 +86,8 @@ class AdminLlmSettingsControllerIntegrationTest {
             .get("/api/admin/llm-settings/prompt/revisions?promptType=COMMENT") {
                 header(HttpHeaders.AUTHORIZATION, adminBearer())
             }.andExpect {
-                jsonPath("$.data.content[0].version") { value(3) }
-                jsonPath("$.data.content[0].restoredFromVersion") { value(1) }
+                jsonPath("$.data.content[0].version") { value(base + 3) }
+                jsonPath("$.data.content[0].restoredFromVersion") { value(base + 1) }
             }
     }
 
@@ -139,6 +127,25 @@ class AdminLlmSettingsControllerIntegrationTest {
                 contentType = MediaType.APPLICATION_JSON
                 this.content = """{"promptType":"COMMENT","systemPrompt":"$content"}"""
             }.andExpect { status { isOk() } }
+    }
+
+    private fun latestVersion(): Int {
+        val content = revisions().path("content")
+        if (content.isEmpty) {
+            return 0
+        }
+        return content[0].path("version").asInt()
+    }
+
+    private fun revisions(): JsonNode {
+        val json =
+            mockMvc
+                .get("/api/admin/llm-settings/prompt/revisions?promptType=COMMENT") {
+                    header(HttpHeaders.AUTHORIZATION, adminBearer())
+                }.andReturn()
+                .response
+                .contentAsString
+        return objectMapper.readTree(json).path("data")
     }
 
     private fun adminBearer(): String = "Bearer ${jwtIssuer.issueAdminToken("admin@gamss.kr")}"
