@@ -29,4 +29,16 @@ interface CommentGenerator {
         characterComment: String,
         userReply: String,
     ): ReplyGenerationOutput
+
+    /**
+     * 저장된 설정 대신 주어진 모델·시스템 프롬프트로 답글을 생성한다 - 플레이그라운드가 미저장
+     * 프롬프트를 시험하는 경로. 그 외 로직은 [generateReply]와 같아야 한다.
+     */
+    fun generateReply(
+        diaryContent: String,
+        characterId: String,
+        characterComment: String,
+        userReply: String,
+        settings: LlmSettingsView,
+    ): ReplyGenerationOutput
 }

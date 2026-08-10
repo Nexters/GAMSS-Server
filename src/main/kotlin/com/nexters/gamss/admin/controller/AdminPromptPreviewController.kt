@@ -2,9 +2,12 @@ package com.nexters.gamss.admin.controller
 
 import com.nexters.gamss.admin.controller.dto.PromptPreviewRequest
 import com.nexters.gamss.admin.controller.dto.PromptPreviewResponse
+import com.nexters.gamss.admin.controller.dto.PromptReplyPreviewRequest
+import com.nexters.gamss.admin.controller.dto.PromptReplyPreviewResponse
 import com.nexters.gamss.global.response.ApiResponse
 import com.nexters.gamss.llm.preview.PromptPreviewCommand
 import com.nexters.gamss.llm.preview.PromptPreviewService
+import com.nexters.gamss.llm.preview.ReplyPreviewCommand
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
@@ -49,5 +52,33 @@ class AdminPromptPreviewController(
                 ),
             )
         return ApiResponse.success(PromptPreviewResponse.from(result))
+    }
+
+    @Operation(
+        summary = "답장 미리보기 생성",
+        description =
+            "유저가 특정 캐릭터의 댓글에 답장했을 때 그 캐릭터의 재응답을 실제 답글 생성 경로로 시험합니다. " +
+                "아무것도 저장하지 않으며 실제 비용이 발생합니다.\n\n" +
+                "**실패 응답**\n\n" +
+                "| error.code | HTTP | 설명 |\n" +
+                "|---|---|---|\n" +
+                "| INVALID_INPUT | 400 | 필수값 누락·길이 초과 |",
+    )
+    @PostMapping("/reply")
+    fun previewReply(
+        @Valid @RequestBody request: PromptReplyPreviewRequest,
+    ): ApiResponse<PromptReplyPreviewResponse> {
+        val result =
+            promptPreviewService.previewReply(
+                ReplyPreviewCommand(
+                    commonPrompt = request.commonPrompt,
+                    replyPrompt = request.replyPrompt,
+                    diaryContent = request.diaryContent,
+                    character = checkNotNull(request.character),
+                    characterComment = request.characterComment,
+                    userReply = request.userReply,
+                ),
+            )
+        return ApiResponse.success(PromptReplyPreviewResponse.from(result))
     }
 }

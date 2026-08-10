@@ -26,13 +26,15 @@ class SystemPromptResolver(
      * 실제 생성과 **같은 조립 규칙**으로 시험하기 위해 여기(조립의 단일 지점)에 둔다.
      */
     fun resolveForPreview(
+        promptType: PromptType,
         commonPrompt: String?,
-        commentPrompt: String?,
+        typePrompt: String?,
     ): LlmSettingsView {
+        require(promptType != PromptType.COMMON) { "조립할 타입 프롬프트를 지정해야 합니다." }
         val base = llmSettingsService.currentCommonView()
         val common = commonPrompt ?: base.systemPrompt
-        val comment = commentPrompt ?: llmSettingsService.currentPrompt(PromptType.COMMENT)
-        return LlmSettingsView(base.model, assemble(common, comment))
+        val type = typePrompt ?: llmSettingsService.currentPrompt(promptType)
+        return LlmSettingsView(base.model, assemble(common, type))
     }
 
     private fun assemble(

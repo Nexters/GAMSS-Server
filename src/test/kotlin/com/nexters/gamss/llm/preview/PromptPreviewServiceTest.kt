@@ -8,11 +8,13 @@ import com.nexters.gamss.llm.config.ModelPricing
 import com.nexters.gamss.llm.error.CommentGenerationFailedException
 import com.nexters.gamss.llm.generation.CommentGenerationOutput
 import com.nexters.gamss.llm.generation.CommentGenerator
+import com.nexters.gamss.llm.generation.ReplyGenerationOutput
 import com.nexters.gamss.llm.parsing.CommentDraft
 import com.nexters.gamss.llm.parsing.CommentFeed
 import com.nexters.gamss.llm.parsing.CommentFeedValidator
 import com.nexters.gamss.llm.prompt.CommentPromptContext
 import com.nexters.gamss.llm.prompt.PromptProvider
+import com.nexters.gamss.llm.prompt.PromptType
 import com.nexters.gamss.llm.selection.EongttungTopicSelector
 import com.nexters.gamss.llm.settings.LlmSettingsView
 import com.nexters.gamss.llm.settings.SystemPromptResolver
@@ -50,7 +52,7 @@ class PromptPreviewServiceTest {
 
     @Test
     fun `캐릭터를 고정하면 그 조건으로 생성하고 결과에 메타데이터를 담는다`() {
-        every { systemPromptResolver.resolveForPreview("공통 시험", "댓글 시험") } returns settings
+        every { systemPromptResolver.resolveForPreview(PromptType.COMMENT, "공통 시험", "댓글 시험") } returns settings
         val context = slot<CommentPromptContext>()
         every { commentGenerator.generateComment(capture(context), settings) } returns
             CommentGenerationOutput(feed, usedTokens = 1_000_000, cachedTokens = 0, inputTokens = 1_000_000, outputTokens = 1_000_000)
@@ -80,7 +82,7 @@ class PromptPreviewServiceTest {
 
     @Test
     fun `엉뚱이가 등장하면 소재를 골라 결과에 담는다`() {
-        every { systemPromptResolver.resolveForPreview(null, null) } returns settings
+        every { systemPromptResolver.resolveForPreview(PromptType.COMMENT, null, null) } returns settings
         every { eongttungTopicSelector.select() } returns "배고프다"
         every { commentGenerator.generateComment(any(), settings) } returns CommentGenerationOutput(feed, 10, 0)
         every { commentFeedValidator.validate(any(), any(), any()) } returns Unit
@@ -93,7 +95,7 @@ class PromptPreviewServiceTest {
 
     @Test
     fun `의미 검증에 실패해도 피드와 함께 실패 사유를 돌려준다`() {
-        every { systemPromptResolver.resolveForPreview(null, null) } returns settings
+        every { systemPromptResolver.resolveForPreview(PromptType.COMMENT, null, null) } returns settings
         every { commentGenerator.generateComment(any(), settings) } returns CommentGenerationOutput(feed, 10, 0)
         every { commentFeedValidator.validate(any(), any(), any()) } throws CommentGenerationFailedException("캐릭터 구성이 다릅니다")
 
@@ -105,7 +107,7 @@ class PromptPreviewServiceTest {
 
     @Test
     fun `생성이 실패하면 과금된 토큰과 함께 실패 사유를 돌려준다`() {
-        every { systemPromptResolver.resolveForPreview(null, null) } returns settings
+        every { systemPromptResolver.resolveForPreview(PromptType.COMMENT, null, null) } returns settings
         every { commentGenerator.generateComment(any(), settings) } throws
             CommentGenerationFailedException("파싱 실패", usedTokens = 500, cachedTokens = 100, inputTokens = 400, outputTokens = 100)
 
@@ -132,6 +134,80 @@ class PromptPreviewServiceTest {
         val exception = assertFailsWith<BusinessException> { service.preview(command(characters = emptyList())) }
 
         assertEquals(ErrorCode.INVALID_INPUT, exception.errorCode)
+    }
+
+    @Test
+    fun `답장 미리보기는 REPLY 조립과 promptId로 그 캐릭터의 재응답을 생성한다`() {
+        every { systemPromptResolver.resolveForPreview(PromptType.REPLY, null, "답글 시험") } returns settings
+        every {
+            commentGenerator.generateReply("원본 일기", "bunno", "화내는 댓글", "고마워", settings)
+        } returns ReplyGenerationOutput("재응답", usedTokens = 100, cachedTokens = 0, inputTokens = 80, outputTokens = 20)
+        every { commentFeedValidator.validateReply("재응답") } returns Unit
+
+        val result =
+            service.previewReply(
+                ReplyPreviewCommand(
+                    commonPrompt = null,
+                    replyPrompt = "답글 시험",
+                    diaryContent = "원본 일기",
+                    character = EmotionType.ANGER,
+                    characterComment = "화내는 댓글",
+                    userReply = "고마워",
+                ),
+            )
+
+        assertEquals("재응답", result.replyText)
+        assertEquals(EmotionType.ANGER, result.character)
+        assertNull(result.validationError)
+        assertNull(result.generationError)
+        assertTrue(result.userContent.contains("bunno"))
+    }
+
+    @Test
+    fun `답장 생성이 실패하면 실패 사유를 담아 돌려준다`() {
+        every { systemPromptResolver.resolveForPreview(PromptType.REPLY, null, null) } returns settings
+        every {
+            commentGenerator.generateReply(any(), any(), any(), any(), settings)
+        } throws CommentGenerationFailedException("호출 실패")
+
+        val result =
+            service.previewReply(
+                ReplyPreviewCommand(
+                    commonPrompt = null,
+                    replyPrompt = null,
+                    diaryContent = "원본 일기",
+                    character = EmotionType.JOY,
+                    characterComment = "댓글",
+                    userReply = "답장",
+                ),
+            )
+
+        assertNull(result.replyText)
+        assertEquals("호출 실패", result.generationError)
+    }
+
+    @Test
+    fun `답장이 검증에 실패하면 텍스트와 함께 실패 사유를 돌려준다`() {
+        every { systemPromptResolver.resolveForPreview(PromptType.REPLY, null, null) } returns settings
+        every {
+            commentGenerator.generateReply(any(), any(), any(), any(), settings)
+        } returns ReplyGenerationOutput("  ", usedTokens = 10, cachedTokens = 0)
+        every { commentFeedValidator.validateReply("  ") } throws CommentGenerationFailedException("답글 내용이 비어 있습니다.")
+
+        val result =
+            service.previewReply(
+                ReplyPreviewCommand(
+                    commonPrompt = null,
+                    replyPrompt = null,
+                    diaryContent = "원본 일기",
+                    character = EmotionType.JOY,
+                    characterComment = "댓글",
+                    userReply = "답장",
+                ),
+            )
+
+        assertEquals("  ", result.replyText)
+        assertEquals("답글 내용이 비어 있습니다.", result.validationError)
     }
 
     private fun command(

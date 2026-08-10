@@ -100,9 +100,24 @@ class GeminiCommentGenerator(
         characterComment: String,
         userReply: String,
     ): ReplyGenerationOutput {
+        val settings =
+            try {
+                systemPromptResolver.resolve(PromptType.REPLY)
+            } catch (e: Exception) {
+                throw CommentGenerationFailedException("LLM 호출에 실패했습니다.", e)
+            }
+        return generateReply(diaryContent, characterId, characterComment, userReply, settings)
+    }
+
+    override fun generateReply(
+        diaryContent: String,
+        characterId: String,
+        characterComment: String,
+        userReply: String,
+        settings: LlmSettingsView,
+    ): ReplyGenerationOutput {
         val response =
             try {
-                val settings = systemPromptResolver.resolve(PromptType.REPLY)
                 client.models.generateContent(
                     settings.model,
                     promptProvider.buildReplyUserContent(diaryContent, characterId, characterComment, userReply),

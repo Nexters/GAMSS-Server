@@ -10,7 +10,9 @@ import com.nexters.gamss.llm.generation.CommentGenerator
 import com.nexters.gamss.llm.parsing.CommentFeedValidator
 import com.nexters.gamss.llm.prompt.CommentPromptContext
 import com.nexters.gamss.llm.prompt.PastSummaries
+import com.nexters.gamss.llm.prompt.PromptCharacterId
 import com.nexters.gamss.llm.prompt.PromptProvider
+import com.nexters.gamss.llm.prompt.PromptType
 import com.nexters.gamss.llm.selection.CharacterSelection
 import com.nexters.gamss.llm.selection.EongttungTopicSelector
 import com.nexters.gamss.llm.settings.SystemPromptResolver
@@ -45,7 +47,7 @@ class PromptPreviewService(
                 tikitakaCount = selection.tikitakaCount,
                 eongttungTopic = eongttungTopic,
             )
-        val settings = systemPromptResolver.resolveForPreview(command.commonPrompt, command.commentPrompt)
+        val settings = systemPromptResolver.resolveForPreview(PromptType.COMMENT, command.commonPrompt, command.commentPrompt)
         val userContent = promptProvider.buildUserContent(context)
 
         val startedAt = System.currentTimeMillis()
@@ -89,6 +91,67 @@ class PromptPreviewService(
             )
         }
     }
+
+    /**
+     * 유저가 캐릭터 댓글에 답장했을 때 그 캐릭터의 재응답을 시험한다 - 실제 답글 생성 경로
+     * (REPLY 조립·promptId·validateReply)를 그대로 쓴다.
+     */
+    fun previewReply(command: ReplyPreviewCommand): ReplyPreviewResult {
+        val settings = systemPromptResolver.resolveForPreview(PromptType.REPLY, command.commonPrompt, command.replyPrompt)
+        val promptId = PromptCharacterId.of(command.character).promptId
+        val userContent = promptProvider.buildReplyUserContent(command.diaryContent, promptId, command.characterComment, command.userReply)
+
+        val startedAt = System.currentTimeMillis()
+        return try {
+            val output =
+                commentGenerator.generateReply(
+                    command.diaryContent,
+                    promptId,
+                    command.characterComment,
+                    command.userReply,
+                    settings,
+                )
+            ReplyPreviewResult(
+                model = settings.model,
+                systemPrompt = settings.systemPrompt,
+                userContent = userContent,
+                character = command.character,
+                replyText = output.text,
+                validationError = replyValidationError(output.text),
+                generationError = null,
+                usedTokens = output.usedTokens,
+                cachedTokens = output.cachedTokens,
+                inputTokens = output.inputTokens,
+                outputTokens = output.outputTokens,
+                estimatedCostUsd = geminiPricing.costUsd(settings.model, output.inputTokens, output.cachedTokens, output.outputTokens),
+                latencyMs = System.currentTimeMillis() - startedAt,
+            )
+        } catch (e: CommentGenerationFailedException) {
+            ReplyPreviewResult(
+                model = settings.model,
+                systemPrompt = settings.systemPrompt,
+                userContent = userContent,
+                character = command.character,
+                replyText = null,
+                validationError = null,
+                generationError = e.message,
+                usedTokens = e.usedTokens ?: 0,
+                cachedTokens = e.cachedTokens ?: 0,
+                inputTokens = e.inputTokens ?: 0,
+                outputTokens = e.outputTokens ?: 0,
+                estimatedCostUsd = geminiPricing.costUsd(settings.model, e.inputTokens ?: 0, e.cachedTokens ?: 0, e.outputTokens ?: 0),
+                latencyMs = System.currentTimeMillis() - startedAt,
+            )
+        }
+    }
+
+    private fun replyValidationError(text: String): String? =
+        try {
+            commentFeedValidator.validateReply(text)
+            null
+        } catch (e: CommentGenerationFailedException) {
+            e.message
+        }
 
     // 선택 불변식은 [CharacterSelection.of]가 보장하고, 여기서는 잘못된 입력을 400으로 번역만 한다.
     private fun resolveSelection(

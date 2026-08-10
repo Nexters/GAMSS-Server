@@ -65,6 +65,27 @@ class AdminPromptPreviewControllerIntegrationTest {
     }
 
     @Test
+    fun `답장 미리보기는 대상 캐릭터의 재응답을 돌려준다`() {
+        mockMvc
+            .post("/api/admin/llm-settings/prompt/preview/reply") {
+                header(HttpHeaders.AUTHORIZATION, adminBearer())
+                contentType = MediaType.APPLICATION_JSON
+                content =
+                    """
+                    {"diaryContent":"오늘 억울한 일이 있었다",
+                     "character":"ANGER",
+                     "characterComment":"누가 그랬어, 화난다!",
+                     "userReply":"고마워, 네 말 들으니 낫다"}
+                    """.trimIndent()
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.character") { value("ANGER") }
+                jsonPath("$.data.replyText") { value("재응답 텍스트") }
+                jsonPath("$.data.generationError") { doesNotExist() }
+            }
+    }
+
+    @Test
     fun `샘플 일기가 비어 있으면 400 INVALID_INPUT`() {
         mockMvc
             .post("/api/admin/llm-settings/prompt/preview") {

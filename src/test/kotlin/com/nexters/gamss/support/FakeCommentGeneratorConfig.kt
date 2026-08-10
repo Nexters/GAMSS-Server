@@ -52,6 +52,14 @@ class FakeCommentGenerator : CommentGenerator {
         characterId: String,
         characterComment: String,
         userReply: String,
+        settings: LlmSettingsView,
+    ): ReplyGenerationOutput = generateReply(diaryContent, characterId, characterComment, userReply)
+
+    override fun generateReply(
+        diaryContent: String,
+        characterId: String,
+        characterComment: String,
+        userReply: String,
     ): ReplyGenerationOutput {
         if (shouldFail) throw CommentGenerationFailedException("테스트 강제 실패")
         return ReplyGenerationOutput("재응답 텍스트", usedTokens = 5, cachedTokens = 0)
