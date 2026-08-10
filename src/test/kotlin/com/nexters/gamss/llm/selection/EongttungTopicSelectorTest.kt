@@ -16,9 +16,11 @@ class EongttungTopicSelectorTest {
     fun `DB 소재 목록에서 한 줄을 무작위로 고른다`() {
         every { llmSettingsService.currentPrompt(PromptType.EONGTTUNG_TOPIC) } returns "배고프다\n심심하다\n집 가고 싶다"
 
-        repeat(100) {
-            assertTrue(selector.select() in setOf("배고프다", "심심하다", "집 가고 싶다"))
-        }
+        val picked = (1..100).map { selector.select() }.toSet()
+
+        assertTrue(picked.all { it in setOf("배고프다", "심심하다", "집 가고 싶다") })
+        // 항상 첫 줄만 돌려주는 고정 구현을 잡는다. 소재 3개×100회가 전부 같을 확률은 사실상 0이다.
+        assertTrue(picked.size >= 2)
     }
 
     @Test
