@@ -20,6 +20,7 @@ data class PromptReplyPreviewRequest(
     val character: EmotionType?,
     @field:Schema(description = "그 캐릭터가 남겼던 댓글")
     @field:NotBlank(message = "characterComment는 필수입니다.")
+    @field:Size(max = 2000, message = "characterComment는 2000자 이하여야 합니다.")
     val characterComment: String,
     @field:Schema(description = "유저의 답장", example = "그치? 나 잘못한 거 없지?")
     @field:NotBlank(message = "userReply는 필수입니다.")
