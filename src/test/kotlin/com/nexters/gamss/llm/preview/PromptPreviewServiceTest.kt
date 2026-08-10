@@ -76,7 +76,7 @@ class PromptPreviewServiceTest {
         assertNotNull(result.feed)
         assertNull(result.validationError)
         assertNull(result.generationError)
-        assertEquals(3.0, result.estimatedCostUsd) // 입력 1M×1.0 + 출력 1M×2.0
+        assertEquals(3.0, result.usage.estimatedCostUsd) // 입력 1M×1.0 + 출력 1M×2.0
         assertEquals("샘플 일기", context.captured.diaryContent)
     }
 
@@ -115,8 +115,8 @@ class PromptPreviewServiceTest {
 
         assertNull(result.feed)
         assertEquals("파싱 실패", result.generationError)
-        assertEquals(500, result.usedTokens)
-        assertEquals(400, result.inputTokens)
+        assertEquals(500, result.usage.usedTokens)
+        assertEquals(400, result.usage.inputTokens)
     }
 
     @Test

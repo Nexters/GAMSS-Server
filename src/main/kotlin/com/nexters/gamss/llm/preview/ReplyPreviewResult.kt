@@ -11,10 +11,6 @@ data class ReplyPreviewResult(
     val replyText: String?,
     val validationError: String?,
     val generationError: String?,
-    val usedTokens: Int,
-    val cachedTokens: Int,
-    val inputTokens: Int,
-    val outputTokens: Int,
-    val estimatedCostUsd: Double,
+    val usage: PreviewUsage,
     val latencyMs: Long,
 )

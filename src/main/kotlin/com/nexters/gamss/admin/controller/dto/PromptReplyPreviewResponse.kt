@@ -42,11 +42,11 @@ data class PromptReplyPreviewResponse(
                 replyText = result.replyText,
                 validationError = result.validationError,
                 generationError = result.generationError,
-                usedTokens = result.usedTokens,
-                cachedTokens = result.cachedTokens,
-                inputTokens = result.inputTokens,
-                outputTokens = result.outputTokens,
-                estimatedCostUsd = result.estimatedCostUsd,
+                usedTokens = result.usage.usedTokens,
+                cachedTokens = result.usage.cachedTokens,
+                inputTokens = result.usage.inputTokens,
+                outputTokens = result.usage.outputTokens,
+                estimatedCostUsd = result.usage.estimatedCostUsd,
                 latencyMs = result.latencyMs,
             )
     }

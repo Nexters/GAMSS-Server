@@ -63,11 +63,7 @@ class PromptPreviewService(
                 feed = output.feed,
                 validationError = validationError(output, selection),
                 generationError = null,
-                usedTokens = output.usedTokens,
-                cachedTokens = output.cachedTokens,
-                inputTokens = output.inputTokens,
-                outputTokens = output.outputTokens,
-                estimatedCostUsd = geminiPricing.costUsd(settings.model, output.inputTokens, output.cachedTokens, output.outputTokens),
+                usage = PreviewUsage.of(geminiPricing, settings.model, output),
                 latencyMs = System.currentTimeMillis() - startedAt,
             )
         } catch (e: CommentGenerationFailedException) {
@@ -82,11 +78,7 @@ class PromptPreviewService(
                 feed = null,
                 validationError = null,
                 generationError = e.message,
-                usedTokens = e.usedTokens ?: 0,
-                cachedTokens = e.cachedTokens ?: 0,
-                inputTokens = e.inputTokens ?: 0,
-                outputTokens = e.outputTokens ?: 0,
-                estimatedCostUsd = geminiPricing.costUsd(settings.model, e.inputTokens ?: 0, e.cachedTokens ?: 0, e.outputTokens ?: 0),
+                usage = PreviewUsage.of(geminiPricing, settings.model, e),
                 latencyMs = System.currentTimeMillis() - startedAt,
             )
         }
@@ -119,11 +111,7 @@ class PromptPreviewService(
                 replyText = output.text,
                 validationError = replyValidationError(output.text),
                 generationError = null,
-                usedTokens = output.usedTokens,
-                cachedTokens = output.cachedTokens,
-                inputTokens = output.inputTokens,
-                outputTokens = output.outputTokens,
-                estimatedCostUsd = geminiPricing.costUsd(settings.model, output.inputTokens, output.cachedTokens, output.outputTokens),
+                usage = PreviewUsage.of(geminiPricing, settings.model, output),
                 latencyMs = System.currentTimeMillis() - startedAt,
             )
         } catch (e: CommentGenerationFailedException) {
@@ -135,11 +123,7 @@ class PromptPreviewService(
                 replyText = null,
                 validationError = null,
                 generationError = e.message,
-                usedTokens = e.usedTokens ?: 0,
-                cachedTokens = e.cachedTokens ?: 0,
-                inputTokens = e.inputTokens ?: 0,
-                outputTokens = e.outputTokens ?: 0,
-                estimatedCostUsd = geminiPricing.costUsd(settings.model, e.inputTokens ?: 0, e.cachedTokens ?: 0, e.outputTokens ?: 0),
+                usage = PreviewUsage.of(geminiPricing, settings.model, e),
                 latencyMs = System.currentTimeMillis() - startedAt,
             )
         }
