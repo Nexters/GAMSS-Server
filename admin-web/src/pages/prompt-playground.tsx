@@ -399,6 +399,10 @@ export function PromptPlaygroundPage() {
       )
       return
     }
+    // 일반 이어보내기는 현재 선택된 조건으로 새 피드를 만든다 - 캐릭터가 비어 있으면 보낼 수 없다.
+    if (selected.length === 0) {
+      return
+    }
     run(
       {
         url: '/api/admin/llm-settings/prompt/preview',
@@ -638,11 +642,17 @@ export function PromptPlaygroundPage() {
                       placeholder={
                         replyTarget
                           ? `${labelOf(replyTarget.characterId ?? '')}의 댓글에 답장하기…`
-                          : '실제 유저처럼 이어서 메시지 보내기 (새 댓글 피드가 생성됩니다)'
+                          : selected.length === 0
+                            ? '이어서 보내려면 왼쪽에서 등장 캐릭터를 선택하세요'
+                            : '실제 유저처럼 이어서 메시지 보내기 (새 댓글 피드가 생성됩니다)'
                       }
                       disabled={running}
                     />
-                    <Button size="sm" onClick={sendComposer} disabled={!composer.trim() || running}>
+                    <Button
+                      size="sm"
+                      onClick={sendComposer}
+                      disabled={!composer.trim() || running || (!replyTarget && selected.length === 0)}
+                    >
                       <Send className="size-4" />
                       보내기
                     </Button>
