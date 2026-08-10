@@ -7,6 +7,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
+import org.springframework.dao.DataIntegrityViolationException
 import java.util.Optional
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -19,13 +20,12 @@ class PromptRevisionServiceTest {
     private val service = PromptRevisionService(promptRevisionRepository, llmSettingsService)
 
     @Test
-    fun `저장하면 현재값을 갱신하고 다음 버전 리비전을 남긴다`() {
-        every { llmSettingsService.currentPrompt(PromptType.COMMENT) } returns "이전 프롬프트"
+    fun `저장하면 설정 행을 잠근 채 현재값을 갱신하고 다음 버전 리비전을 남긴다`() {
+        every { llmSettingsService.currentPromptForUpdate(PromptType.COMMENT) } returns "이전 프롬프트"
         every { llmSettingsService.updatePrompt(PromptType.COMMENT, "새 프롬프트") } returns Unit
-        every { promptRevisionRepository.findLatestForUpdate(PromptType.COMMENT) } returns
-            PromptRevision(PromptType.COMMENT, 3, "이전 프롬프트", null)
+        every { promptRevisionRepository.findMaxVersion(PromptType.COMMENT) } returns 3
         val saved = slot<PromptRevision>()
-        every { promptRevisionRepository.save(capture(saved)) } answers { firstArg() }
+        every { promptRevisionRepository.saveAndFlush(capture(saved)) } answers { firstArg() }
 
         service.savePrompt(PromptType.COMMENT, "새 프롬프트", "admin@gamss.kr")
 
@@ -37,12 +37,13 @@ class PromptRevisionServiceTest {
     }
 
     @Test
-    fun `리비전이 하나도 없으면 버전 1로 기록한다`() {
-        every { llmSettingsService.currentPrompt(PromptType.CARD) } returns "이전"
+    fun `설정 행이 없으면 기본값과 비교하고 버전 1로 기록한다`() {
+        every { llmSettingsService.currentPromptForUpdate(PromptType.CARD) } returns null
+        every { llmSettingsService.currentPrompt(PromptType.CARD) } returns "기본값"
         every { llmSettingsService.updatePrompt(PromptType.CARD, "새 값") } returns Unit
-        every { promptRevisionRepository.findLatestForUpdate(PromptType.CARD) } returns null
+        every { promptRevisionRepository.findMaxVersion(PromptType.CARD) } returns null
         val saved = slot<PromptRevision>()
-        every { promptRevisionRepository.save(capture(saved)) } answers { firstArg() }
+        every { promptRevisionRepository.saveAndFlush(capture(saved)) } answers { firstArg() }
 
         service.savePrompt(PromptType.CARD, "새 값", "admin@gamss.kr")
 
@@ -51,24 +52,23 @@ class PromptRevisionServiceTest {
 
     @Test
     fun `내용이 현재값과 같으면 갱신도 리비전도 남기지 않는다`() {
-        every { llmSettingsService.currentPrompt(PromptType.COMMENT) } returns "같은 프롬프트"
+        every { llmSettingsService.currentPromptForUpdate(PromptType.COMMENT) } returns "같은 프롬프트"
 
         service.savePrompt(PromptType.COMMENT, "같은 프롬프트", "admin@gamss.kr")
 
         verify(exactly = 0) { llmSettingsService.updatePrompt(any(), any()) }
-        verify(exactly = 0) { promptRevisionRepository.save(any()) }
+        verify(exactly = 0) { promptRevisionRepository.saveAndFlush(any()) }
     }
 
     @Test
     fun `복원하면 리비전 내용으로 갱신하고 출처 버전을 남긴 새 리비전을 기록한다`() {
         val target = PromptRevision(PromptType.COMMENT, 2, "v2 프롬프트", "old@gamss.kr")
         every { promptRevisionRepository.findById(10L) } returns Optional.of(target)
-        every { llmSettingsService.currentPrompt(PromptType.COMMENT) } returns "현재 프롬프트"
+        every { llmSettingsService.currentPromptForUpdate(PromptType.COMMENT) } returns "현재 프롬프트"
         every { llmSettingsService.updatePrompt(PromptType.COMMENT, "v2 프롬프트") } returns Unit
-        every { promptRevisionRepository.findLatestForUpdate(PromptType.COMMENT) } returns
-            PromptRevision(PromptType.COMMENT, 5, "현재 프롬프트", null)
+        every { promptRevisionRepository.findMaxVersion(PromptType.COMMENT) } returns 5
         val saved = slot<PromptRevision>()
-        every { promptRevisionRepository.save(capture(saved)) } answers { firstArg() }
+        every { promptRevisionRepository.saveAndFlush(capture(saved)) } answers { firstArg() }
 
         service.restore(10L, "admin@gamss.kr")
 
@@ -83,12 +83,12 @@ class PromptRevisionServiceTest {
     fun `현재값과 같은 내용의 리비전을 복원하면 아무것도 기록하지 않는다`() {
         val target = PromptRevision(PromptType.COMMENT, 2, "현재 프롬프트", "old@gamss.kr")
         every { promptRevisionRepository.findById(10L) } returns Optional.of(target)
-        every { llmSettingsService.currentPrompt(PromptType.COMMENT) } returns "현재 프롬프트"
+        every { llmSettingsService.currentPromptForUpdate(PromptType.COMMENT) } returns "현재 프롬프트"
 
         service.restore(10L, "admin@gamss.kr")
 
         verify(exactly = 0) { llmSettingsService.updatePrompt(any(), any()) }
-        verify(exactly = 0) { promptRevisionRepository.save(any()) }
+        verify(exactly = 0) { promptRevisionRepository.saveAndFlush(any()) }
     }
 
     @Test
@@ -98,5 +98,16 @@ class PromptRevisionServiceTest {
         val exception = assertFailsWith<BusinessException> { service.restore(99L, "admin@gamss.kr") }
 
         assertEquals(ErrorCode.PROMPT_REVISION_NOT_FOUND, exception.errorCode)
+    }
+
+    @Test
+    fun `채번이 유니크 제약에 걸리면 회복 가능한 충돌로 번역한다`() {
+        every { llmSettingsService.currentPromptForUpdate(PromptType.CARD) } returns null
+        every { llmSettingsService.currentPrompt(PromptType.CARD) } returns "기본값"
+        every { llmSettingsService.updatePrompt(PromptType.CARD, "새 값") } returns Unit
+        every { promptRevisionRepository.findMaxVersion(PromptType.CARD) } returns null
+        every { promptRevisionRepository.saveAndFlush(any<PromptRevision>()) } throws DataIntegrityViolationException("duplicate")
+
+        assertFailsWith<PromptRevisionConflictException> { service.savePrompt(PromptType.CARD, "새 값", "admin@gamss.kr") }
     }
 }

@@ -24,12 +24,12 @@ class PromptRevisionRepositoryTest : RepositoryTest() {
     }
 
     @Test
-    fun `최신 리비전을 잠그고 조회한다 - 다음 버전 채번의 기준`() {
+    fun `최대 버전을 조회한다 - 다음 버전 채번의 기준`() {
         val base = latestVersion(PromptType.CARD)
         promptRevisionRepository.save(PromptRevision(PromptType.CARD, base + 1, "새 버전", null))
 
-        assertEquals(base + 1, promptRevisionRepository.findLatestForUpdate(PromptType.CARD)?.version)
+        assertEquals(base + 1, promptRevisionRepository.findMaxVersion(PromptType.CARD))
     }
 
-    private fun latestVersion(promptType: PromptType): Int = promptRevisionRepository.findLatestForUpdate(promptType)?.version ?: 0
+    private fun latestVersion(promptType: PromptType): Int = promptRevisionRepository.findMaxVersion(promptType) ?: 0
 }

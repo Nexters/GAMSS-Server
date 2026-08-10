@@ -8,6 +8,7 @@ import com.nexters.gamss.admin.controller.dto.UpdateModelRequest
 import com.nexters.gamss.admin.controller.dto.UpdatePromptRequest
 import com.nexters.gamss.global.response.ApiResponse
 import com.nexters.gamss.global.response.PageResponse
+import com.nexters.gamss.global.retry.ConflictRetry
 import com.nexters.gamss.global.security.AdminPrincipal
 import com.nexters.gamss.llm.prompt.PromptType
 import com.nexters.gamss.llm.settings.LlmSettingsService
@@ -42,6 +43,7 @@ import org.springframework.web.bind.annotation.RestController
 class AdminLlmSettingsController(
     private val llmSettingsService: LlmSettingsService,
     private val promptRevisionService: PromptRevisionService,
+    private val conflictRetry: ConflictRetry,
 ) {
     @Operation(summary = "모델 조회", description = "앱 전체 단일 모델과 선택 가능한 모델 목록을 반환합니다.")
     @GetMapping("/model")
@@ -90,7 +92,8 @@ class AdminLlmSettingsController(
         @Valid @RequestBody request: UpdatePromptRequest,
     ): ApiResponse<PromptSettingResponse> {
         val promptType = checkNotNull(request.promptType)
-        promptRevisionService.savePrompt(promptType, request.systemPrompt, principal.email)
+        // 최초 기록의 채번 경합은 트랜잭션 바깥에서 작업 전체를 재시도해 해소한다.
+        conflictRetry.execute { promptRevisionService.savePrompt(promptType, request.systemPrompt, principal.email) }
         return ApiResponse.success(promptResponse(promptType))
     }
 
@@ -139,7 +142,7 @@ class AdminLlmSettingsController(
         @Parameter(hidden = true) @AuthenticationPrincipal principal: AdminPrincipal,
         @PathVariable revisionId: Long,
     ): ApiResponse<PromptSettingResponse> {
-        val revision = promptRevisionService.restore(revisionId, principal.email)
+        val revision = conflictRetry.execute { promptRevisionService.restore(revisionId, principal.email) }
         return ApiResponse.success(promptResponse(revision.promptType))
     }
 
