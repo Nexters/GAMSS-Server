@@ -92,6 +92,30 @@ class PromptRevisionServiceTest {
     }
 
     @Test
+    fun `앞뒤 공백만 다른 내용은 같은 것으로 보고 기록하지 않는다`() {
+        every { llmSettingsService.currentPromptForUpdate(PromptType.COMMENT) } returns "같은 프롬프트"
+
+        service.savePrompt(PromptType.COMMENT, "  같은 프롬프트  \n", "admin@gamss.kr")
+
+        verify(exactly = 0) { llmSettingsService.updatePrompt(any(), any()) }
+        verify(exactly = 0) { promptRevisionRepository.saveAndFlush(any()) }
+    }
+
+    @Test
+    fun `저장 전에 앞뒤 공백을 다듬어 기록한다`() {
+        every { llmSettingsService.currentPromptForUpdate(PromptType.COMMENT) } returns "이전"
+        every { llmSettingsService.updatePrompt(PromptType.COMMENT, "새 프롬프트") } returns Unit
+        every { promptRevisionRepository.findMaxVersion(PromptType.COMMENT) } returns 1
+        val saved = slot<PromptRevision>()
+        every { promptRevisionRepository.saveAndFlush(capture(saved)) } answers { firstArg() }
+
+        service.savePrompt(PromptType.COMMENT, "  새 프롬프트  ", "admin@gamss.kr")
+
+        verify(exactly = 1) { llmSettingsService.updatePrompt(PromptType.COMMENT, "새 프롬프트") }
+        assertEquals("새 프롬프트", saved.captured.systemPrompt)
+    }
+
+    @Test
     fun `없는 리비전을 복원하면 PROMPT_REVISION_NOT_FOUND`() {
         every { promptRevisionRepository.findById(99L) } returns Optional.empty()
 

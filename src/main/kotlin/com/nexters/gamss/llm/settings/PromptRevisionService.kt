@@ -20,7 +20,8 @@ import org.springframework.transaction.annotation.Transactional
  * [PromptRevisionConflictException]으로 번역해 트랜잭션 바깥의 재시도가 해소한다.
  *
  * 내용이 현재값과 같은 저장·복원은 아무것도 기록하지 않는다 — 반복 클릭이 이력을 오염시키면
- * '무엇이 바뀌었는지'를 보는 감사 로그의 목적이 흐려진다.
+ * '무엇이 바뀌었는지'를 보는 감사 로그의 목적이 흐려진다. 비교·기록 전에 앞뒤 공백을 다듬어
+ * 프런트의 dirty 판단(trim 기준)과 어긋나거나 공백만 다른 리비전이 쌓이는 일을 막는다.
  */
 @Service
 class PromptRevisionService(
@@ -34,11 +35,12 @@ class PromptRevisionService(
         systemPrompt: String,
         savedBy: String,
     ) {
+        val content = systemPrompt.trim()
         val current = lockedCurrentPrompt(promptType)
-        if (systemPrompt == current) {
+        if (content == current) {
             return
         }
-        mutate(promptType, systemPrompt, savedBy, restoredFromVersion = null)
+        mutate(promptType, content, savedBy, restoredFromVersion = null)
     }
 
     /**
@@ -51,11 +53,13 @@ class PromptRevisionService(
         savedBy: String,
     ): PromptRevision {
         val revision = getRevision(revisionId)
+        // 과거(공백 다듬기 도입 전) 리비전을 복원해도 공백이 되살아나지 않게 여기서도 다듬는다.
+        val content = revision.systemPrompt.trim()
         val current = lockedCurrentPrompt(revision.promptType)
-        if (revision.systemPrompt == current) {
+        if (content == current) {
             return revision
         }
-        mutate(revision.promptType, revision.systemPrompt, savedBy, revision.version)
+        mutate(revision.promptType, content, savedBy, revision.version)
         return revision
     }
 
