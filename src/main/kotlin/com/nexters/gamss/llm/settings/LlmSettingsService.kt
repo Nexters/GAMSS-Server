@@ -52,13 +52,6 @@ class LlmSettingsService(
     fun currentPromptForUpdate(promptType: PromptType): String? = repository.findByPromptTypeForUpdate(promptType)?.systemPrompt
 
     /**
-     * 행을 잠그고 현재 프롬프트를 읽는다 — 프롬프트 저장·복원의 리비전 채번을 타입 단위로
-     * 직렬화하는 잠금 지점([PromptRevisionService]). 행이 없으면 null(잠글 대상 없음).
-     */
-    @Transactional
-    fun currentPromptForUpdate(promptType: PromptType): String? = repository.findByPromptTypeForUpdate(promptType)?.systemPrompt
-
-    /**
      * COMMON 행을 한 번만 읽어 앱 전체 모델 + 공통 프롬프트를 함께 돌려준다.
      * 모델·공통 프롬프트가 같은 COMMON 행에서 나오므로, [SystemPromptResolver]가 조립할 때
      * COMMON 행을 중복 조회하지 않게 한다.
