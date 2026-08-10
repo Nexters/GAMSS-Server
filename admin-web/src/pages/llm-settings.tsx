@@ -141,7 +141,6 @@ function ModelSection() {
 interface PromptSetting {
   promptType: PromptType
   systemPrompt: string
-  defaultSystemPrompt: string
 }
 
 function PromptSection() {
@@ -256,15 +255,6 @@ function PromptSection() {
                 : '이 타입의 역할·규칙·출력형식입니다. 생성 시 공통 프롬프트 뒤에 붙습니다.'}
             </p>
             <SavedFlash show={flash} />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPrompt(settings.defaultSystemPrompt)}
-              disabled={saving || prompt.trim() === settings.defaultSystemPrompt.trim()}
-            >
-              <RotateCcw className="size-4" />
-              기본값 변경
-            </Button>
             <Button size="sm" onClick={onSave} disabled={!dirty || saving || !prompt.trim()}>
               <Save className="size-4" />
               저장

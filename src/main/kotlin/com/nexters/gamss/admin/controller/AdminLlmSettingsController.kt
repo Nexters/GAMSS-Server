@@ -157,6 +157,5 @@ class AdminLlmSettingsController(
         PromptSettingResponse(
             promptType = promptType.name,
             systemPrompt = llmSettingsService.currentPrompt(promptType),
-            defaultSystemPrompt = llmSettingsService.defaultPrompt(promptType),
         )
 }
