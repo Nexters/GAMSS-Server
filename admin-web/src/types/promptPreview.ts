@@ -27,3 +27,19 @@ export interface PreviewResult {
   estimatedCostUsd: number
   latencyMs: number
 }
+
+export interface ReplyPreviewResult {
+  model: string
+  systemPrompt: string
+  userContent: string
+  character: string
+  replyText: string | null
+  validationError: string | null
+  generationError: string | null
+  usedTokens: number
+  cachedTokens: number
+  inputTokens: number
+  outputTokens: number
+  estimatedCostUsd: number
+  latencyMs: number
+}
