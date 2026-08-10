@@ -12,7 +12,6 @@ import com.nexters.gamss.llm.prompt.CommentPromptContext
 import com.nexters.gamss.llm.prompt.PastSummaries
 import com.nexters.gamss.llm.prompt.PromptProvider
 import com.nexters.gamss.llm.selection.CharacterSelection
-import com.nexters.gamss.llm.selection.CharacterSelector
 import com.nexters.gamss.llm.selection.EongttungTopicSelector
 import com.nexters.gamss.llm.settings.SystemPromptResolver
 import org.springframework.stereotype.Service
@@ -29,7 +28,6 @@ import org.springframework.stereotype.Service
 class PromptPreviewService(
     private val systemPromptResolver: SystemPromptResolver,
     private val promptProvider: PromptProvider,
-    private val characterSelector: CharacterSelector,
     private val eongttungTopicSelector: EongttungTopicSelector,
     private val commentGenerator: CommentGenerator,
     private val commentFeedValidator: CommentFeedValidator,
@@ -92,21 +90,16 @@ class PromptPreviewService(
         }
     }
 
-    // 캐릭터를 고정하지 않으면 실제 생성처럼 서버가 무작위로 고른다. 고정 선택의 불변식은
-    // [CharacterSelection.of]가 보장하고, 여기서는 잘못된 입력을 400으로 번역만 한다.
+    // 선택 불변식은 [CharacterSelection.of]가 보장하고, 여기서는 잘못된 입력을 400으로 번역만 한다.
     private fun resolveSelection(
-        characters: List<EmotionType>?,
+        characters: List<EmotionType>,
         tikitakaCount: Int?,
-    ): CharacterSelection {
-        if (characters == null) {
-            return characterSelector.select()
-        }
-        return try {
+    ): CharacterSelection =
+        try {
             CharacterSelection.of(characters, tikitakaCount ?: 0)
         } catch (e: IllegalArgumentException) {
             throw BusinessException(ErrorCode.INVALID_INPUT, e.message ?: "잘못된 캐릭터 조건입니다.")
         }
-    }
 
     private fun validationError(
         output: CommentGenerationOutput,

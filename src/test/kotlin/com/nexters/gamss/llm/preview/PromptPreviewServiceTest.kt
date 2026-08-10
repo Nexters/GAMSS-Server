@@ -13,8 +13,6 @@ import com.nexters.gamss.llm.parsing.CommentFeed
 import com.nexters.gamss.llm.parsing.CommentFeedValidator
 import com.nexters.gamss.llm.prompt.CommentPromptContext
 import com.nexters.gamss.llm.prompt.PromptProvider
-import com.nexters.gamss.llm.selection.CharacterSelection
-import com.nexters.gamss.llm.selection.CharacterSelector
 import com.nexters.gamss.llm.selection.EongttungTopicSelector
 import com.nexters.gamss.llm.settings.LlmSettingsView
 import com.nexters.gamss.llm.settings.SystemPromptResolver
@@ -32,7 +30,6 @@ import kotlin.test.assertTrue
 class PromptPreviewServiceTest {
     private val systemPromptResolver = mockk<SystemPromptResolver>()
     private val promptProvider = PromptProvider()
-    private val characterSelector = mockk<CharacterSelector>()
     private val eongttungTopicSelector = mockk<EongttungTopicSelector>()
     private val commentGenerator = mockk<CommentGenerator>()
     private val commentFeedValidator = mockk<CommentFeedValidator>()
@@ -42,7 +39,6 @@ class PromptPreviewServiceTest {
         PromptPreviewService(
             systemPromptResolver,
             promptProvider,
-            characterSelector,
             eongttungTopicSelector,
             commentGenerator,
             commentFeedValidator,
@@ -80,19 +76,6 @@ class PromptPreviewServiceTest {
         assertNull(result.generationError)
         assertEquals(3.0, result.estimatedCostUsd) // 입력 1M×1.0 + 출력 1M×2.0
         assertEquals("샘플 일기", context.captured.diaryContent)
-    }
-
-    @Test
-    fun `캐릭터를 고정하지 않으면 실제 생성처럼 서버가 무작위로 고른다`() {
-        every { characterSelector.select() } returns CharacterSelection(listOf(EmotionType.JOY), 0)
-        every { systemPromptResolver.resolveForPreview(null, null) } returns settings
-        every { commentGenerator.generateComment(any(), settings) } returns CommentGenerationOutput(feed, 10, 0)
-        every { commentFeedValidator.validate(any(), any(), any()) } returns Unit
-
-        val result = service.preview(command(characters = null))
-
-        verify(exactly = 1) { characterSelector.select() }
-        assertEquals(listOf(EmotionType.JOY), result.characters)
     }
 
     @Test
@@ -152,7 +135,7 @@ class PromptPreviewServiceTest {
     }
 
     private fun command(
-        characters: List<EmotionType>?,
+        characters: List<EmotionType>,
         tikitakaCount: Int? = 0,
     ): PromptPreviewCommand =
         PromptPreviewCommand(

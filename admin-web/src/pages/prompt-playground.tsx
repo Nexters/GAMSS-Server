@@ -8,7 +8,6 @@ import {
   Clock,
   CornerDownRight,
   Cpu,
-  Dices,
   Download,
   FlaskConical,
   Play,
@@ -191,7 +190,6 @@ export function PromptPlaygroundPage() {
   const [summary, setSummary] = useState('')
   const [commonPrompt, setCommonPrompt] = useState('')
   const [commentPrompt, setCommentPrompt] = useState('')
-  const [randomCast, setRandomCast] = useState(true)
   const [selected, setSelected] = useState<Emotion[]>([])
   const [tikitaka, setTikitaka] = useState(0)
   const [result, setResult] = useState<PreviewResult | null>(null)
@@ -209,7 +207,7 @@ export function PromptPlaygroundPage() {
     })
   }
 
-  const canRun = diary.trim().length > 0 && !running && (randomCast || selected.length > 0)
+  const canRun = diary.trim().length > 0 && !running && selected.length > 0
 
   const onRun = () => {
     if (!canRun) {
@@ -225,8 +223,8 @@ export function PromptPlaygroundPage() {
           currentConversationSummary: summary.trim() || null,
           commonPrompt: commonPrompt.trim() ? commonPrompt : null,
           commentPrompt: commentPrompt.trim() ? commentPrompt : null,
-          characters: randomCast ? null : selected,
-          tikitakaCount: randomCast ? null : tikitaka,
+          characters: selected,
+          tikitakaCount: tikitaka,
         },
       },
       {
@@ -272,21 +270,10 @@ export function PromptPlaygroundPage() {
             </div>
 
             <div className="space-y-2.5">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">등장 캐릭터</span>
-                <button
-                  type="button"
-                  onClick={() => setRandomCast(!randomCast)}
-                  className={cn(
-                    'flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors',
-                    randomCast ? 'border-foreground/20 bg-secondary font-medium' : 'text-muted-foreground hover:bg-muted/40',
-                  )}
-                >
-                  <Dices className="size-3.5" />
-                  실제처럼 무작위
-                </button>
-              </div>
-              <div className={cn('flex flex-wrap gap-1.5', randomCast && 'pointer-events-none opacity-40')}>
+              <span className="text-sm font-medium">
+                등장 캐릭터 <span className="text-destructive">*</span>
+              </span>
+              <div className="flex flex-wrap gap-1.5">
                 {CHARACTERS.map((character) => (
                   <button
                     key={character.value}
@@ -304,8 +291,7 @@ export function PromptPlaygroundPage() {
                   </button>
                 ))}
               </div>
-              {!randomCast && (
-                <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">티키타카</span>
                   <div className="w-24">
                     <Select
@@ -319,8 +305,7 @@ export function PromptPlaygroundPage() {
                     </Select>
                   </div>
                   {selected.length < 2 && <span className="text-[11px] text-muted-foreground">캐릭터 2명 이상일 때 지정 가능</span>}
-                </div>
-              )}
+              </div>
             </div>
           </Card>
 

@@ -3,6 +3,7 @@ package com.nexters.gamss.admin.controller.dto
 import com.nexters.gamss.emotion.domain.EmotionType
 import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.NotEmpty
 import jakarta.validation.constraints.Size
 
 data class PromptPreviewRequest(
@@ -16,8 +17,9 @@ data class PromptPreviewRequest(
     val diaryContent: String,
     @field:Schema(description = "현재 채팅방 임시 요약(선택)", nullable = true)
     val currentConversationSummary: String? = null,
-    @field:Schema(description = "등장 캐릭터 고정값(선택). null이면 실제 생성처럼 서버가 무작위 선택", nullable = true)
-    val characters: List<EmotionType>? = null,
-    @field:Schema(description = "티키타카 개수 고정값(선택). characters 지정 시에만 의미 있음", example = "1", nullable = true)
+    @field:Schema(description = "등장 캐릭터(1명 이상 필수)")
+    @field:NotEmpty(message = "characters는 1개 이상이어야 합니다.")
+    val characters: List<EmotionType>,
+    @field:Schema(description = "티키타카 개수. 생략 시 0", example = "1", nullable = true)
     val tikitakaCount: Int? = null,
 )
