@@ -84,8 +84,13 @@ class PromptRevisionConcurrencyIntegrationTest {
                     }
                 }
             }
-        futures.forEach { it.get(30, TimeUnit.SECONDS) }
-        executor.shutdown()
+        try {
+            futures.forEach { it.get(30, TimeUnit.SECONDS) }
+        } finally {
+            // 타임아웃·예외로 빠져나가도 스레드 풀이 남아 CI를 붙잡지 않게 한다.
+            executor.shutdownNow()
+            executor.awaitTermination(5, TimeUnit.SECONDS)
+        }
 
         assertTrue(errors.isEmpty(), "동시 저장 중 예외 발생: $errors")
         val newRevisions =
