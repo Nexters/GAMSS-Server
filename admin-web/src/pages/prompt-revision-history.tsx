@@ -125,20 +125,20 @@ export function PromptRevisionHistory({ type, currentPrompt, onLoadToEditor, onR
   const [page, setPage] = useState(0)
   const [expandedId, setExpandedId] = useState<number | null>(null)
 
-  const { data, isLoading } = useCustom<PromptRevisionPage>({
+  const { data, isLoading, isError, refetch } = useCustom<PromptRevisionPage>({
     url: `/api/admin/llm-settings/prompt/revisions?promptType=${type}&page=${page}&size=${PAGE_SIZE}`,
     method: 'get',
     queryOptions: { queryKey: ['prompt-revisions', type, page, currentPrompt] },
   })
   const { mutate: restore, isLoading: restoring } = useCustomMutation()
-  const [restoreFailed, setRestoreFailed] = useState(false)
+  const [restoreFailedId, setRestoreFailedId] = useState<number | null>(null)
 
   const revisions = data?.data?.content ?? []
   const totalPages = data?.data?.totalPages ?? 0
   const total = data?.data?.totalElements ?? 0
 
   const onRestore = (revisionId: number) => {
-    setRestoreFailed(false)
+    setRestoreFailedId(null)
     restore(
       { url: `/api/admin/llm-settings/prompt/revisions/${revisionId}/restore`, method: 'post', values: {} },
       {
@@ -151,7 +151,7 @@ export function PromptRevisionHistory({ type, currentPrompt, onLoadToEditor, onR
           setExpandedId(null)
           setPage(0)
         },
-        onError: () => setRestoreFailed(true),
+        onError: () => setRestoreFailedId(revisionId),
       },
     )
   }
@@ -169,7 +169,15 @@ export function PromptRevisionHistory({ type, currentPrompt, onLoadToEditor, onR
         <span className="ml-auto text-xs text-muted-foreground">저장할 때마다 자동으로 기록됩니다</span>
       </div>
 
-      {isLoading ? (
+      {isError && !data ? (
+        <div className="flex items-center gap-3 p-6">
+          <p className="text-sm text-muted-foreground">이력을 불러오지 못했습니다.</p>
+          <Button variant="outline" size="sm" onClick={() => refetch()}>
+            <RotateCcw className="size-4" />
+            다시 시도
+          </Button>
+        </div>
+      ) : isLoading ? (
         <div className="space-y-2 p-4">
           {Array.from({ length: 3 }).map((_, i) => (
             <Skeleton key={i} className="h-9 w-full" />
@@ -239,7 +247,7 @@ export function PromptRevisionHistory({ type, currentPrompt, onLoadToEditor, onR
                           onLoadToEditor={onLoadToEditor}
                           onRestore={onRestore}
                           restoring={restoring}
-                          restoreFailed={restoreFailed}
+                          restoreFailed={restoreFailedId === revision.id}
                           onClose={() => setExpandedId(null)}
                         />
                       </TableCell>
