@@ -1,5 +1,6 @@
-package com.nexters.gamss.auth.service
+package com.nexters.gamss.global.retry
 
+import com.nexters.gamss.auth.service.ConcurrentRegistrationException
 import com.nexters.gamss.auth.social.SocialProvider
 import kotlin.test.Test
 import kotlin.test.assertEquals

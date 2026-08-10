@@ -1,6 +1,7 @@
 package com.nexters.gamss.auth.service
 
 import com.nexters.gamss.auth.social.SocialProvider
+import com.nexters.gamss.global.retry.RecoverableConflictException
 
 /**
  * 동시 최초 로그인으로 같은 소셜 계정이 중복 가입되려다 유니크 제약에 걸렸음을 나타내는 도메인 예외.
@@ -12,4 +13,4 @@ import com.nexters.gamss.auth.social.SocialProvider
 class ConcurrentRegistrationException(
     provider: SocialProvider,
     providerId: String,
-) : RuntimeException("동시 가입 경합: provider=$provider, providerId=$providerId")
+) : RecoverableConflictException("동시 가입 경합: provider=$provider, providerId=$providerId")
