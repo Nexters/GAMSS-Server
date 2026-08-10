@@ -18,6 +18,25 @@ class SystemPromptResolver(
             return base
         }
         val typePrompt = llmSettingsService.currentPrompt(promptType)
-        return LlmSettingsView(base.model, "${base.systemPrompt}\n\n$typePrompt")
+        return LlmSettingsView(base.model, assemble(base.systemPrompt, typePrompt))
     }
+
+    /**
+     * 플레이그라운드 미리보기용 조립. null 인 조각은 저장된 현재값을 쓴다 - 미저장 편집본을
+     * 실제 생성과 **같은 조립 규칙**으로 시험하기 위해 여기(조립의 단일 지점)에 둔다.
+     */
+    fun resolveForPreview(
+        commonPrompt: String?,
+        commentPrompt: String?,
+    ): LlmSettingsView {
+        val base = llmSettingsService.currentCommonView()
+        val common = commonPrompt ?: base.systemPrompt
+        val comment = commentPrompt ?: llmSettingsService.currentPrompt(PromptType.COMMENT)
+        return LlmSettingsView(base.model, assemble(common, comment))
+    }
+
+    private fun assemble(
+        commonPrompt: String,
+        typePrompt: String,
+    ): String = "$commonPrompt\n\n$typePrompt"
 }

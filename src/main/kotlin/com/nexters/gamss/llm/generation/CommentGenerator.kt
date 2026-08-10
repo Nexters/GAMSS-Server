@@ -1,6 +1,7 @@
 package com.nexters.gamss.llm.generation
 
 import com.nexters.gamss.llm.prompt.CommentPromptContext
+import com.nexters.gamss.llm.settings.LlmSettingsView
 
 /**
  * 일기 내용과 이번 생성 조건(등장 캐릭터·티키타카 개수·엉뚱이 소재)으로 댓글 피드를 생성하거나,
@@ -12,6 +13,15 @@ import com.nexters.gamss.llm.prompt.CommentPromptContext
  */
 interface CommentGenerator {
     fun generateComment(context: CommentPromptContext): CommentGenerationOutput
+
+    /**
+     * 저장된 설정 대신 주어진 모델·시스템 프롬프트로 생성한다 - 플레이그라운드가 미저장
+     * 프롬프트를 시험하는 경로. 그 외 로직(유저 콘텐츠·파싱)은 [generateComment]와 같아야 한다.
+     */
+    fun generateComment(
+        context: CommentPromptContext,
+        settings: LlmSettingsView,
+    ): CommentGenerationOutput
 
     fun generateReply(
         diaryContent: String,
