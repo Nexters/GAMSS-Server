@@ -29,4 +29,24 @@ class SystemPromptResolverTest {
 
         assertEquals("공통규칙", result.systemPrompt)
     }
+
+    @Test
+    fun `미리보기 조립은 오버라이드를 실제 생성과 같은 형식으로 조립한다`() {
+        every { llmSettingsService.currentCommonView() } returns LlmSettingsView("m", "저장 공통")
+
+        val result = resolver.resolveForPreview("공통 시험", "댓글 시험")
+
+        assertEquals("m", result.model)
+        assertEquals("공통 시험\n\n댓글 시험", result.systemPrompt)
+    }
+
+    @Test
+    fun `미리보기 조립에서 null 조각은 저장된 현재값을 쓴다`() {
+        every { llmSettingsService.currentCommonView() } returns LlmSettingsView("m", "저장 공통")
+        every { llmSettingsService.currentPrompt(PromptType.COMMENT) } returns "저장 댓글"
+
+        assertEquals("저장 공통\n\n저장 댓글", resolver.resolveForPreview(null, null).systemPrompt)
+        assertEquals("저장 공통\n\n댓글 시험", resolver.resolveForPreview(null, "댓글 시험").systemPrompt)
+        assertEquals("공통 시험\n\n저장 댓글", resolver.resolveForPreview("공통 시험", null).systemPrompt)
+    }
 }
