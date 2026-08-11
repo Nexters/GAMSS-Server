@@ -18,6 +18,8 @@ import com.nexters.gamss.llm.prompt.PromptType
 import com.nexters.gamss.llm.selection.EongttungTopicSelector
 import com.nexters.gamss.llm.settings.LlmSettingsView
 import com.nexters.gamss.llm.settings.SystemPromptResolver
+import com.nexters.gamss.monitoring.domain.GenerationType
+import com.nexters.gamss.monitoring.service.GenerationLogRecorder
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -37,6 +39,7 @@ class PromptPreviewServiceTest {
     private val commentFeedValidator = mockk<CommentFeedValidator>()
     private val geminiPricing =
         GeminiPricing(models = mapOf("test-model" to ModelPricing(inputPer1M = 1.0, cachedInputPer1M = 0.1, outputPer1M = 2.0)))
+    private val generationLogRecorder = mockk<GenerationLogRecorder>(relaxed = true)
     private val service =
         PromptPreviewService(
             systemPromptResolver,
@@ -45,6 +48,7 @@ class PromptPreviewServiceTest {
             commentGenerator,
             commentFeedValidator,
             geminiPricing,
+            generationLogRecorder,
         )
 
     private val settings = LlmSettingsView("test-model", "조립된 프롬프트")
@@ -65,6 +69,7 @@ class PromptPreviewServiceTest {
                     commentPrompt = "댓글 시험",
                     diaryContent = "샘플 일기",
                     currentConversationSummary = null,
+                    pastSummaries = emptyList(),
                     characters = listOf(EmotionType.JOY),
                     tikitakaCount = 0,
                 ),
@@ -78,6 +83,19 @@ class PromptPreviewServiceTest {
         assertNull(result.generationError)
         assertEquals(3.0, result.usage.estimatedCostUsd) // 입력 1M×1.0 + 출력 1M×2.0
         assertEquals("샘플 일기", context.captured.diaryContent)
+        verify {
+            generationLogRecorder.record(
+                type = GenerationType.PREVIEW,
+                success = true,
+                attemptCount = 1,
+                latencyMs = any(),
+                usedTokens = 1_000_000,
+                cachedTokens = 0,
+                inputTokens = 1_000_000,
+                outputTokens = 1_000_000,
+                failureReason = null,
+            )
+        }
     }
 
     @Test
@@ -117,6 +135,31 @@ class PromptPreviewServiceTest {
         assertEquals("파싱 실패", result.generationError)
         assertEquals(500, result.usage.usedTokens)
         assertEquals(400, result.usage.inputTokens)
+        verify {
+            generationLogRecorder.record(
+                type = GenerationType.PREVIEW,
+                success = false,
+                attemptCount = 1,
+                latencyMs = any(),
+                usedTokens = 500,
+                cachedTokens = 100,
+                inputTokens = 400,
+                outputTokens = 100,
+                failureReason = "파싱 실패",
+            )
+        }
+    }
+
+    @Test
+    fun `과거 대화 요약을 지정하면 유저 콘텐츠에 섹션이 만들어진다`() {
+        every { systemPromptResolver.resolveForPreview(PromptType.COMMENT, null, null) } returns settings
+        every { commentGenerator.generateComment(any(), settings) } returns CommentGenerationOutput(feed, 10, 0)
+        every { commentFeedValidator.validate(any(), any(), any()) } returns Unit
+
+        val result = service.preview(command(characters = listOf(EmotionType.JOY), pastSummaries = listOf("전에 이직 고민을 나눴다")))
+
+        assertTrue(result.userContent.contains("[과거 대화 요약]"))
+        assertTrue(result.userContent.contains("전에 이직 고민을 나눴다"))
     }
 
     @Test
@@ -213,12 +256,14 @@ class PromptPreviewServiceTest {
     private fun command(
         characters: List<EmotionType>,
         tikitakaCount: Int? = 0,
+        pastSummaries: List<String> = emptyList(),
     ): PromptPreviewCommand =
         PromptPreviewCommand(
             commonPrompt = null,
             commentPrompt = null,
             diaryContent = "샘플 일기",
             currentConversationSummary = null,
+            pastSummaries = pastSummaries,
             characters = characters,
             tikitakaCount = tikitakaCount,
         )

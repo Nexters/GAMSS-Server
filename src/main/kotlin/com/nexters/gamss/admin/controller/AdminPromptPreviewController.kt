@@ -18,7 +18,9 @@ import org.springframework.web.bind.annotation.RestController
 
 @Tag(
     name = "백오피스 프롬프트 플레이그라운드",
-    description = "저장하기 전 프롬프트로 실제 LLM 생성을 시험한다 (ROLE_ADMIN 필요). DB에 아무것도 저장하지 않는다.",
+    description =
+        "저장하기 전 프롬프트로 실제 LLM 생성을 시험한다 (ROLE_ADMIN 필요). " +
+            "프롬프트는 저장하지 않으며, 비용 추적용 생성 로그(PREVIEW)만 남는다(품질 지표에서 제외).",
 )
 @RestController
 @RequestMapping("/api/admin/llm-settings/prompt/preview")
@@ -29,7 +31,7 @@ class AdminPromptPreviewController(
         summary = "프롬프트 미리보기 생성",
         description =
             "미저장 프롬프트(공통·댓글)와 샘플 일기로 실제 LLM을 호출해 댓글 피드를 생성해봅니다. " +
-                "프롬프트도, 생성 로그도 저장하지 않으며 실제 비용이 발생합니다. " +
+                "프롬프트는 저장하지 않으며 실제 비용이 발생합니다(비용 추적용 PREVIEW 생성 로그만 기록). " +
                 "생성·검증 실패는 오류 필드로 담겨 200으로 내려옵니다(실패 관찰이 목적).\n\n" +
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
@@ -47,6 +49,7 @@ class AdminPromptPreviewController(
                     commentPrompt = request.commentPrompt,
                     diaryContent = request.diaryContent,
                     currentConversationSummary = request.currentConversationSummary,
+                    pastSummaries = request.pastSummaries ?: emptyList(),
                     characters = request.characters,
                     tikitakaCount = request.tikitakaCount,
                 ),
@@ -58,7 +61,7 @@ class AdminPromptPreviewController(
         summary = "답장 미리보기 생성",
         description =
             "유저가 특정 캐릭터의 댓글에 답장했을 때 그 캐릭터의 재응답을 실제 답글 생성 경로로 시험합니다. " +
-                "아무것도 저장하지 않으며 실제 비용이 발생합니다.\n\n" +
+                "프롬프트는 저장하지 않으며 실제 비용이 발생합니다(비용 추적용 PREVIEW 생성 로그만 기록).\n\n" +
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +

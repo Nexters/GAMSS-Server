@@ -105,6 +105,19 @@ class AdminPromptPreviewControllerIntegrationTest {
     }
 
     @Test
+    fun `티키타카가 상한을 넘으면 400 INVALID_INPUT`() {
+        mockMvc
+            .post("/api/admin/llm-settings/prompt/preview") {
+                header(HttpHeaders.AUTHORIZATION, adminBearer())
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"diaryContent":"샘플","characters":["JOY","ANGER"],"tikitakaCount":1000}"""
+            }.andExpect {
+                status { isBadRequest() }
+                jsonPath("$.error.code") { value("INVALID_INPUT") }
+            }
+    }
+
+    @Test
     fun `답장 미리보기에 character가 없으면 400 INVALID_INPUT`() {
         // 컨트롤러의 checkNotNull이 아니라 Bean Validation이 먼저 막는 계약을 고정한다(@NotNull 제거 회귀 방지).
         mockMvc

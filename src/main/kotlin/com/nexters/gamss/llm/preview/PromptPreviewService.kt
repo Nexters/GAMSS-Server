@@ -16,15 +16,18 @@ import com.nexters.gamss.llm.prompt.PromptType
 import com.nexters.gamss.llm.selection.CharacterSelection
 import com.nexters.gamss.llm.selection.EongttungTopicSelector
 import com.nexters.gamss.llm.settings.SystemPromptResolver
+import com.nexters.gamss.monitoring.domain.GenerationType
+import com.nexters.gamss.monitoring.service.GenerationLogRecorder
 import org.springframework.stereotype.Service
 
 /**
  * 백오피스 프롬프트 플레이그라운드: 미저장 프롬프트를 실제 생성 경로(조립 규칙·유저 콘텐츠·
  * LLM 호출·의미 검증) 그대로 시험한다.
  *
- * DB에는 아무것도 남기지 않는다 - 프롬프트 저장은 물론 생성 로그도 기록하지 않아, 실험이
- * 백오피스 사용량·품질 지표를 오염시키지 않는다. 생성 실패·검증 실패도 예외 대신 결과에 담아
- * 돌려준다 - 실패를 관찰하는 것이 이 기능의 목적이기 때문이다.
+ * 프롬프트는 저장하지 않고, 생성 로그만 [GenerationType.PREVIEW]로 남긴다 - 실험에 쓴 실제
+ * 과금을 추적하기 위해서다. PREVIEW는 품질 지표 집계에서 제외되고 memberId가 없어 일일 토큰
+ * 상한에도 잡히지 않으므로, 실험이 실사용 지표를 오염시키지 않는다. 생성 실패·검증 실패도
+ * 예외 대신 결과에 담아 돌려준다 - 실패를 관찰하는 것이 이 기능의 목적이기 때문이다.
  */
 @Service
 class PromptPreviewService(
@@ -34,6 +37,7 @@ class PromptPreviewService(
     private val commentGenerator: CommentGenerator,
     private val commentFeedValidator: CommentFeedValidator,
     private val geminiPricing: GeminiPricing,
+    private val generationLogRecorder: GenerationLogRecorder,
 ) {
     fun preview(command: PromptPreviewCommand): PromptPreviewResult {
         val selection = resolveSelection(command.characters, command.tikitakaCount)
@@ -41,7 +45,7 @@ class PromptPreviewService(
         val context =
             CommentPromptContext(
                 currentConversationSummary = command.currentConversationSummary,
-                pastSummaries = PastSummaries.of(emptyList()),
+                pastSummaries = PastSummaries.of(command.pastSummaries),
                 diaryContent = command.diaryContent,
                 characters = selection.characters,
                 tikitakaCount = selection.tikitakaCount,
@@ -51,37 +55,40 @@ class PromptPreviewService(
         val userContent = promptProvider.buildUserContent(context)
 
         val startedAt = System.nanoTime()
-        return try {
-            val output = commentGenerator.generateComment(context, settings)
-            PromptPreviewResult(
-                model = settings.model,
-                systemPrompt = settings.systemPrompt,
-                userContent = userContent,
-                characters = selection.characters,
-                tikitakaCount = selection.tikitakaCount,
-                eongttungTopic = eongttungTopic,
-                feed = output.feed,
-                validationError = validationError(output, selection),
-                generationError = null,
-                usage = PreviewUsage.of(geminiPricing, settings.model, output),
-                latencyMs = elapsedMs(startedAt),
-            )
-        } catch (e: CommentGenerationFailedException) {
-            // 호출·파싱 실패. 이미 과금된 토큰이 있으면(파싱 실패 등) 그대로 보여준다.
-            PromptPreviewResult(
-                model = settings.model,
-                systemPrompt = settings.systemPrompt,
-                userContent = userContent,
-                characters = selection.characters,
-                tikitakaCount = selection.tikitakaCount,
-                eongttungTopic = eongttungTopic,
-                feed = null,
-                validationError = null,
-                generationError = e.message,
-                usage = PreviewUsage.of(geminiPricing, settings.model, e),
-                latencyMs = elapsedMs(startedAt),
-            )
-        }
+        val result =
+            try {
+                val output = commentGenerator.generateComment(context, settings)
+                PromptPreviewResult(
+                    model = settings.model,
+                    systemPrompt = settings.systemPrompt,
+                    userContent = userContent,
+                    characters = selection.characters,
+                    tikitakaCount = selection.tikitakaCount,
+                    eongttungTopic = eongttungTopic,
+                    feed = output.feed,
+                    validationError = validationError(output, selection),
+                    generationError = null,
+                    usage = PreviewUsage.of(geminiPricing, settings.model, output),
+                    latencyMs = elapsedMs(startedAt),
+                )
+            } catch (e: CommentGenerationFailedException) {
+                // 호출·파싱 실패. 이미 과금된 토큰이 있으면(파싱 실패 등) 그대로 보여준다.
+                PromptPreviewResult(
+                    model = settings.model,
+                    systemPrompt = settings.systemPrompt,
+                    userContent = userContent,
+                    characters = selection.characters,
+                    tikitakaCount = selection.tikitakaCount,
+                    eongttungTopic = eongttungTopic,
+                    feed = null,
+                    validationError = null,
+                    generationError = e.message,
+                    usage = PreviewUsage.of(geminiPricing, settings.model, e),
+                    latencyMs = elapsedMs(startedAt),
+                )
+            }
+        recordUsage(result.usage, result.latencyMs, result.generationError)
+        return result
     }
 
     /**
@@ -94,39 +101,61 @@ class PromptPreviewService(
         val userContent = promptProvider.buildReplyUserContent(command.diaryContent, promptId, command.characterComment, command.userReply)
 
         val startedAt = System.nanoTime()
-        return try {
-            val output =
-                commentGenerator.generateReply(
-                    command.diaryContent,
-                    promptId,
-                    command.characterComment,
-                    command.userReply,
-                    settings,
+        val result =
+            try {
+                val output =
+                    commentGenerator.generateReply(
+                        command.diaryContent,
+                        promptId,
+                        command.characterComment,
+                        command.userReply,
+                        settings,
+                    )
+                ReplyPreviewResult(
+                    model = settings.model,
+                    systemPrompt = settings.systemPrompt,
+                    userContent = userContent,
+                    character = command.character,
+                    replyText = output.text,
+                    validationError = replyValidationError(output.text),
+                    generationError = null,
+                    usage = PreviewUsage.of(geminiPricing, settings.model, output),
+                    latencyMs = elapsedMs(startedAt),
                 )
-            ReplyPreviewResult(
-                model = settings.model,
-                systemPrompt = settings.systemPrompt,
-                userContent = userContent,
-                character = command.character,
-                replyText = output.text,
-                validationError = replyValidationError(output.text),
-                generationError = null,
-                usage = PreviewUsage.of(geminiPricing, settings.model, output),
-                latencyMs = elapsedMs(startedAt),
-            )
-        } catch (e: CommentGenerationFailedException) {
-            ReplyPreviewResult(
-                model = settings.model,
-                systemPrompt = settings.systemPrompt,
-                userContent = userContent,
-                character = command.character,
-                replyText = null,
-                validationError = null,
-                generationError = e.message,
-                usage = PreviewUsage.of(geminiPricing, settings.model, e),
-                latencyMs = elapsedMs(startedAt),
-            )
-        }
+            } catch (e: CommentGenerationFailedException) {
+                ReplyPreviewResult(
+                    model = settings.model,
+                    systemPrompt = settings.systemPrompt,
+                    userContent = userContent,
+                    character = command.character,
+                    replyText = null,
+                    validationError = null,
+                    generationError = e.message,
+                    usage = PreviewUsage.of(geminiPricing, settings.model, e),
+                    latencyMs = elapsedMs(startedAt),
+                )
+            }
+        recordUsage(result.usage, result.latencyMs, result.generationError)
+        return result
+    }
+
+    // 실험에 쓴 실제 과금을 남긴다. memberId·conversationId가 없어 일일 상한·대화방 집계에는 잡히지 않는다.
+    private fun recordUsage(
+        usage: PreviewUsage,
+        latencyMs: Long,
+        generationError: String?,
+    ) {
+        generationLogRecorder.record(
+            type = GenerationType.PREVIEW,
+            success = generationError == null,
+            attemptCount = 1,
+            latencyMs = latencyMs,
+            usedTokens = usage.usedTokens,
+            cachedTokens = usage.cachedTokens,
+            inputTokens = usage.inputTokens,
+            outputTokens = usage.outputTokens,
+            failureReason = generationError,
+        )
     }
 
     // 벽시계는 NTP 보정에 흔들려 경과 시간이 왜곡될 수 있어 단조 시계를 쓴다.

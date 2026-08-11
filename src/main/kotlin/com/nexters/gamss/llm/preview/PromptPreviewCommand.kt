@@ -11,6 +11,7 @@ data class PromptPreviewCommand(
     val commentPrompt: String?,
     val diaryContent: String,
     val currentConversationSummary: String?,
+    val pastSummaries: List<String>,
     val characters: List<EmotionType>,
     val tikitakaCount: Int?,
 )
