@@ -11,6 +11,7 @@ import { MemberList } from '@/pages/members/list'
 import { MemberShow } from '@/pages/members/show'
 import { AdminAccountList } from '@/pages/admin-accounts/list'
 import { LlmSettingsPage } from '@/pages/llm-settings'
+import { PromptPlaygroundPage } from '@/pages/prompt-playground'
 import { TokenUsagePage } from '@/pages/token-usage'
 
 // mock(로컬) 모드에서는 Firebase 없이 dev-login 을 쓴다.
@@ -44,6 +45,7 @@ export default function App() {
             <Route path="/members/:id" element={<MemberShow />} />
             <Route path="/admin-accounts" element={<AdminAccountList />} />
             <Route path="/llm-settings" element={<LlmSettingsPage />} />
+            <Route path="/playground" element={<PromptPlaygroundPage />} />
             <Route path="/token-usage" element={<TokenUsagePage />} />
           </Route>
 

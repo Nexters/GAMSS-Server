@@ -35,4 +35,38 @@ class SystemPromptResolverTest {
     fun `소재 목록 타입은 시스템 프롬프트로 조립할 수 없다`() {
         assertFailsWith<IllegalArgumentException> { resolver.resolve(PromptType.EONGTTUNG_TOPIC) }
     }
+
+    @Test
+    fun `미리보기 조립은 오버라이드를 실제 생성과 같은 형식으로 조립한다`() {
+        every { llmSettingsService.currentCommonView() } returns LlmSettingsView("m", "저장 공통")
+
+        val result = resolver.resolveForPreview(PromptType.COMMENT, "공통 시험", "댓글 시험")
+
+        assertEquals("m", result.model)
+        assertEquals("공통 시험\n\n댓글 시험", result.systemPrompt)
+    }
+
+    @Test
+    fun `미리보기 조립에서 null 조각은 저장된 현재값을 쓴다`() {
+        every { llmSettingsService.currentCommonView() } returns LlmSettingsView("m", "저장 공통")
+        every { llmSettingsService.currentPrompt(PromptType.COMMENT) } returns "저장 댓글"
+
+        assertEquals("저장 공통\n\n저장 댓글", resolver.resolveForPreview(PromptType.COMMENT, null, null).systemPrompt)
+        assertEquals("저장 공통\n\n댓글 시험", resolver.resolveForPreview(PromptType.COMMENT, null, "댓글 시험").systemPrompt)
+        assertEquals("공통 시험\n\n저장 댓글", resolver.resolveForPreview(PromptType.COMMENT, "공통 시험", null).systemPrompt)
+    }
+
+    @Test
+    fun `미리보기 조립에 COMMON을 넘기면 실패한다 - 조립할 타입이 없다`() {
+        assertFailsWith<IllegalArgumentException> {
+            resolver.resolveForPreview(PromptType.COMMON, "공통 시험", null)
+        }
+    }
+
+    @Test
+    fun `미리보기 조립도 소재 목록 타입을 거부한다`() {
+        assertFailsWith<IllegalArgumentException> {
+            resolver.resolveForPreview(PromptType.EONGTTUNG_TOPIC, null, null)
+        }
+    }
 }

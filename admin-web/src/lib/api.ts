@@ -8,6 +8,22 @@ const TOKEN_KEY = 'gamss-admin-token'
 const MOCK_MODE = import.meta.env.VITE_AUTH_MODE === 'mock'
 const DEV_ADMIN_EMAIL: string = import.meta.env.VITE_DEV_ADMIN_EMAIL ?? ''
 
+/**
+ * API 실패 응답. message는 기존 호출부와의 호환을 위해 분기용 코드를 유지하고,
+ * 사람이 읽을 서버 메시지는 detail에 담는다.
+ */
+export class ApiError extends Error {
+  readonly code: string
+  readonly detail?: string
+
+  constructor(code: string, detail?: string) {
+    super(code)
+    this.name = 'ApiError'
+    this.code = code
+    this.detail = detail
+  }
+}
+
 export function getStoredToken(): string | null {
   return localStorage.getItem(TOKEN_KEY)
 }
@@ -96,7 +112,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
 
   const body = await res.json().catch(() => null)
   if (!res.ok || !body?.success) {
-    throw new Error(body?.error?.code ?? `HTTP_${res.status}`)
+    throw new ApiError(body?.error?.code ?? `HTTP_${res.status}`, body?.error?.message)
   }
   return body.data as T
 }

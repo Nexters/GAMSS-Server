@@ -7,8 +7,15 @@ import org.springframework.data.repository.query.Param
 import java.time.Instant
 
 interface GenerationLogRepository : JpaRepository<GenerationLog, Long> {
-    /** [from] 이후의 생성 로그를 시간순으로 조회한다. 대시보드 품질 지표 집계에 쓴다. */
-    @Query("select g from GenerationLog g where g.createdAt >= :from order by g.createdAt asc")
+    /**
+     * [from] 이후의 생성 로그를 시간순으로 조회한다. 대시보드 품질 지표 집계에 쓴다.
+     * 실험실 호출(PREVIEW)은 비용 추적용 기록일 뿐 실사용 품질이 아니므로 제외한다.
+     */
+    @Query(
+        "select g from GenerationLog g " +
+            "where g.createdAt >= :from and g.generationType <> com.nexters.gamss.monitoring.domain.GenerationType.PREVIEW " +
+            "order by g.createdAt asc",
+    )
     fun findAllSince(
         @Param("from") from: Instant,
     ): List<GenerationLog>
