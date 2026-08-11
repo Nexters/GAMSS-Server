@@ -36,6 +36,7 @@ systemctl enable --now docker
 
 echo "== 3/6 도커 로그 로테이션 기본값(/etc/docker/daemon.json) =="
 # compose에 명시된 서비스는 그쪽 설정을 따르고, 이 기본값은 그 외 임시 컨테이너까지 덮는다.
+# live-restore: 데몬 재시작·업그레이드 때 실행 중인 컨테이너를 유지한다.
 if [[ -f /etc/docker/daemon.json ]]; then
   echo "  이미 존재 — log-driver/log-opts가 설정돼 있는지 직접 확인하세요."
 else
@@ -45,11 +46,19 @@ else
   "log-opts": {
     "max-size": "10m",
     "max-file": "3"
-  }
+  },
+  "live-restore": true
 }
 EOF
-  systemctl restart docker
-  echo "  작성 완료 (기존 컨테이너는 재생성해야 적용됨)"
+  # 로그 기본값 적용에는 데몬 재시작이 필요한데, 운영 중인 서버에서 재실행된 경우라면
+  # 전 컨테이너가 내려갔다 올라온다. 실행 중인 컨테이너가 있으면 재시작을 미루고 안내만 한다.
+  if [[ -n "$(docker ps -q)" ]]; then
+    echo "  실행 중인 컨테이너가 있어 도커 재시작을 건너뜁니다."
+    echo "  → 트래픽 적은 시간에 'systemctl restart docker'를 직접 실행하세요."
+  else
+    systemctl restart docker
+    echo "  작성 완료 (기존 컨테이너는 재생성해야 적용됨)"
+  fi
 fi
 
 echo "== 4/6 배포 유저(${DEPLOY_USER})를 docker 그룹에 추가 =="
