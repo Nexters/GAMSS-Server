@@ -11,7 +11,7 @@ data class PromptPreviewResponse(
     val systemPrompt: String,
     @field:Schema(description = "실제 전달된 user content")
     val userContent: String,
-    @field:Schema(description = "등장 캐릭터(무작위 선택 결과 포함)")
+    @field:Schema(description = "등장 캐릭터(요청에서 지정한 목록, 중복 제거 후)")
     val characters: List<String>,
     @field:Schema(description = "티키타카 개수", example = "1")
     val tikitakaCount: Int,
