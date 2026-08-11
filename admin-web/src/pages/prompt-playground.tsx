@@ -17,6 +17,7 @@ import {
   X,
 } from 'lucide-react'
 import type { PreviewResult, ReplyPreviewResult } from '@/types/promptPreview'
+import { ApiError } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -39,6 +40,14 @@ const CHARACTERS: { value: Emotion; label: string; emoji: string }[] = [
 
 const characterOf = (value: string) => CHARACTERS.find((c) => c.value === value)
 const labelOf = (value: string) => characterOf(value)?.label ?? value
+
+// 서버 DTO의 @Size 제한과 같은 값. 서버가 2000자, 요약 근사는 여유를 둔 1800자 예산을 쓴다.
+const DIARY_MAX_LENGTH = 2000
+const SUMMARY_MAX_LENGTH = 1800
+
+// 400(INVALID_INPUT)은 순수한 입력 오류라 서버가 내려준 사유를 그대로 보여준다.
+const errorMessageOf = (error: unknown, fallback: string) =>
+  error instanceof ApiError && error.detail ? error.detail : fallback
 
 /** 세션에 쌓이는 말풍선 하나. 유저 메시지 또는 캐릭터 메시지. */
 interface SessionItem {
@@ -198,7 +207,8 @@ function SessionBubble({ item, onReply }: { item: SessionItem; onReply: (item: S
           <button
             type="button"
             onClick={() => onReply(item)}
-            className="flex items-center gap-0.5 rounded px-1 py-0.5 text-[11px] text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
+            aria-label={`${character?.label ?? item.characterId}에게 답장`}
+            className="flex items-center gap-0.5 rounded px-1 py-0.5 text-[11px] text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
           >
             <Reply className="size-3" />
             답장
@@ -272,14 +282,13 @@ export function PromptPlaygroundPage() {
     return idRef.current
   }
 
+  // updater는 순수해야 하므로(StrictMode 이중 호출) setTikitaka는 updater 밖에서 부른다.
   const toggleCharacter = (value: Emotion) => {
-    setSelected((prev) => {
-      const next = prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
-      if (next.length < 2) {
-        setTikitaka(0)
-      }
-      return next
-    })
+    const next = selected.includes(value) ? selected.filter((v) => v !== value) : [...selected, value]
+    setSelected(next)
+    if (next.length < 2) {
+      setTikitaka(0)
+    }
   }
 
   const canStart = diary.trim().length > 0 && !running && selected.length > 0
@@ -306,24 +315,45 @@ export function PromptPlaygroundPage() {
   })
 
   // 프로덕션에서 클라이언트가 보내는 '채팅방 임시 요약'을 세션 대화 내용으로 근사한다.
+  // 문자 단위로 자르면 첫 줄의 화자 라벨이 깨진 파편으로 시작하므로, 최근 대화부터 줄 단위로
+  // 담고 관리자가 지정한 요약은 항상 보존한다.
   const transcriptSummary = () => {
+    const base = summary.trim()
     const lines = session.map((item) => `${item.kind === 'user' ? '유저' : labelOf(item.characterId ?? '')}: ${item.text}`)
-    const base = summary.trim() ? `${summary.trim()} / ` : ''
-    return `${base}${lines.join(' / ')}`.slice(-1800)
+    let budget = SUMMARY_MAX_LENGTH - (base ? base.length + 3 : 0)
+    const kept: string[] = []
+    for (let i = lines.length - 1; i >= 0; i -= 1) {
+      const cost = lines[i].length + (kept.length > 0 ? 3 : 0)
+      if (cost > budget) {
+        break
+      }
+      budget -= cost
+      kept.unshift(lines[i])
+    }
+    return [base, ...kept].filter(Boolean).join(' / ')
   }
 
-  const startSession = () => {
-    if (!canStart) {
-      return
-    }
+  /**
+   * 댓글 피드 미리보기 한 번. 세션 시작(교체)과 이어보내기(추가)가 같은 요청 조건을 쓰도록
+   * 호출 경로를 하나로 모은다 - 두 경로의 조건이 갈라지면 "같은 조건 비교"라는 목적이 깨진다.
+   */
+  const runFeedPreview = ({
+    diaryContent,
+    conversationSummary,
+    replaceSession,
+  }: {
+    diaryContent: string
+    conversationSummary: string | null
+    replaceSession: boolean
+  }) => {
     setRequestError(null)
     run(
       {
         url: '/api/admin/llm-settings/prompt/preview',
         method: 'post',
         values: {
-          diaryContent: diary,
-          currentConversationSummary: summary.trim() || null,
+          diaryContent,
+          currentConversationSummary: conversationSummary,
           commonPrompt: commonPrompt.trim() ? commonPrompt : null,
           commentPrompt: commentPrompt.trim() ? commentPrompt : null,
           characters: selected,
@@ -333,9 +363,17 @@ export function PromptPlaygroundPage() {
       {
         onSuccess: (response) => {
           const result = response.data as unknown as PreviewResult
-          setFirstDiary(diary)
-          setSession([{ id: nextId(), kind: 'user', text: diary }, ...feedToItems(result)])
-          setSessionCost(result.estimatedCostUsd)
+          const newItems: SessionItem[] = [{ id: nextId(), kind: 'user', text: diaryContent }, ...feedToItems(result)]
+          if (replaceSession) {
+            setFirstDiary(diaryContent)
+            setSession(newItems)
+            setSessionCost(result.estimatedCostUsd)
+            setReplyTarget(null)
+          }
+          if (!replaceSession) {
+            setSession((prev) => [...prev, ...newItems])
+            setSessionCost((cost) => cost + result.estimatedCostUsd)
+          }
           setLastRun({
             meta: metaOf(result),
             systemPrompt: result.systemPrompt,
@@ -344,12 +382,19 @@ export function PromptPlaygroundPage() {
             generationError: result.generationError,
             conditions: { characters: result.characters, tikitakaCount: result.tikitakaCount, eongttungTopic: result.eongttungTopic },
           })
-          setReplyTarget(null)
           setComposer('')
         },
-        onError: () => setRequestError('미리보기 요청에 실패했습니다. 입력을 확인하고 다시 시도해주세요.'),
+        onError: (error) =>
+          setRequestError(errorMessageOf(error, '미리보기 요청에 실패했습니다. 입력을 확인하고 다시 시도해주세요.')),
       },
     )
+  }
+
+  const startSession = () => {
+    if (!canStart) {
+      return
+    }
+    runFeedPreview({ diaryContent: diary, conversationSummary: summary.trim() || null, replaceSession: true })
   }
 
   const sendComposer = () => {
@@ -394,7 +439,7 @@ export function PromptPlaygroundPage() {
             setComposer('')
             setReplyTarget(null)
           },
-          onError: () => setRequestError('답장 미리보기 요청에 실패했습니다.'),
+          onError: (error) => setRequestError(errorMessageOf(error, '답장 미리보기 요청에 실패했습니다.')),
         },
       )
       return
@@ -403,38 +448,7 @@ export function PromptPlaygroundPage() {
     if (selected.length === 0) {
       return
     }
-    run(
-      {
-        url: '/api/admin/llm-settings/prompt/preview',
-        method: 'post',
-        values: {
-          diaryContent: text,
-          currentConversationSummary: transcriptSummary() || null,
-          commonPrompt: commonPrompt.trim() ? commonPrompt : null,
-          commentPrompt: commentPrompt.trim() ? commentPrompt : null,
-          characters: selected,
-          tikitakaCount: tikitaka,
-        },
-      },
-      {
-        onSuccess: (response) => {
-          const result = response.data as unknown as PreviewResult
-          const newItems: SessionItem[] = [{ id: nextId(), kind: 'user', text }, ...feedToItems(result)]
-          setSession((prev) => [...prev, ...newItems])
-          setSessionCost((cost) => cost + result.estimatedCostUsd)
-          setLastRun({
-            meta: metaOf(result),
-            systemPrompt: result.systemPrompt,
-            userContent: result.userContent,
-            validationError: result.validationError,
-            generationError: result.generationError,
-            conditions: { characters: result.characters, tikitakaCount: result.tikitakaCount, eongttungTopic: result.eongttungTopic },
-          })
-          setComposer('')
-        },
-        onError: () => setRequestError('미리보기 요청에 실패했습니다.'),
-      },
-    )
+    runFeedPreview({ diaryContent: text, conversationSummary: transcriptSummary() || null, replaceSession: false })
   }
 
   return (
@@ -456,9 +470,13 @@ export function PromptPlaygroundPage() {
                 id="diary"
                 value={diary}
                 onChange={(e) => setDiary(e.target.value)}
+                maxLength={DIARY_MAX_LENGTH}
                 placeholder="예) 오늘 팀장님한테 깨졌는데 생각해보니 내 잘못이 아니었다"
                 className="min-h-[7rem]"
               />
+              <p className="mt-1 text-right text-[11px] tabular-nums text-muted-foreground">
+                {diary.length.toLocaleString()} / {DIARY_MAX_LENGTH.toLocaleString()}
+              </p>
             </div>
             <div>
               <label htmlFor="summary" className="mb-1.5 block text-sm font-medium">
@@ -634,6 +652,7 @@ export function PromptPlaygroundPage() {
                     <Input
                       value={composer}
                       onChange={(e) => setComposer(e.target.value)}
+                      maxLength={DIARY_MAX_LENGTH}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
                           sendComposer()
