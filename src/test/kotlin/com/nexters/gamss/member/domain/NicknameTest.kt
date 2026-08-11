@@ -47,6 +47,40 @@ class NicknameTest {
     }
 
     @Test
+    fun `이모지 하나는 1자로 세어 최소 길이 미달이다`() {
+        // String.length 기준이던 시절엔 서로게이트 페어(2 유닛) 때문에 통과하던 입력이다.
+        val exception = assertFailsWith<BusinessException> { Nickname("😀") }
+
+        assertEquals(ErrorCode.INVALID_NICKNAME, exception.errorCode)
+    }
+
+    @Test
+    fun `이모지도 사용자가 보는 글자 수로 센다`() {
+        assertEquals("😀😀", Nickname("😀😀").value)
+        assertEquals("😀".repeat(Nickname.MAX_LENGTH), Nickname("😀".repeat(Nickname.MAX_LENGTH)).value)
+        assertFailsWith<BusinessException> { Nickname("😀".repeat(Nickname.MAX_LENGTH + 1)) }
+    }
+
+    @Test
+    fun `피부톤·ZWJ 조합 이모지는 한 자로 센다`() {
+        // 👍🏽 = 엄지 + 피부톤(코드 포인트 2개), 👨‍👩‍👧 = ZWJ 가족(코드 포인트 5개). 각각 그래핌 1자.
+        assertFailsWith<BusinessException> { Nickname("👍🏽") }
+        assertFailsWith<BusinessException> { Nickname("👨‍👩‍👧") }
+        assertEquals("👍🏽바다", Nickname("👍🏽바다").value)
+        assertEquals("👨‍👩‍👧바다", Nickname("👨‍👩‍👧바다").value)
+    }
+
+    @Test
+    fun `그래핌 수가 맞아도 코드 유닛이 컬럼 한계를 넘으면 INVALID_NICKNAME`() {
+        // ZWJ로 무한정 이어 붙인 병적인 단일 그래핌. 검증을 통과시키면 varchar(200) 삽입에서 터진다.
+        val hugeCluster = List(60) { "👨" }.joinToString("\u200D")
+
+        val exception = assertFailsWith<BusinessException> { Nickname("${hugeCluster}가$hugeCluster") }
+
+        assertEquals(ErrorCode.INVALID_NICKNAME, exception.errorCode)
+    }
+
+    @Test
     fun `금칙어가 포함되면 INVALID_NICKNAME`() {
         val exception = assertFailsWith<BusinessException> { Nickname("시발이") }
 
