@@ -62,3 +62,33 @@ jobs:
           update-comment: true
           min-coverage-overall: 0
           min-coverage-changed-files: 0
+
+  # 백오피스(admin-web) 린트·타입체크·빌드. 이게 없으면 프론트 타입 에러가
+  # dev 머지 후 이미지 빌드(build-admin)에서야 드러나고, 그 시점엔 백엔드 배포가
+  # 이미 진행 중이다. 경로 필터 없이 항상 돌린다 - 1분 남짓으로 저렴하고,
+  # 조건부 스킵은 브랜치 보호 필수 체크와의 조합을 복잡하게 만든다.
+  admin-web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: admin-web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v5
+        with:
+          # admin-web/Dockerfile(node:22-alpine)과 맞춘다.
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: admin-web/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint (oxlint)
+        run: npm run lint
+
+      - name: Typecheck & Build
+        run: npm run build
