@@ -1,6 +1,8 @@
 package com.nexters.gamss.admin.controller
 
 import com.nexters.gamss.global.security.JwtIssuer
+import com.nexters.gamss.member.domain.Member
+import com.nexters.gamss.member.repository.MemberRepository
 import com.nexters.gamss.support.FakeCommentGeneratorConfig
 import com.nexters.gamss.support.TestcontainersConfig
 import org.junit.jupiter.api.BeforeEach
@@ -27,6 +29,9 @@ class AdminPromptPreviewControllerIntegrationTest {
 
     @Autowired
     private lateinit var jwtIssuer: JwtIssuer
+
+    @Autowired
+    private lateinit var memberRepository: MemberRepository
 
     private lateinit var mockMvc: MockMvc
 
@@ -91,10 +96,40 @@ class AdminPromptPreviewControllerIntegrationTest {
             .post("/api/admin/llm-settings/prompt/preview") {
                 header(HttpHeaders.AUTHORIZATION, adminBearer())
                 contentType = MediaType.APPLICATION_JSON
-                content = """{"diaryContent":""}"""
+                // characters를 채워 diaryContent의 @NotBlank 위반만 남긴다 - 원인을 분리해야 검증 제거 회귀를 잡는다.
+                content = """{"diaryContent":"","characters":["JOY"]}"""
             }.andExpect {
                 status { isBadRequest() }
                 jsonPath("$.error.code") { value("INVALID_INPUT") }
+            }
+    }
+
+    @Test
+    fun `답장 미리보기에 character가 없으면 400 INVALID_INPUT`() {
+        // 컨트롤러의 checkNotNull이 아니라 Bean Validation이 먼저 막는 계약을 고정한다(@NotNull 제거 회귀 방지).
+        mockMvc
+            .post("/api/admin/llm-settings/prompt/preview/reply") {
+                header(HttpHeaders.AUTHORIZATION, adminBearer())
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"diaryContent":"샘플","characterComment":"댓글","userReply":"답장"}"""
+            }.andExpect {
+                status { isBadRequest() }
+                jsonPath("$.error.code") { value("INVALID_INPUT") }
+            }
+    }
+
+    @Test
+    fun `일반 회원 토큰으로 호출하면 403`() {
+        val member = memberRepository.save(Member("user@a.com"))
+
+        mockMvc
+            .post("/api/admin/llm-settings/prompt/preview") {
+                header(HttpHeaders.AUTHORIZATION, "Bearer ${jwtIssuer.issueAccessToken(member.id)}")
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"diaryContent":"샘플","characters":["JOY"]}"""
+            }.andExpect {
+                status { isForbidden() }
+                jsonPath("$.error.code") { value("ACCESS_DENIED") }
             }
     }
 

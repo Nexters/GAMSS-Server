@@ -28,4 +28,10 @@ class CharacterSelectionTest {
     fun `음수 티키타카는 만들 수 없다`() {
         assertFailsWith<IllegalArgumentException> { CharacterSelection.of(listOf(EmotionType.JOY, EmotionType.ANGER), -1) }
     }
+
+    @Test
+    fun `중복 제거 후 캐릭터가 1명이면 티키타카를 지정할 수 없다`() {
+        // distinct가 티키타카 검사보다 먼저 적용되는 순서 의존성을 고정한다.
+        assertFailsWith<IllegalArgumentException> { CharacterSelection.of(listOf(EmotionType.JOY, EmotionType.JOY), 1) }
+    }
 }
