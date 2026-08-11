@@ -62,6 +62,15 @@ class NicknameTest {
     }
 
     @Test
+    fun `조합 이모지 최대 길이도 허용한다 - 컬럼 방어는 코드 포인트 기준`() {
+        // 👨‍👩‍👧‍👦 1자 = 코드 포인트 7개·UTF-16 유닛 11개. 20자면 코드 포인트 140개로 varchar(200)에
+        // 들어가야 한다. UTF-16 유닛(220개)으로 방어하면 이 정상 입력이 거부된다.
+        val family = "👨‍👩‍👧‍👦".repeat(Nickname.MAX_LENGTH)
+
+        assertEquals(family, Nickname(family).value)
+    }
+
+    @Test
     fun `피부톤·ZWJ 조합 이모지는 한 자로 센다`() {
         // 👍🏽 = 엄지 + 피부톤(코드 포인트 2개), 👨‍👩‍👧 = ZWJ 가족(코드 포인트 5개). 각각 그래핌 1자.
         assertFailsWith<BusinessException> { Nickname("👍🏽") }

@@ -26,9 +26,10 @@ class Nickname(
     }
 
     private fun validateLength(value: String) {
-        // 컬럼(varchar, 코드 포인트 기준)을 넘는 병적인 입력(초장문 ZWJ 조합 등) 방어.
-        // UTF-16 유닛 수 ≥ 코드 포인트 수이므로 이 검사로 컬럼 초과가 원천 차단된다.
-        if (graphemeCount(value) in MIN_LENGTH..MAX_LENGTH && value.length <= COLUMN_LENGTH) {
+        // 컬럼(varchar)이 세는 단위인 코드 포인트로 방어한다 - 병적인 초장문 ZWJ 조합이
+        // 그래핌 검사를 통과해도 컬럼을 넘으면 거부한다. UTF-16 유닛으로 세면 조합 이모지
+        // (그래핌당 유닛 11개 등)가 컬럼에는 들어가는데도 과하게 거부된다.
+        if (graphemeCount(value) in MIN_LENGTH..MAX_LENGTH && value.codePointCount(0, value.length) <= COLUMN_LENGTH) {
             return
         }
         throw BusinessException(
