@@ -546,6 +546,8 @@ export function PromptPlaygroundPage() {
             </p>
           </div>
           {requestError && <p className="text-sm text-destructive">{requestError}</p>}
+
+          {lastRun && <PromptInspector systemPrompt={lastRun.systemPrompt} userContent={lastRun.userContent} />}
         </div>
 
         {/* 결과 세션 */}
@@ -682,8 +684,6 @@ export function PromptPlaygroundPage() {
                   </p>
                 </div>
               </Card>
-
-              {lastRun && <PromptInspector systemPrompt={lastRun.systemPrompt} userContent={lastRun.userContent} />}
             </>
           )}
         </div>
