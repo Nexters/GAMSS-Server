@@ -57,6 +57,11 @@ interface SessionItem {
   characterId?: string
   /** 캐릭터 티키타카·재응답의 답장 대상, 또는 유저 답장의 대상 캐릭터. */
   replyTo?: string
+  /**
+   * 캐릭터 말풍선이 속한 일기. 답장 시 이 일기를 맥락으로 보낸다 - 프로덕션이 rootMessageId로
+   * 그 댓글이 달린 일기를 찾는 것과 같은 동작.
+   */
+  diary?: string
 }
 
 interface LastMeta {
@@ -262,11 +267,11 @@ export function PromptPlaygroundPage() {
   const [commonPrompt, setCommonPrompt] = useState('')
   const [commentPrompt, setCommentPrompt] = useState('')
   const [replyPrompt, setReplyPrompt] = useState('')
+  const [pastSummaries, setPastSummaries] = useState('')
   const [selected, setSelected] = useState<Emotion[]>([])
   const [tikitaka, setTikitaka] = useState(0)
 
   const [session, setSession] = useState<SessionItem[]>([])
-  const [firstDiary, setFirstDiary] = useState('')
   const [sessionCost, setSessionCost] = useState(0)
   const [lastRun, setLastRun] = useState<LastRun | null>(null)
   const [composer, setComposer] = useState('')
@@ -293,16 +298,45 @@ export function PromptPlaygroundPage() {
 
   const canStart = diary.trim().length > 0 && !running && selected.length > 0
 
-  const feedToItems = (result: PreviewResult): SessionItem[] => [
-    ...(result.comments ?? []).map((c) => ({ id: nextId(), kind: 'character' as const, text: c.text, characterId: c.characterId })),
-    ...(result.tikitaka ?? []).map((t) => ({
+  // 프로덕션(MessageThreadOrder)처럼 티키타카를 답장 대상 댓글 바로 뒤에 끼워 넣는다 -
+  // 읽히는 흐름을 보고 프롬프트를 판단하는 도구라 표시 순서도 실제와 같아야 한다.
+  const feedToItems = (result: PreviewResult, diaryContent: string): SessionItem[] => {
+    const items: SessionItem[] = (result.comments ?? []).map((c) => ({
       id: nextId(),
       kind: 'character' as const,
-      text: t.text,
-      characterId: t.characterId,
-      replyTo: t.replyTo,
-    })),
-  ]
+      text: c.text,
+      characterId: c.characterId,
+      diary: diaryContent,
+    }))
+    for (const t of result.tikitaka ?? []) {
+      const item: SessionItem = {
+        id: nextId(),
+        kind: 'character' as const,
+        text: t.text,
+        characterId: t.characterId,
+        replyTo: t.replyTo,
+        diary: diaryContent,
+      }
+      // 대상 캐릭터의 댓글(또는 같은 대상에게 이미 붙은 티키타카) 뒤에 삽입해 순서를 보존한다.
+      const anchor = items.map((i) => i.characterId === t.replyTo || i.replyTo === t.replyTo).lastIndexOf(true)
+      if (anchor === -1) {
+        items.push(item)
+        continue
+      }
+      items.splice(anchor + 1, 0, item)
+    }
+    return items
+  }
+
+  // 과거 대화 요약: 한 줄에 하나, 최대 5개(서버 @Size와 동일).
+  const pastSummaryLines = () => {
+    const lines = pastSummaries
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .slice(0, 5)
+    return lines.length > 0 ? lines : null
+  }
 
   const metaOf = (r: PreviewResult | ReplyPreviewResult): LastMeta => ({
     model: r.model,
@@ -318,9 +352,10 @@ export function PromptPlaygroundPage() {
   // 문자 단위로 자르면 첫 줄의 화자 라벨이 깨진 파편으로 시작하므로, 최근 대화부터 줄 단위로
   // 담고 관리자가 지정한 요약은 항상 보존한다.
   const transcriptSummary = () => {
-    const base = summary.trim()
+    // 관리자 지정 요약이 예산보다 길면 잘라서라도 예산이 음수가 되지 않게 한다.
+    const base = summary.trim().slice(0, SUMMARY_MAX_LENGTH)
     const lines = session.map((item) => `${item.kind === 'user' ? '유저' : labelOf(item.characterId ?? '')}: ${item.text}`)
-    let budget = SUMMARY_MAX_LENGTH - (base ? base.length + 3 : 0)
+    let budget = Math.max(0, SUMMARY_MAX_LENGTH - (base ? base.length + 3 : 0))
     const kept: string[] = []
     for (let i = lines.length - 1; i >= 0; i -= 1) {
       const cost = lines[i].length + (kept.length > 0 ? 3 : 0)
@@ -354,6 +389,7 @@ export function PromptPlaygroundPage() {
         values: {
           diaryContent,
           currentConversationSummary: conversationSummary,
+          pastSummaries: pastSummaryLines(),
           commonPrompt: commonPrompt.trim() ? commonPrompt : null,
           commentPrompt: commentPrompt.trim() ? commentPrompt : null,
           characters: selected,
@@ -363,9 +399,8 @@ export function PromptPlaygroundPage() {
       {
         onSuccess: (response) => {
           const result = response.data as unknown as PreviewResult
-          const newItems: SessionItem[] = [{ id: nextId(), kind: 'user', text: diaryContent }, ...feedToItems(result)]
+          const newItems: SessionItem[] = [{ id: nextId(), kind: 'user', text: diaryContent }, ...feedToItems(result, diaryContent)]
           if (replaceSession) {
-            setFirstDiary(diaryContent)
             setSession(newItems)
             setSessionCost(result.estimatedCostUsd)
             setReplyTarget(null)
@@ -409,7 +444,8 @@ export function PromptPlaygroundPage() {
           url: '/api/admin/llm-settings/prompt/preview/reply',
           method: 'post',
           values: {
-            diaryContent: firstDiary,
+            // 프로덕션(rootMessageId 조회)처럼 그 댓글이 달린 일기를 맥락으로 보낸다.
+            diaryContent: replyTarget.diary ?? '',
             character: replyTarget.characterId,
             characterComment: replyTarget.text,
             userReply: text,
@@ -423,7 +459,15 @@ export function PromptPlaygroundPage() {
             const newItems: SessionItem[] = [
               { id: nextId(), kind: 'user', text, replyTo: replyTarget.characterId },
               ...(result.replyText !== null
-                ? [{ id: nextId(), kind: 'character' as const, text: result.replyText, characterId: result.character }]
+                ? [
+                    {
+                      id: nextId(),
+                      kind: 'character' as const,
+                      text: result.replyText,
+                      characterId: result.character,
+                      diary: replyTarget.diary,
+                    },
+                  ]
                 : []),
             ]
             setSession((prev) => [...prev, ...newItems])
@@ -455,7 +499,7 @@ export function PromptPlaygroundPage() {
     <div className="space-y-6">
       <PageHeader
         title="프롬프트 실험실"
-        description="저장하기 전에 프롬프트를 실제 LLM으로 시험합니다. 프롬프트도 생성 로그도 저장되지 않으며, 호출마다 소액의 비용이 발생합니다."
+        description="저장하기 전에 프롬프트를 실제 LLM으로 시험합니다. 프롬프트는 저장되지 않으며, 호출마다 소액의 비용이 발생합니다(비용은 생성 로그에 PREVIEW로 기록)."
       />
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
@@ -486,8 +530,27 @@ export function PromptPlaygroundPage() {
                 id="summary"
                 value={summary}
                 onChange={(e) => setSummary(e.target.value)}
+                maxLength={SUMMARY_MAX_LENGTH}
                 placeholder="이 채팅방에서 오간 대화의 요약이 있다면"
               />
+              <p className="mt-1 text-right text-[11px] tabular-nums text-muted-foreground">
+                {summary.length.toLocaleString()} / {SUMMARY_MAX_LENGTH.toLocaleString()}
+              </p>
+            </div>
+            <div>
+              <label htmlFor="pastSummaries" className="mb-1.5 block text-sm font-medium">
+                과거 대화 요약 <span className="font-normal text-muted-foreground">(선택, 한 줄에 하나·최대 5개)</span>
+              </label>
+              <Textarea
+                id="pastSummaries"
+                value={pastSummaries}
+                onChange={(e) => setPastSummaries(e.target.value)}
+                placeholder={'예) 지난주에 이직 고민을 나눴다\n예) 어제는 잠을 잘 못 잤다고 했다'}
+                className="min-h-[4rem]"
+              />
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                실제 서비스는 다른 날 채팅방의 요약을 무작위로 2개 뽑아 넣습니다. 비워두면 [과거 대화 요약] 섹션이 빠집니다.
+              </p>
             </div>
 
             <div className="space-y-2.5">
