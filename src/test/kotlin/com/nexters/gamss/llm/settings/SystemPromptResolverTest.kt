@@ -62,4 +62,11 @@ class SystemPromptResolverTest {
             resolver.resolveForPreview(PromptType.COMMON, "공통 시험", null)
         }
     }
+
+    @Test
+    fun `미리보기 조립도 소재 목록 타입을 거부한다`() {
+        assertFailsWith<IllegalArgumentException> {
+            resolver.resolveForPreview(PromptType.EONGTTUNG_TOPIC, null, null)
+        }
+    }
 }

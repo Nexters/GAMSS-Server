@@ -34,6 +34,8 @@ class SystemPromptResolver(
         typePrompt: String?,
     ): LlmSettingsView {
         require(promptType != PromptType.COMMON) { "조립할 타입 프롬프트를 지정해야 합니다." }
+        // resolve()와 같은 이유 - 소재 목록은 시스템 프롬프트 조각이 아니다.
+        require(promptType != PromptType.EONGTTUNG_TOPIC) { "EONGTTUNG_TOPIC은 시스템 프롬프트로 조립할 수 없습니다." }
         val base = llmSettingsService.currentCommonView()
         val common = commonPrompt ?: base.systemPrompt
         val type = typePrompt ?: llmSettingsService.currentPrompt(promptType)
