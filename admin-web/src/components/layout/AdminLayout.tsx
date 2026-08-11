@@ -45,6 +45,9 @@ function sectionOf(pathname: string): string {
   if (pathname.startsWith('/token-usage')) {
     return '토큰 사용량'
   }
+  if (pathname.startsWith('/playground')) {
+    return '프롬프트 실험실'
+  }
   return ''
 }
 
