@@ -13,6 +13,9 @@ class SystemPromptResolver(
 ) {
     /** 생성기가 쓸 모델·시스템 프롬프트. COMMON을 넘기면 조립 없이 공통 프롬프트만 돌려준다. */
     fun resolve(promptType: PromptType): LlmSettingsView {
+        // 소재 목록은 시스템 프롬프트 조각이 아니다 — 조립하면 "공통 + 소재 나열"이라는
+        // 성립 불가능한 프롬프트가 조용히 만들어지므로 호출 자체를 계약 위반으로 막는다.
+        require(promptType != PromptType.EONGTTUNG_TOPIC) { "EONGTTUNG_TOPIC은 시스템 프롬프트로 조립할 수 없습니다." }
         val base = llmSettingsService.currentCommonView()
         if (promptType == PromptType.COMMON) {
             return base
