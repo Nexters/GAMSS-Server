@@ -50,7 +50,7 @@ class PromptPreviewService(
         val settings = systemPromptResolver.resolveForPreview(PromptType.COMMENT, command.commonPrompt, command.commentPrompt)
         val userContent = promptProvider.buildUserContent(context)
 
-        val startedAt = System.currentTimeMillis()
+        val startedAt = System.nanoTime()
         return try {
             val output = commentGenerator.generateComment(context, settings)
             PromptPreviewResult(
@@ -64,7 +64,7 @@ class PromptPreviewService(
                 validationError = validationError(output, selection),
                 generationError = null,
                 usage = PreviewUsage.of(geminiPricing, settings.model, output),
-                latencyMs = System.currentTimeMillis() - startedAt,
+                latencyMs = elapsedMs(startedAt),
             )
         } catch (e: CommentGenerationFailedException) {
             // 호출·파싱 실패. 이미 과금된 토큰이 있으면(파싱 실패 등) 그대로 보여준다.
@@ -79,7 +79,7 @@ class PromptPreviewService(
                 validationError = null,
                 generationError = e.message,
                 usage = PreviewUsage.of(geminiPricing, settings.model, e),
-                latencyMs = System.currentTimeMillis() - startedAt,
+                latencyMs = elapsedMs(startedAt),
             )
         }
     }
@@ -93,7 +93,7 @@ class PromptPreviewService(
         val promptId = PromptCharacterId.of(command.character).promptId
         val userContent = promptProvider.buildReplyUserContent(command.diaryContent, promptId, command.characterComment, command.userReply)
 
-        val startedAt = System.currentTimeMillis()
+        val startedAt = System.nanoTime()
         return try {
             val output =
                 commentGenerator.generateReply(
@@ -112,7 +112,7 @@ class PromptPreviewService(
                 validationError = replyValidationError(output.text),
                 generationError = null,
                 usage = PreviewUsage.of(geminiPricing, settings.model, output),
-                latencyMs = System.currentTimeMillis() - startedAt,
+                latencyMs = elapsedMs(startedAt),
             )
         } catch (e: CommentGenerationFailedException) {
             ReplyPreviewResult(
@@ -124,10 +124,13 @@ class PromptPreviewService(
                 validationError = null,
                 generationError = e.message,
                 usage = PreviewUsage.of(geminiPricing, settings.model, e),
-                latencyMs = System.currentTimeMillis() - startedAt,
+                latencyMs = elapsedMs(startedAt),
             )
         }
     }
+
+    // 벽시계는 NTP 보정에 흔들려 경과 시간이 왜곡될 수 있어 단조 시계를 쓴다.
+    private fun elapsedMs(startedAtNanos: Long): Long = (System.nanoTime() - startedAtNanos) / 1_000_000
 
     private fun replyValidationError(text: String): String? =
         try {
