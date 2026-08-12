@@ -33,30 +33,19 @@ class ExcludedEmotionTypes private constructor(
     companion object {
         val EMPTY = ExcludedEmotionTypes(emptyList())
 
-        /**
-         * 사용자 요청값을 dedup 후 검증한다. 전체 종을 다 제외하면(남는 후보가 없으면) 거부한다.
-         *
-         * 신규 생성 대상에서 빠진 캐릭터(WARM)는 400으로 막지 않고 조용히 걸러낸다 — 어차피
-         * 뽑히지 않아 목록에 넣어도 의미가 없는 값이고, 서버보다 늦게 배포되는 구버전 앱이
-         * 한동안 계속 보내오기 때문이다. 걸러내지 않으면 개수 상한 계산에 섞여 "후보가 남았는데도
-         * 거부"가 된다.
-         */
+        /** 사용자 요청값을 dedup 후 검증한다. 전체 종을 다 제외하면(남는 후보가 없으면) 거부한다. */
         fun of(emotionTypes: List<EmotionType>): ExcludedEmotionTypes {
-            val distinct = emotionTypes.filter { it.selectable }.distinct()
-            if (distinct.size >= EmotionType.SELECTABLE.size) {
+            val distinct = emotionTypes.distinct()
+            if (distinct.size >= EmotionType.entries.size) {
                 throw BusinessException(
                     ErrorCode.INVALID_INPUT,
-                    "excludeCharacters는 최대 ${EmotionType.SELECTABLE.size - 1}종까지만 지정할 수 있습니다.",
+                    "excludeCharacters는 최대 ${EmotionType.entries.size - 1}종까지만 지정할 수 있습니다.",
                 )
             }
             return ExcludedEmotionTypes(distinct)
         }
 
-        /**
-         * DB 컬럼 값을 복원한다. 저장된 값은 생성 시점에 이미 검증됐으므로 재검증하지 않는다.
-         * 캐릭터 교체 이전에 저장된 행에는 WARM이 남아 있을 수 있지만, 후보 풀
-         * ([EmotionType.SELECTABLE])에 애초에 없어 무동작이다.
-         */
+        /** DB 컬럼 값을 복원한다. 저장된 값은 생성 시점에 이미 검증됐으므로 재검증하지 않는다. */
         fun fromColumnValue(raw: String?): ExcludedEmotionTypes =
             if (raw.isNullOrBlank()) EMPTY else ExcludedEmotionTypes(raw.split(",").map(EmotionType::valueOf))
     }

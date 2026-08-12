@@ -15,7 +15,6 @@ import kotlin.random.Random
  * 성립할 수 없다 — 이 제약을 나중에 걸러내면 남은 예산이 갈 곳을 잃고 증발하므로, characterCount를
  * 뽑는 범위 자체에 미리 반영해 total이 항상 그대로 소진되게 한다.
  *
- * 후보 풀은 [EmotionType.SELECTABLE]이다 — 신규 생성 대상에서 빠진 캐릭터는 과거 레코드로만 남고 새로 뽑히지 않는다.
  * [excludedCharacters]로 대화방이 제외한 캐릭터를 걸러낸 후보 풀에서 뽑는다. 후보가
  * [MIN_CHARACTERS_FOR_TIKITAKA]명 미만(즉 1명)이면 애초에 티키타카가 성립할 수 없으므로 total 자체를
  * [TOTAL_MIN]으로 강제한다 — 그러지 않으면 characterCount 하한(2)이 후보 풀(1명)보다 커져 범위가 깨진다.
@@ -25,7 +24,7 @@ class CharacterSelector(
     private val random: Random = Random.Default,
 ) {
     fun select(excludedCharacters: Set<EmotionType> = emptySet()): CharacterSelection {
-        val candidates = EmotionType.SELECTABLE.filterNot { it in excludedCharacters }
+        val candidates = EmotionType.entries.filterNot { it in excludedCharacters }
         require(candidates.isNotEmpty()) { "excludedCharacters가 전체 캐릭터를 제외했습니다: $excludedCharacters" }
         val poolSize = candidates.size
         val total =
@@ -55,8 +54,7 @@ data class CharacterSelection(
     companion object {
         /**
          * 고정 선택용 팩토리(플레이그라운드 등). 중복을 제거하고 선택 불변식 - 캐릭터 1명 이상,
-         * 신규 생성 대상인 캐릭터만, 티키타카는 캐릭터 2명 이상일 때만 - 을 [CharacterSelector]의
-         * 무작위 선택과 똑같이 보장한다.
+         * 티키타카는 캐릭터 2명 이상일 때만 - 을 [CharacterSelector]의 무작위 선택과 똑같이 보장한다.
          */
         fun of(
             characters: List<EmotionType>,
@@ -64,10 +62,6 @@ data class CharacterSelection(
         ): CharacterSelection {
             val distinct = characters.distinct()
             require(distinct.isNotEmpty()) { "캐릭터를 1명 이상 지정해야 합니다." }
-            // 신규 생성에서 빠진 캐릭터는 보이스 카드도 프롬프트에서 빠져 실제 생성과 다른 결과를 보게 된다.
-            // 실서비스와 같은 경로를 시험하는 게 플레이그라운드의 목적이므로 여기서 막는다.
-            val unselectable = distinct.filterNot { it.selectable }
-            require(unselectable.isEmpty()) { "생성에 쓰이지 않는 캐릭터는 지정할 수 없습니다: ${unselectable.joinToString { it.label }}" }
             require(tikitakaCount >= 0) { "tikitakaCount는 0 이상이어야 합니다." }
             require(tikitakaCount == 0 || distinct.size >= 2) { "티키타카는 캐릭터가 2명 이상일 때만 지정할 수 있습니다." }
             return CharacterSelection(distinct, tikitakaCount)

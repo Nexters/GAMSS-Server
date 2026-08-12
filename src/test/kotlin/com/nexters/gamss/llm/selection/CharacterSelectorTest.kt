@@ -75,17 +75,8 @@ class CharacterSelectorTest {
     }
 
     @Test
-    fun `신규 생성 대상이 아닌 캐릭터는 후보에서 아예 빠진다`() {
-        repeat(1_000) {
-            val selection = selector.select()
-
-            assertTrue(selection.characters.all { it.selectable }, "생성에 쓰이지 않는 캐릭터가 선택됨: ${selection.characters}")
-        }
-    }
-
-    @Test
     fun `후보가 1명으로 좁혀지면 그 캐릭터만 뽑히고 티키타카는 0이다`() {
-        val excluded = EmotionType.SELECTABLE.drop(1).toSet()
+        val excluded = EmotionType.entries.drop(1).toSet()
         repeat(1_000) {
             val selection = selector.select(excluded)
 
@@ -96,7 +87,7 @@ class CharacterSelectorTest {
 
     @Test
     fun `후보가 2명으로 좁혀지면 캐릭터 수는 후보 수를 넘지 않는다`() {
-        val excluded = EmotionType.SELECTABLE.drop(2).toSet()
+        val excluded = EmotionType.entries.drop(2).toSet()
         repeat(1_000) {
             val selection = selector.select(excluded)
 
@@ -107,7 +98,7 @@ class CharacterSelectorTest {
     @Test
     fun `전체 캐릭터를 제외하면 IllegalArgumentException`() {
         assertFailsWith<IllegalArgumentException> {
-            selector.select(EmotionType.SELECTABLE.toSet())
+            selector.select(EmotionType.entries.toSet())
         }
     }
 }

@@ -319,28 +319,6 @@ class ConversationControllerIntegrationTest {
     }
 
     @Test
-    fun `구버전 앱이 보낸 다정이(WARM)는 제외 목록에서 걸러지고 저장된다`() {
-        val member = memberRepository.save(Member("me@a.com"))
-
-        mockMvc
-            .post("/api/conversations/messages") {
-                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
-                contentType = MediaType.APPLICATION_JSON
-                content =
-                    """
-                    {"content":"오늘 억울한 일이 있었어",
-                     "excludeCharacters":["WARM","ANGER"]}
-                    """.trimIndent()
-            }.andExpect {
-                status { isOk() }
-                jsonPath("$.data.commentStatus") { value("DONE") }
-            }
-
-        val conversation = conversationRepository.findAll().single()
-        assertEquals(listOf(EmotionType.ANGER), conversation.excludedEmotionTypes.values)
-    }
-
-    @Test
     fun `excludeCharacters로 전체 캐릭터를 제외하면 400을 반환한다`() {
         val member = memberRepository.save(Member("me@a.com"))
 
