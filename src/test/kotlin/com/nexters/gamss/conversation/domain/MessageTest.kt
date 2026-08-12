@@ -19,11 +19,11 @@ class MessageTest {
             Message(
                 conversationId = 1L,
                 senderType = SenderType.CHARACTER,
-                emotionType = EmotionType.WARM,
+                emotionType = EmotionType.SADNESS,
                 content = "많이 힘들었겠다",
             )
 
-        assertEquals(EmotionType.WARM, message.emotionType)
+        assertEquals(EmotionType.SADNESS, message.emotionType)
     }
 
     @Test

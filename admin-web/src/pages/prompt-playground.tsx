@@ -27,11 +27,12 @@ import { Textarea } from '@/components/ui/textarea'
 import { PageHeader } from '@/components/page-header'
 import { cn } from '@/lib/utils'
 
-type Emotion = 'JOY' | 'WARM' | 'ANGER' | 'ANXIETY' | 'GRUMPY' | 'QUIRKY'
+// 서버의 EmotionType과 같은 목록.
+type Emotion = 'JOY' | 'SADNESS' | 'ANGER' | 'ANXIETY' | 'GRUMPY' | 'QUIRKY'
 
 const CHARACTERS: { value: Emotion; label: string; emoji: string }[] = [
   { value: 'JOY', label: '기쁨', emoji: '😊' },
-  { value: 'WARM', label: '다정', emoji: '🥰' },
+  { value: 'SADNESS', label: '슬픔', emoji: '😢' },
   { value: 'ANGER', label: '분노', emoji: '😡' },
   { value: 'ANXIETY', label: '불안', emoji: '😰' },
   { value: 'GRUMPY', label: '까칠', emoji: '😤' },

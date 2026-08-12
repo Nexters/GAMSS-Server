@@ -3,15 +3,15 @@ import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.llm.error.CommentGenerationFailedException
 
 /**
- * 프롬프트가 실제로 쓰는 로마자 캐릭터 id(gippeum, dajeong...) <-> 내부 [EmotionType] 매핑.
- * EmotionType.label(기쁨/다정/분노/불안/까칠/엉뚱)과 1:1 대응된다. 프롬프트 어휘가 도메인 enum(EmotionType)
+ * 프롬프트가 실제로 쓰는 로마자 캐릭터 id(gippeum, seulpeum...) <-> 내부 [EmotionType] 매핑.
+ * EmotionType.label(기쁨/슬픔/분노/불안/까칠/엉뚱)과 1:1 대응된다. 프롬프트 어휘가 도메인 enum(EmotionType)
  * 안으로 새어 들어오지 않도록 이 파일과 [PromptProvider], [CommentFeedJsonParser] 안에서만 번역한다.
  */
 enum class PromptCharacterId(
     val emotionType: EmotionType,
 ) {
     GIPPEUM(EmotionType.JOY),
-    DAJEONG(EmotionType.WARM),
+    SEULPEUM(EmotionType.SADNESS),
     BUNNO(EmotionType.ANGER),
     BULAN(EmotionType.ANXIETY),
     KKACHIL(EmotionType.GRUMPY),

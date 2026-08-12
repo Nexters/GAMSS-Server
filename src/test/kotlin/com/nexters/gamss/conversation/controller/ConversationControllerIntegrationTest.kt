@@ -301,7 +301,7 @@ class ConversationControllerIntegrationTest {
                 content =
                     """
                     {"content":"오늘 억울한 일이 있었어",
-                     "excludeCharacters":["ANGER","ANXIETY","GRUMPY","WARM","QUIRKY"]}
+                     "excludeCharacters":["SADNESS","ANGER","ANXIETY","GRUMPY","QUIRKY"]}
                     """.trimIndent()
             }.andExpect {
                 status { isOk() }
@@ -313,7 +313,7 @@ class ConversationControllerIntegrationTest {
 
         val conversation = conversationRepository.findAll().single()
         assertEquals(
-            listOf(EmotionType.ANGER, EmotionType.ANXIETY, EmotionType.GRUMPY, EmotionType.WARM, EmotionType.QUIRKY),
+            listOf(EmotionType.SADNESS, EmotionType.ANGER, EmotionType.ANXIETY, EmotionType.GRUMPY, EmotionType.QUIRKY),
             conversation.excludedEmotionTypes.values,
         )
     }
@@ -329,7 +329,7 @@ class ConversationControllerIntegrationTest {
                 content =
                     """
                     {"content":"오늘 억울한 일이 있었어",
-                     "excludeCharacters":["JOY","ANGER","ANXIETY","GRUMPY","WARM","QUIRKY"]}
+                     "excludeCharacters":["JOY","SADNESS","ANGER","ANXIETY","GRUMPY","QUIRKY"]}
                     """.trimIndent()
             }.andExpect {
                 status { isBadRequest() }

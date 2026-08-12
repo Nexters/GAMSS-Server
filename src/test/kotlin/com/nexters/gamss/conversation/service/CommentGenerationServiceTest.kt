@@ -60,7 +60,7 @@ class CommentGenerationServiceTest {
             dailyTokenLimitService,
         )
 
-    private val characters = listOf(EmotionType.JOY, EmotionType.WARM, EmotionType.GRUMPY)
+    private val characters = listOf(EmotionType.JOY, EmotionType.SADNESS, EmotionType.GRUMPY)
     private val tikitakaCount = 3
 
     private fun rootMessage(): Message = Message(conversationId = 10L, senderType = SenderType.USER, content = "오늘 억울한 일이 있었어")
@@ -92,7 +92,7 @@ class CommentGenerationServiceTest {
     private fun feed(): CommentFeed =
         CommentFeed(
             comments = characters.map { CommentDraft(it, "댓글-$it") },
-            tikitaka = listOf(TikitakaDraft(EmotionType.JOY, EmotionType.WARM, "티키타카")),
+            tikitaka = listOf(TikitakaDraft(EmotionType.JOY, EmotionType.SADNESS, "티키타카")),
         )
 
     private fun promptContext(
@@ -252,7 +252,7 @@ class CommentGenerationServiceTest {
             Message(conversationId = 10L, senderType = SenderType.CHARACTER, emotionType = EmotionType.JOY, content = "댓글")
                 .also { ReflectionTestUtils.setField(it, "id", 10L) }
         val otherComment =
-            Message(conversationId = 10L, senderType = SenderType.CHARACTER, emotionType = EmotionType.WARM, content = "댓글2")
+            Message(conversationId = 10L, senderType = SenderType.CHARACTER, emotionType = EmotionType.SADNESS, content = "댓글2")
                 .also { ReflectionTestUtils.setField(it, "id", 11L) }
         val tikitaka =
             Message(
