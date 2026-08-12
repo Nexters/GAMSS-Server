@@ -18,18 +18,36 @@ class ExcludedEmotionTypesTest {
 
     @Test
     fun `전체 종을 다 제외하면 INVALID_INPUT`() {
-        val exception = assertFailsWith<BusinessException> { ExcludedEmotionTypes.of(EmotionType.entries.toList()) }
+        val exception = assertFailsWith<BusinessException> { ExcludedEmotionTypes.of(EmotionType.SELECTABLE) }
 
         assertEquals(ErrorCode.INVALID_INPUT, exception.errorCode)
     }
 
     @Test
     fun `1종만 남기고 전부(5종) 제외할 수 있다`() {
-        val excludeFive = EmotionType.entries.drop(1)
+        val excludeFive = EmotionType.SELECTABLE.drop(1)
 
         val excluded = ExcludedEmotionTypes.of(excludeFive)
 
         assertEquals(excludeFive, excluded.values)
+    }
+
+    @Test
+    fun `신규 생성에서 빠진 캐릭터는 제외 목록에서 걸러낸다`() {
+        // 구버전 앱이 계속 보내오는 값이라 400으로 막지 않는다.
+        val excluded = ExcludedEmotionTypes.of(listOf(EmotionType.WARM, EmotionType.ANGER))
+
+        assertEquals(listOf(EmotionType.ANGER), excluded.values)
+    }
+
+    @Test
+    fun `신규 생성에서 빠진 캐릭터는 제외 개수 상한에 포함되지 않는다`() {
+        // 구버전 앱이 "다정이 포함 6종"을 보내는 상황. 걸러낸 5종은 상한(5종) 안이므로 통과해야 한다.
+        val excludeFivePlusWarm = EmotionType.SELECTABLE.drop(1) + EmotionType.WARM
+
+        val excluded = ExcludedEmotionTypes.of(excludeFivePlusWarm)
+
+        assertEquals(EmotionType.SELECTABLE.drop(1), excluded.values)
     }
 
     @Test

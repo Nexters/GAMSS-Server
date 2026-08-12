@@ -180,6 +180,14 @@ class PromptPreviewServiceTest {
     }
 
     @Test
+    fun `신규 생성 대상이 아닌 캐릭터를 지정하면 INVALID_INPUT`() {
+        // 보이스 카드가 빠진 캐릭터로 시험하면 실서비스와 다른 결과를 보게 되므로 실험실에서도 막는다.
+        val exception = assertFailsWith<BusinessException> { service.preview(command(characters = listOf(EmotionType.WARM))) }
+
+        assertEquals(ErrorCode.INVALID_INPUT, exception.errorCode)
+    }
+
+    @Test
     fun `답장 미리보기는 REPLY 조립과 promptId로 그 캐릭터의 재응답을 생성한다`() {
         every { systemPromptResolver.resolveForPreview(PromptType.REPLY, null, "답글 시험") } returns settings
         every {

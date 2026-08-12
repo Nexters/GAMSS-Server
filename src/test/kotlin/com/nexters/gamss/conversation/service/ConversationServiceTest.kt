@@ -86,7 +86,7 @@ class ConversationServiceTest {
     fun `excludeCharacters로 전체 캐릭터를 제외하면 INVALID_INPUT`() {
         val exception =
             assertFailsWith<BusinessException> {
-                conversationService.saveUserMessage(1L, null, "내용", excludeCharacters = EmotionType.entries.toList())
+                conversationService.saveUserMessage(1L, null, "내용", excludeCharacters = EmotionType.SELECTABLE)
             }
 
         assertEquals(ErrorCode.INVALID_INPUT, exception.errorCode)
@@ -98,11 +98,22 @@ class ConversationServiceTest {
         val savedConversation = slot<Conversation>()
         every { conversationRepository.save(capture(savedConversation)) } answers { firstArg() }
         every { messageRepository.save(any()) } answers { firstArg() }
-        val excludeFiveTypes = EmotionType.entries.drop(1)
+        val excludeFiveTypes = EmotionType.SELECTABLE.drop(1)
 
         conversationService.saveUserMessage(1L, null, "내용", excludeCharacters = excludeFiveTypes)
 
         assertEquals(excludeFiveTypes, savedConversation.captured.excludedEmotionTypes.values)
+    }
+
+    @Test
+    fun `구버전 앱이 다정이를 제외 목록에 보내도 무시하고 저장한다`() {
+        val savedConversation = slot<Conversation>()
+        every { conversationRepository.save(capture(savedConversation)) } answers { firstArg() }
+        every { messageRepository.save(any()) } answers { firstArg() }
+
+        conversationService.saveUserMessage(1L, null, "내용", excludeCharacters = listOf(EmotionType.WARM, EmotionType.ANGER))
+
+        assertEquals(listOf(EmotionType.ANGER), savedConversation.captured.excludedEmotionTypes.values)
     }
 
     @Test

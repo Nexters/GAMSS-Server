@@ -301,7 +301,7 @@ class ConversationControllerIntegrationTest {
                 content =
                     """
                     {"content":"오늘 억울한 일이 있었어",
-                     "excludeCharacters":["ANGER","ANXIETY","GRUMPY","WARM","QUIRKY"]}
+                     "excludeCharacters":["SADNESS","ANGER","ANXIETY","GRUMPY","QUIRKY"]}
                     """.trimIndent()
             }.andExpect {
                 status { isOk() }
@@ -313,9 +313,31 @@ class ConversationControllerIntegrationTest {
 
         val conversation = conversationRepository.findAll().single()
         assertEquals(
-            listOf(EmotionType.ANGER, EmotionType.ANXIETY, EmotionType.GRUMPY, EmotionType.WARM, EmotionType.QUIRKY),
+            listOf(EmotionType.SADNESS, EmotionType.ANGER, EmotionType.ANXIETY, EmotionType.GRUMPY, EmotionType.QUIRKY),
             conversation.excludedEmotionTypes.values,
         )
+    }
+
+    @Test
+    fun `구버전 앱이 보낸 다정이(WARM)는 제외 목록에서 걸러지고 저장된다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+
+        mockMvc
+            .post("/api/conversations/messages") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content =
+                    """
+                    {"content":"오늘 억울한 일이 있었어",
+                     "excludeCharacters":["WARM","ANGER"]}
+                    """.trimIndent()
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.commentStatus") { value("DONE") }
+            }
+
+        val conversation = conversationRepository.findAll().single()
+        assertEquals(listOf(EmotionType.ANGER), conversation.excludedEmotionTypes.values)
     }
 
     @Test
@@ -329,7 +351,7 @@ class ConversationControllerIntegrationTest {
                 content =
                     """
                     {"content":"오늘 억울한 일이 있었어",
-                     "excludeCharacters":["JOY","ANGER","ANXIETY","GRUMPY","WARM","QUIRKY"]}
+                     "excludeCharacters":["JOY","SADNESS","ANGER","ANXIETY","GRUMPY","QUIRKY"]}
                     """.trimIndent()
             }.andExpect {
                 status { isBadRequest() }
