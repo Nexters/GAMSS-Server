@@ -225,10 +225,13 @@ class GeminiCommentGenerator(
             ).required(listOf("character_id", "reply_to", "text"))
             .build()
 
+    // 신규 생성 대상에서 빠진 캐릭터는 새 댓글 피드에 등장할 수 없으므로 스키마 단계에서 아예 못 뽑게 막는다 —
+    // 값 자체가 나올 수 없으면 [CommentFeedValidator]까지 가서 재시도를 태울 일도 없다.
+    // 이 스키마는 댓글 피드 전용이라 과거에 다정이가 단 댓글의 답글(replySchema는 text만)·카드 생성은 영향받지 않는다.
     private fun characterIdSchema(): Schema =
         Schema
             .builder()
             .type("STRING")
-            .enum_(PromptCharacterId.entries.map { it.promptId })
+            .enum_(PromptCharacterId.entries.filter { it.emotionType.selectable }.map { it.promptId })
             .build()
 }
