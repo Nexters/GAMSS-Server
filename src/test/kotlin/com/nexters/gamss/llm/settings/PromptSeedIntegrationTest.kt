@@ -9,9 +9,10 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 
 /**
- * V23 시딩이 이관 전 코드 기본값과 **바이트 단위로 동일**한지 고정한다. 골든 파일은 이관 직전
- * PromptProvider.defaultPrompt() 출력 그대로다 — 이 테스트가 깨지면 이관 과정에서 프롬프트가
- * 변형된 것이므로 시딩 SQL을 의심해야 한다.
+ * 마이그레이션을 다 적용한 뒤의 프롬프트가 골든 파일과 **바이트 단위로 동일**한지 고정한다.
+ * 골든 파일의 출발점은 V23 이관 직전 PromptProvider.defaultPrompt() 출력이고, 이후 프롬프트를
+ * 바꾸는 마이그레이션(V26 등)이 생기면 골든 파일도 함께 갱신한다 — 이 테스트가 깨지면
+ * 마이그레이션이 의도와 다른 문자열을 넣은 것이므로 해당 SQL을 의심해야 한다.
  */
 class PromptSeedIntegrationTest : RepositoryTest() {
     @Autowired
@@ -21,7 +22,7 @@ class PromptSeedIntegrationTest : RepositoryTest() {
     lateinit var promptRevisionRepository: PromptRevisionRepository
 
     @Test
-    fun `V23 시딩 프롬프트는 이관 전 코드 기본값과 동일하다`() {
+    fun `마이그레이션이 적용된 프롬프트는 골든 파일과 동일하다`() {
         PromptType.entries.forEach { type ->
             val row = llmSettingsRepository.findByPromptType(type)
             assertNotNull(row, "$type 행이 시딩돼야 한다")
