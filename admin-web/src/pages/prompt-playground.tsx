@@ -27,7 +27,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { PageHeader } from '@/components/page-header'
 import { cn } from '@/lib/utils'
 
-// 서버의 EmotionType.SELECTABLE과 같은 목록. 생성에서 빠진 WARM(다정)은 서버가 400으로 거부하므로 넣지 않는다.
+// 서버의 EmotionType과 같은 목록.
 type Emotion = 'JOY' | 'SADNESS' | 'ANGER' | 'ANXIETY' | 'GRUMPY' | 'QUIRKY'
 
 const CHARACTERS: { value: Emotion; label: string; emoji: string }[] = [
