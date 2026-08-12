@@ -24,7 +24,8 @@ data class SaveMessageRequest(
     @field:Schema(
         description =
             "새 채팅방을 만들 때 반응하지 않길 원하는 캐릭터 목록(선택, 최대 5종 — 전체 제외는 불가). " +
-                "conversationId가 있으면(기존 채팅방에 이어서 보내는 요청) 무시됩니다.",
+                "conversationId가 있으면(기존 채팅방에 이어서 보내는 요청) 무시됩니다. " +
+                "신규 생성에서 빠진 캐릭터(WARM)는 목록에 있어도 무시됩니다.",
         example = "[\"ANGER\", \"ANXIETY\"]",
         nullable = true,
     )

@@ -30,7 +30,10 @@ data class PromptPreviewRequest(
         @Size(max = 2_000, message = "과거 요약 한 줄은 2000자 이하여야 합니다.")
         String,
     >? = null,
-    @field:Schema(description = "등장 캐릭터(1명 이상 필수)")
+    @field:Schema(
+        description = "등장 캐릭터(1명 이상 필수). 신규 생성에서 빠진 캐릭터(WARM)는 지정 불가",
+        example = "[\"JOY\", \"SADNESS\"]",
+    )
     @field:NotEmpty(message = "characters는 1개 이상이어야 합니다.")
     val characters: List<EmotionType>,
     // 프로덕션 상한(CharacterSelector.TOTAL_MAX=3)보다 여유를 둔 실험 상한. 오타(예: 1000)가
