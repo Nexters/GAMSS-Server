@@ -12,9 +12,9 @@ data class MessageResponse(
     @field:Schema(description = "발신 주체", example = "USER", allowableValues = ["USER", "CHARACTER"])
     val senderType: String,
     @field:Schema(
-        description = "감정 캐릭터 (캐릭터 메시지에만 존재). WARM(다정)은 신규 생성에서 빠졌지만 과거 메시지에는 남아 있음",
+        description = "감정 캐릭터 (캐릭터 메시지에만 존재)",
         example = "JOY",
-        allowableValues = ["JOY", "SADNESS", "ANGER", "ANXIETY", "GRUMPY", "QUIRKY", "WARM"],
+        allowableValues = ["JOY", "SADNESS", "ANGER", "ANXIETY", "GRUMPY", "QUIRKY"],
         nullable = true,
     )
     val emotionType: String?,

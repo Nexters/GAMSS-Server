@@ -31,7 +31,7 @@ data class PromptPreviewRequest(
         String,
     >? = null,
     @field:Schema(
-        description = "등장 캐릭터(1명 이상 필수). 신규 생성에서 빠진 캐릭터(WARM)는 지정 불가",
+        description = "등장 캐릭터(1명 이상 필수)",
         example = "[\"JOY\", \"SADNESS\"]",
     )
     @field:NotEmpty(message = "characters는 1개 이상이어야 합니다.")
