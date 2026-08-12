@@ -6,10 +6,19 @@
 #   app 힙 3G + 비힙 약 0.8G / MySQL 약 2.5G / OS·Docker 약 0.5G → 여유 약 1.2G
 # 여유분은 스레드 스택용이다. LLM 호출은 응답까지 스레드를 붙잡고 있어서
 # 동시성을 올리려면 스레드를 늘려야 하고, 스레드당 스택이 1MB씩 붙는다.
+# 컨테이너 로그 로테이션. 기본 json-file 드라이버는 무제한 적재라 디스크가 차면
+# MySQL 쓰기 실패로 서비스 전체가 내려간다. 서비스당 최대 30MB(10MB×3)로 상한.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   app:
     image: ghcr.io/nexters/gamss-server:${IMAGE_TAG:-dev}
     restart: unless-stopped
+    logging: *default-logging
     depends_on:
       db:
         condition: service_healthy
@@ -34,11 +43,13 @@ services:
   admin:
     image: ghcr.io/nexters/gamss-server-admin:${IMAGE_TAG:-dev}
     restart: unless-stopped
+    logging: *default-logging
     networks: [gamss]
 
   nginx:
     image: nginx:1.27-alpine
     restart: unless-stopped
+    logging: *default-logging
     depends_on: [app, admin]
     ports:
       - "80:80"
@@ -55,6 +66,7 @@ services:
   certbot:
     image: certbot/certbot:latest
     restart: unless-stopped
+    logging: *default-logging
     volumes:
       - certbot-www:/var/www/certbot
       - certbot-conf:/etc/letsencrypt
@@ -64,6 +76,7 @@ services:
   db:
     image: mysql:8.0
     restart: unless-stopped
+    logging: *default-logging
     # ngram-token-size: 대화방 검색이 bigram 을 전제로 한다(V18 의 WITH PARSER ngram, 최소 2자 검증).
     # 기본값도 2 지만 기동 파라미터라 환경에 좌우되고, 바뀌면 풀텍스트 인덱스를 재생성해야 해서 고정한다.
     # (command 는 YAML folded scalar 라 블록 안에 주석을 넣으면 인자로 섞여 들어간다)

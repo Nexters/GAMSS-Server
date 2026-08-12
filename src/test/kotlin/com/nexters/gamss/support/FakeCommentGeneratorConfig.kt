@@ -8,6 +8,7 @@ import com.nexters.gamss.llm.parsing.CommentDraft
 import com.nexters.gamss.llm.parsing.CommentFeed
 import com.nexters.gamss.llm.parsing.TikitakaDraft
 import com.nexters.gamss.llm.prompt.CommentPromptContext
+import com.nexters.gamss.llm.settings.LlmSettingsView
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Primary
@@ -28,6 +29,11 @@ class FakeCommentGenerator : CommentGenerator {
     /** true로 바꾸면 매 호출이 재시도 소진까지 실패한다(FAILED 경로 검증용). */
     var shouldFail = false
 
+    override fun generateComment(
+        context: CommentPromptContext,
+        settings: LlmSettingsView,
+    ): CommentGenerationOutput = generateComment(context)
+
     override fun generateComment(context: CommentPromptContext): CommentGenerationOutput {
         if (shouldFail) throw CommentGenerationFailedException("테스트 강제 실패")
         val characters = context.characters
@@ -40,6 +46,14 @@ class FakeCommentGenerator : CommentGenerator {
             }
         return CommentGenerationOutput(CommentFeed(comments, tikitaka), usedTokens = 10, cachedTokens = 0)
     }
+
+    override fun generateReply(
+        diaryContent: String,
+        characterId: String,
+        characterComment: String,
+        userReply: String,
+        settings: LlmSettingsView,
+    ): ReplyGenerationOutput = generateReply(diaryContent, characterId, characterComment, userReply)
 
     override fun generateReply(
         diaryContent: String,

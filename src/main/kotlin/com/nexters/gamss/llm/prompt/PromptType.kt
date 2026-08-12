@@ -17,4 +17,11 @@ enum class PromptType {
 
     /** 대화 종료 시 대표 캐릭터가 유저를 대신해 남기는 카드 한 줄 (#30). */
     CARD,
+
+    /**
+     * 엉뚱이가 다룰 소재 목록(한 줄에 소재 하나). 시스템 프롬프트 조립([COMMON] + 타입)에는
+     * 쓰이지 않고, 생성 시 서버가 한 줄을 무작위로 골라 유저 콘텐츠에 넣는다
+     * ([com.nexters.gamss.llm.selection.EongttungTopicSelector]).
+     */
+    EONGTTUNG_TOPIC,
 }

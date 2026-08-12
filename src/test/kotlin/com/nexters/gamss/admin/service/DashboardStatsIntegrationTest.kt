@@ -109,6 +109,19 @@ class DashboardStatsIntegrationTest : RepositoryTest() {
             ),
         )
 
+        // 실험실 호출은 비용 추적용 기록일 뿐이라 품질 지표에 섞이면 안 된다.
+        generationLogRepository.save(
+            GenerationLog(
+                generationType = GenerationType.PREVIEW,
+                model = "gemini-test",
+                success = true,
+                attemptCount = 1,
+                usedTokens = 999_999,
+                latencyMs = 9_999,
+                createdAt = now,
+            ),
+        )
+
         val quality = qualityStatsService.getQualityStats(14)
 
         assertEquals(2, quality.totalGenerations)

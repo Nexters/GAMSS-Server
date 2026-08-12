@@ -4,7 +4,6 @@ import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.llm.config.GeminiModelCatalog
 import com.nexters.gamss.llm.config.GeminiProperties
-import com.nexters.gamss.llm.prompt.PromptProvider
 import com.nexters.gamss.llm.prompt.PromptType
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -14,20 +13,20 @@ import org.springframework.transaction.annotation.Transactional
  * - **모델**: 앱 전체 단일 설정(댓글·답글·카드가 같은 모델 사용). 물리적으로는 [PromptType.COMMON] 행에 저장한다.
  * - **프롬프트**: [PromptType]별 원본(백오피스 편집 단위). 생성기가 쓰는 조립본(COMMON + 타입)은 [SystemPromptResolver]가 만든다.
  *
- * DB에 값이 없으면 코드 기본값(GeminiProperties.model / PromptProvider의 타입별 프롬프트)을 쓴다.
+ * 프롬프트의 단일 원본은 DB다 — V23 시딩이 모든 타입의 행을 보장하므로 코드 폴백은 없고,
+ * 행이 없으면 마이그레이션이 안 돈 것이라 즉시 실패시킨다.
  * 선택 가능한 모델은 [GeminiModelCatalog]가 Gemini API에서 동적으로 가져온다(신모델 자동 노출).
  */
 @Service
 class LlmSettingsService(
     private val repository: LlmSettingsRepository,
     private val geminiProperties: GeminiProperties,
-    private val promptProvider: PromptProvider,
     private val modelCatalog: GeminiModelCatalog,
 ) {
     // ── 모델(앱 전체 단일). COMMON 행의 model 컬럼에 저장한다. ──
 
     @Transactional(readOnly = true)
-    fun currentModel(): String = row(PromptType.COMMON)?.model ?: geminiProperties.model
+    fun currentModel(): String = requireRow(PromptType.COMMON).model
 
     fun defaultModel(): String = geminiProperties.model
 
@@ -36,18 +35,21 @@ class LlmSettingsService(
     @Transactional
     fun updateModel(model: String) {
         validateModel(model)
-        val row = row(PromptType.COMMON)
-        if (row != null) {
-            row.update(model, row.systemPrompt)
-            return
-        }
-        repository.save(LlmSettings(PromptType.COMMON, model, promptProvider.defaultPrompt(PromptType.COMMON)))
+        val row = requireRow(PromptType.COMMON)
+        row.update(model, row.systemPrompt)
     }
 
     // ── 프롬프트(타입별 원본). ──
 
     @Transactional(readOnly = true)
-    fun currentPrompt(promptType: PromptType): String = row(promptType)?.systemPrompt ?: promptProvider.defaultPrompt(promptType)
+    fun currentPrompt(promptType: PromptType): String = requireRow(promptType).systemPrompt
+
+    /**
+     * 행을 잠그고 현재 프롬프트를 읽는다 — 프롬프트 저장·복원의 리비전 채번을 타입 단위로
+     * 직렬화하는 잠금 지점([PromptRevisionService]). 행이 없으면 null(잠글 대상 없음).
+     */
+    @Transactional
+    fun currentPromptForUpdate(promptType: PromptType): String? = repository.findByPromptTypeForUpdate(promptType)?.systemPrompt
 
     /**
      * COMMON 행을 한 번만 읽어 앱 전체 모델 + 공통 프롬프트를 함께 돌려준다.
@@ -56,27 +58,17 @@ class LlmSettingsService(
      */
     @Transactional(readOnly = true)
     fun currentCommonView(): LlmSettingsView {
-        val common = row(PromptType.COMMON)
-        return LlmSettingsView(
-            common?.model ?: geminiProperties.model,
-            common?.systemPrompt ?: promptProvider.defaultPrompt(PromptType.COMMON),
-        )
+        val common = requireRow(PromptType.COMMON)
+        return LlmSettingsView(common.model, common.systemPrompt)
     }
-
-    fun defaultPrompt(promptType: PromptType): String = promptProvider.defaultPrompt(promptType)
 
     @Transactional
     fun updatePrompt(
         promptType: PromptType,
         systemPrompt: String,
     ) {
-        val row = row(promptType)
-        if (row != null) {
-            row.update(row.model, systemPrompt)
-            return
-        }
-        // 새 행의 model 컬럼: COMMON이면 곧 전체 모델, 그 외 타입은 안 쓰이는 자리표시자다.
-        repository.save(LlmSettings(promptType, currentModel(), systemPrompt))
+        val row = requireRow(promptType)
+        row.update(row.model, systemPrompt)
     }
 
     // 기본 형식은 항상 검증하고, 카탈로그 조회가 성공한 경우엔 목록 소속까지 강제한다.
@@ -91,8 +83,11 @@ class LlmSettingsService(
         }
     }
 
-    // promptType당 행 최대 1개(unique 제약). 없으면 null(코드 기본값 사용).
-    private fun row(promptType: PromptType): LlmSettings? = repository.findByPromptType(promptType)
+    // promptType당 행 1개(unique 제약 + V23 시딩 보장). 없으면 마이그레이션 누락이므로 즉시 실패.
+    private fun requireRow(promptType: PromptType): LlmSettings =
+        checkNotNull(repository.findByPromptType(promptType)) {
+            "llm_settings에 $promptType 행이 없습니다. V23 시딩 마이그레이션이 적용됐는지 확인하세요."
+        }
 
     companion object {
         private const val GEMINI_PREFIX = "gemini-"
