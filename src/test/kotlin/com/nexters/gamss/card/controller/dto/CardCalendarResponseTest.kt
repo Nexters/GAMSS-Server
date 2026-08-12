@@ -49,7 +49,7 @@ class CardCalendarResponseTest {
             Card(
                 memberId = 1L,
                 conversationId = 2L,
-                emotion = EmotionType.WARM,
+                emotion = EmotionType.SADNESS,
                 summary = "요약",
                 message = "대사",
                 conversationCreatedAt = dawnInstant,

@@ -49,7 +49,7 @@ class MessageThreadOrderTest {
         val comment1 = message(1L, SenderType.CHARACTER, emotionType = EmotionType.JOY)
         val comment2 = message(2L, SenderType.CHARACTER, emotionType = EmotionType.ANGER)
         val userReplyToComment1 = message(3L, SenderType.USER, repliesToMessageId = 1L)
-        val characterReplyToUserReply = message(4L, SenderType.CHARACTER, repliesToMessageId = 3L, emotionType = EmotionType.WARM)
+        val characterReplyToUserReply = message(4L, SenderType.CHARACTER, repliesToMessageId = 3L, emotionType = EmotionType.SADNESS)
 
         val result =
             MessageThreadOrder.reorderTikitakaAfterTarget(listOf(comment1, comment2, userReplyToComment1, characterReplyToUserReply))
