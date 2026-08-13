@@ -36,7 +36,8 @@ import org.springframework.web.bind.annotation.RestController
     description =
         "LLM 모델·시스템 프롬프트 조회·수정 (ROLE_ADMIN 필요). 재배포 없이 다음 생성부터 반영. " +
             "모델은 앱 전체 단일 설정이고, 프롬프트는 타입별(COMMON 공통 + COMMENT/REPLY/CARD)로 조립된다. " +
-            "EONGTTUNG_TOPIC은 조립에 쓰이지 않는 엉뚱이 소재 목록(한 줄에 소재 하나)으로, 생성 시 서버가 한 줄을 무작위로 골라 유저 콘텐츠에 넣는다.",
+            "EONGTTUNG_TOPIC은 조립에 쓰이지 않는 엉뚱이 소재 목록(한 줄에 소재 하나)으로, 생성 시 서버가 한 줄을 무작위로 골라 유저 콘텐츠에 넣는다. " +
+            "CARD_EMOTION도 조립에 쓰이지 않는다 — 카드 생성 요청에 emotion이 없을 때 유저 메시지만 보고 감정 6종 중 하나를 고르는 분류 프롬프트로 단독 사용된다.",
 )
 @Validated
 @RestController
