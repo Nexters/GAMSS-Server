@@ -37,6 +37,11 @@ class SystemPromptResolverTest {
     }
 
     @Test
+    fun `감정 분류 타입은 시스템 프롬프트로 조립할 수 없다`() {
+        assertFailsWith<IllegalArgumentException> { resolver.resolve(PromptType.CARD_EMOTION) }
+    }
+
+    @Test
     fun `미리보기 조립은 오버라이드를 실제 생성과 같은 형식으로 조립한다`() {
         every { llmSettingsService.currentCommonView() } returns LlmSettingsView("m", "저장 공통")
 
@@ -67,6 +72,13 @@ class SystemPromptResolverTest {
     fun `미리보기 조립도 소재 목록 타입을 거부한다`() {
         assertFailsWith<IllegalArgumentException> {
             resolver.resolveForPreview(PromptType.EONGTTUNG_TOPIC, null, null)
+        }
+    }
+
+    @Test
+    fun `미리보기 조립도 감정 분류 타입을 거부한다`() {
+        assertFailsWith<IllegalArgumentException> {
+            resolver.resolveForPreview(PromptType.CARD_EMOTION, null, null)
         }
     }
 }

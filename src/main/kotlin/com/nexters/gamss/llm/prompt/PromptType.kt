@@ -24,4 +24,11 @@ enum class PromptType {
      * ([com.nexters.gamss.llm.selection.EongttungTopicSelector]).
      */
     EONGTTUNG_TOPIC,
+
+    /**
+     * 카드 생성 요청에 emotion이 없을 때 유저 메시지만 보고 대표 감정 하나를 고르는 분류 (#134).
+     * 분류 작업이라 캐릭터 톤·말맛 지침([COMMON])과 무관하므로 조립에 쓰이지 않고 단독으로 쓰인다
+     * ([com.nexters.gamss.llm.generation.GeminiEmotionExtractor]).
+     */
+    CARD_EMOTION,
 }

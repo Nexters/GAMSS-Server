@@ -4,12 +4,16 @@ import com.nexters.gamss.card.domain.Card
 import com.nexters.gamss.card.repository.CardRepository
 import com.nexters.gamss.conversation.domain.Conversation
 import com.nexters.gamss.conversation.domain.ConversationStatus
+import com.nexters.gamss.conversation.domain.Message
+import com.nexters.gamss.conversation.domain.SenderType
 import com.nexters.gamss.conversation.repository.ConversationRepository
+import com.nexters.gamss.conversation.repository.MessageRepository
 import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.global.security.JwtIssuer
 import com.nexters.gamss.member.domain.Member
 import com.nexters.gamss.member.repository.MemberRepository
 import com.nexters.gamss.support.FakeCardMessageGeneratorConfig
+import com.nexters.gamss.support.FakeEmotionExtractorConfig
 import com.nexters.gamss.support.TestcontainersConfig
 import jakarta.persistence.EntityManager
 import jakarta.persistence.PersistenceContext
@@ -37,7 +41,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 @SpringBootTest
-@Import(TestcontainersConfig::class, FakeCardMessageGeneratorConfig::class)
+@Import(TestcontainersConfig::class, FakeCardMessageGeneratorConfig::class, FakeEmotionExtractorConfig::class)
 @Transactional
 class CardControllerIntegrationTest {
     @Autowired
@@ -48,6 +52,9 @@ class CardControllerIntegrationTest {
 
     @Autowired
     private lateinit var conversationRepository: ConversationRepository
+
+    @Autowired
+    private lateinit var messageRepository: MessageRepository
 
     @Autowired
     private lateinit var cardRepository: CardRepository
@@ -94,6 +101,25 @@ class CardControllerIntegrationTest {
 
         val persistedConversation = conversationRepository.findById(conversation.id).orElseThrow()
         assertEquals(summary, persistedConversation.summary)
+        assertEquals(1, cardRepository.count())
+    }
+
+    @Test
+    fun `emotion 없이 요청하면 서버가 유저 메시지로 감정을 추출해 카드를 생성한다`() {
+        val member = memberRepository.save(Member("card-emotion-fallback@test.com"))
+        val conversation = conversationRepository.save(Conversation(member.id).apply { end() })
+        messageRepository.save(Message(conversation.id, SenderType.USER, content = "오늘 하루종일 우울했다"))
+
+        mockMvc
+            .post("/api/cards") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"conversationId":${conversation.id},"summary":"우울했던 하루"}"""
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.emotion") { value(EmotionType.SADNESS.name) }
+            }
+
         assertEquals(1, cardRepository.count())
     }
 

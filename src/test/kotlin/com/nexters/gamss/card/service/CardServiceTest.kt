@@ -4,13 +4,19 @@ import com.nexters.gamss.card.domain.Card
 import com.nexters.gamss.card.repository.CardRepository
 import com.nexters.gamss.conversation.domain.CardGenerationStatus
 import com.nexters.gamss.conversation.domain.Conversation
+import com.nexters.gamss.conversation.domain.Message
+import com.nexters.gamss.conversation.domain.SenderType
 import com.nexters.gamss.conversation.repository.ConversationRepository
+import com.nexters.gamss.conversation.repository.MessageRepository
 import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.llm.error.CardGenerationFailedException
 import com.nexters.gamss.llm.generation.CardMessageGenerator
 import com.nexters.gamss.llm.generation.CardMessageOutput
+import com.nexters.gamss.llm.generation.EmotionExtractionOutput
+import com.nexters.gamss.llm.generation.EmotionExtractor
+import com.nexters.gamss.monitoring.domain.GenerationType
 import com.nexters.gamss.monitoring.service.GenerationLogRecorder
 import com.nexters.gamss.tokenlimit.service.DailyTokenLimitService
 import io.mockk.every
@@ -30,7 +36,9 @@ import kotlin.test.assertFailsWith
 class CardServiceTest {
     private val cardRepository = mockk<CardRepository>()
     private val conversationRepository = mockk<ConversationRepository>()
+    private val messageRepository = mockk<MessageRepository>()
     private val cardMessageGenerator = mockk<CardMessageGenerator>()
+    private val emotionExtractor = mockk<EmotionExtractor>()
     private val generationLogRecorder = mockk<GenerationLogRecorder>(relaxed = true)
     private val dailyTokenLimitService = mockk<DailyTokenLimitService> { every { isWithinLimit(any()) } returns true }
     private val cardPersistenceService = mockk<CardPersistenceService>()
@@ -38,7 +46,9 @@ class CardServiceTest {
         CardService(
             cardRepository,
             conversationRepository,
+            messageRepository,
             cardMessageGenerator,
+            emotionExtractor,
             generationLogRecorder,
             dailyTokenLimitService,
             cardPersistenceService,
@@ -47,6 +57,8 @@ class CardServiceTest {
     private val zone = ZoneId.of("Asia/Seoul")
 
     private fun endedConversation(memberId: Long = MEMBER_ID): Conversation = Conversation(memberId).apply { end() }
+
+    private fun userMessage(content: String): Message = Message(CONVERSATION_ID, SenderType.USER, content = content)
 
     /** LLM 호출 전 CAS 선점이 성공하는 경로. */
     private fun stubClaimSuccess() {
@@ -174,6 +186,104 @@ class CardServiceTest {
 
         assertEquals(ErrorCode.CARD_GENERATION_IN_PROGRESS, exception.errorCode)
         verify(exactly = 0) { cardMessageGenerator.generate(any(), any()) }
+    }
+
+    @Test
+    fun `emotion이 없으면 유저 메시지만 보고 감정을 분류해 카드에 쓴다`() {
+        every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
+        stubClaimSuccess()
+        every {
+            messageRepository.findAllByConversationIdAndSenderTypeOrderByIdAsc(CONVERSATION_ID, SenderType.USER)
+        } returns listOf(userMessage("오늘 진짜 우울했다"), userMessage("계속 눈물이 났다"))
+        every {
+            emotionExtractor.extract(listOf("오늘 진짜 우울했다", "계속 눈물이 났다"))
+        } returns EmotionExtractionOutput(EmotionType.SADNESS, usedTokens = 5, cachedTokens = 0)
+        every { cardMessageGenerator.generate(EmotionType.SADNESS, "요약") } returns CardMessageOutput("오늘은 좀 힘들었지.", 10, 0)
+        val saved = slot<Card>()
+        every { cardPersistenceService.save(capture(saved), CONVERSATION_ID, "요약") } answers { firstArg() }
+
+        service.createCard(MEMBER_ID, CONVERSATION_ID, null, "요약")
+
+        assertEquals(EmotionType.SADNESS, saved.captured.emotion)
+        verify(exactly = 1) {
+            generationLogRecorder.record(
+                type = GenerationType.CARD_EMOTION,
+                success = true,
+                attemptCount = 1,
+                latencyMs = any(),
+                memberId = MEMBER_ID,
+                conversationId = CONVERSATION_ID,
+                usedTokens = 5,
+                cachedTokens = 0,
+                inputTokens = any(),
+                outputTokens = any(),
+            )
+        }
+    }
+
+    @Test
+    fun `emotion이 있으면 감정 분류를 호출하지 않는다`() {
+        every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
+        stubClaimSuccess()
+        every { cardMessageGenerator.generate(EmotionType.ANGER, "요약") } returns CardMessageOutput("대사", 10, 0)
+        every { cardPersistenceService.save(any(), CONVERSATION_ID, "요약") } answers { firstArg() }
+
+        service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약")
+
+        verify(exactly = 0) { emotionExtractor.extract(any()) }
+    }
+
+    @Test
+    fun `유저 메시지가 하나도 없으면 클라이언트 요약으로 감정을 분류한다`() {
+        every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
+        stubClaimSuccess()
+        every {
+            messageRepository.findAllByConversationIdAndSenderTypeOrderByIdAsc(CONVERSATION_ID, SenderType.USER)
+        } returns emptyList()
+        every { emotionExtractor.extract(listOf("요약")) } returns EmotionExtractionOutput(EmotionType.JOY, usedTokens = 5, cachedTokens = 0)
+        every { cardMessageGenerator.generate(EmotionType.JOY, "요약") } returns CardMessageOutput("대사", 10, 0)
+        every { cardPersistenceService.save(any(), CONVERSATION_ID, "요약") } answers { firstArg() }
+
+        service.createCard(MEMBER_ID, CONVERSATION_ID, null, "요약")
+
+        verify(exactly = 1) { emotionExtractor.extract(listOf("요약")) }
+    }
+
+    @Test
+    fun `감정 분류에 실패하면 FAILED로 전이하고 CARD_GENERATION_FAILED - 대사 생성은 호출되지 않는다`() {
+        every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
+        stubClaimSuccess()
+        every {
+            messageRepository.findAllByConversationIdAndSenderTypeOrderByIdAsc(CONVERSATION_ID, SenderType.USER)
+        } returns listOf(userMessage("오늘 일기"))
+        val extractionFailure = CardGenerationFailedException("분류 실패")
+        every { emotionExtractor.extract(any()) } throws extractionFailure
+        stubMarkStatus(CardGenerationStatus.FAILED)
+
+        val exception = assertFailsWith<BusinessException> { service.createCard(MEMBER_ID, CONVERSATION_ID, null, "요약") }
+
+        assertEquals(ErrorCode.CARD_GENERATION_FAILED, exception.errorCode)
+        assertEquals(extractionFailure, exception.cause)
+        verify(exactly = 0) { cardMessageGenerator.generate(any(), any()) }
+        verify(exactly = 0) { cardPersistenceService.save(any(), any(), any()) }
+        verify(exactly = 1) {
+            conversationRepository.updateCardGenerationStatus(CONVERSATION_ID, CardGenerationStatus.FAILED, any(), any())
+        }
+        verify(exactly = 1) {
+            generationLogRecorder.record(
+                type = GenerationType.CARD_EMOTION,
+                success = false,
+                attemptCount = 1,
+                latencyMs = any(),
+                memberId = MEMBER_ID,
+                conversationId = CONVERSATION_ID,
+                usedTokens = any(),
+                cachedTokens = any(),
+                inputTokens = any(),
+                outputTokens = any(),
+                failureReason = any(),
+            )
+        }
     }
 
     @Test
