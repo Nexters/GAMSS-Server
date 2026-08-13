@@ -12,12 +12,57 @@ import { cn } from '@/lib/utils'
 
 type PromptType = 'COMMON' | 'COMMENT' | 'REPLY' | 'CARD' | 'EONGTTUNG_TOPIC'
 
-const TABS: { value: PromptType; label: string; hint: string }[] = [
-  { value: 'COMMON', label: '공통', hint: '세 타입이 공유하는 톤·경계·말맛지침·보이스카드. 여기를 바꾸면 댓글·답글·카드에 모두 반영됩니다.' },
-  { value: 'COMMENT', label: '댓글', hint: '여러 감정 캐릭터가 일기에 코멘트를 달고 서로 티키타카하는 생성.' },
-  { value: 'REPLY', label: '답글', hint: '유저가 캐릭터 댓글에 답글을 달면 그 캐릭터 1명이 재응답하는 생성.' },
-  { value: 'CARD', label: '카드', hint: '대화 종료 시 대표 캐릭터가 유저를 대신해 남기는 한 줄 카드 대사.' },
-  { value: 'EONGTTUNG_TOPIC', label: '엉뚱이 소재', hint: '엉뚱이가 꺼낼 소재 목록. 한 줄에 하나씩 적으면 생성 시 서버가 무작위로 한 줄을 고릅니다.' },
+interface PromptTab {
+  value: PromptType
+  /** 탭 버튼에 보이는 이름. */
+  label: string
+  /** 탭 아래 한 줄 설명 — 이 프롬프트가 무엇을 만드는지. */
+  hint: string
+  /** 편집기 위 라벨. */
+  editorLabel: string
+  /** 편집기 아래 주의사항. */
+  editorNote: string
+  /** 공통 프롬프트와 조립되지 않고 단독으로 쓰이는 타입(조립 안내 배너를 숨긴다). */
+  standalone?: boolean
+}
+
+const TABS: PromptTab[] = [
+  {
+    value: 'COMMON',
+    label: '공통',
+    hint: '세 타입이 공유하는 톤·경계·말맛지침·보이스카드. 여기를 바꾸면 댓글·답글·카드에 모두 반영됩니다.',
+    editorLabel: '공통 프롬프트',
+    editorNote: '캐릭터 보이스카드·말맛지침 등 세 타입이 공유하는 부분입니다. 신중히 수정하세요.',
+  },
+  {
+    value: 'COMMENT',
+    label: '댓글',
+    hint: '여러 감정 캐릭터가 일기에 코멘트를 달고 서로 티키타카하는 생성.',
+    editorLabel: '타입 프롬프트',
+    editorNote: '이 타입의 역할·규칙·출력형식입니다. 생성 시 공통 프롬프트 뒤에 붙습니다.',
+  },
+  {
+    value: 'REPLY',
+    label: '답글',
+    hint: '유저가 캐릭터 댓글에 답글을 달면 그 캐릭터 1명이 재응답하는 생성.',
+    editorLabel: '타입 프롬프트',
+    editorNote: '이 타입의 역할·규칙·출력형식입니다. 생성 시 공통 프롬프트 뒤에 붙습니다.',
+  },
+  {
+    value: 'CARD',
+    label: '카드',
+    hint: '대화 종료 시 대표 캐릭터가 유저를 대신해 남기는 한 줄 카드 대사.',
+    editorLabel: '타입 프롬프트',
+    editorNote: '이 타입의 역할·규칙·출력형식입니다. 생성 시 공통 프롬프트 뒤에 붙습니다.',
+  },
+  {
+    value: 'EONGTTUNG_TOPIC',
+    label: '엉뚱이 소재',
+    hint: '엉뚱이가 꺼낼 소재 목록. 한 줄에 하나씩 적으면 생성 시 서버가 무작위로 한 줄을 고릅니다.',
+    editorLabel: '소재 목록 (한 줄에 하나)',
+    editorNote: '빈 줄은 무시됩니다. 목록을 전부 비우면 저장할 수 없습니다.',
+    standalone: true,
+  },
 ]
 
 function SavedFlash({ show }: { show: boolean }) {
@@ -193,7 +238,7 @@ function PromptSection() {
 
   return (
     <div className="space-y-4">
-      {type !== 'EONGTTUNG_TOPIC' && (
+      {!activeTab?.standalone && (
         <div className="flex items-center gap-2 rounded-lg border bg-muted/40 p-2.5 text-xs text-muted-foreground">
           <Layers className="size-4 shrink-0 text-muted-foreground/70" />
           <span>
@@ -240,7 +285,7 @@ function PromptSection() {
         <Card className="space-y-3 p-6">
           <div className="flex items-baseline justify-between">
             <label htmlFor="prompt" className="text-sm font-medium">
-              {type === 'COMMON' ? '공통 프롬프트' : type === 'EONGTTUNG_TOPIC' ? '소재 목록 (한 줄에 하나)' : '타입 프롬프트'}
+              {activeTab?.editorLabel}
             </label>
             <span className="text-xs tabular-nums text-muted-foreground">{prompt.length.toLocaleString()}자</span>
           </div>
@@ -252,13 +297,7 @@ function PromptSection() {
             className="min-h-[28rem] font-mono text-[13px] leading-relaxed"
           />
           <div className="flex flex-wrap items-center gap-2">
-            <p className="mr-auto text-xs text-muted-foreground">
-              {type === 'COMMON'
-                ? '캐릭터 보이스카드·말맛지침 등 세 타입이 공유하는 부분입니다. 신중히 수정하세요.'
-                : type === 'EONGTTUNG_TOPIC'
-                  ? '빈 줄은 무시됩니다. 목록을 전부 비우면 저장할 수 없습니다.'
-                  : '이 타입의 역할·규칙·출력형식입니다. 생성 시 공통 프롬프트 뒤에 붙습니다.'}
-            </p>
+            <p className="mr-auto text-xs text-muted-foreground">{activeTab?.editorNote}</p>
             <SavedFlash show={flash} />
             <Button size="sm" onClick={onSave} disabled={!dirty || saving || !prompt.trim()}>
               <Save className="size-4" />
