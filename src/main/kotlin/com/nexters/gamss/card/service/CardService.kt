@@ -19,6 +19,7 @@ import com.nexters.gamss.monitoring.domain.GenerationType
 import com.nexters.gamss.monitoring.service.GenerationLogRecorder
 import com.nexters.gamss.tokenlimit.service.DailyTokenLimitService
 import org.slf4j.LoggerFactory
+import org.springframework.dao.DataAccessException
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -143,12 +144,7 @@ class CardService(
         conversationId: Long,
         summary: String,
     ): EmotionType {
-        val userMessages =
-            messageRepository
-                .findAllByConversationIdAndSenderTypeOrderByIdAsc(conversationId, SenderType.USER)
-                .map { it.content }
-        // 유저 메시지가 하나도 없는 방어적 엣지 — 클라이언트가 만든 요약도 유저의 대화 내용이므로 그걸로 분류한다.
-        val input = userMessages.ifEmpty { listOf(summary) }
+        val input = loadUserMessages(conversationId, summary)
         val startedAt = System.currentTimeMillis()
         val output =
             try {
@@ -183,6 +179,28 @@ class CardService(
             outputTokens = output.outputTokens,
         )
         return output.emotion
+    }
+
+    /**
+     * 분류에 넣을 유저 메시지를 읽는다. 이 조회는 CAS 선점 **이후**라 실패를 그대로 던지면 상태가
+     * PENDING으로 남아, 재시도가 재시도 가능한 503이 아니라 409(생성 중)로 막힌다 — 정리 스케줄러가
+     * 타임아웃시킬 때까지. LLM 실패와 같은 계약으로 FAILED까지 되돌린다.
+     */
+    private fun loadUserMessages(
+        conversationId: Long,
+        summary: String,
+    ): List<String> {
+        val userMessages =
+            try {
+                messageRepository
+                    .findAllByConversationIdAndSenderTypeOrderByIdAsc(conversationId, SenderType.USER)
+                    .map { it.content }
+            } catch (e: DataAccessException) {
+                markCardGenerationStatus(conversationId, CardGenerationStatus.FAILED)
+                throw BusinessException(ErrorCode.CARD_GENERATION_FAILED, e.message).apply { initCause(e) }
+            }
+        // 유저 메시지가 하나도 없는 방어적 엣지 — 클라이언트가 만든 요약도 유저의 대화 내용이므로 그걸로 분류한다.
+        return userMessages.ifEmpty { listOf(summary) }
     }
 
     /** LLM으로 카드 대사를 생성하고 생성 로그를 남긴다. 실패 시 상태를 FAILED로 되돌린 뒤 예외로 변환한다. */

@@ -24,6 +24,7 @@ import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
 import org.springframework.dao.DataIntegrityViolationException
+import org.springframework.dao.QueryTimeoutException
 import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
@@ -283,6 +284,26 @@ class CardServiceTest {
                 outputTokens = any(),
                 failureReason = any(),
             )
+        }
+    }
+
+    @Test
+    fun `분류용 메시지 조회가 실패해도 FAILED로 전이하고 CARD_GENERATION_FAILED - PENDING으로 남지 않는다`() {
+        every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
+        stubClaimSuccess()
+        val readFailure = QueryTimeoutException("조회 타임아웃")
+        every {
+            messageRepository.findAllByConversationIdAndSenderTypeOrderByIdAsc(CONVERSATION_ID, SenderType.USER)
+        } throws readFailure
+        stubMarkStatus(CardGenerationStatus.FAILED)
+
+        val exception = assertFailsWith<BusinessException> { service.createCard(MEMBER_ID, CONVERSATION_ID, null, "요약") }
+
+        assertEquals(ErrorCode.CARD_GENERATION_FAILED, exception.errorCode)
+        assertEquals(readFailure, exception.cause)
+        verify(exactly = 0) { emotionExtractor.extract(any()) }
+        verify(exactly = 1) {
+            conversationRepository.updateCardGenerationStatus(CONVERSATION_ID, CardGenerationStatus.FAILED, any(), any())
         }
     }
 
