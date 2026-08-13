@@ -2,6 +2,7 @@ package com.nexters.gamss.admin.controller
 
 import com.nexters.gamss.global.security.JwtIssuer
 import com.nexters.gamss.support.TestcontainersConfig
+import org.hamcrest.Matchers.containsString
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -110,6 +111,37 @@ class AdminLlmSettingsControllerIntegrationTest {
             }.andExpect {
                 status { isBadRequest() }
                 jsonPath("$.error.code") { value("INVALID_INPUT") }
+            }
+    }
+
+    @Test
+    fun `카드 감정 프롬프트도 조회·수정되고 리비전이 남는다`() {
+        // 백오피스 API는 PromptType 제네릭이라 enum·시딩만으로 신규 타입이 동작해야 한다(#134·#135).
+        mockMvc
+            .get("/api/admin/llm-settings/prompt?promptType=CARD_EMOTION") {
+                header(HttpHeaders.AUTHORIZATION, adminBearer())
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.promptType") { value("CARD_EMOTION") }
+                jsonPath("$.data.systemPrompt") { value(containsString("감정 분류기")) }
+            }
+
+        mockMvc
+            .put("/api/admin/llm-settings/prompt") {
+                header(HttpHeaders.AUTHORIZATION, adminBearer())
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"promptType":"CARD_EMOTION","systemPrompt":"수정한 감정 분류 프롬프트"}"""
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.systemPrompt") { value("수정한 감정 분류 프롬프트") }
+            }
+
+        mockMvc
+            .get("/api/admin/llm-settings/prompt/revisions?promptType=CARD_EMOTION") {
+                header(HttpHeaders.AUTHORIZATION, adminBearer())
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.content[0].savedBy") { value("admin@gamss.kr") }
             }
     }
 
