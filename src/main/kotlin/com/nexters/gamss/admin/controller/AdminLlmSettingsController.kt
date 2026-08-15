@@ -54,7 +54,7 @@ class AdminLlmSettingsController(
     @Operation(
         summary = "모델 수정",
         description =
-            "앱 전체 모델을 갱신합니다(댓글·답글·카드 공통).\n\n" +
+            "앱 전체 모델을 갱신합니다(댓글·답글·카드 생성과 카드 감정 분류 공통).\n\n" +
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +
