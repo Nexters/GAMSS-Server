@@ -48,6 +48,18 @@ class ConversationRepositoryAutoCardTargetTest {
         )
     }
 
+    private fun markFailed(
+        conversationId: Long,
+        at: Instant,
+    ) {
+        conversationRepository.updateCardGenerationStatus(
+            conversationId,
+            CardGenerationStatus.FAILED,
+            listOf(CardGenerationStatus.NONE),
+            at,
+        )
+    }
+
     /** 요약이 저장된 방(카드를 만들 수 있는 상태). 요약은 메시지를 보낼 때마다 갱신된다. */
     private fun saveWithSummary(
         memberId: Long = 1L,
@@ -65,6 +77,35 @@ class ConversationRepositoryAutoCardTargetTest {
         val endedWithoutCard = saveWithSummary(ended = true)
 
         assertEquals(listOf(active, endedWithoutCard), findTargets())
+    }
+
+    @Test
+    fun `자동 생성을 포기한(SKIPPED) 대화방은 대상에서 빠진다`() {
+        // 요약이 없어 포기한 방은 종료된 상태라 요약이 채워질 길이 없다 — 다시 집어도 결론이 같다.
+        val skipped = saveWithSummary(ended = true)
+        conversationRepository.updateCardGenerationStatus(
+            skipped,
+            CardGenerationStatus.SKIPPED,
+            listOf(CardGenerationStatus.NONE),
+            Instant.now(),
+        )
+        val pending = saveWithSummary()
+
+        assertEquals(listOf(pending), findTargets())
+    }
+
+    @Test
+    fun `실패한 대화방은 하루 안에 다시 시도하지 않는다`() {
+        // 실패는 재시도가 살아 있어야 하므로 상태로 뺄 수 없다. 대신 마지막 시도가 이번 하루 안이면
+        // 건너뛴다 — 영구적으로 실패하는 방이 생겨도 태우는 LLM 호출이 하루 한 번으로 묶인다.
+        val boundary = Instant.now().plus(1, ChronoUnit.HOURS)
+        val failedAfterBoundary = saveWithSummary(ended = true)
+        val failedBeforeBoundary = saveWithSummary(ended = true)
+        // 경계 이후에 실패했다 = 이번 하루 안에 이미 한 번 태웠다.
+        markFailed(failedAfterBoundary, at = boundary.plusSeconds(60))
+        markFailed(failedBeforeBoundary, at = boundary.minus(1, ChronoUnit.DAYS))
+
+        assertEquals(listOf(failedBeforeBoundary), findTargets(createdBefore = boundary))
     }
 
     @Test
@@ -98,7 +139,7 @@ class ConversationRepositoryAutoCardTargetTest {
     fun `상한 이후에 만들어진 대화방은 대상에서 빠진다`() {
         saveWithSummary()
 
-        // 오늘 만들어진 방은 KST 오늘 자정 기준으로 아직 대상이 아니다(오늘 기록은 오늘 밤까지 열어둔다).
+        // 아직 지나지 않은 하루에 속한 방은 대상이 아니다 — 상한은 가장 최근에 지난 하루 경계(KST 05시)다.
         assertTrue(findTargets(createdBefore = Instant.now().minus(1, ChronoUnit.DAYS)).isEmpty())
     }
 

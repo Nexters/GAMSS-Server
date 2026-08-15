@@ -1,6 +1,7 @@
 package com.nexters.gamss.card.service
 
 import com.nexters.gamss.card.config.CardProperties
+import com.nexters.gamss.conversation.domain.CardGenerationStatus
 import com.nexters.gamss.conversation.repository.ConversationRepository
 import com.nexters.gamss.conversation.service.ConversationService
 import com.nexters.gamss.global.exception.BusinessException
@@ -52,7 +53,7 @@ class DailyAutoCardScheduler(
     /**
      * 지금 시점 기준으로 가장 최근에 지난 하루 경계(KST [DAY_BOUNDARY_HOUR]시).
      *
-     * 이 서비스의 하루는 자정이 아니라 새벽 [DAY_BOUNDARY_HOUR]시에 바뀐다. 자정을 상한으로 쓰면
+     * 이 배치가 보는 하루는 자정이 아니라 새벽 [DAY_BOUNDARY_HOUR]시에 바뀐다. 자정을 상한으로 쓰면
      * **0시~5시에 만든 방이 어제에 속하는데도 "오늘 것"으로 분류돼** 하루를 더 열린 채로 기다린다.
      *
      * 아직 오늘 경계 전이면 어제 경계가 기준이다([DailyTokenLimitService.windowStart]와 같은 계산) —
@@ -118,11 +119,27 @@ class DailyAutoCardScheduler(
         }
         val summary = conversation.summary
         if (summary.isNullOrBlank()) {
+            // 종료된 방에는 메시지를 못 보내니 요약이 채워질 길이 없다 — 상태로 못 박아 다음 실행부터
+            // 대상에서 빠지게 한다. 그러지 않으면 결론이 같은 방을 매일 밤 다시 집는다.
+            markCardGenerationSkipped(conversationId)
             log.info("요약이 없어 카드 생성을 건너뛴다(종료는 완료): conversationId={}", conversationId)
             return AutoCardOutcome.NO_SUMMARY
         }
         cardService.createCard(conversation.memberId, conversationId, emotion = null, summary = summary)
         return AutoCardOutcome.CREATED
+    }
+
+    /**
+     * 자동 생성을 포기했다고 표시한다. 전이가 0건이면(그 사이 다른 요청이 선점·완료) 그 요청의
+     * 결과를 존중하고 넘어간다 — 어차피 그쪽이 DONE이나 PENDING으로 만들어 대상에서 빠진다.
+     */
+    private fun markCardGenerationSkipped(conversationId: Long) {
+        conversationRepository.updateCardGenerationStatus(
+            conversationId,
+            CardGenerationStatus.SKIPPED,
+            listOf(CardGenerationStatus.NONE, CardGenerationStatus.FAILED),
+            Instant.now(),
+        )
     }
 
     /** 배치 입장에서 정상인 실패와 진짜 실패를 가른다. */
@@ -151,9 +168,13 @@ class DailyAutoCardScheduler(
         private const val ZONE_ID = "Asia/Seoul"
 
         /**
-         * 이 서비스의 하루 경계(KST). 자정이 아니라 새벽 5시에 하루가 바뀐다 — 새벽까지 이어 쓴
-         * 기록은 그 전날에 속한다. 일일 토큰 리셋(`token_policy.reset_hour`, 시드값 5)이 같은
-         * 시각인 것도 같은 이유다.
+         * **이 배치가 보는** 하루 경계(KST). 자정이 아니라 새벽 5시로 잡는다 — 새벽까지 이어 쓴
+         * 기록은 그 전날에 속한다고 보고, 일일 토큰 리셋(`token_policy.reset_hour`, 시드값 5)과
+         * 맞춘 값이다.
+         *
+         * 서비스 전체의 날짜 경계는 아니다 — 카드 캘린더·날짜별 대화 조회는 여전히 자정을 쓴다
+         * ([com.nexters.gamss.card.service.CardService]의 getCardsByDate 등). 이 상수를 근거로
+         * 다른 곳의 날짜 경계를 옮기면 그쪽 조회가 어긋난다.
          */
         private const val DAY_BOUNDARY_HOUR = 5
 

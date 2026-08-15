@@ -59,18 +59,31 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
      * 걸러낸다. 그 방들은 요약이 없어 카드를 만들 수 없으므로, 하한이 없으면 첫 실행이 기존
      * 사용자들의 진행 중인 방을 전부 카드 없이 종료해버린다
      * ([com.nexters.gamss.card.config.CardProperties.autoCardStartDate]).
+     *
+     * **하한은 고정이고 상한만 매일 밀리므로, 끝나지 않는 방은 대상에 계속 쌓인다.** 그래서 결론이
+     * 바뀔 수 없는 방과 바뀔 수 있는 방을 다르게 다룬다:
+     * - 요약이 없어 포기한 방([CardGenerationStatus.SKIPPED])은 종료된 방이라 요약이 채워질 길이
+     *   없다 — DONE과 함께 아예 제외한다.
+     * - 실패한 방([CardGenerationStatus.FAILED])은 재시도가 살아 있어야 하므로 상태로 뺄 수 없다.
+     *   대신 마지막 시도가 이번 하루 안이면 건너뛰어 **하루 한 번**으로 제한한다. 배치 카드는
+     *   감정 분류·대사 생성 2회를 부르므로, 영구적으로 실패하는 방이 생겨도 태우는 양이 예측
+     *   가능한 선에서 묶인다.
      */
     @Query(
         "select c.id from Conversation c " +
             "where c.createdAt >= :createdAfter and c.createdAt < :createdBefore " +
-            "and c.status <> :deletedStatus and c.cardGenerationStatus <> :doneStatus " +
+            "and c.status <> :deletedStatus and c.cardGenerationStatus not in :finishedStatuses " +
+            "and (c.cardGenerationStatus <> :failedStatus " +
+            "or c.cardGenerationStatusUpdatedAt is null or c.cardGenerationStatusUpdatedAt < :createdBefore) " +
             "order by c.id asc",
     )
     fun findAutoCardTargetIds(
         @Param("createdAfter") createdAfter: Instant,
         @Param("createdBefore") createdBefore: Instant,
         @Param("deletedStatus") deletedStatus: ConversationStatus = ConversationStatus.DELETED,
-        @Param("doneStatus") doneStatus: CardGenerationStatus = CardGenerationStatus.DONE,
+        @Param("finishedStatuses") finishedStatuses: List<CardGenerationStatus> =
+            listOf(CardGenerationStatus.DONE, CardGenerationStatus.SKIPPED),
+        @Param("failedStatus") failedStatus: CardGenerationStatus = CardGenerationStatus.FAILED,
     ): List<Long>
 
     /**

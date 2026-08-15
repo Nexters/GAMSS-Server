@@ -69,6 +69,7 @@ class ConversationController(
                 "| INVALID_INPUT | 400 | content 누락·140자 초과, 잘못된 답장 대상, 또는 excludeCharacters가 전체 캐릭터를 제외함 |\n" +
                 "| CONVERSATION_NOT_FOUND | 404 | 존재하지 않는 채팅방 |\n" +
                 "| CONVERSATION_ACCESS_DENIED | 403 | 본인 채팅방이 아님 |\n" +
+                "| CONVERSATION_ENDED | 409 | 종료된 채팅방 — 매일 새벽 5시 자동 종료로 닫혔을 수 있습니다. 새 채팅방으로 재전송하세요 |\n" +
                 "| CONVERSATION_ALREADY_DELETED | 409 | 삭제된 채팅방 |",
     )
     @PostMapping("/messages")

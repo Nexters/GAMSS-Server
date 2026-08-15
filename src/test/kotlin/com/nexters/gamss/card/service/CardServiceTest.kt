@@ -67,7 +67,7 @@ class CardServiceTest {
             conversationRepository.updateCardGenerationStatus(
                 CONVERSATION_ID,
                 CardGenerationStatus.PENDING,
-                listOf(CardGenerationStatus.NONE, CardGenerationStatus.FAILED),
+                listOf(CardGenerationStatus.NONE, CardGenerationStatus.FAILED, CardGenerationStatus.SKIPPED),
                 any(),
             )
         } returns 1
@@ -158,7 +158,7 @@ class CardServiceTest {
             conversationRepository.updateCardGenerationStatus(
                 CONVERSATION_ID,
                 CardGenerationStatus.PENDING,
-                listOf(CardGenerationStatus.NONE, CardGenerationStatus.FAILED),
+                listOf(CardGenerationStatus.NONE, CardGenerationStatus.FAILED, CardGenerationStatus.SKIPPED),
                 any(),
             )
         } returns 0
@@ -177,7 +177,7 @@ class CardServiceTest {
             conversationRepository.updateCardGenerationStatus(
                 CONVERSATION_ID,
                 CardGenerationStatus.PENDING,
-                listOf(CardGenerationStatus.NONE, CardGenerationStatus.FAILED),
+                listOf(CardGenerationStatus.NONE, CardGenerationStatus.FAILED, CardGenerationStatus.SKIPPED),
                 any(),
             )
         } returns 0

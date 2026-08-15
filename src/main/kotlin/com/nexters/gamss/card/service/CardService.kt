@@ -122,7 +122,10 @@ class CardService(
             conversationRepository.updateCardGenerationStatus(
                 conversationId,
                 CardGenerationStatus.PENDING,
-                listOf(CardGenerationStatus.NONE, CardGenerationStatus.FAILED),
+                // SKIPPED는 배치가 요약이 없어 자동 생성을 포기한 방이다. 카드 생성 API는 요약을
+                // 클라이언트가 실어 보내므로 사용자는 만들 수 있어야 한다 — 빼면 이 요청이 CAS
+                // 0건으로 떨어져 CARD_GENERATION_IN_PROGRESS라는 엉뚱한 에러가 나간다.
+                listOf(CardGenerationStatus.NONE, CardGenerationStatus.FAILED, CardGenerationStatus.SKIPPED),
                 Instant.now(),
             )
         if (claimed == 0) {

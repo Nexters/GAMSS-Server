@@ -2,6 +2,7 @@ package com.nexters.gamss.card.service
 
 import com.nexters.gamss.card.config.CardProperties
 import com.nexters.gamss.card.domain.Card
+import com.nexters.gamss.conversation.domain.CardGenerationStatus
 import com.nexters.gamss.conversation.domain.Conversation
 import com.nexters.gamss.conversation.repository.ConversationRepository
 import com.nexters.gamss.conversation.service.ConversationService
@@ -37,6 +38,10 @@ class DailyAutoCardSchedulerTest {
         memberId: Long = MEMBER_ID,
         summary: String? = "오늘 억울한 일이 있었다",
     ): Conversation = Conversation(memberId).apply { summary?.let { updateSummary(it) } }
+
+    private fun stubMarkSkipped() {
+        every { conversationRepository.updateCardGenerationStatus(any(), any(), any(), any()) } returns 1
+    }
 
     private fun stubTargets(vararg ids: Long) {
         every { conversationRepository.findAutoCardTargetIds(any(), any(), any(), any()) } returns ids.toList()
@@ -74,12 +79,33 @@ class DailyAutoCardSchedulerTest {
         every { conversationService.endForAutoBatch(10L) } returns conversation(summary = null)
         every { conversationService.endForAutoBatch(20L) } returns conversation(summary = "   ")
         every { cardService.createCard(any(), any(), any(), any()) } returns mockk<Card>()
+        stubMarkSkipped()
 
         scheduler.runFor(createdAfter, createdBefore)
 
         verify(exactly = 1) { conversationService.endForAutoBatch(10L) }
         verify(exactly = 1) { conversationService.endForAutoBatch(20L) }
         verify(exactly = 0) { cardService.createCard(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `요약이 없는 방은 자동 생성을 포기했다고 표시해 다음 실행에서 다시 잡지 않는다`() {
+        // 종료된 방에는 메시지를 못 보내니 요약이 채워질 길이 없다 — 상태로 못 박지 않으면
+        // 결론이 같은 방을 매일 밤 다시 집는다.
+        stubTargets(10L)
+        every { conversationService.endForAutoBatch(10L) } returns conversation(summary = null)
+        stubMarkSkipped()
+
+        scheduler.runFor(createdAfter, createdBefore)
+
+        verify(exactly = 1) {
+            conversationRepository.updateCardGenerationStatus(
+                10L,
+                CardGenerationStatus.SKIPPED,
+                listOf(CardGenerationStatus.NONE, CardGenerationStatus.FAILED),
+                any(),
+            )
+        }
     }
 
     @Test
