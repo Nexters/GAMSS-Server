@@ -188,7 +188,7 @@ class CardControllerIntegrationTest {
     }
 
     @Test
-    fun `대화방을 먼저 삭제한 뒤에도 카드를 삭제할 수 있다`() {
+    fun `대화방을 먼저 삭제하면 카드도 함께 지워져 카드 삭제는 409가 된다`() {
         val member = memberRepository.save(Member("convfirst@test.com"))
         val card = createCardVia(member, "대화방 먼저 삭제")
 
@@ -199,15 +199,16 @@ class CardControllerIntegrationTest {
         entityManager.flush()
         entityManager.clear()
 
-        // 이미 삭제된 방을 다시 delete() 하면 예외라, 카드 삭제가 그 예외에 휘말리면 안 된다.
+        // 방 삭제가 카드까지 지우므로 이 시점에 카드는 이미 삭제 상태다. 사용자 화면에서는 이미
+        // 사라진 카드라 실제로 도달하는 경로는 아니고, 데이터 상태와 응답이 어긋나지 않는지 본다.
+        assertNotNull(cardRepository.findById(card.id).orElseThrow().deletedAt)
         mockMvc
             .delete("/api/cards/${card.id}") {
                 header(HttpHeaders.AUTHORIZATION, bearerFor(member))
-            }.andExpect { status { isOk() } }
-        entityManager.flush()
-        entityManager.clear()
-
-        assertNotNull(cardRepository.findById(card.id).orElseThrow().deletedAt)
+            }.andExpect {
+                status { isConflict() }
+                jsonPath("$.error.code") { value("CARD_ALREADY_DELETED") }
+            }
     }
 
     @Test
@@ -792,8 +793,8 @@ class CardControllerIntegrationTest {
         entityManager.flush()
         entityManager.clear()
 
-        // 카드 자체는 deletedAt 이 null 이지만 캘린더에는 이미 나오지 않는다 — 같은 규칙을 따른다.
-        assertNull(cardRepository.findById(card.id).orElseThrow().deletedAt)
+        // 방이 지워지면 카드도 함께 지워진다 — 삭제된 방에 살아 있는 카드를 남기지 않는다.
+        assertNotNull(cardRepository.findById(card.id).orElseThrow().deletedAt)
         mockMvc
             .get("/api/cards/${card.id}") {
                 header(HttpHeaders.AUTHORIZATION, bearerFor(member))

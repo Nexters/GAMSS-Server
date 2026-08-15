@@ -2,8 +2,10 @@ package com.nexters.gamss.conversation.controller
 
 import com.nexters.gamss.conversation.controller.dto.CommentGenerationResponse
 import com.nexters.gamss.conversation.controller.dto.CommentGenerationStatus
+import com.nexters.gamss.conversation.controller.dto.ConversationDeleteResponse
 import com.nexters.gamss.conversation.controller.dto.ConversationResponse
 import com.nexters.gamss.conversation.controller.dto.ConversationSearchResponse
+import com.nexters.gamss.conversation.controller.dto.DeleteConversationsRequest
 import com.nexters.gamss.conversation.controller.dto.GenerateCommentsRequest
 import com.nexters.gamss.conversation.controller.dto.MessageResponse
 import com.nexters.gamss.conversation.controller.dto.ReplyGenerationResponse
@@ -328,6 +330,32 @@ class ConversationController(
     ): ApiResponse<ConversationResponse> {
         val conversation = conversationService.deleteConversation(principal.memberId, conversationId)
         return ApiResponse.success(ConversationResponse.from(conversation))
+    }
+
+    @Operation(
+        summary = "채팅방 일괄 삭제",
+        description =
+            "채팅방 여러 개를 한 번에 삭제하고, 삭제된 개수를 돌려줍니다. 삭제된 채팅방은 단건 삭제와 똑같이 " +
+                "목록 조회·메시지 조회·메시지 추가·종료 등 어떤 요청에도 더 이상 응할 수 없습니다.\n\n" +
+                "- **본인 채팅방만 삭제됩니다.** 남의 채팅방·존재하지 않는 채팅방 ID가 섞여 있어도 그것만 빠지고 " +
+                "나머지는 정상 삭제됩니다(단건 삭제처럼 403·404로 전체가 거절되지 않습니다).\n" +
+                "- 이미 삭제한 채팅방은 다시 세지 않습니다. **연속 호출해도 안전합니다.**\n" +
+                "- 대상이 하나도 없으면 `deletedCount: 0`으로 **성공**합니다.\n" +
+                "- **카드가 만들어진 채팅방을 지우면 그 카드도 함께 삭제됩니다.**\n\n" +
+                "**실패 응답**\n\n" +
+                "| error.code | HTTP | 설명 |\n" +
+                "|---|---|---|\n" +
+                "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·무효) |\n" +
+                "| EXPIRED_TOKEN | 401 | accessToken 만료 — 재발급 후 재시도 |\n" +
+                "| INVALID_INPUT | 400 | conversationIds가 비었거나 ${DeleteConversationsRequest.MAX_IDS}개를 넘음 |",
+    )
+    @DeleteMapping
+    fun deleteConversations(
+        @Parameter(hidden = true) @AuthenticationPrincipal principal: AuthPrincipal,
+        @Valid @RequestBody request: DeleteConversationsRequest,
+    ): ApiResponse<ConversationDeleteResponse> {
+        val deletedCount = conversationService.deleteConversations(principal.memberId, request.conversationIds)
+        return ApiResponse.success(ConversationDeleteResponse(deletedCount))
     }
 
     companion object {

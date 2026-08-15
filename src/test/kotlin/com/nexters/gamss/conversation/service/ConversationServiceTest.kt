@@ -340,6 +340,50 @@ class ConversationServiceTest {
     }
 
     @Test
+    fun `일괄 삭제는 본인 방만 지우고 삭제된 개수를 돌려준다`() {
+        // 남의 방·없는 방·이미 지운 방은 findDeletableIds가 걸러낸다 — 섞여 있어도 나머지는 지워진다.
+        every { conversationRepository.findDeletableIds(1L, listOf(10L, 20L, 99L)) } returns listOf(10L, 20L)
+        every { conversationRepository.softDeleteByIds(listOf(10L, 20L), any(), any()) } returns 2
+
+        val deletedCount = conversationService.deleteConversations(1L, listOf(10L, 20L, 99L))
+
+        assertEquals(2, deletedCount)
+        verify(exactly = 1) { cleaner.clean(listOf(10L, 20L), any()) }
+    }
+
+    @Test
+    fun `일괄 삭제는 지울 방이 없으면 0을 돌려주고 아무것도 건드리지 않는다`() {
+        every { conversationRepository.findDeletableIds(1L, listOf(99L)) } returns emptyList()
+
+        assertEquals(0, conversationService.deleteConversations(1L, listOf(99L)))
+
+        verify(exactly = 0) { conversationRepository.softDeleteByIds(any(), any(), any()) }
+        verify(exactly = 0) { cleaner.clean(any(), any()) }
+    }
+
+    @Test
+    fun `일괄 삭제는 중복 id를 한 번만 조회한다`() {
+        every { conversationRepository.findDeletableIds(1L, listOf(10L)) } returns listOf(10L)
+        every { conversationRepository.softDeleteByIds(listOf(10L), any(), any()) } returns 1
+
+        assertEquals(1, conversationService.deleteConversations(1L, listOf(10L, 10L, 10L)))
+    }
+
+    @Test
+    fun `일괄 삭제는 채팅방과 딸린 자원에 같은 시각을 찍는다`() {
+        val conversationDeletedAt = slot<Instant>()
+        val cardDeletedAt = slot<Instant>()
+        every { conversationRepository.findDeletableIds(1L, listOf(10L)) } returns listOf(10L)
+        every { conversationRepository.softDeleteByIds(listOf(10L), capture(conversationDeletedAt), any()) } returns 1
+        every { cleaner.clean(any(), capture(cardDeletedAt)) } returns Unit
+
+        conversationService.deleteConversations(1L, listOf(10L))
+
+        // 한 번의 삭제로 사라진 것들이 이력에서 다른 요청처럼 보이면 안 된다.
+        assertEquals(conversationDeletedAt.captured, cardDeletedAt.captured)
+    }
+
+    @Test
     fun `삭제에 실패하면 딸린 자원도 정리하지 않는다`() {
         val alreadyDeleted = Conversation(memberId = 1L).apply { delete() }
         every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(alreadyDeleted)

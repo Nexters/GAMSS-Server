@@ -86,6 +86,33 @@ class ConversationService(
     }
 
     /**
+     * 채팅방 여러 개를 한 번에 삭제하고 실제로 삭제된 개수를 돌려준다.
+     *
+     * 본인 방만 지운다 — 남의 방·없는 방·이미 지운 방 id가 섞여 있어도 그것만 빠지고 나머지는
+     * 정상 삭제된다(카드 일괄 삭제와 같은 계약). 단건 삭제처럼 403·404·409로 전체를 거절하면 id
+     * 하나 때문에 나머지를 못 지우고, 연속 호출도 안전하지 않다.
+     *
+     * 행 잠금을 쓰지 않는다 — 삭제는 `status <> DELETED` 조건부 UPDATE라 동시에 들어온 요청이
+     * 같은 방을 두 번 세지 않는다.
+     */
+    @Transactional
+    fun deleteConversations(
+        memberId: Long,
+        conversationIds: List<Long>,
+    ): Int {
+        val deletableIds = conversationRepository.findDeletableIds(memberId, conversationIds.distinct())
+        if (deletableIds.isEmpty()) {
+            return 0
+        }
+        // 채팅방과 딸린 자원에 같은 시각을 찍는다 — 한 번의 삭제로 사라진 것들이 이력에서 서로 다른
+        // 요청처럼 보이지 않아야 한다(카드 일괄 삭제도 같은 이유로 시각을 공유한다).
+        val now = Instant.now()
+        val deletedCount = conversationRepository.softDeleteByIds(deletableIds, now)
+        cleaners.cleanAll(deletableIds, now)
+        return deletedCount
+    }
+
+    /**
      * 채팅방 제목을 지정·변경한다. 여러 번 호출할 수 있다. 삭제된 방은 변경할 수 없다.
      * 제목도 상태를 바꾸는 요청이라 행 잠금([getOwnedConversationForUpdate])을 쓴다 — 잠금 없이
      * stale 상태로 읽으면 동시 삭제가 flush 로 되살아나거나(모든 컬럼 UPDATE) 삭제된 방의 제목이 바뀔 수 있다.
