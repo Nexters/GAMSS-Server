@@ -46,6 +46,27 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
     ): List<Conversation>
 
     /**
+     * 자동 종료·카드 생성 배치의 대상 id를 조회한다 — [createdBefore](KST 오늘 자정) 전에 만들어졌고,
+     * 삭제되지 않았으며, 아직 카드가 없는(`cardGenerationStatus <> DONE`) 방.
+     *
+     * "어제 하루"로 좁히지 않는다 — 배치가 하루 걸러 실패하면 그날 방들이 영영 카드 없이 남는다.
+     * 이미 종료된 방까지 포함하는 것도 같은 이유로, 종료까지만 되고 카드 생성에서 끊긴 방이 다음
+     * 실행에서 이어서 처리된다. DONE 필터는 불필요한 일감을 줄이는 용도일 뿐이고, 중복 카드 생성을
+     * 실제로 막는 것은 카드 생성 경로의 CAS 선점과 `cards.conversation_id` 유니크 제약이다.
+     */
+    @Query(
+        "select c.id from Conversation c " +
+            "where c.createdAt < :createdBefore and c.status <> :deletedStatus " +
+            "and c.cardGenerationStatus <> :doneStatus " +
+            "order by c.id asc",
+    )
+    fun findAutoCardTargetIds(
+        @Param("createdBefore") createdBefore: Instant,
+        @Param("deletedStatus") deletedStatus: ConversationStatus = ConversationStatus.DELETED,
+        @Param("doneStatus") doneStatus: CardGenerationStatus = CardGenerationStatus.DONE,
+    ): List<Long>
+
+    /**
      * 상태를 바꾸는 요청(메시지 저장·종료·삭제)에서 사용한다. 행을 잠가 다른 상태 변경 요청이
      * 커밋될 때까지 대기하게 만들어, 삭제 이후 작업 차단 계약이 경합으로 깨지지 않도록 한다.
      */

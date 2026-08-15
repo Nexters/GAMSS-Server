@@ -20,6 +20,7 @@ import java.util.Optional
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 
 class ConversationServiceTest {
     private val conversationRepository = mockk<ConversationRepository>()
@@ -327,6 +328,38 @@ class ConversationServiceTest {
             }
 
         assertEquals(ErrorCode.CONVERSATION_ALREADY_ENDED, exception.errorCode)
+    }
+
+    @Test
+    fun `자동 종료 배치는 진행 중 채팅방을 종료한다`() {
+        val conversation = Conversation(memberId = 1L)
+        every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
+
+        val result = conversationService.endForAutoBatch(10L)
+
+        assertEquals(ConversationStatus.ENDED, conversation.status)
+        assertEquals(conversation, result)
+    }
+
+    @Test
+    fun `자동 종료 배치는 이미 종료된 채팅방을 예외 없이 그대로 돌려준다`() {
+        // 종료까지만 되고 카드 생성에서 끊긴 방을 다음 실행이 이어서 처리해야 한다.
+        val conversation = Conversation(memberId = 1L).apply { end() }
+        every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
+
+        val result = conversationService.endForAutoBatch(10L)
+
+        assertEquals(conversation, result)
+    }
+
+    @Test
+    fun `자동 종료 배치는 삭제된 채팅방과 없는 채팅방을 null로 거른다`() {
+        val deleted = Conversation(memberId = 1L).apply { delete() }
+        every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(deleted)
+        every { conversationRepository.findByIdForUpdate(99L) } returns Optional.empty()
+
+        assertNull(conversationService.endForAutoBatch(10L))
+        assertNull(conversationService.endForAutoBatch(99L))
     }
 
     @Test

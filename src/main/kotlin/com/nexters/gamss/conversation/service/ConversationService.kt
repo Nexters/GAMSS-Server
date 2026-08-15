@@ -75,6 +75,23 @@ class ConversationService(
     }
 
     /**
+     * 자동 종료 배치용 종료. 사용자 요청이 아니므로 소유권을 검사하지 않고, 이미 종료된 방도 예외
+     * 없이 그대로 돌려준다 — 종료까지만 되고 카드 생성에서 끊긴 방을 다음 실행이 이어서 처리해야
+     * 하기 때문이다. 삭제된 방은 대상이 아니므로 null.
+     */
+    @Transactional
+    fun endForAutoBatch(conversationId: Long): Conversation? {
+        val conversation = conversationRepository.findByIdForUpdate(conversationId).orElse(null) ?: return null
+        if (conversation.isDeleted()) {
+            return null
+        }
+        if (conversation.status == ConversationStatus.ACTIVE) {
+            conversation.end()
+        }
+        return conversation
+    }
+
+    /**
      * 채팅방을 삭제한다. 삭제 후에는 채팅방 목록·메시지 조회에 나타나지 않는다.
      *
      * 이 방에 딸린 자원(카드 등)도 같은 시각으로 함께 정리한다([DeletedConversationCleaner]) —
