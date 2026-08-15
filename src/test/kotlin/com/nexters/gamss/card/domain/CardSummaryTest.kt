@@ -56,4 +56,43 @@ class CardSummaryTest {
         assertTrue(normalized.length > "오늘".length + 1)
         assertTrue(normalized.length <= CardSummary.MAX_LENGTH)
     }
+
+    @Test
+    fun `이모지가 상한을 넘겨도 서로게이트 쌍이 갈라지지 않는다`() {
+        // String.length는 UTF-16 유닛이라 이모지가 2로 세진다. 그 단위로 자르면 쌍 한가운데가
+        // 잘려 깨진 문자가 카드에 그대로 남는다(카드는 재생성이 안 된다).
+        val normalized = CardSummary.normalize("\uD83D\uDE00".repeat(60))
+
+        // 고립된 서로게이트는 UTF-8로 인코딩할 때 대체 문자로 바뀌므로 왕복이 깨진다.
+        assertEquals(normalized, String(normalized.toByteArray(Charsets.UTF_8), Charsets.UTF_8))
+        assertTrue(CardSummary.graphemeCount(normalized) <= CardSummary.MAX_LENGTH)
+    }
+
+    @Test
+    fun `피부톤 이모지가 조합에서 갈라지지 않는다`() {
+        val normalized = CardSummary.normalize("\uD83D\uDC4D\uD83C\uDFFD".repeat(60))
+
+        assertEquals(normalized, String(normalized.toByteArray(Charsets.UTF_8), Charsets.UTF_8))
+        assertTrue(CardSummary.graphemeCount(normalized) <= CardSummary.MAX_LENGTH)
+    }
+
+    @Test
+    fun `ZWJ 가족 이모지가 한 글자로 세어지고 갈라지지 않는다`() {
+        // 👨‍👩‍👧 — 코드 포인트 5개, UTF-16 8유닛이지만 화면에서는 한 글자다.
+        val family = "\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC67"
+        assertEquals(1, CardSummary.graphemeCount(family))
+
+        val normalized = CardSummary.normalize(family.repeat(60))
+
+        assertEquals(normalized, String(normalized.toByteArray(Charsets.UTF_8), Charsets.UTF_8))
+        assertTrue(CardSummary.graphemeCount(normalized) <= CardSummary.MAX_LENGTH)
+    }
+
+    @Test
+    fun `상한 이내의 이모지 문장은 그대로 둔다`() {
+        // 유닛으로 재면 상한을 넘는다고 오판해 멀쩡한 문장을 자르게 된다.
+        val line = "오늘 하루종일 집 밖에 안 나갔어요 \uD83D\uDE00".repeat(1)
+
+        assertEquals(line, CardSummary.normalize(line))
+    }
 }

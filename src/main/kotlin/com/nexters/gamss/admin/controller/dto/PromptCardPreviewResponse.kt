@@ -47,7 +47,8 @@ data class PromptCardPreviewResponse(
                 userContent = result.userContent,
                 emotion = result.emotion.name,
                 line = result.line,
-                length = result.line?.length,
+                // 관리자가 세는 글자 수와 서버가 자르는 기준이 같아야 한다(UTF-16 유닛이 아니라 그래핌).
+                length = result.line?.let { CardSummary.graphemeCount(it) },
                 rawLine = result.rawLine,
                 rawLength = result.rawLength,
                 truncated = result.truncated,

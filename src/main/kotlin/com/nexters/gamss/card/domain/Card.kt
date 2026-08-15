@@ -45,7 +45,9 @@ class Card(
         require(summary.isNotBlank()) { "카드 요약은 비어 있을 수 없습니다." }
         // 길이를 맞추는 것은 CardSummary.normalize의 몫이고, 여기서는 그걸 거치지 않은 값이 저장되는
         // 경로가 생기지 않았는지만 확인한다.
-        require(summary.length <= CardSummary.MAX_LENGTH) {
+        // 길이는 UTF-16 유닛이 아니라 사용자가 보는 글자 수로 센다 — 유닛으로 재면 이모지가 섞인
+        // 문장이 normalize를 통과하고도 여기서 거부돼 500이 난다.
+        require(CardSummary.graphemeCount(summary) <= CardSummary.MAX_LENGTH) {
             "카드 요약은 ${CardSummary.MAX_LENGTH}자 이하여야 합니다."
         }
         require('\n' !in summary && '\r' !in summary) { "카드 요약은 한 줄이어야 합니다." }

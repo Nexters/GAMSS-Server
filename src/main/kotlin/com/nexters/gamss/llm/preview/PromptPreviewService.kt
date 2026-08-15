@@ -163,7 +163,7 @@ class PromptPreviewService(
                     emotion = command.emotion,
                     line = line,
                     rawLine = output.summary,
-                    rawLength = output.summary.length,
+                    rawLength = CardSummary.graphemeCount(output.summary),
                     truncated = line != output.summary,
                     generationError = null,
                     usage = PreviewUsage.of(geminiPricing, settings.model, output),
