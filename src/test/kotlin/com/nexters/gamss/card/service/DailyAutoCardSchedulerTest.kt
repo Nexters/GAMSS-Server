@@ -26,7 +26,7 @@ class DailyAutoCardSchedulerTest {
     private val conversationService = mockk<ConversationService>()
     private val memberService = mockk<MemberService> { every { getById(any()) } returns Member() }
     private val cardService = mockk<CardService>()
-    private val properties = CardProperties(autoCardStartDate = LocalDate.of(2026, 8, 20))
+    private val properties = CardProperties(autoCardStartDate = START_DATE)
     private val scheduler =
         DailyAutoCardScheduler(conversationRepository, conversationService, memberService, cardService, properties)
 
@@ -157,11 +157,15 @@ class DailyAutoCardSchedulerTest {
             conversationRepository.findAutoCardTargetIds(capture(capturedAfter), capture(capturedBefore), any(), any())
         } returns emptyList()
 
-        scheduler.autoEndAndCreateCards()
-
+        // 호출을 시각 구간으로 감싼다 — 호출 도중 05시 경계가 지나가도(하루 한 순간) 검증이
+        // 흔들리지 않게, 단언은 이 구간에 대해 성립하는 성질만 본다.
         val zone = ZoneId.of("Asia/Seoul")
+        val before = ZonedDateTime.now(zone)
+        scheduler.autoEndAndCreateCards()
+        val after = ZonedDateTime.now(zone)
+
         // 하한은 요약 저장이 배포된 날의 하루 시작(05시).
-        val startDayBegin = LocalDate.of(2026, 8, 20).atTime(5, 0).atZone(zone)
+        val startDayBegin = START_DATE.atTime(5, 0).atZone(zone)
         assertEquals(startDayBegin.toInstant(), capturedAfter.captured)
 
         // 상한은 자정이 아니라 하루 경계여야 한다 — 자정을 쓰면 0~5시에 만든 방이 어제에 속하는데도
@@ -170,12 +174,16 @@ class DailyAutoCardSchedulerTest {
         assertEquals(5, boundary.hour)
         assertEquals(0, boundary.minute)
         // 그리고 이미 지난 경계여야 한다(미래 경계를 쓰면 아직 진행 중인 하루까지 닫아버린다).
-        val now = ZonedDateTime.now(zone)
-        assertTrue(boundary <= now, "이미 지난 하루 경계여야 한다: $boundary")
-        assertTrue(boundary > now.minusDays(1), "가장 최근 경계여야 한다: $boundary")
+        assertTrue(boundary <= after, "이미 지난 하루 경계여야 한다: $boundary")
+        assertTrue(boundary > before.minusDays(1), "가장 최근 경계여야 한다: $boundary")
+        // 시작일이 과거이므로 조회 구간이 뒤집히지 않는다(뒤집히면 대상이 늘 비어 조용히 아무 일도 안 한다).
+        assertTrue(capturedAfter.captured < capturedBefore.captured, "조회 구간이 뒤집히면 안 된다")
     }
 
     companion object {
+        /** 배치가 다루기 시작한 날. 조회 구간이 뒤집히지 않도록 늘 과거인 날짜를 쓴다. */
+        private val START_DATE: LocalDate = LocalDate.of(2026, 1, 1)
+
         private const val MEMBER_ID = 1L
         private const val OTHER_MEMBER_ID = 2L
     }

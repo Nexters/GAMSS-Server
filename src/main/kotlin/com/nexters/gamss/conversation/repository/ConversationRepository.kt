@@ -46,8 +46,9 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
     ): List<Conversation>
 
     /**
-     * 자동 종료·카드 생성 배치의 대상 id를 조회한다 — [createdAfter] 이후 [createdBefore](KST 오늘
-     * 자정) 전에 만들어졌고, 삭제되지 않았으며, 아직 카드가 없는(`cardGenerationStatus <> DONE`) 방.
+     * 자동 종료·카드 생성 배치의 대상 id를 조회한다 — [createdAfter] 이후 [createdBefore](가장 최근에
+     * 지난 하루 경계, KST 05시) 전에 만들어졌고, 삭제되지 않았으며, 아직 카드가 없는
+     * (`cardGenerationStatus <> DONE`) 방.
      *
      * 상한을 "어제 하루"로 좁히지 않는다 — 배치가 하루 걸러 실패하면 그날 방들이 영영 카드 없이
      * 남는다. 이미 종료된 방까지 포함하는 것도 같은 이유로, 종료까지만 되고 카드 생성에서 끊긴 방이
