@@ -47,23 +47,20 @@ class DailyAutoCardScheduler(
             log.info("자동 카드 생성 배치: 대상 없음 (기준={})", createdBefore)
             return
         }
-        val counts = mutableMapOf<Outcome, Int>()
+        val counts = mutableMapOf<AutoCardOutcome, Int>()
         targetIds.forEach { conversationId ->
             val outcome = process(conversationId)
             counts.merge(outcome, 1, Int::plus)
         }
+        // 결과 종류가 늘어도 집계가 어긋나지 않도록 enum을 그대로 훑는다.
         log.info(
-            "자동 카드 생성 배치 완료: 대상={}, 생성={}, 이미 처리됨={}, 요약 없음={}, 토큰 상한={}, 실패={}",
+            "자동 카드 생성 배치 완료: 대상={}, {}",
             targetIds.size,
-            counts[Outcome.CREATED] ?: 0,
-            counts[Outcome.ALREADY_HANDLED] ?: 0,
-            counts[Outcome.NO_SUMMARY] ?: 0,
-            counts[Outcome.TOKEN_LIMIT] ?: 0,
-            counts[Outcome.FAILED] ?: 0,
+            AutoCardOutcome.entries.joinToString(", ") { "${it.label}=${counts[it] ?: 0}" },
         )
     }
 
-    private fun process(conversationId: Long): Outcome =
+    private fun process(conversationId: Long): AutoCardOutcome =
         try {
             createCardForEndedConversation(conversationId)
         } catch (e: BusinessException) {
@@ -72,49 +69,42 @@ class DailyAutoCardScheduler(
             // 방 하나의 예상 못 한 실패가 남은 방들을 막지 않게 한다. 카드 생성 상태는 실패 경로에서
             // 이미 FAILED로 되돌아가 있어 다음 실행이 다시 시도한다.
             log.error("자동 카드 생성 실패: conversationId={}", conversationId, e)
-            Outcome.FAILED
+            AutoCardOutcome.FAILED
         }
 
-    private fun createCardForEndedConversation(conversationId: Long): Outcome {
-        val conversation = conversationService.endForAutoBatch(conversationId) ?: return Outcome.ALREADY_HANDLED
+    private fun createCardForEndedConversation(conversationId: Long): AutoCardOutcome {
+        val conversation =
+            conversationService.endForAutoBatch(conversationId) ?: return AutoCardOutcome.ALREADY_HANDLED
         val summary = conversation.summary
         if (summary.isNullOrBlank()) {
             log.info("요약이 없어 카드 생성을 건너뛴다(종료는 완료): conversationId={}", conversationId)
-            return Outcome.NO_SUMMARY
+            return AutoCardOutcome.NO_SUMMARY
         }
         cardService.createCard(conversation.memberId, conversationId, emotion = null, summary = summary)
-        return Outcome.CREATED
+        return AutoCardOutcome.CREATED
     }
 
     /** 배치 입장에서 정상인 실패와 진짜 실패를 가른다. */
     private fun classify(
         e: BusinessException,
         conversationId: Long,
-    ): Outcome =
+    ): AutoCardOutcome =
         when (e.errorCode) {
             // 다른 요청이 먼저 카드를 만들었거나 만드는 중 — 배치가 할 일이 없다.
             ErrorCode.CARD_ALREADY_EXISTS, ErrorCode.CARD_GENERATION_IN_PROGRESS -> {
-                Outcome.ALREADY_HANDLED
+                AutoCardOutcome.ALREADY_HANDLED
             }
 
             // 한도를 배치가 대신 소진시키지 않는다. 사용자가 직접 만들 여지를 남긴다.
             ErrorCode.DAILY_TOKEN_LIMIT_EXCEEDED -> {
-                Outcome.TOKEN_LIMIT
+                AutoCardOutcome.TOKEN_LIMIT
             }
 
             else -> {
                 log.warn("자동 카드 생성 실패: conversationId={}, errorCode={}", conversationId, e.errorCode, e)
-                Outcome.FAILED
+                AutoCardOutcome.FAILED
             }
         }
-
-    private enum class Outcome {
-        CREATED,
-        ALREADY_HANDLED,
-        NO_SUMMARY,
-        TOKEN_LIMIT,
-        FAILED,
-    }
 
     companion object {
         private const val ZONE_ID = "Asia/Seoul"
