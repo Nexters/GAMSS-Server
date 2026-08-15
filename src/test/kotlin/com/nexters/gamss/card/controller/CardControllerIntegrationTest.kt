@@ -105,6 +105,10 @@ class CardControllerIntegrationTest {
         // 대화방 요약은 다른 채팅방 댓글의 '과거 맥락'으로 쓰이므로 클라이언트 원본 그대로 남아야 한다.
         val persistedConversation = conversationRepository.findById(conversation.id).orElseThrow()
         assertEquals(summary, persistedConversation.summary)
+
+        // 클라이언트가 어느 필드를 읽든 같은 문구가 보여야 한다(Card KDoc 참고).
+        val persistedCard = cardRepository.findAll().single { it.conversationId == conversation.id }
+        assertEquals(persistedCard.summary, persistedCard.message)
         assertEquals(1, cardRepository.count())
     }
 

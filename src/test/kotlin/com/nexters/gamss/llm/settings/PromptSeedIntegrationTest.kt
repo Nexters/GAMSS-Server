@@ -48,5 +48,24 @@ class PromptSeedIntegrationTest : RepositoryTest() {
         }
     }
 
+    @Test
+    fun `모든 타입의 최신 리비전은 현재 프롬프트와 같다`() {
+        // 프롬프트를 바꾸는 마이그레이션은 현재값 UPDATE와 리비전 append를 함께 해야 한다(V26·V29).
+        // 리비전을 빠뜨려도 골든 비교는 통과하므로, 백오피스 이력이 끊기는 것은 여기서만 드러난다.
+        PromptType.entries.forEach { type ->
+            val latest =
+                promptRevisionRepository
+                    .findAllByPromptTypeOrderByVersionDesc(type, PageRequest.of(0, 1))
+                    .content
+                    .firstOrNull()
+            assertNotNull(latest, "$type 의 리비전이 있어야 한다")
+            assertEquals(
+                checkNotNull(llmSettingsRepository.findByPromptType(type)).systemPrompt,
+                latest.systemPrompt,
+                "$type 의 최신 리비전이 현재 프롬프트와 다르다 — 마이그레이션이 리비전 append를 빠뜨렸다",
+            )
+        }
+    }
+
     private fun golden(type: PromptType): String = checkNotNull(javaClass.getResource("/prompts/${type.name}.default.txt")).readText()
 }
