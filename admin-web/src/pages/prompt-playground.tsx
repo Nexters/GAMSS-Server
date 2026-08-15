@@ -23,6 +23,7 @@ import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { CardPreviewSection } from '@/components/card-preview-section'
 import { PageHeader } from '@/components/page-header'
+import { SegmentedTabs } from '@/components/segmented-tabs'
 import { MetricTile } from '@/components/playground/metric-tile'
 import { PromptInspector } from '@/components/playground/prompt-inspector'
 import { PromptOverrideEditor } from '@/components/playground/prompt-override-editor'
@@ -39,6 +40,16 @@ const CHARACTERS: { value: Emotion; label: string; emoji: string }[] = [
   { value: 'GRUMPY', label: '까칠', emoji: '😤' },
   { value: 'QUIRKY', label: '엉뚱', emoji: '🤪' },
 ]
+
+/**
+ * 실험 종류. 둘은 입력도 결과도 달라(댓글은 대화 세션, 카드는 요약 한 줄) 한 화면에 세로로 쌓기보다
+ * 탭으로 나누는 편이 읽기 쉽다. 프롬프트 설정 화면과 같은 탭 모양을 쓴다.
+ */
+const EXPERIMENTS = [
+  { value: 'feed' as const, label: '댓글 · 답글', hint: '샘플 일기로 캐릭터 댓글을 만들고, 실제 유저처럼 이어서 대화해봅니다.' },
+  { value: 'card' as const, label: '카드 한 줄', hint: '대화 요약을 다듬어 카드에 남을 한 줄을 만듭니다. 대화 세션 없이 요약과 감정만으로 시험합니다.' },
+]
+type ExperimentTab = (typeof EXPERIMENTS)[number]['value']
 
 const characterOf = (value: string) => CHARACTERS.find((c) => c.value === value)
 const labelOf = (value: string) => characterOf(value)?.label ?? value
@@ -83,19 +94,6 @@ interface LastRun {
   validationError: string | null
   generationError: string | null
   conditions: { characters: string[]; tikitakaCount: number; eongttungTopic: string | null } | null
-}
-
-/**
- * 실험 구분 제목. 한 페이지에 성격이 다른 실험이 둘 있어, 어디까지가 한 실험인지 눈으로 끊어준다.
- * 페이지 제목([PageHeader])보다 한 단계 작은 위계를 쓴다.
- */
-function SectionHeading({ title, description }: { title: string; description: string }) {
-  return (
-    <div className="border-b pb-2.5">
-      <h2 className="text-base font-semibold tracking-tight">{title}</h2>
-      <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
-    </div>
-  )
 }
 
 function CharacterChip({ value }: { value: string }) {
@@ -164,6 +162,7 @@ function SessionBubble({ item, onReply }: { item: SessionItem; onReply: (item: S
 }
 
 export function PromptPlaygroundPage() {
+  const [tab, setTab] = useState<ExperimentTab>('feed')
   const [diary, setDiary] = useState('')
   const [summary, setSummary] = useState('')
   const [commonPrompt, setCommonPrompt] = useState('')
@@ -404,12 +403,13 @@ export function PromptPlaygroundPage() {
         description="저장하기 전에 프롬프트를 실제 LLM으로 시험합니다. 프롬프트는 저장되지 않으며, 호출마다 소액의 비용이 발생합니다(비용은 생성 로그에 PREVIEW로 기록)."
       />
 
-      <SectionHeading
-        title="댓글 · 답글 실험"
-        description="샘플 일기로 캐릭터 댓글을 만들고, 실제 유저처럼 이어서 대화해봅니다."
-      />
+      <div className="space-y-2">
+        <SegmentedTabs value={tab} onChange={setTab} options={EXPERIMENTS} />
+        <p className="text-sm text-muted-foreground">{EXPERIMENTS.find((item) => item.value === tab)?.hint}</p>
+      </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+      {/* 탭을 바꿔도 반대쪽 실험의 입력·세션은 남는다 — 언마운트하면 진행하던 실험이 사라진다. */}
+      <div className={cn('grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]', tab !== 'feed' && 'hidden')}>
         {/* 실험 조건 */}
         <div className="space-y-4">
           <Card className="space-y-4 p-5">
@@ -659,12 +659,9 @@ export function PromptPlaygroundPage() {
         </div>
       </div>
 
-      <SectionHeading
-        title="카드 한 줄 실험"
-        description="대화 요약을 다듬어 카드에 남을 한 줄을 만듭니다. 대화 세션 없이 요약과 감정만으로 시험합니다."
-      />
-
-      <CardPreviewSection />
+      <div className={cn(tab !== 'card' && 'hidden')}>
+        <CardPreviewSection />
+      </div>
     </div>
   )
 }
