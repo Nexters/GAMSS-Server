@@ -16,7 +16,10 @@ data class SaveMessageRequest(
     val repliesToMessageId: Long? = null,
     @field:Size(max = 2_000, message = "currentConversationSummary는 2000자 이하여야 합니다.")
     @field:Schema(
-        description = "현재 채팅방 전체를 프론트가 압축한 임시 요약(저장하지 않고 생성 컨텍스트로만 사용, 최대 2000자)",
+        description =
+            "현재 채팅방 전체를 프론트가 압축한 요약(최대 2000자). 댓글 생성 컨텍스트로 쓰이며, " +
+                "마지막으로 보낸 값이 저장되어 자동 종료 배치가 카드 요약으로 사용합니다 — " +
+                "보내지 않으면 그 대화방은 자동 종료 시 카드가 생성되지 않습니다.",
         example = "아침에 커피 쏟음. 회사 지각함. 회사에서 바빴음.",
         nullable = true,
     )

@@ -83,6 +83,7 @@ class ConversationController(
                 content = request.content,
                 repliesToMessageId = request.repliesToMessageId,
                 excludeCharacters = request.excludeCharacters,
+                currentConversationSummary = request.currentConversationSummary,
             )
         val result = commentGenerationService.generateFor(principal.memberId, message, request.currentConversationSummary)
         return ApiResponse.success(SaveMessageResponse.from(message, result))

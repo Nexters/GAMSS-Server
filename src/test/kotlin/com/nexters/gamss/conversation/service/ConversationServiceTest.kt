@@ -120,6 +120,31 @@ class ConversationServiceTest {
     }
 
     @Test
+    fun `메시지를 보낼 때마다 프론트가 보낸 요약이 대화방의 최신 요약으로 저장된다`() {
+        val conversation = Conversation(memberId = 1L)
+        every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
+        every { messageRepository.save(any()) } answers { firstArg() }
+
+        conversationService.saveUserMessage(1L, 10L, "첫 마디", currentConversationSummary = "예전 요약")
+        conversationService.saveUserMessage(1L, 10L, "두 번째 마디", currentConversationSummary = "최신 요약")
+
+        assertEquals("최신 요약", conversation.summary)
+    }
+
+    @Test
+    fun `요약을 보내지 않거나 공백이면 기존 요약을 덮어쓰지 않는다`() {
+        val conversation = Conversation(memberId = 1L)
+        every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
+        every { messageRepository.save(any()) } answers { firstArg() }
+
+        conversationService.saveUserMessage(1L, 10L, "첫 마디", currentConversationSummary = "지켜져야 하는 요약")
+        conversationService.saveUserMessage(1L, 10L, "요약 없이 보낸 메시지")
+        conversationService.saveUserMessage(1L, 10L, "공백 요약", currentConversationSummary = "   ")
+
+        assertEquals("지켜져야 하는 요약", conversation.summary)
+    }
+
+    @Test
     fun `없는 채팅방에 저장하면 CONVERSATION_NOT_FOUND`() {
         every { conversationRepository.findByIdForUpdate(99L) } returns Optional.empty()
 
