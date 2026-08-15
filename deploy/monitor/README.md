@@ -102,13 +102,16 @@ ROOT=$(grep '^DB_ROOT_PASSWORD=' .env | cut -d= -f2-)
 docker compose exec -T db mysql -uroot -p"$ROOT" <<SQL
 CREATE USER IF NOT EXISTS 'exporter'@'%' IDENTIFIED BY '<시크릿과 같은 값>';
 ALTER USER 'exporter'@'%' IDENTIFIED BY '<시크릿과 같은 값>';
-GRANT PROCESS, REPLICATION CLIENT, SELECT ON *.* TO 'exporter'@'%';
+GRANT PROCESS, REPLICATION CLIENT ON *.* TO 'exporter'@'%';
 FLUSH PRIVILEGES;
 SQL
 ```
 
-`PROCESS`(스레드 목록)·`REPLICATION CLIENT`(상태 변수)·`SELECT`(performance_schema) 세 가지만 준다.
-쓰기 권한은 없으므로 이 계정이 새면 읽히는 것 외의 피해는 없다.
+지금 켜 둔 수집기(`global_status`·`global_variables`)에는 `PROCESS` 와 `REPLICATION CLIENT` 만 있으면 된다.
+**애플리케이션 데이터에 대한 `SELECT` 은 주지 않는다** — 이 계정이 유출돼도 대화·회원 데이터는 읽히지 않는다.
+
+나중에 `info_schema`·`perf_schema` 계열 수집기를 켜게 되면 그 수집기가 요구하는 스키마에만
+(`GRANT SELECT ON performance_schema.*` 처럼) 권한을 더한다. `*.*` 로 넓히지 않는다.
 
 ## 갱신 (설정·대시보드 변경 후)
 
