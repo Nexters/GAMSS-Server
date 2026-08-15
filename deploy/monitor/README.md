@@ -15,12 +15,30 @@ Grafana + Prometheus + Loki 스택. dev·prod 를 사설망으로 수집하고 `
 
 ## 수집 경로
 
-```
-gamss-dev / gamss-prod                     gamss-monitor (192.168.0.63)
-  node_exporter   :9100  ──── scrape ────►  Prometheus ──┐
-  cAdvisor        :9101  ──── scrape ────►             ├─►  Grafana ──► monitor.gamss.kr
-  nginx(내부 전용) :9102  ──── scrape ────►             │      (nginx + certbot)
-  promtail               ──── push  ────►  Loki :3100 ──┘
+```mermaid
+flowchart LR
+  subgraph T["수집 대상 · gamss-dev / gamss-prod"]
+    direction TB
+    NE["node_exporter<br/>:9100 · 호스트 자원"]
+    CA["cAdvisor<br/>:9101 · 컨테이너 자원"]
+    NG["nginx 내부 전용<br/>:9102 · /actuator/prometheus"]
+    PT["promtail<br/>컨테이너 로그"]
+  end
+
+  subgraph M["gamss-monitor · 192.168.0.63"]
+    direction TB
+    PR["Prometheus<br/>30일 · 20GB"]
+    LK["Loki<br/>:3100 · 14일"]
+    GR["Grafana"]
+  end
+
+  NE -- "scrape (pull)" --> PR
+  CA -- "scrape (pull)" --> PR
+  NG -- "scrape (pull)" --> PR
+  PT -- "push" --> LK
+  PR --> GR
+  LK --> GR
+  GR --> W["monitor.gamss.kr<br/>nginx + certbot"]
 ```
 
 - 스크레이프 포트는 **사설 IP 에만 바인딩**한다. 도커의 포트 publish 는 ufw 를 우회하므로
