@@ -1,0 +1,48 @@
+# Prometheus 수집 설정.
+#
+# 타겟은 전부 같은 서브넷(192.168.0.0/24)의 사설 IP 다. 공인 IP 로 긁으면 트래픽이 인터넷을
+# 돌고 exporter 를 외부에 열어야 하므로 반드시 사설 IP 를 쓴다.
+#   gamss-dev  192.168.0.231
+#   gamss-prod 192.168.0.141
+#   (모니터링 서버 자신은 같은 compose 네트워크라 서비스명으로 붙는다)
+#
+# 포트 규약 — dev·prod 는 세 포트를 사설 IP 에만 바인딩해 노출한다:
+#   9100 node_exporter (호스트 리소스)
+#   9101 cAdvisor      (컨테이너별 리소스, 컨테이너 안에서는 8080)
+#   9102 앱 메트릭     (nginx 내부 전용 블록 → app:8080/actuator/prometheus)
+#
+# 모든 타겟에 env 라벨(dev/prod/monitor)을 붙인다. Grafana 대시보드는 이 라벨을 변수로 받아
+# 대시보드 하나로 환경을 전환한다(환경마다 대시보드를 복제하면 수정이 두 배가 된다).
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+        labels: { env: monitor, server: gamss-monitor }
+
+  - job_name: node
+    static_configs:
+      - targets: ["node-exporter:9100"]
+        labels: { env: monitor, server: gamss-monitor }
+      - targets: ["192.168.0.231:9100"]
+        labels: { env: dev, server: gamss-dev }
+      - targets: ["192.168.0.141:9100"]
+        labels: { env: prod, server: gamss-prod }
+
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["192.168.0.231:9101"]
+        labels: { env: dev, server: gamss-dev }
+      - targets: ["192.168.0.141:9101"]
+        labels: { env: prod, server: gamss-prod }
+
+  - job_name: spring
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["192.168.0.231:9102"]
+        labels: { env: dev, server: gamss-dev }
+      - targets: ["192.168.0.141:9102"]
+        labels: { env: prod, server: gamss-prod }
