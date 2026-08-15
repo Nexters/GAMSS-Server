@@ -314,6 +314,8 @@ class ConversationController(
         description =
             "채팅방을 삭제합니다. 종료 여부와 무관하게 삭제할 수 있으며, 삭제된 채팅방은 목록 조회·메시지 조회·메시지 추가·종료 등 " +
                 "어떤 요청에도 더 이상 응할 수 없습니다.\n\n" +
+                "- **카드가 만들어진 채팅방을 지우면 그 카드도 함께 삭제됩니다.** 그 카드는 날짜별·월별 조회에서 사라지고, " +
+                "이후 `DELETE /api/cards/{cardId}`는 `CARD_ALREADY_DELETED`(409)로 응답합니다.\n\n" +
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +
