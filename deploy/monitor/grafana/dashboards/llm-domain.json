@@ -37,10 +37,10 @@
         },
         "query": {
           "qryType": 1,
-          "query": "label_values(up, env)",
+          "query": "label_values(up{job=\"spring\"}, env)",
           "refId": "env"
         },
-        "definition": "label_values(up, env)",
+        "definition": "label_values(up{job=\"spring\"}, env)",
         "refresh": 1,
         "sort": 1,
         "includeAll": false,
@@ -1087,7 +1087,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "실행 횟수"
+              "options": "실행 횟수(24시간)"
             },
             "properties": [
               {
@@ -1134,8 +1134,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(gamss_autocard_batch_seconds_count{env=\"$env\"}[$__interval]))",
-          "legendFormat": "실행 횟수",
+          "expr": "sum(increase(gamss_autocard_batch_seconds_count{env=\"$env\"}[24h]))",
+          "legendFormat": "실행 횟수(24시간)",
           "refId": "B",
           "editorMode": "code",
           "range": true

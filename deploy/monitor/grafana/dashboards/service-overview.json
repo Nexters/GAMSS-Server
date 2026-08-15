@@ -37,10 +37,10 @@
         },
         "query": {
           "qryType": 1,
-          "query": "label_values(up, env)",
+          "query": "label_values(up{job=\"spring\"}, env)",
           "refId": "env"
         },
-        "definition": "label_values(up, env)",
+        "definition": "label_values(up{job=\"spring\"}, env)",
         "refresh": 1,
         "sort": 1,
         "includeAll": false,

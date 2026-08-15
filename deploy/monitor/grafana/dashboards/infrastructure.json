@@ -68,7 +68,7 @@
         },
         "enable": true,
         "iconColor": "#8F6FE8",
-        "expr": "changes(process_start_time_seconds{env=\"$env\"}[1m]) > 0",
+        "expr": "changes(process_start_time_seconds{env=~\"$env\"}[1m]) > 0",
         "titleFormat": "앱 재기동",
         "step": "60s"
       }
