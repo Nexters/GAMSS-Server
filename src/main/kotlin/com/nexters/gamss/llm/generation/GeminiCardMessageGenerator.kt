@@ -10,22 +10,25 @@ import com.nexters.gamss.llm.config.GeminiProperties
 import com.nexters.gamss.llm.error.CardGenerationFailedException
 import com.nexters.gamss.llm.prompt.PromptProvider
 import com.nexters.gamss.llm.prompt.PromptType
-import com.nexters.gamss.llm.settings.SystemPromptResolver
+import com.nexters.gamss.llm.settings.LlmSettingsService
 import org.springframework.stereotype.Component
 import tools.jackson.core.JacksonException
 import tools.jackson.databind.json.JsonMapper
 
 /**
- * Gemini 공식 SDK(google-genai)로 카드 한 줄 대사를 생성하는 [CardMessageGenerator] 구현체.
- * SDK 타입이 이 클래스 밖으로 새어나가지 않는다. 모델·시스템 프롬프트는 [SystemPromptResolver]가
- * 공통 프롬프트 + 카드 프롬프트로 조립한 값을 쓰므로(백오피스에서 편집 가능), 이 클래스는 그 계약을
- * SDK 호출에 실어 나르는 역할만 한다.
+ * Gemini 공식 SDK(google-genai)로 카드 한 줄을 생성하는 [CardMessageGenerator] 구현체.
+ * SDK 타입이 이 클래스 밖으로 새어나가지 않는다.
+ *
+ * 시스템 프롬프트는 [PromptType.CARD] 원본을 그대로 쓴다 — COMMON과 조립하면 캐릭터 보이스 카드가
+ * 앞에 붙어 "말투를 철저히 지켜라"와 "캐릭터 말투를 쓰지 마라"가 한 프롬프트 안에서 충돌한다
+ * ([GeminiEmotionExtractor]와 같은 이유·같은 방식). 백오피스에서 편집한 값은 재배포 없이 다음
+ * 호출부터 반영된다.
  */
 @Component
 class GeminiCardMessageGenerator(
     private val properties: GeminiProperties,
     private val promptProvider: PromptProvider,
-    private val systemPromptResolver: SystemPromptResolver,
+    private val llmSettingsService: LlmSettingsService,
     private val jsonMapper: JsonMapper,
 ) : CardMessageGenerator {
     private val client: Client by lazy { Client.builder().apiKey(properties.apiKey).build() }
@@ -36,16 +39,14 @@ class GeminiCardMessageGenerator(
     ): CardMessageOutput {
         val response =
             try {
-                // 운영 중 백오피스에서 바꾼 값(공통 + 카드)을 매 호출 조립·반영한다(재배포 불필요).
                 // 설정 조회(DB) 실패도 여기서 잡아 재시도 계약을 유지한다.
-                val settings = systemPromptResolver.resolve(PromptType.CARD)
                 client.models.generateContent(
-                    settings.model,
+                    llmSettingsService.currentModel(),
                     promptProvider.buildCardUserContent(emotion, summary),
-                    buildConfig(settings.systemPrompt),
+                    buildConfig(llmSettingsService.currentPrompt(PromptType.CARD)),
                 )
             } catch (e: Exception) {
-                throw CardGenerationFailedException("카드 대사 LLM 호출에 실패했습니다.", e)
+                throw CardGenerationFailedException("카드 한 줄 LLM 호출에 실패했습니다.", e)
             }
 
         // 토큰은 파싱 전에 뽑는다 — 이후 파싱이 실패해도 이미 과금된 토큰을 실패 로그에 전달할 수 있게 한다.
@@ -57,19 +58,19 @@ class GeminiCardMessageGenerator(
         val text =
             response.text()
                 ?: throw CardGenerationFailedException(
-                    "카드 대사 응답이 비어 있습니다.",
+                    "카드 한 줄 응답이 비어 있습니다.",
                     usedTokens = usedTokens,
                     cachedTokens = cachedTokens,
                     inputTokens = inputTokens,
                     outputTokens = outputTokens,
                 )
 
-        val message =
+        val line =
             try {
-                parseLine(text)
+                parseSummary(text)
             } catch (e: CardGenerationFailedException) {
                 throw CardGenerationFailedException(
-                    e.message ?: "카드 대사 파싱 실패",
+                    e.message ?: "카드 한 줄 파싱 실패",
                     e.cause,
                     usedTokens,
                     cachedTokens,
@@ -77,19 +78,24 @@ class GeminiCardMessageGenerator(
                     outputTokens,
                 )
             }
-        return CardMessageOutput(message, usedTokens, cachedTokens, inputTokens, outputTokens)
+        return CardMessageOutput(line, usedTokens, cachedTokens, inputTokens, outputTokens)
     }
 
-    private fun parseLine(text: String): String {
+    /**
+     * 구조만 검증한다 — 비어 있지 않은 한 줄인지까지다. 길이는 여기서 보지 않는다
+     * ([com.nexters.gamss.card.domain.CardSummary]가 자른다) — 길다는 이유로 실패시키면
+     * 멀쩡한 문장 하나 때문에 그날 카드가 통째로 안 만들어진다.
+     */
+    private fun parseSummary(text: String): String {
         val dto =
             try {
-                jsonMapper.readValue(text, CardLineDto::class.java)
+                jsonMapper.readValue(text, CardSummaryDto::class.java)
             } catch (e: JacksonException) {
-                throw CardGenerationFailedException("카드 대사 JSON 파싱에 실패했습니다.", e)
+                throw CardGenerationFailedException("카드 한 줄 JSON 파싱에 실패했습니다.", e)
             }
-        val line = dto.line.trim()
+        val line = dto.summary.trim()
         if (line.isBlank() || line.contains('\n') || line.contains('\r')) {
-            throw CardGenerationFailedException("카드 대사는 비어 있지 않은 한 줄이어야 합니다.")
+            throw CardGenerationFailedException("카드 한 줄은 비어 있지 않은 한 줄이어야 합니다.")
         }
         return line
     }
@@ -99,20 +105,20 @@ class GeminiCardMessageGenerator(
             .builder()
             .systemInstruction(Content.fromParts(Part.fromText(systemPrompt)))
             .responseMimeType("application/json")
-            .responseSchema(cardLineSchema())
+            .responseSchema(cardSummarySchema())
             .httpOptions(HttpOptions.builder().timeout(properties.requestTimeoutMillis))
             .build()
 
-    private fun cardLineSchema(): Schema =
+    private fun cardSummarySchema(): Schema =
         Schema
             .builder()
             .type("OBJECT")
             .properties(
-                mapOf("line" to Schema.builder().type("STRING").build()),
-            ).required(listOf("line"))
+                mapOf("summary" to Schema.builder().type("STRING").build()),
+            ).required(listOf("summary"))
             .build()
 
-    private data class CardLineDto(
-        val line: String = "",
+    private data class CardSummaryDto(
+        val summary: String = "",
     )
 }

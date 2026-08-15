@@ -16,6 +16,6 @@ class FakeCardMessageGeneratorConfig {
             override fun generate(
                 emotion: EmotionType,
                 summary: String,
-            ): CardMessageOutput = CardMessageOutput("$emotion 카드 대사: $summary", usedTokens = 10, cachedTokens = 0)
+            ): CardMessageOutput = CardMessageOutput("$emotion 카드 한 줄: $summary", usedTokens = 10, cachedTokens = 0)
         }
 }

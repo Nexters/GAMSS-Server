@@ -1,6 +1,7 @@
 package com.nexters.gamss.card.controller
 
 import com.nexters.gamss.card.domain.Card
+import com.nexters.gamss.card.domain.CardSummary
 import com.nexters.gamss.card.repository.CardRepository
 import com.nexters.gamss.conversation.domain.Conversation
 import com.nexters.gamss.conversation.domain.ConversationStatus
@@ -17,6 +18,7 @@ import com.nexters.gamss.support.FakeEmotionExtractorConfig
 import com.nexters.gamss.support.TestcontainersConfig
 import jakarta.persistence.EntityManager
 import jakarta.persistence.PersistenceContext
+import org.hamcrest.Matchers.not
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -93,12 +95,14 @@ class CardControllerIntegrationTest {
                     """{"conversationId":${conversation.id},"emotion":"ANGER","summary":"$summary"}"""
             }.andExpect {
                 status { isOk() }
-                jsonPath("$.data.summary") { value(summary) }
+                // 카드에는 원본이 아니라 LLM이 다듬은 한 줄이 들어간다.
+                jsonPath("$.data.summary") { value(not(summary)) }
             }
 
         entityManager.flush()
         entityManager.clear()
 
+        // 대화방 요약은 다른 채팅방 댓글의 '과거 맥락'으로 쓰이므로 클라이언트 원본 그대로 남아야 한다.
         val persistedConversation = conversationRepository.findById(conversation.id).orElseThrow()
         assertEquals(summary, persistedConversation.summary)
         assertEquals(1, cardRepository.count())
@@ -137,8 +141,11 @@ class CardControllerIntegrationTest {
                     """{"conversationId":${conversation.id},"emotion":"ANGER","summary":"$summary"}"""
             }.andExpect {
                 status { isOk() }
-                jsonPath("$.data.summary") { value(summary) }
             }
+
+        // 요청 상한(2000자)과 카드에 남는 한 줄의 상한(50자)은 별개다.
+        val card = cardRepository.findAll().single { it.conversationId == conversation.id }
+        assertTrue(card.summary.length <= CardSummary.MAX_LENGTH)
     }
 
     @Test
@@ -735,7 +742,7 @@ class CardControllerIntegrationTest {
                 }.andExpect {
                     status { isOk() }
                     jsonPath("$.data.id") { value(card.id) }
-                    jsonPath("$.data.summary") { value("조회할 카드") }
+                    jsonPath("$.data.summary") { value(card.summary) }
                 }.andReturn()
                 .response
                 .contentAsString
