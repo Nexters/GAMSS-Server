@@ -37,10 +37,10 @@
         },
         "query": {
           "qryType": 1,
-          "query": "label_values(mysql_up, env)",
+          "query": "label_values(up{job=\"mysql\"}, env)",
           "refId": "env"
         },
-        "definition": "label_values(mysql_up, env)",
+        "definition": "label_values(up{job=\"mysql\"}, env)",
         "refresh": 1,
         "sort": 1,
         "includeAll": false,
@@ -88,7 +88,7 @@
       "type": "stat",
       "title": "MySQL 가동",
       "id": 2,
-      "description": "exporter 가 DB 에 붙어 있는지. 0 이면 DB 가 죽었거나 모니터링 계정 인증이 깨진 것이다.",
+      "description": "exporter 가 DB 에 붙어 있는지. 0 이면 DB 가 죽었거나, 모니터링 계정 인증이 깨졌거나, exporter 컨테이너 자체가 내려간 것이다(어느 쪽이든 DB 관측이 끊긴 상태다).",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -148,7 +148,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "mysql_up{env=\"$env\"}",
+          "expr": "min(mysql_up{env=\"$env\"}) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "editorMode": "code",
