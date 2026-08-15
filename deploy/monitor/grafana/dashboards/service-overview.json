@@ -75,7 +75,7 @@
       "type": "alertlist",
       "title": "발화 중인 알림",
       "id": 18,
-      "description": "지금 울리고 있는 알림. 디스코드를 확인하지 않아도 대시보드를 여는 순간 상태가 보인다.",
+      "description": "이 환경에서 지금 울리고 있는 알림. 대시보드 상단의 환경 선택과 같은 기준으로 걸러진다 — prod 를 보는 화면에 dev 알림이 섞이면 어디를 봐야 하는지 흐려진다.",
       "gridPos": {
         "h": 6,
         "w": 16,
@@ -94,7 +94,7 @@
           "normal": false,
           "error": true
         },
-        "alertInstanceLabelFilter": "",
+        "alertInstanceLabelFilter": "{env=\"$env\"}",
         "dashboardAlerts": false,
         "showInstances": true,
         "datasource": "",
