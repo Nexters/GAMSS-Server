@@ -26,36 +26,40 @@ interface PromptTab {
   standalone?: boolean
 }
 
-const TABS: PromptTab[] = [
-  {
+/**
+ * 탭 정의. `Record<PromptType, ...>`이라 타입을 하나 늘리고 탭을 빠뜨리면 컴파일이 막힌다 —
+ * 배열로 두면 누락돼도 조회가 undefined를 돌려주며 라벨이 조용히 빈 칸으로 렌더된다.
+ */
+const TABS: Record<PromptType, PromptTab> = {
+  COMMON: {
     value: 'COMMON',
     label: '공통',
     hint: '댓글·답글·카드가 공유하는 톤·경계·말맛지침·보이스카드. 여기를 바꾸면 그 세 타입에 모두 반영됩니다(카드 감정·엉뚱이 소재는 제외).',
     editorLabel: '공통 프롬프트',
     editorNote: '캐릭터 보이스카드·말맛지침 등 댓글·답글·카드가 공유하는 부분입니다. 신중히 수정하세요.',
   },
-  {
+  COMMENT: {
     value: 'COMMENT',
     label: '댓글',
     hint: '여러 감정 캐릭터가 일기에 코멘트를 달고 서로 티키타카하는 생성.',
     editorLabel: '타입 프롬프트',
     editorNote: '이 타입의 역할·규칙·출력형식입니다. 생성 시 공통 프롬프트 뒤에 붙습니다.',
   },
-  {
+  REPLY: {
     value: 'REPLY',
     label: '답글',
     hint: '유저가 캐릭터 댓글에 답글을 달면 그 캐릭터 1명이 재응답하는 생성.',
     editorLabel: '타입 프롬프트',
     editorNote: '이 타입의 역할·규칙·출력형식입니다. 생성 시 공통 프롬프트 뒤에 붙습니다.',
   },
-  {
+  CARD: {
     value: 'CARD',
     label: '카드',
     hint: '대화 종료 시 대표 캐릭터가 유저를 대신해 남기는 한 줄 카드 대사.',
     editorLabel: '타입 프롬프트',
     editorNote: '이 타입의 역할·규칙·출력형식입니다. 생성 시 공통 프롬프트 뒤에 붙습니다.',
   },
-  {
+  CARD_EMOTION: {
     value: 'CARD_EMOTION',
     label: '카드 감정',
     hint: '카드 생성 요청에 감정이 없을 때, 유저가 보낸 메시지만 보고 감정 6종 중 하나를 고르는 분류.',
@@ -63,7 +67,7 @@ const TABS: PromptTab[] = [
     editorNote: '분류 작업이라 공통 프롬프트와 조립하지 않고 단독으로 쓰입니다. 응답은 감정 6종으로 강제됩니다.',
     standalone: true,
   },
-  {
+  EONGTTUNG_TOPIC: {
     value: 'EONGTTUNG_TOPIC',
     label: '엉뚱이 소재',
     hint: '엉뚱이가 꺼낼 소재 목록. 한 줄에 하나씩 적으면 생성 시 서버가 무작위로 한 줄을 고릅니다.',
@@ -71,7 +75,7 @@ const TABS: PromptTab[] = [
     editorNote: '빈 줄은 무시됩니다. 목록을 전부 비우면 저장할 수 없습니다.',
     standalone: true,
   },
-]
+}
 
 function SavedFlash({ show }: { show: boolean }) {
   if (!show) {
@@ -224,7 +228,7 @@ function PromptSection() {
 
   const dirty = prompt.trim() !== savedPrompt.trim()
   const ready = Boolean(settings) && settings?.promptType === type
-  const activeTab = TABS.find((t) => t.value === type)
+  const activeTab = TABS[type]
 
   const onSave = () => {
     if (!dirty || !prompt.trim()) {
@@ -246,7 +250,7 @@ function PromptSection() {
 
   return (
     <div className="space-y-4">
-      {!activeTab?.standalone && (
+      {!activeTab.standalone && (
         <div className="flex items-center gap-2 rounded-lg border bg-muted/40 p-2.5 text-xs text-muted-foreground">
           <Layers className="size-4 shrink-0 text-muted-foreground/70" />
           <span>
@@ -258,7 +262,7 @@ function PromptSection() {
       )}
 
       <div className="inline-flex items-center rounded-lg border bg-muted/40 p-1">
-        {TABS.map((tab) => (
+        {Object.values(TABS).map((tab) => (
           <button
             key={tab.value}
             type="button"
@@ -275,7 +279,7 @@ function PromptSection() {
         ))}
       </div>
 
-      {activeTab && <p className="text-sm text-muted-foreground">{activeTab.hint}</p>}
+      <p className="text-sm text-muted-foreground">{activeTab.hint}</p>
 
       {isError && !settings ? (
         <Card className="flex flex-col items-start gap-3 p-6">
@@ -293,7 +297,7 @@ function PromptSection() {
         <Card className="space-y-3 p-6">
           <div className="flex items-baseline justify-between">
             <label htmlFor="prompt" className="text-sm font-medium">
-              {activeTab?.editorLabel}
+              {activeTab.editorLabel}
             </label>
             <span className="text-xs tabular-nums text-muted-foreground">{prompt.length.toLocaleString()}자</span>
           </div>
@@ -305,7 +309,7 @@ function PromptSection() {
             className="min-h-[28rem] font-mono text-[13px] leading-relaxed"
           />
           <div className="flex flex-wrap items-center gap-2">
-            <p className="mr-auto text-xs text-muted-foreground">{activeTab?.editorNote}</p>
+            <p className="mr-auto text-xs text-muted-foreground">{activeTab.editorNote}</p>
             <SavedFlash show={flash} />
             <Button size="sm" onClick={onSave} disabled={!dirty || saving || !prompt.trim()}>
               <Save className="size-4" />
