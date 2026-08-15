@@ -19,6 +19,24 @@ class CardSummaryTest {
     }
 
     @Test
+    fun `개행은 공백으로 접어 한 줄로 만든다`() {
+        // '한 줄' 보장이 생성기의 파싱 검증에만 있으면 구현을 갈아끼울 때 사라지고, 읽기 경로로
+        // 들어오는 옛 카드 요약에는 애초에 실패시킬 대상이 없다(이미 저장된 값이다).
+        assertEquals(
+            "오늘 힘든 일이 있었어요 그래도 괜찮아요",
+            CardSummary.normalize("오늘 힘든 일이 있었어요\n그래도 괜찮아요"),
+        )
+    }
+
+    @Test
+    fun `연속된 공백류는 한 칸으로 접는다`() {
+        assertEquals(
+            "오늘 힘들었어요 그래도 괜찮아요",
+            CardSummary.normalize("오늘   힘들었어요 \r\n\t 그래도  괜찮아요"),
+        )
+    }
+
+    @Test
     fun `정확히 상한 길이면 자르지 않는다`() {
         val line = "가".repeat(CardSummary.MAX_LENGTH)
 

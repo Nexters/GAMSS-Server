@@ -22,6 +22,8 @@ object CardSummary {
 
     private const val ELLIPSIS = "…"
 
+    private val WHITESPACE = Regex("\\s+")
+
     /**
      * 어절 경계가 문장 앞쪽에 있으면 자를 때 내용이 통째로 날아간다. 그 경우엔 어절을 무시하고
      * 글자 수로 자르는 편이 남는 정보가 많다.
@@ -29,11 +31,15 @@ object CardSummary {
     private const val MIN_WORD_BOUNDARY = BODY_LIMIT / 2
 
     /**
-     * 저장 가능한 한 줄로 다듬는다 — 앞뒤 공백을 없애고, [MAX_LENGTH]를 넘으면 어절 경계에서 자른 뒤
-     * 말줄임표를 붙인다. 문장 중간에서 끊기지 않게 하려는 것이다.
+     * 저장 가능한 한 줄로 다듬는다 — 개행·연속 공백을 한 칸으로 접고, [MAX_LENGTH]를 넘으면 어절
+     * 경계에서 자른 뒤 말줄임표를 붙인다. 문장 중간에서 끊기지 않게 하려는 것이다.
+     *
+     * '한 줄'까지 여기서 흡수하는 것은 길이와 같은 이유다 — 생성기의 파싱 검증에만 두면 구현을
+     * 갈아끼울 때 보장이 사라지고, 이 값은 읽기 경로에서 옛 카드에도 적용된다(그 시절 요약에는
+     * 개행이 들어 있을 수 있다).
      */
     fun normalize(raw: String): String {
-        val trimmed = raw.trim()
+        val trimmed = raw.replace(WHITESPACE, " ").trim()
         val graphemes = graphemesOf(trimmed)
         if (graphemes.size <= MAX_LENGTH) {
             return trimmed
