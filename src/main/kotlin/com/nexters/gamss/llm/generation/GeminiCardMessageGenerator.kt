@@ -11,6 +11,7 @@ import com.nexters.gamss.llm.error.CardGenerationFailedException
 import com.nexters.gamss.llm.prompt.PromptProvider
 import com.nexters.gamss.llm.prompt.PromptType
 import com.nexters.gamss.llm.settings.LlmSettingsService
+import com.nexters.gamss.llm.settings.LlmSettingsView
 import org.springframework.stereotype.Component
 import tools.jackson.core.JacksonException
 import tools.jackson.databind.json.JsonMapper
@@ -36,14 +37,34 @@ class GeminiCardMessageGenerator(
     override fun generate(
         emotion: EmotionType,
         summary: String,
+    ): CardMessageOutput =
+        // 설정 조회(DB) 실패도 호출 경로 안에서 잡아 재시도 계약을 유지한다.
+        generate(emotion, summary) {
+            LlmSettingsView(llmSettingsService.currentModel(), llmSettingsService.currentPrompt(PromptType.CARD))
+        }
+
+    override fun generate(
+        emotion: EmotionType,
+        summary: String,
+        settings: LlmSettingsView,
+    ): CardMessageOutput = generate(emotion, summary) { settings }
+
+    /**
+     * 두 경로가 유저 콘텐츠·파싱·토큰 집계를 공유하게 한다. 설정을 값이 아니라 람다로 받는 것은
+     * 저장된 설정 조회(DB)도 LLM 호출과 같은 try 안에 들어가야 하기 때문이다.
+     */
+    private fun generate(
+        emotion: EmotionType,
+        summary: String,
+        settingsSupplier: () -> LlmSettingsView,
     ): CardMessageOutput {
         val response =
             try {
-                // 설정 조회(DB) 실패도 여기서 잡아 재시도 계약을 유지한다.
+                val settings = settingsSupplier()
                 client.models.generateContent(
-                    llmSettingsService.currentModel(),
+                    settings.model,
                     promptProvider.buildCardUserContent(emotion, summary),
-                    buildConfig(llmSettingsService.currentPrompt(PromptType.CARD)),
+                    buildConfig(settings.systemPrompt),
                 )
             } catch (e: Exception) {
                 throw CardGenerationFailedException("카드 한 줄 LLM 호출에 실패했습니다.", e)

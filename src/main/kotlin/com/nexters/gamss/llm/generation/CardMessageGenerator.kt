@@ -1,6 +1,7 @@
 package com.nexters.gamss.llm.generation
 
 import com.nexters.gamss.emotion.domain.EmotionType
+import com.nexters.gamss.llm.settings.LlmSettingsView
 
 /**
  * 클라이언트가 만든 대화 요약을 다듬어, 카드에 남길 하루 기록 한 줄을 생성한다.
@@ -18,5 +19,16 @@ interface CardMessageGenerator {
     fun generate(
         emotion: EmotionType,
         summary: String,
+    ): CardMessageOutput
+
+    /**
+     * 저장된 설정 대신 주어진 모델·시스템 프롬프트로 생성한다 — 플레이그라운드가 미저장 프롬프트를
+     * 시험하는 경로([CommentGenerator]와 같은 패턴). 그 외 로직(유저 콘텐츠·파싱)은 [generate]와
+     * 같아야 한다.
+     */
+    fun generate(
+        emotion: EmotionType,
+        summary: String,
+        settings: LlmSettingsView,
     ): CardMessageOutput
 }
