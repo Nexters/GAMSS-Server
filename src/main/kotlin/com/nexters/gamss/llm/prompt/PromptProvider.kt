@@ -55,6 +55,27 @@ class PromptProvider {
             append("위 유저 답글에 대해 네 캐릭터 말투로 답글을 JSON으로 출력해.")
         }
 
+    /**
+     * 유저가 보낸 메시지들에서 대표 감정 하나를 분류하게 하는 유저 콘텐츠. 메시지가 많으면
+     * 최근 것부터 [MAX_CARD_EMOTION_INPUT_CHARS]까지만 담는다(시간순 유지) — 하루의 감정은
+     * 최근 발화에 더 잘 드러나고, 분류 입력을 무한정 키우면 비용만 는다.
+     */
+    fun buildCardEmotionUserContent(userMessages: List<String>): String {
+        val normalized = userMessages.map { it.normalizeForPrompt() }.filter { it.isNotBlank() }
+        val recent = ArrayDeque<String>()
+        var totalChars = 0
+        for (message in normalized.asReversed()) {
+            totalChars += message.length
+            if (recent.isNotEmpty() && totalChars > MAX_CARD_EMOTION_INPUT_CHARS) break
+            recent.addFirst(message)
+        }
+        return buildString {
+            appendLine("[유저가 보낸 메시지] (시간순)")
+            recent.forEach { appendLine("- $it") }
+            append("위 메시지들에서 드러나는 유저의 대표 감정 하나를 JSON으로 출력해.")
+        }
+    }
+
     /** 대표 감정 캐릭터가 유저를 대신해 남기는 카드 한 줄을 요청하는 유저 콘텐츠. */
     fun buildCardUserContent(
         emotion: EmotionType,
@@ -67,5 +88,9 @@ class PromptProvider {
             appendLine(summary.normalizeForPrompt())
             append("위 캐릭터가 유저를 대신해 불특정 다수에게 남기는, 이 하루를 대표하는 카드 한 줄을 JSON으로 출력해.")
         }
+    }
+
+    companion object {
+        private const val MAX_CARD_EMOTION_INPUT_CHARS = 4000
     }
 }

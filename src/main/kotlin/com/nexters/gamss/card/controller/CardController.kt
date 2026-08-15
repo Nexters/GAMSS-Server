@@ -35,20 +35,21 @@ class CardController(
         summary = "카드 생성",
         description =
             "종료된 채팅방에 대해 대표 감정 캐릭터의 한 줄 대사를 생성해 카드를 만듭니다. " +
-                "감정은 클라이언트가 준 값을 그대로 대표 감정으로 씁니다.\n\n" +
+                "감정은 클라이언트가 준 값을 그대로 대표 감정으로 쓰고, **emotion을 생략하면** " +
+                "서버가 유저가 보낸 메시지들만 보고 감정을 추출해 채웁니다(클라이언트 추출 실패 시 폴백).\n\n" +
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +
                 "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·무효) |\n" +
                 "| EXPIRED_TOKEN | 401 | accessToken 만료 — 재발급 후 재시도 |\n" +
-                "| INVALID_INPUT | 400 | conversationId·emotion·summary 누락 또는 형식 오류 |\n" +
+                "| INVALID_INPUT | 400 | conversationId·summary 누락 또는 형식 오류(emotion은 생략 가능) |\n" +
                 "| CONVERSATION_NOT_FOUND | 404 | 존재하지 않는 채팅방 |\n" +
                 "| CONVERSATION_ACCESS_DENIED | 403 | 본인 채팅방이 아님 |\n" +
                 "| CONVERSATION_ALREADY_DELETED | 409 | 이미 삭제된 채팅방 |\n" +
                 "| CONVERSATION_NOT_ENDED | 409 | 종료되지 않은 채팅방 |\n" +
                 "| CARD_ALREADY_EXISTS | 409 | 이미 카드가 생성된 채팅방 |\n" +
                 "| CARD_GENERATION_IN_PROGRESS | 409 | 카드 생성 중(재시도 가능) |\n" +
-                "| CARD_GENERATION_FAILED | 503 | 카드 대사 생성 실패(재시도 가능) |",
+                "| CARD_GENERATION_FAILED | 503 | 감정 추출·카드 대사 생성 실패(재시도 가능) |",
     )
     @PostMapping
     fun create(
@@ -59,7 +60,7 @@ class CardController(
             cardService.createCard(
                 memberId = principal.memberId,
                 conversationId = checkNotNull(request.conversationId),
-                emotion = checkNotNull(request.emotion),
+                emotion = request.emotion,
                 summary = checkNotNull(request.summary),
             )
         return ApiResponse.success(CardResponse.from(card))

@@ -5,17 +5,21 @@ import com.nexters.gamss.card.repository.CardRepository
 import com.nexters.gamss.conversation.domain.CardGenerationStatus
 import com.nexters.gamss.conversation.domain.Conversation
 import com.nexters.gamss.conversation.domain.ConversationStatus
+import com.nexters.gamss.conversation.domain.SenderType
 import com.nexters.gamss.conversation.repository.ConversationRepository
+import com.nexters.gamss.conversation.repository.MessageRepository
 import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.llm.error.CardGenerationFailedException
 import com.nexters.gamss.llm.generation.CardMessageGenerator
 import com.nexters.gamss.llm.generation.CardMessageOutput
+import com.nexters.gamss.llm.generation.EmotionExtractor
 import com.nexters.gamss.monitoring.domain.GenerationType
 import com.nexters.gamss.monitoring.service.GenerationLogRecorder
 import com.nexters.gamss.tokenlimit.service.DailyTokenLimitService
 import org.slf4j.LoggerFactory
+import org.springframework.dao.DataAccessException
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -32,7 +36,9 @@ import java.time.ZoneId
 class CardService(
     private val cardRepository: CardRepository,
     private val conversationRepository: ConversationRepository,
+    private val messageRepository: MessageRepository,
     private val cardMessageGenerator: CardMessageGenerator,
+    private val emotionExtractor: EmotionExtractor,
     private val generationLogRecorder: GenerationLogRecorder,
     private val dailyTokenLimitService: DailyTokenLimitService,
     private val cardPersistenceService: CardPersistenceService,
@@ -43,20 +49,24 @@ class CardService(
      *
      * LLM을 부르기 전에 [Conversation.cardGenerationStatus]를 CAS로 선점한다([Message.commentStatus]와
      * 같은 패턴) — 동시 중복 요청은 선점에 실패해 LLM을 아예 호출하지 않고 즉시 반환된다.
+     *
+     * [emotion]이 null이면(클라이언트 추출 실패) 유저가 보낸 메시지들만 보고 서버가 대표 감정을
+     * 분류해 채운다 — 선점 이후에 분류해야 동시 요청이 분류 LLM을 중복 호출하지 않는다.
      */
     fun createCard(
         memberId: Long,
         conversationId: Long,
-        emotion: EmotionType,
+        emotion: EmotionType?,
         summary: String,
     ): Card {
         val conversation = claimForGeneration(conversationId, memberId)
-        val output = generateMessage(emotion, summary, memberId, conversationId)
+        val resolvedEmotion = emotion ?: extractEmotion(memberId, conversationId, summary)
+        val output = generateMessage(resolvedEmotion, summary, memberId, conversationId)
         val card =
             Card(
                 memberId = memberId,
                 conversationId = conversationId,
-                emotion = emotion,
+                emotion = resolvedEmotion,
                 summary = summary,
                 message = output.message,
                 conversationCreatedAt = conversation.createdAt,
@@ -122,6 +132,75 @@ class CardService(
             throw BusinessException(ErrorCode.CARD_GENERATION_IN_PROGRESS)
         }
         return conversation
+    }
+
+    /**
+     * 유저가 보낸 메시지들만 보고 LLM으로 대표 감정을 분류하고 생성 로그를 남긴다.
+     * 실패 시 상태를 FAILED로 되돌린 뒤 예외로 변환한다([generateMessage]와 같은 계약) —
+     * 클라이언트는 분류·대사 생성 어느 쪽이 실패했든 CARD_GENERATION_FAILED 하나로 재시도한다.
+     */
+    private fun extractEmotion(
+        memberId: Long,
+        conversationId: Long,
+        summary: String,
+    ): EmotionType {
+        val input = loadUserMessages(conversationId, summary)
+        val startedAt = System.currentTimeMillis()
+        val output =
+            try {
+                emotionExtractor.extract(input)
+            } catch (e: CardGenerationFailedException) {
+                generationLogRecorder.record(
+                    type = GenerationType.CARD_EMOTION,
+                    success = false,
+                    attemptCount = 1,
+                    latencyMs = System.currentTimeMillis() - startedAt,
+                    memberId = memberId,
+                    conversationId = conversationId,
+                    usedTokens = e.usedTokens,
+                    cachedTokens = e.cachedTokens,
+                    inputTokens = e.inputTokens,
+                    outputTokens = e.outputTokens,
+                    failureReason = (e.cause ?: e).javaClass.simpleName,
+                )
+                markCardGenerationStatus(conversationId, CardGenerationStatus.FAILED)
+                throw BusinessException(ErrorCode.CARD_GENERATION_FAILED, e.message).apply { initCause(e) }
+            }
+        generationLogRecorder.record(
+            type = GenerationType.CARD_EMOTION,
+            success = true,
+            attemptCount = 1,
+            latencyMs = System.currentTimeMillis() - startedAt,
+            memberId = memberId,
+            conversationId = conversationId,
+            usedTokens = output.usedTokens,
+            cachedTokens = output.cachedTokens,
+            inputTokens = output.inputTokens,
+            outputTokens = output.outputTokens,
+        )
+        return output.emotion
+    }
+
+    /**
+     * 분류에 넣을 유저 메시지를 읽는다. 이 조회는 CAS 선점 **이후**라 실패를 그대로 던지면 상태가
+     * PENDING으로 남아, 재시도가 재시도 가능한 503이 아니라 409(생성 중)로 막힌다 — 정리 스케줄러가
+     * 타임아웃시킬 때까지. LLM 실패와 같은 계약으로 FAILED까지 되돌린다.
+     */
+    private fun loadUserMessages(
+        conversationId: Long,
+        summary: String,
+    ): List<String> {
+        val userMessages =
+            try {
+                messageRepository
+                    .findAllByConversationIdAndSenderTypeOrderByIdAsc(conversationId, SenderType.USER)
+                    .map { it.content }
+            } catch (e: DataAccessException) {
+                markCardGenerationStatus(conversationId, CardGenerationStatus.FAILED)
+                throw BusinessException(ErrorCode.CARD_GENERATION_FAILED, e.message).apply { initCause(e) }
+            }
+        // 유저 메시지가 하나도 없는 방어적 엣지 — 클라이언트가 만든 요약도 유저의 대화 내용이므로 그걸로 분류한다.
+        return userMessages.ifEmpty { listOf(summary) }
     }
 
     /** LLM으로 카드 대사를 생성하고 생성 로그를 남긴다. 실패 시 상태를 FAILED로 되돌린 뒤 예외로 변환한다. */

@@ -16,6 +16,9 @@ class SystemPromptResolver(
         // 소재 목록은 시스템 프롬프트 조각이 아니다 — 조립하면 "공통 + 소재 나열"이라는
         // 성립 불가능한 프롬프트가 조용히 만들어지므로 호출 자체를 계약 위반으로 막는다.
         require(promptType != PromptType.EONGTTUNG_TOPIC) { "EONGTTUNG_TOPIC은 시스템 프롬프트로 조립할 수 없습니다." }
+        // 감정 분류는 캐릭터 톤·말맛 지침(COMMON)과 무관한 작업이라 조립하면 분류 정확도만 흐린다 —
+        // 단독 프롬프트로 쓰도록 조립을 막는다(GeminiEmotionExtractor가 원본을 직접 읽는다).
+        require(promptType != PromptType.CARD_EMOTION) { "CARD_EMOTION은 시스템 프롬프트로 조립할 수 없습니다." }
         val base = llmSettingsService.currentCommonView()
         if (promptType == PromptType.COMMON) {
             return base
@@ -34,8 +37,9 @@ class SystemPromptResolver(
         typePrompt: String?,
     ): LlmSettingsView {
         require(promptType != PromptType.COMMON) { "조립할 타입 프롬프트를 지정해야 합니다." }
-        // resolve()와 같은 이유 - 소재 목록은 시스템 프롬프트 조각이 아니다.
+        // resolve()와 같은 이유 - 소재 목록·감정 분류는 시스템 프롬프트 조각이 아니다.
         require(promptType != PromptType.EONGTTUNG_TOPIC) { "EONGTTUNG_TOPIC은 시스템 프롬프트로 조립할 수 없습니다." }
+        require(promptType != PromptType.CARD_EMOTION) { "CARD_EMOTION은 시스템 프롬프트로 조립할 수 없습니다." }
         val base = llmSettingsService.currentCommonView()
         val common = commonPrompt ?: base.systemPrompt
         val type = typePrompt ?: llmSettingsService.currentPrompt(promptType)
