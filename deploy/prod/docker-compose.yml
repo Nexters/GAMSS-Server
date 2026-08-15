@@ -104,7 +104,8 @@ services:
       - --housekeeping_interval=30s
       # 쓰지 않는 수집기를 꺼 메모리·CPU 를 아낀다(특히 percpu 는 코어 수만큼 시계열이 늘어난다).
       - --disable_metrics=percpu,sched,process,hugetlb,referenced_memory,cpu_topology,resctrl
-    privileged: true
+    # privileged 없이 동작하는 것을 실제로 확인했다(컨테이너·머신 메트릭 모두 수집됨).
+    # 컨테이너 자원을 보겠다고 호스트 전체 권한을 주는 것은 대가가 너무 크다.
     devices:
       - /dev/kmsg
     volumes:

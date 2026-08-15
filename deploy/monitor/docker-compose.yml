@@ -6,7 +6,11 @@
 # 배포는 dev/prod 와 달리 CD 가 없다(설정 변경 빈도가 낮고, 모니터링이 배포 파이프라인에
 # 의존하면 파이프라인이 고장났을 때 관측도 함께 잃는다). 갱신 절차는 README.md 참고.
 #
-# 4GB 서버 기준 예상 사용량: Prometheus ~400M / Loki ~500M / Grafana ~150M / 그 외 ~100M.
+# 4GB 서버 기준 실측 사용량: Grafana 86M / Prometheus 59M / Loki 50M / 그 외 16M (합 ~210M).
+# 각 서비스에 mem_limit 을 건다 — 카디널리티가 늘거나 큰 쿼리가 들어와 한 컨테이너가 호스트
+# 메모리를 잠식하면 커널 OOM killer 가 무엇을 죽일지 보장되지 않고, 관측 스택이 통째로
+# 사라지면 알림도 함께 사라진다. 상한에 걸리면 그 컨테이너만 재시작되고 cAdvisor 의 재시작
+# 지표에 흔적이 남는다. 값은 실측의 5~10배로, 합계(2.9G)가 호스트(3.9G)를 넘지 않게 잡았다.
 # 메모리보다 디스크(50GB)가 먼저 차므로 양쪽 다 보존 정책으로 상한을 건다
 # (Prometheus 30일·20GB, Loki 14일). 보존 정책 없이 두면 125번 이슈(도커 로그 무한 적재)와
 # 같은 방식으로 디스크가 차서 스택 전체가 멈춘다.
@@ -19,6 +23,7 @@ x-logging: &default-logging
 services:
   grafana:
     image: grafana/grafana:11.6.0
+    mem_limit: 512m
     restart: unless-stopped
     logging: *default-logging
     environment:
@@ -31,7 +36,9 @@ services:
       # 가입 차단 — 계정은 admin 이 직접 만든다(공인 IP로 열려 있는 서비스다).
       GF_USERS_ALLOW_SIGN_UP: "false"
       # 알림 컨택포인트(Discord)의 웹훅 URL. 프로비저닝 YAML 이 이 변수를 참조한다.
-      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL}
+      # 값이 없으면 compose 가 여기서 멈춘다 — 빈 값으로 뜨면 Grafana 가 컨택포인트 검증에
+      # 걸려 재시작을 반복하는데, 그때는 원인이 로그 깊숙이 묻혀 찾기 어렵다.
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:?DISCORD_WEBHOOK_URL 을 .env 에 설정해야 한다}
     volumes:
       - grafana-data:/var/lib/grafana
       # 데이터소스·대시보드·알림은 전부 코드로 관리한다(UI 수정은 재기동 시 덮어써진다).
@@ -42,6 +49,7 @@ services:
 
   prometheus:
     image: prom/prometheus:v3.2.1
+    mem_limit: 1g
     restart: unless-stopped
     logging: *default-logging
     command:
@@ -58,6 +66,7 @@ services:
 
   loki:
     image: grafana/loki:3.4.2
+    mem_limit: 1g
     restart: unless-stopped
     logging: *default-logging
     command: -config.file=/etc/loki/loki.yml
@@ -75,6 +84,7 @@ services:
   # 관측 도구가 자기 디스크에 깔려 죽는 상황을 미리 잡기 위한 것이다.
   node-exporter:
     image: prom/node-exporter:v1.9.1
+    mem_limit: 128m
     restart: unless-stopped
     logging: *default-logging
     command:
@@ -87,6 +97,7 @@ services:
 
   nginx:
     image: nginx:1.27-alpine
+    mem_limit: 128m
     restart: unless-stopped
     logging: *default-logging
     depends_on: [grafana]
@@ -103,7 +114,8 @@ services:
 
   # HTTPS 인증서 발급·자동 갱신. 최초 발급은 서버에서 수동 1회(README 참고), 이후 12시간마다 갱신 시도.
   certbot:
-    image: certbot/certbot:latest
+    image: certbot/certbot:v5.7.0
+    mem_limit: 128m
     restart: unless-stopped
     logging: *default-logging
     volumes:
