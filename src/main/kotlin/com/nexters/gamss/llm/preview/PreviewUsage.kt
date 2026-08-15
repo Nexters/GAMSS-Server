@@ -1,7 +1,9 @@
 package com.nexters.gamss.llm.preview
 
 import com.nexters.gamss.llm.config.GeminiPricing
+import com.nexters.gamss.llm.error.CardGenerationFailedException
 import com.nexters.gamss.llm.error.CommentGenerationFailedException
+import com.nexters.gamss.llm.generation.CardMessageOutput
 import com.nexters.gamss.llm.generation.CommentGenerationOutput
 import com.nexters.gamss.llm.generation.ReplyGenerationOutput
 
@@ -29,11 +31,24 @@ data class PreviewUsage(
             output: ReplyGenerationOutput,
         ): PreviewUsage = of(pricing, model, output.usedTokens, output.cachedTokens, output.inputTokens, output.outputTokens)
 
+        fun of(
+            pricing: GeminiPricing,
+            model: String,
+            output: CardMessageOutput,
+        ): PreviewUsage = of(pricing, model, output.usedTokens, output.cachedTokens, output.inputTokens, output.outputTokens)
+
         /** 실패 예외에는 과금 정보가 없을 수 있다(호출 자체 실패) - 그 경우 0으로 환산한다. */
         fun of(
             pricing: GeminiPricing,
             model: String,
             e: CommentGenerationFailedException,
+        ): PreviewUsage = of(pricing, model, e.usedTokens ?: 0, e.cachedTokens ?: 0, e.inputTokens ?: 0, e.outputTokens ?: 0)
+
+        /** 카드 생성 실패도 같은 규칙으로 환산한다([CommentGenerationFailedException]과 같은 이유). */
+        fun of(
+            pricing: GeminiPricing,
+            model: String,
+            e: CardGenerationFailedException,
         ): PreviewUsage = of(pricing, model, e.usedTokens ?: 0, e.cachedTokens ?: 0, e.inputTokens ?: 0, e.outputTokens ?: 0)
 
         private fun of(
