@@ -829,7 +829,7 @@
           },
           "annotations": {
             "summary": "{{ $labels.instance }} 인증서 {{ humanize $values.B.Value }}일 남음",
-            "description": "certbot 자동 갱신이 실패하고 있을 수 있다. 모니터링 서버에서 `docker compose logs certbot` 으로 갱신 시도를 확인하고, 필요하면 수동 갱신한다. 만료되면 브라우저가 접속을 막는다."
+            "description": "certbot 자동 갱신이 실패하고 있을 수 있다. 모니터링 서버에서 `docker compose logs certbot` 으로 갱신 시도를 확인하고, 필요하면 수동 갱신한다. 만료되면 브라우저가 접속을 막는다. (TLS 핸드셰이크가 실패해 만료 시각이 0 으로 남은 경우는 이 규칙에서 제외한다 — 큰 음수가 되어 만료 임박으로 오탐하기 때문이다. 그 상황은 외부 접속 불가 알림이 잡는다.)"
           },
           "data": [
             {
@@ -841,7 +841,7 @@
               "datasourceUid": "prometheus",
               "model": {
                 "refId": "A",
-                "expr": "(probe_ssl_earliest_cert_expiry - time()) / 86400",
+                "expr": "((probe_ssl_earliest_cert_expiry - time()) / 86400) and (probe_ssl_earliest_cert_expiry > 0)",
                 "instant": false,
                 "range": true,
                 "editorMode": "code",

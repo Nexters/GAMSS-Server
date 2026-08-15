@@ -236,7 +236,7 @@
       "type": "stat",
       "title": "버퍼풀 적중률",
       "id": 4,
-      "description": "읽기 요청 중 메모리에서 해결된 비율. 99% 아래로 떨어지면 버퍼풀(2G)이 데이터 크기를 못 따라가는 것이다.",
+      "description": "읽기 요청 중 메모리에서 해결된 비율. 99% 아래로 떨어지면 버퍼풀(2G)이 데이터 크기를 못 따라가는 것이다. 조회가 적은 시간대에는 표본이 작아 값이 크게 흔들릴 수 있다.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -300,7 +300,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(1 - rate(mysql_global_status_innodb_buffer_pool_reads{env=\"$env\"}[10m]) / clamp_min(rate(mysql_global_status_innodb_buffer_pool_read_requests{env=\"$env\"}[10m]), 1)) * 100",
+          "expr": "(1 - rate(mysql_global_status_innodb_buffer_pool_reads{env=\"$env\"}[10m]) / clamp_min(rate(mysql_global_status_innodb_buffer_pool_read_requests{env=\"$env\"}[10m]), 0.001)) * 100",
           "legendFormat": "",
           "refId": "A",
           "editorMode": "code",
@@ -703,7 +703,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "mysql_global_status_buffer_pool_page_changes_total{env=\"$env\"} * 0 + mysql_global_variables_innodb_buffer_pool_size{env=\"$env\"}",
+          "expr": "mysql_global_variables_innodb_buffer_pool_size{env=\"$env\"}",
           "legendFormat": "설정 크기",
           "refId": "A",
           "editorMode": "code",

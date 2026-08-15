@@ -1457,7 +1457,7 @@
       "type": "timeseries",
       "title": "외부 도달성",
       "id": 21,
-      "description": "모니터링 서버가 인터넷을 통해 실제로 접속해 본 결과다. 앱 메트릭이 정상인데 이 값이 0이면 DNS·인증서·nginx 앞단처럼 앱 바깥에서 끊긴 것이다.",
+      "description": "모니터링 서버가 인터넷을 통해 실제로 접속해 본 결과다. 앱 메트릭이 정상인데 이 값이 0이면 DNS·인증서·nginx 앞단처럼 앱 바깥에서 끊긴 것이다. 인증서 패널과 마찬가지로 환경 선택과 무관하게 전 도메인을 보여준다 — monitor.gamss.kr 은 앱 메트릭이 없어 환경 목록에 뜨지 않는데, 그 때문에 프로브 결과까지 가려지면 안 된다.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1526,7 +1526,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "probe_success{env=\"$env\"}",
+          "expr": "probe_success",
           "legendFormat": "{{instance}}",
           "refId": "A",
           "editorMode": "code",
