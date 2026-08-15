@@ -1,14 +1,11 @@
 import { useRef, useState } from 'react'
-import { useCustom, useCustomMutation } from '@refinedev/core'
+import { useCustomMutation } from '@refinedev/core'
 import {
   AlertTriangle,
-  ChevronDown,
-  ChevronRight,
   CircleDollarSign,
   Clock,
   CornerDownRight,
   Cpu,
-  Download,
   FlaskConical,
   Play,
   Reply,
@@ -26,6 +23,9 @@ import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { CardPreviewSection } from '@/components/card-preview-section'
 import { PageHeader } from '@/components/page-header'
+import { MetricTile } from '@/components/playground/metric-tile'
+import { PromptInspector } from '@/components/playground/prompt-inspector'
+import { PromptOverrideEditor } from '@/components/playground/prompt-override-editor'
 import { cn } from '@/lib/utils'
 
 // 서버의 EmotionType과 같은 목록.
@@ -85,82 +85,16 @@ interface LastRun {
   conditions: { characters: string[]; tikitakaCount: number; eongttungTopic: string | null } | null
 }
 
-/** 접이식 프롬프트 오버라이드 에디터. 비워두면 저장된 현재값으로 생성된다. */
-function PromptOverrideEditor({
-  type,
-  title,
-  value,
-  onChange,
-}: {
-  type: 'COMMON' | 'COMMENT' | 'REPLY'
-  title: string
-  value: string
-  onChange: (value: string) => void
-}) {
-  const [open, setOpen] = useState(false)
-  const { refetch } = useCustom<{ systemPrompt: string }>({
-    url: `/api/admin/llm-settings/prompt?promptType=${type}`,
-    method: 'get',
-    queryOptions: { enabled: false },
-  })
-
-  const loadSaved = async () => {
-    const result = await refetch()
-    const saved = result.data?.data?.systemPrompt
-    if (saved !== undefined) {
-      onChange(saved)
-    }
-  }
-
+/**
+ * 실험 구분 제목. 한 페이지에 성격이 다른 실험이 둘 있어, 어디까지가 한 실험인지 눈으로 끊어준다.
+ * 페이지 제목([PageHeader])보다 한 단계 작은 위계를 쓴다.
+ */
+function SectionHeading({ title, description }: { title: string; description: string }) {
   return (
-    <div className="rounded-md border">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted/40"
-      >
-        {open ? <ChevronDown className="size-4 text-muted-foreground" /> : <ChevronRight className="size-4 text-muted-foreground" />}
-        <span className="font-medium">{title}</span>
-        <Badge variant={value.trim() ? 'default' : 'secondary'} className="ml-auto text-[10px]">
-          {value.trim() ? '오버라이드' : '저장값 사용'}
-        </Badge>
-      </button>
-      {open && (
-        <div className="space-y-2 border-t p-3">
-          <Textarea
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            spellCheck={false}
-            placeholder="비워두면 저장된 현재값으로 생성합니다."
-            className="min-h-[12rem] font-mono text-[12px] leading-relaxed"
-          />
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={loadSaved}>
-              <Download className="size-4" />
-              저장값 불러와서 수정
-            </Button>
-            {value.trim() && (
-              <Button variant="outline" size="sm" onClick={() => onChange('')}>
-                비우기(저장값 사용)
-              </Button>
-            )}
-          </div>
-        </div>
-      )}
+    <div className="border-b pb-2.5">
+      <h2 className="text-base font-semibold tracking-tight">{title}</h2>
+      <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
     </div>
-  )
-}
-
-function MetricTile({ icon: Icon, label, value, sub }: { icon: typeof Cpu; label: string; value: string; sub?: string }) {
-  return (
-    <Card className="p-4">
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Icon className="size-3.5" />
-        {label}
-      </div>
-      <p className="mt-1 truncate text-lg font-semibold tabular-nums tracking-tight">{value}</p>
-      {sub && <p className="text-[11px] text-muted-foreground">{sub}</p>}
-    </Card>
   )
 }
 
@@ -226,40 +160,6 @@ function SessionBubble({ item, onReply }: { item: SessionItem; onReply: (item: S
         </p>
       </div>
     </div>
-  )
-}
-
-/** 마지막 호출에서 전달된 프롬프트 전문 접이식 뷰어. */
-function PromptInspector({ systemPrompt, userContent }: { systemPrompt: string; userContent: string }) {
-  const [open, setOpen] = useState(false)
-  return (
-    <Card className="overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="flex w-full items-center gap-2 px-4 py-3 text-sm hover:bg-muted/40"
-      >
-        {open ? <ChevronDown className="size-4 text-muted-foreground" /> : <ChevronRight className="size-4 text-muted-foreground" />}
-        <span className="font-medium">LLM에 실제로 전달된 내용</span>
-        <span className="ml-auto text-xs text-muted-foreground">마지막 호출 기준</span>
-      </button>
-      {open && (
-        <div className="space-y-3 border-t p-4">
-          <div>
-            <p className="mb-1.5 text-xs font-medium text-muted-foreground">시스템 프롬프트 (조립본)</p>
-            <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-md border bg-muted/20 p-3 font-mono text-[12px] leading-relaxed">
-              {systemPrompt}
-            </pre>
-          </div>
-          <div>
-            <p className="mb-1.5 text-xs font-medium text-muted-foreground">user content</p>
-            <pre className="max-h-56 overflow-auto whitespace-pre-wrap rounded-md border bg-muted/20 p-3 font-mono text-[12px] leading-relaxed">
-              {userContent}
-            </pre>
-          </div>
-        </div>
-      )}
-    </Card>
   )
 }
 
@@ -502,6 +402,11 @@ export function PromptPlaygroundPage() {
       <PageHeader
         title="프롬프트 실험실"
         description="저장하기 전에 프롬프트를 실제 LLM으로 시험합니다. 프롬프트는 저장되지 않으며, 호출마다 소액의 비용이 발생합니다(비용은 생성 로그에 PREVIEW로 기록)."
+      />
+
+      <SectionHeading
+        title="댓글 · 답글 실험"
+        description="샘플 일기로 캐릭터 댓글을 만들고, 실제 유저처럼 이어서 대화해봅니다."
       />
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
@@ -753,6 +658,11 @@ export function PromptPlaygroundPage() {
           )}
         </div>
       </div>
+
+      <SectionHeading
+        title="카드 한 줄 실험"
+        description="대화 요약을 다듬어 카드에 남을 한 줄을 만듭니다. 대화 세션 없이 요약과 감정만으로 시험합니다."
+      />
 
       <CardPreviewSection />
     </div>
