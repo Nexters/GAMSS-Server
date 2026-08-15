@@ -151,7 +151,7 @@ class CardService(
     /**
      * 유저가 보낸 메시지들만 보고 LLM으로 대표 감정을 분류하고 생성 로그를 남긴다.
      * 실패 시 상태를 FAILED로 되돌린 뒤 예외로 변환한다([generateMessage]와 같은 계약) —
-     * 클라이언트는 분류·대사 생성 어느 쪽이 실패했든 CARD_GENERATION_FAILED 하나로 재시도한다.
+     * 클라이언트는 분류·한 줄 생성 어느 쪽이 실패했든 CARD_GENERATION_FAILED 하나로 재시도한다.
      */
     private fun extractEmotion(
         memberId: Long,
@@ -217,7 +217,7 @@ class CardService(
         return userMessages.ifEmpty { listOf(summary) }
     }
 
-    /** LLM으로 카드 대사를 생성하고 생성 로그를 남긴다. 실패 시 상태를 FAILED로 되돌린 뒤 예외로 변환한다. */
+    /** LLM으로 카드 한 줄을 생성하고 생성 로그를 남긴다. 실패 시 상태를 FAILED로 되돌린 뒤 예외로 변환한다. */
     private fun generateMessage(
         emotion: EmotionType,
         summary: String,

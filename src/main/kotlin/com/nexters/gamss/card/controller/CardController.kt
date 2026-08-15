@@ -34,7 +34,8 @@ class CardController(
     @Operation(
         summary = "카드 생성",
         description =
-            "종료된 채팅방에 대해 대표 감정 캐릭터의 한 줄 대사를 생성해 카드를 만듭니다. " +
+            "종료된 채팅방에 대해 그날 있었던 일을 한 줄(공백 포함 50자 이하)로 요약해 카드를 만듭니다. " +
+                "요약은 클라이언트가 보낸 원본을 서버 LLM이 다듬은 값이며, 원본은 채팅방에 그대로 남습니다. " +
                 "감정은 클라이언트가 준 값을 그대로 대표 감정으로 쓰고, **emotion을 생략하면** " +
                 "서버가 유저가 보낸 메시지들만 보고 감정을 추출해 채웁니다(클라이언트 추출 실패 시 폴백).\n\n" +
                 "**실패 응답**\n\n" +
@@ -49,7 +50,7 @@ class CardController(
                 "| CONVERSATION_NOT_ENDED | 409 | 종료되지 않은 채팅방 |\n" +
                 "| CARD_ALREADY_EXISTS | 409 | 이미 카드가 생성된 채팅방 |\n" +
                 "| CARD_GENERATION_IN_PROGRESS | 409 | 카드 생성 중(재시도 가능) |\n" +
-                "| CARD_GENERATION_FAILED | 503 | 감정 추출·카드 대사 생성 실패(재시도 가능) |",
+                "| CARD_GENERATION_FAILED | 503 | 감정 추출·카드 한 줄 생성 실패(재시도 가능) |",
     )
     @PostMapping
     fun create(
@@ -92,7 +93,7 @@ class CardController(
         summary = "월별 카드 조회(캘린더)",
         description =
             "해당 월(대화 생성일 기준, KST)의 날짜별 대표 감정 목록만 반환합니다(캘린더 표시용). " +
-                "대사·요약 등 상세는 날짜를 눌러 날짜별 조회로 확인합니다.\n\n" +
+                "한 줄 요약 등 상세는 날짜를 눌러 날짜별 조회로 확인합니다.\n\n" +
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +

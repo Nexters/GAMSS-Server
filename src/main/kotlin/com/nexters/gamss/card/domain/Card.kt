@@ -49,8 +49,8 @@ class Card(
             "카드 요약은 ${CardSummary.MAX_LENGTH}자 이하여야 합니다."
         }
         require('\n' !in summary && '\r' !in summary) { "카드 요약은 한 줄이어야 합니다." }
-        require(message.isNotBlank()) { "카드 대사는 비어 있을 수 없습니다." }
-        require('\n' !in message && '\r' !in message) { "카드 대사는 한 줄이어야 합니다." }
+        require(message.isNotBlank()) { "카드 한 줄은 비어 있을 수 없습니다." }
+        require('\n' !in message && '\r' !in message) { "카드 한 줄에는 개행이 있을 수 없습니다." }
     }
 
     @Id

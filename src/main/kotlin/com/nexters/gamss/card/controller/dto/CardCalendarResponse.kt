@@ -7,7 +7,7 @@ import java.time.ZoneId
 
 /**
  * 캘린더(월별) 화면용 경량 응답. 날짜별로 그날 만들어진 카드의 대표 감정 목록만 담는다
- * (대사·요약 등 상세는 제외 — 날짜를 눌러 날짜별 조회로 확인).
+ * (한 줄 요약 등 상세는 제외 — 날짜를 눌러 날짜별 조회로 확인).
  */
 data class CardCalendarResponse(
     @field:Schema(description = "날짜 (KST)", example = "2026-07-23")
