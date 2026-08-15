@@ -37,10 +37,10 @@
         },
         "query": {
           "qryType": 1,
-          "query": "label_values(up, env)",
+          "query": "label_values(up{job=\"spring\"}, env)",
           "refId": "env"
         },
-        "definition": "label_values(up, env)",
+        "definition": "label_values(up{job=\"spring\"}, env)",
         "refresh": 1,
         "sort": 1,
         "includeAll": false,
@@ -224,7 +224,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(jvm_memory_used_bytes{env=\"$env\", area=\"heap\"}) / sum(jvm_memory_max_bytes{env=\"$env\", area=\"heap\"}) * 100",
+          "expr": "sum(jvm_memory_used_bytes{env=\"$env\", area=\"heap\"}) / sum(jvm_memory_max_bytes{env=\"$env\", area=\"heap\"} > 0) * 100",
           "legendFormat": "",
           "refId": "A",
           "editorMode": "code",
@@ -541,7 +541,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(jvm_memory_max_bytes{env=\"$env\", area=\"heap\"})",
+          "expr": "sum(jvm_memory_max_bytes{env=\"$env\", area=\"heap\"} > 0)",
           "legendFormat": "힙 상한",
           "refId": "B",
           "editorMode": "code",

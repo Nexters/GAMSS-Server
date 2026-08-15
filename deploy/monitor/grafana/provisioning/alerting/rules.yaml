@@ -741,7 +741,7 @@
               "datasourceUid": "prometheus",
               "model": {
                 "refId": "A",
-                "expr": "sum by (env) (jvm_memory_used_bytes{area=\"heap\"}) / clamp_min(sum by (env) (jvm_memory_max_bytes{area=\"heap\"}), 1) * 100",
+                "expr": "sum by (env) (jvm_memory_used_bytes{area=\"heap\"}) / clamp_min(sum by (env) (jvm_memory_max_bytes{area=\"heap\"} > 0), 1) * 100",
                 "instant": false,
                 "range": true,
                 "editorMode": "code",
