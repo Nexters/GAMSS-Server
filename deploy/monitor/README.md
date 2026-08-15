@@ -43,11 +43,23 @@ scp -i ~/nexters/ssh-keypair-gamss-monitor.pem -r deploy/monitor/. ubuntu@1.201.
 ssh -i ~/nexters/ssh-keypair-gamss-monitor.pem ubuntu@1.201.126.136
 cp ~/app/.env.example ~/app/.env && chmod 600 ~/app/.env && vi ~/app/.env
 
-# 4. 인증서 발급 전 nginx 만 먼저 띄운다(HTTP-01 챌린지를 80 으로 받아야 한다)
-cd ~/app && docker compose up -d nginx
+# 4. 인증서 부트스트랩 (닭과 달걀 풀기)
+#    nginx 는 443 블록의 인증서 파일이 없으면 기동조차 못 하고, 인증서는 80 으로 오는 ACME
+#    챌린지를 nginx 가 받아줘야 발급된다. 그래서 자기서명 더미 인증서로 nginx 를 먼저 띄운다.
+cd ~/app
+docker compose run --rm --entrypoint sh certbot -c \
+  'mkdir -p /etc/letsencrypt/live/monitor && openssl req -x509 -nodes -newkey rsa:2048 -days 1 \
+   -keyout /etc/letsencrypt/live/monitor/privkey.pem \
+   -out /etc/letsencrypt/live/monitor/fullchain.pem -subj "/CN=monitor.gamss.kr"'
+docker compose up -d nginx
+
+#    더미를 지우고 진짜를 받는다. nginx 는 이미 인증서를 메모리에 올려둔 상태라 파일이 사라져도
+#    계속 뜬 채로 챌린지를 서빙한다. 발급 후 reload 하면 진짜 인증서로 갈아탄다.
+docker compose run --rm --entrypoint sh certbot -c 'rm -rf /etc/letsencrypt/live/monitor'
 docker compose run --rm --entrypoint certbot certbot certonly \
   --webroot -w /var/www/certbot --cert-name monitor -d monitor.gamss.kr \
   --email <이메일> --agree-tos --no-eff-email
+docker compose exec -T nginx nginx -s reload
 
 # 5. 전체 기동
 docker compose up -d
