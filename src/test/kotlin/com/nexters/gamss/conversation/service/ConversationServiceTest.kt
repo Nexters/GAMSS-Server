@@ -270,6 +270,29 @@ class ConversationServiceTest {
     }
 
     @Test
+    fun `상세 조회는 대화방과 메시지를 함께 돌려준다`() {
+        val conversation = Conversation(memberId = 1L)
+        val messages = listOf(Message(conversationId = 10L, senderType = SenderType.USER, content = "안녕"))
+        every { conversationRepository.findById(10L) } returns Optional.of(conversation)
+        every { messageRepository.findAllByConversationIdOrderByIdAsc(10L) } returns messages
+
+        val detail = conversationService.getConversationDetail(1L, 10L)
+
+        assertEquals(conversation, detail.conversation)
+        assertEquals(messages, detail.messages)
+    }
+
+    @Test
+    fun `상세 조회도 삭제된 채팅방이면 CONVERSATION_ALREADY_DELETED`() {
+        val deleted = Conversation(memberId = 1L).apply { delete() }
+        every { conversationRepository.findById(10L) } returns Optional.of(deleted)
+
+        val exception = assertFailsWith<BusinessException> { conversationService.getConversationDetail(1L, 10L) }
+
+        assertEquals(ErrorCode.CONVERSATION_ALREADY_DELETED, exception.errorCode)
+    }
+
+    @Test
     fun `채팅방 메시지 조회는 티키타카를 답장 대상 댓글 바로 다음으로 재배치한다`() {
         val conversation = Conversation(memberId = 1L)
         val comment =

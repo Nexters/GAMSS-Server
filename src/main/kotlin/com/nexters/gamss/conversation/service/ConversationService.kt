@@ -221,15 +221,34 @@ class ConversationService(
     fun getInProgressConversations(memberId: Long): List<Conversation> =
         conversationRepository.findAllByMemberIdAndStatus(memberId, ConversationStatus.ACTIVE)
 
+    /**
+     * 채팅방 하나와 그 메시지 전부를 함께 읽는다. 방을 열 때 필요한 건 메시지만이 아니라 생성 날짜
+     * 같은 방 자체의 정보이기도 한데, 둘을 따로 읽으면 소유권·삭제 판정을 두 번 하게 되고 그 사이
+     * 상태가 바뀔 수도 있다 — 한 트랜잭션에서 한 번의 판정으로 묶는다.
+     *
+     * 메시지는 전량 반환한다(페이징 없음) — [getMessages]와 같은 계약이다.
+     */
+    @Transactional(readOnly = true)
+    fun getConversationDetail(
+        memberId: Long,
+        conversationId: Long,
+    ): ConversationDetail {
+        val conversation = getOwnedConversation(conversationId, memberId)
+        conversation.ensureNotDeleted()
+        val messages =
+            MessageThreadOrder.reorderTikitakaAfterTarget(messageRepository.findAllByConversationIdOrderByIdAsc(conversationId))
+        return ConversationDetail(conversation, messages)
+    }
+
+    /**
+     * 메시지만 조회한다. 상세 조회를 그대로 태워, 순서·티키타카 재배치·권한·삭제 판정이 두 경로에서
+     * 갈라지지 않게 한다.
+     */
     @Transactional(readOnly = true)
     fun getMessages(
         memberId: Long,
         conversationId: Long,
-    ): List<Message> {
-        val conversation = getOwnedConversation(conversationId, memberId)
-        conversation.ensureNotDeleted()
-        return MessageThreadOrder.reorderTikitakaAfterTarget(messageRepository.findAllByConversationIdOrderByIdAsc(conversationId))
-    }
+    ): List<Message> = getConversationDetail(memberId, conversationId).messages
 
     private fun getOwnedConversation(
         conversationId: Long,
