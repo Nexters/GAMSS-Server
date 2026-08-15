@@ -24,6 +24,7 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { CardPreviewSection } from '@/components/card-preview-section'
 import { PageHeader } from '@/components/page-header'
 import { cn } from '@/lib/utils'
 
@@ -752,6 +753,8 @@ export function PromptPlaygroundPage() {
           )}
         </div>
       </div>
+
+      <CardPreviewSection />
     </div>
   )
 }

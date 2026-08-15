@@ -19,6 +19,10 @@ class SystemPromptResolver(
         // 감정 분류는 캐릭터 톤·말맛 지침(COMMON)과 무관한 작업이라 조립하면 분류 정확도만 흐린다 —
         // 단독 프롬프트로 쓰도록 조립을 막는다(GeminiEmotionExtractor가 원본을 직접 읽는다).
         require(promptType != PromptType.CARD_EMOTION) { "CARD_EMOTION은 시스템 프롬프트로 조립할 수 없습니다." }
+        // 카드 한 줄은 캐릭터 대사가 아니라 유저 시점의 하루 기록이라 캐릭터 보이스 카드가 필요 없다.
+        // 조립하면 COMMON의 "보이스 카드 말투를 철저히 지켜라"와 CARD의 "캐릭터 말투를 쓰지 마라"가
+        // 한 프롬프트 안에서 정면으로 충돌한다(GeminiCardMessageGenerator가 원본을 직접 읽는다).
+        require(promptType != PromptType.CARD) { "CARD는 시스템 프롬프트로 조립할 수 없습니다." }
         val base = llmSettingsService.currentCommonView()
         if (promptType == PromptType.COMMON) {
             return base
@@ -37,13 +41,32 @@ class SystemPromptResolver(
         typePrompt: String?,
     ): LlmSettingsView {
         require(promptType != PromptType.COMMON) { "조립할 타입 프롬프트를 지정해야 합니다." }
-        // resolve()와 같은 이유 - 소재 목록·감정 분류는 시스템 프롬프트 조각이 아니다.
+        // resolve()와 같은 이유 - 소재 목록·감정 분류·카드 한 줄은 시스템 프롬프트 조각이 아니다.
         require(promptType != PromptType.EONGTTUNG_TOPIC) { "EONGTTUNG_TOPIC은 시스템 프롬프트로 조립할 수 없습니다." }
         require(promptType != PromptType.CARD_EMOTION) { "CARD_EMOTION은 시스템 프롬프트로 조립할 수 없습니다." }
+        require(promptType != PromptType.CARD) { "CARD는 시스템 프롬프트로 조립할 수 없습니다." }
         val base = llmSettingsService.currentCommonView()
         val common = commonPrompt ?: base.systemPrompt
         val type = typePrompt ?: llmSettingsService.currentPrompt(promptType)
         return LlmSettingsView(base.model, assemble(common, type))
+    }
+
+    /**
+     * 조립하지 않는 타입의 미리보기용 설정. [typePrompt]가 null이면 저장된 현재값을 쓴다.
+     *
+     * [resolveForPreview]와 나눠 둔 것은 조립 여부가 타입마다 정해져 있기 때문이다 — 한 메서드가
+     * 조건에 따라 조립을 건너뛰게 하면, 조립하면 안 되는 타입에 공통 프롬프트를 실어 보내는 실수가
+     * 조용히 통과한다. 이쪽은 애초에 공통 프롬프트를 받지 않는다.
+     */
+    fun resolveStandaloneForPreview(
+        promptType: PromptType,
+        typePrompt: String?,
+    ): LlmSettingsView {
+        require(promptType == PromptType.CARD || promptType == PromptType.CARD_EMOTION) {
+            "$promptType 은 단독 프롬프트가 아닙니다."
+        }
+        val model = llmSettingsService.currentCommonView().model
+        return LlmSettingsView(model, typePrompt ?: llmSettingsService.currentPrompt(promptType))
     }
 
     private fun assemble(

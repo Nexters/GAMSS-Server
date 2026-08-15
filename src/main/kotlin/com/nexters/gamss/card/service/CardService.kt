@@ -1,6 +1,7 @@
 package com.nexters.gamss.card.service
 
 import com.nexters.gamss.card.domain.Card
+import com.nexters.gamss.card.domain.CardSummary
 import com.nexters.gamss.card.repository.CardRepository
 import com.nexters.gamss.conversation.domain.CardGenerationStatus
 import com.nexters.gamss.conversation.domain.Conversation
@@ -44,8 +45,12 @@ class CardService(
     private val cardPersistenceService: CardPersistenceService,
 ) {
     /**
-     * 종료된 대화에 대해 대표 감정 캐릭터의 한 줄 대사를 생성해 카드를 저장한다. 외부 LLM 호출이 DB
+     * 종료된 대화에 대해 그날 있었던 일 한 줄을 생성해 카드를 저장한다. 외부 LLM 호출이 DB
      * 커넥션을 오래 점유하지 않도록 트랜잭션으로 감싸지 않는다.
+     *
+     * [summary]는 클라이언트가 만든 대화 요약이다. 그대로 카드에 싣지 않고 LLM으로 한 번 다듬는다 —
+     * 온프레미스 모델 산출물이라 문장이 투박하다(#111). 원본은 대화방에 남겨 다른 채팅방 댓글의
+     * '과거 맥락'으로 계속 쓴다.
      *
      * LLM을 부르기 전에 [Conversation.cardGenerationStatus]를 CAS로 선점한다([Message.commentStatus]와
      * 같은 패턴) — 동시 중복 요청은 선점에 실패해 LLM을 아예 호출하지 않고 즉시 반환된다.
@@ -62,15 +67,21 @@ class CardService(
         val conversation = claimForGeneration(conversationId, memberId)
         val resolvedEmotion = emotion ?: extractEmotion(memberId, conversationId, summary)
         val output = generateMessage(resolvedEmotion, summary, memberId, conversationId)
+        // 프롬프트가 지시한 길이를 LLM이 넘길 수 있어 저장 직전에 한 번 자른다.
+        val cardLine = CardSummary.normalize(output.summary)
         val card =
             Card(
                 memberId = memberId,
                 conversationId = conversationId,
                 emotion = resolvedEmotion,
-                summary = summary,
-                message = output.message,
+                summary = cardLine,
+                // 카드에 남는 것은 한 줄뿐이지만, 클라이언트가 아직 어느 필드를 읽는지 몰라
+                // 같은 값을 채운다(Card KDoc 참고).
+                message = cardLine,
                 conversationCreatedAt = conversation.createdAt,
             )
+        // 대화방에는 클라이언트 원본 요약을 남긴다 — 다른 채팅방 댓글의 '과거 맥락'으로 쓰이는 값이라
+        // 50자로 깎인 카드 문구보다 정보가 많은 쪽이 낫다.
         return persistCard(card, conversationId, summary)
     }
 
@@ -140,7 +151,7 @@ class CardService(
     /**
      * 유저가 보낸 메시지들만 보고 LLM으로 대표 감정을 분류하고 생성 로그를 남긴다.
      * 실패 시 상태를 FAILED로 되돌린 뒤 예외로 변환한다([generateMessage]와 같은 계약) —
-     * 클라이언트는 분류·대사 생성 어느 쪽이 실패했든 CARD_GENERATION_FAILED 하나로 재시도한다.
+     * 클라이언트는 분류·한 줄 생성 어느 쪽이 실패했든 CARD_GENERATION_FAILED 하나로 재시도한다.
      */
     private fun extractEmotion(
         memberId: Long,
@@ -206,7 +217,7 @@ class CardService(
         return userMessages.ifEmpty { listOf(summary) }
     }
 
-    /** LLM으로 카드 대사를 생성하고 생성 로그를 남긴다. 실패 시 상태를 FAILED로 되돌린 뒤 예외로 변환한다. */
+    /** LLM으로 카드 한 줄을 생성하고 생성 로그를 남긴다. 실패 시 상태를 FAILED로 되돌린 뒤 예외로 변환한다. */
     private fun generateMessage(
         emotion: EmotionType,
         summary: String,

@@ -1,10 +1,13 @@
 package com.nexters.gamss.llm.preview
 
+import com.nexters.gamss.card.domain.CardSummary
 import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.llm.config.GeminiPricing
+import com.nexters.gamss.llm.error.CardGenerationFailedException
 import com.nexters.gamss.llm.error.CommentGenerationFailedException
+import com.nexters.gamss.llm.generation.CardMessageGenerator
 import com.nexters.gamss.llm.generation.CommentGenerationOutput
 import com.nexters.gamss.llm.generation.CommentGenerator
 import com.nexters.gamss.llm.parsing.CommentFeedValidator
@@ -35,6 +38,7 @@ class PromptPreviewService(
     private val promptProvider: PromptProvider,
     private val eongttungTopicSelector: EongttungTopicSelector,
     private val commentGenerator: CommentGenerator,
+    private val cardMessageGenerator: CardMessageGenerator,
     private val commentFeedValidator: CommentFeedValidator,
     private val geminiPricing: GeminiPricing,
     private val generationLogRecorder: GenerationLogRecorder,
@@ -130,6 +134,51 @@ class PromptPreviewService(
                     character = command.character,
                     replyText = null,
                     validationError = null,
+                    generationError = e.message,
+                    usage = PreviewUsage.of(geminiPricing, settings.model, e),
+                    latencyMs = elapsedMs(startedAt),
+                )
+            }
+        recordUsage(result.usage, result.latencyMs, result.generationError)
+        return result
+    }
+
+    /**
+     * 카드 한 줄 생성을 시험한다 - 실제 카드 생성 경로(CARD 단독 프롬프트·유저 콘텐츠·CardSummary
+     * 정제)를 그대로 쓴다. 다듬기 전후를 함께 돌려줘 프롬프트의 길이 지시가 지켜지는지 볼 수 있다.
+     */
+    fun previewCard(command: CardPreviewCommand): CardPreviewResult {
+        val settings = systemPromptResolver.resolveStandaloneForPreview(PromptType.CARD, command.cardPrompt)
+        val userContent = promptProvider.buildCardUserContent(command.emotion, command.summary)
+
+        val startedAt = System.nanoTime()
+        val result =
+            try {
+                val output = cardMessageGenerator.generate(command.emotion, command.summary, settings)
+                val line = CardSummary.normalize(output.summary)
+                CardPreviewResult(
+                    model = settings.model,
+                    systemPrompt = settings.systemPrompt,
+                    userContent = userContent,
+                    emotion = command.emotion,
+                    line = line,
+                    rawLine = output.summary,
+                    rawLength = CardSummary.graphemeCount(output.summary),
+                    truncated = line != output.summary,
+                    generationError = null,
+                    usage = PreviewUsage.of(geminiPricing, settings.model, output),
+                    latencyMs = elapsedMs(startedAt),
+                )
+            } catch (e: CardGenerationFailedException) {
+                CardPreviewResult(
+                    model = settings.model,
+                    systemPrompt = settings.systemPrompt,
+                    userContent = userContent,
+                    emotion = command.emotion,
+                    line = null,
+                    rawLine = null,
+                    rawLength = null,
+                    truncated = false,
                     generationError = e.message,
                     usage = PreviewUsage.of(geminiPricing, settings.model, e),
                     latencyMs = elapsedMs(startedAt),

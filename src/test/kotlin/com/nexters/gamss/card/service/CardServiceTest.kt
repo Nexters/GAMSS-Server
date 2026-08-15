@@ -1,6 +1,7 @@
 package com.nexters.gamss.card.service
 
 import com.nexters.gamss.card.domain.Card
+import com.nexters.gamss.card.domain.CardSummary
 import com.nexters.gamss.card.repository.CardRepository
 import com.nexters.gamss.conversation.domain.CardGenerationStatus
 import com.nexters.gamss.conversation.domain.Conversation
@@ -33,6 +34,7 @@ import java.util.Optional
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 class CardServiceTest {
     private val cardRepository = mockk<CardRepository>()
@@ -83,21 +85,40 @@ class CardServiceTest {
     }
 
     @Test
-    fun `종료된 대화에 카드를 생성하고 대화 요약을 저장한다`() {
+    fun `카드에는 LLM이 다듬은 한 줄이 저장되고 대화방에는 클라이언트 원본 요약이 남는다`() {
+        // 원본은 다른 채팅방 댓글의 '과거 맥락'으로 쓰이므로 카드 문구로 덮어써서는 안 된다.
         val conversation = endedConversation()
         every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(conversation)
         stubClaimSuccess()
-        every { cardMessageGenerator.generate(EmotionType.ANGER, "요약") } returns CardMessageOutput("얘 오늘 건들면 안 됨.", 10, 0)
+        every { cardMessageGenerator.generate(EmotionType.ANGER, "요약") } returns
+            CardMessageOutput("팀장이 자기 할 일을 다 떠넘겼어요", 10, 0)
         val saved = slot<Card>()
         every { cardPersistenceService.save(capture(saved), CONVERSATION_ID, "요약") } answers { firstArg() }
 
         service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약")
 
         assertEquals(EmotionType.ANGER, saved.captured.emotion)
-        assertEquals("요약", saved.captured.summary)
-        assertEquals("얘 오늘 건들면 안 됨.", saved.captured.message)
+        assertEquals("팀장이 자기 할 일을 다 떠넘겼어요", saved.captured.summary)
+        // 카드에 남는 것은 한 줄뿐이라 두 필드가 같은 값을 갖는다(어느 필드를 읽는 클라이언트든 깨지지 않게).
+        assertEquals(saved.captured.summary, saved.captured.message)
         assertEquals(conversation.createdAt, saved.captured.conversationCreatedAt)
         verify(exactly = 1) { cardPersistenceService.save(any(), CONVERSATION_ID, "요약") }
+    }
+
+    @Test
+    fun `LLM이 상한을 넘긴 한 줄을 돌려줘도 카드 생성은 실패하지 않고 잘라서 저장한다`() {
+        val conversation = endedConversation()
+        every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(conversation)
+        stubClaimSuccess()
+        every { cardMessageGenerator.generate(EmotionType.ANGER, "요약") } returns
+            CardMessageOutput("가".repeat(CardSummary.MAX_LENGTH + 10), 10, 0)
+        val saved = slot<Card>()
+        every { cardPersistenceService.save(capture(saved), CONVERSATION_ID, "요약") } answers { firstArg() }
+
+        service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약")
+
+        assertTrue(saved.captured.summary.length <= CardSummary.MAX_LENGTH)
+        assertEquals(saved.captured.summary, saved.captured.message)
     }
 
     @Test

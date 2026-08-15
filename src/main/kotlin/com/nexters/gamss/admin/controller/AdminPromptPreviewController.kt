@@ -1,10 +1,13 @@
 package com.nexters.gamss.admin.controller
 
+import com.nexters.gamss.admin.controller.dto.PromptCardPreviewRequest
+import com.nexters.gamss.admin.controller.dto.PromptCardPreviewResponse
 import com.nexters.gamss.admin.controller.dto.PromptPreviewRequest
 import com.nexters.gamss.admin.controller.dto.PromptPreviewResponse
 import com.nexters.gamss.admin.controller.dto.PromptReplyPreviewRequest
 import com.nexters.gamss.admin.controller.dto.PromptReplyPreviewResponse
 import com.nexters.gamss.global.response.ApiResponse
+import com.nexters.gamss.llm.preview.CardPreviewCommand
 import com.nexters.gamss.llm.preview.PromptPreviewCommand
 import com.nexters.gamss.llm.preview.PromptPreviewService
 import com.nexters.gamss.llm.preview.ReplyPreviewCommand
@@ -83,5 +86,34 @@ class AdminPromptPreviewController(
                 ),
             )
         return ApiResponse.success(PromptReplyPreviewResponse.from(result))
+    }
+
+    @Operation(
+        summary = "카드 한 줄 미리보기 생성",
+        description =
+            "대표 감정과 대화 요약으로 카드에 남을 한 줄을 실제 카드 생성 경로로 시험합니다. " +
+                "카드 프롬프트는 공통 프롬프트와 조립되지 않으므로 commonPrompt를 받지 않습니다.\n\n" +
+                "자르기 전 원문(rawLine)과 실제 저장될 한 줄(line)을 함께 돌려줍니다 — " +
+                "프롬프트의 길이 지시가 지켜지는지, 서버 truncate에 얼마나 기대고 있는지 보기 위한 것입니다.\n\n" +
+                "프롬프트는 저장하지 않으며 실제 비용이 발생합니다(비용 추적용 PREVIEW 생성 로그만 기록). " +
+                "생성 실패는 오류 필드로 담겨 200으로 내려옵니다(실패 관찰이 목적).\n\n" +
+                "**실패 응답**\n\n" +
+                "| error.code | HTTP | 설명 |\n" +
+                "|---|---|---|\n" +
+                "| INVALID_INPUT | 400 | emotion·summary 누락, 길이 초과 |",
+    )
+    @PostMapping("/card")
+    fun previewCard(
+        @Valid @RequestBody request: PromptCardPreviewRequest,
+    ): ApiResponse<PromptCardPreviewResponse> {
+        val result =
+            promptPreviewService.previewCard(
+                CardPreviewCommand(
+                    cardPrompt = request.cardPrompt,
+                    emotion = checkNotNull(request.emotion),
+                    summary = request.summary,
+                ),
+            )
+        return ApiResponse.success(PromptCardPreviewResponse.from(result))
     }
 }
