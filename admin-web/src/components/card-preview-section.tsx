@@ -169,6 +169,13 @@ export function CardPreviewSection() {
           </div>
         ) : (
           <>
+            <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+              <MetricTile icon={Cpu} label="모델" value={result.model.replace('gemini-', '')} />
+              <MetricTile icon={Clock} label="지연" value={`${result.latencyMs.toLocaleString()}ms`} />
+              <MetricTile icon={Ruler} label="토큰" value={result.usedTokens.toLocaleString()} />
+              <MetricTile icon={CircleDollarSign} label="비용" value={`$${result.estimatedCostUsd.toFixed(5)}`} />
+            </div>
+
             <Card className="space-y-3 p-5">
               <div className="flex items-center gap-2">
                 <p className="text-xs font-medium text-muted-foreground">카드에 남을 한 줄</p>
@@ -199,12 +206,6 @@ export function CardPreviewSection() {
               </Card>
             )}
 
-            <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-              <MetricTile icon={Cpu} label="모델" value={result.model.replace('gemini-', '')} />
-              <MetricTile icon={Clock} label="지연" value={`${result.latencyMs.toLocaleString()}ms`} />
-              <MetricTile icon={Ruler} label="토큰" value={result.usedTokens.toLocaleString()} />
-              <MetricTile icon={CircleDollarSign} label="비용" value={`$${result.estimatedCostUsd.toFixed(5)}`} />
-            </div>
           </>
         )}
       </div>
