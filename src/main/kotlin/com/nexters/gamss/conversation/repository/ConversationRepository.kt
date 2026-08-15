@@ -56,6 +56,23 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
     ): Optional<Conversation>
 
     /**
+     * 주어진 id 중 **이 회원의, 아직 살아 있는** 채팅방 id만 추린다. 일괄 삭제가 실제로 지울 대상을
+     * 정할 때 쓴다.
+     *
+     * 남의 방·없는 방·이미 지운 방은 조용히 빠진다 — 단건 삭제처럼 403·404·409로 전체를 거절하면
+     * id 하나만 잘못 섞여도 나머지를 못 지우고, 남의 방이 존재하는지도 응답으로 드러난다.
+     */
+    @Query(
+        "select c.id from Conversation c " +
+            "where c.memberId = :memberId and c.id in :ids and c.status <> :deletedStatus",
+    )
+    fun findDeletableIds(
+        @Param("memberId") memberId: Long,
+        @Param("ids") ids: Collection<Long>,
+        @Param("deletedStatus") deletedStatus: ConversationStatus = ConversationStatus.DELETED,
+    ): List<Long>
+
+    /**
      * 지정한 채팅방들을 한 번에 삭제한다(soft delete). 카드 일괄 삭제가 대화방까지 지울 때 쓴다
      * ([com.nexters.gamss.card.service.CardService.deleteCardsWithConversations]).
      *

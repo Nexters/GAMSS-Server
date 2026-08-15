@@ -13,6 +13,7 @@ import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -20,6 +21,7 @@ import java.time.ZoneId
 class ConversationService(
     private val conversationRepository: ConversationRepository,
     private val messageRepository: MessageRepository,
+    private val cleaners: DeletedConversationCleaners,
 ) {
     /**
      * 사용자 메시지를 저장한다. conversationId가 없으면 새 채팅방을 만들어 담는다.
@@ -66,15 +68,61 @@ class ConversationService(
         return conversation
     }
 
-    /** 채팅방을 삭제한다. 삭제 후에는 채팅방 목록·메시지 조회에 나타나지 않는다. */
+    /**
+     * 채팅방을 삭제한다. 삭제 후에는 채팅방 목록·메시지 조회에 나타나지 않는다.
+     *
+     * 이 방에 딸린 자원(카드 등)도 같은 시각으로 함께 정리한다([DeletedConversationCleaner]) —
+     * 방이 사라졌는데 카드만 살아 있으면 반대 방향(카드를 지우면 방까지 지운다)과 데이터가 어긋난다.
+     *
+     * **정리를 채팅방 잠금보다 먼저 한다.** 카드 단건 삭제
+     * ([com.nexters.gamss.card.service.CardService.deleteCard])가 카드 → 채팅방 순으로 행을 잡으므로,
+     * 여기서 채팅방을 먼저 잠그면 동시에 들어온 두 요청이 서로가 잡은 행을 기다리다 데드락으로 죽는다.
+     * 그래서 소유권·삭제 여부는 잠그지 않는 읽기로 먼저 확인하고, 상태 전이는 잠금을 잡은 뒤
+     * [Conversation.delete]가 다시 판정한다 — 그 사이 다른 요청이 삭제를 끝냈다면 여기서
+     * CONVERSATION_ALREADY_DELETED로 실패하고 앞서 지운 자원도 함께 롤백된다.
+     */
     @Transactional
     fun deleteConversation(
         memberId: Long,
         conversationId: Long,
     ): Conversation {
+        getOwnedConversation(conversationId, memberId).ensureNotDeleted()
+        cleaners.cleanAll(listOf(conversationId), Instant.now())
         val conversation = getOwnedConversationForUpdate(conversationId, memberId)
         conversation.delete()
         return conversation
+    }
+
+    /**
+     * 채팅방 여러 개를 한 번에 삭제하고 실제로 삭제된 개수를 돌려준다.
+     *
+     * 본인 방만 지운다 — 남의 방·없는 방·이미 지운 방 id가 섞여 있어도 그것만 빠지고 나머지는
+     * 정상 삭제된다(카드 일괄 삭제와 같은 계약). 단건 삭제처럼 403·404·409로 전체를 거절하면 id
+     * 하나 때문에 나머지를 못 지우고, 연속 호출도 안전하지 않다.
+     *
+     * 행 잠금을 쓰지 않는다 — 삭제는 `status <> DELETED` 조건부 UPDATE라 동시에 들어온 요청이
+     * 같은 방을 두 번 세지 않는다.
+     *
+     * **딸린 자원을 먼저 정리하고 채팅방을 지운다.** 카드 일괄 삭제
+     * ([com.nexters.gamss.card.service.CardService.deleteCardsWithConversations])가 카드 → 채팅방
+     * 순으로 행을 잡으므로, 반대로 잡으면 동시에 들어온 두 요청이 데드락으로 죽는다. 대상은
+     * [ConversationRepository.findDeletableIds]로 이미 확정해둔 뒤라 순서를 바꿔도 지워지는 집합은
+     * 같다.
+     */
+    @Transactional
+    fun deleteConversations(
+        memberId: Long,
+        conversationIds: List<Long>,
+    ): Int {
+        val deletableIds = conversationRepository.findDeletableIds(memberId, conversationIds.distinct())
+        if (deletableIds.isEmpty()) {
+            return 0
+        }
+        // 채팅방과 딸린 자원에 같은 시각을 찍는다 — 한 번의 삭제로 사라진 것들이 이력에서 서로 다른
+        // 요청처럼 보이지 않아야 한다(카드 일괄 삭제도 같은 이유로 시각을 공유한다).
+        val now = Instant.now()
+        cleaners.cleanAll(deletableIds, now)
+        return conversationRepository.softDeleteByIds(deletableIds, now)
     }
 
     /**

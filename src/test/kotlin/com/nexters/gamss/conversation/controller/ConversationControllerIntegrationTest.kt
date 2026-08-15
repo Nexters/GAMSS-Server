@@ -2,7 +2,9 @@ package com.nexters.gamss.conversation.controller
 
 import com.nexters.gamss.card.domain.Card
 import com.nexters.gamss.card.repository.CardRepository
+import com.nexters.gamss.conversation.controller.dto.DeleteConversationsRequest
 import com.nexters.gamss.conversation.domain.Conversation
+import com.nexters.gamss.conversation.domain.ConversationStatus
 import com.nexters.gamss.conversation.domain.ExcludedEmotionTypes
 import com.nexters.gamss.conversation.domain.Message
 import com.nexters.gamss.conversation.domain.SenderType
@@ -40,6 +42,7 @@ import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 @SpringBootTest
@@ -635,6 +638,168 @@ class ConversationControllerIntegrationTest {
                 status { isOk() }
                 jsonPath("$.data.id") { value(conversation.id) }
                 jsonPath("$.data.status") { value("DELETED") }
+            }
+    }
+
+    @Test
+    fun `채팅방을 삭제하면 그 방의 카드에도 삭제 시각이 찍힌다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val ended = conversationRepository.save(Conversation(member.id).apply { end() })
+        val card =
+            cardRepository.save(
+                Card(
+                    memberId = member.id,
+                    conversationId = ended.id,
+                    emotion = EmotionType.ANGER,
+                    summary = "지울 방의 카드",
+                    message = "얘 오늘 건들면 안 됨.",
+                    conversationCreatedAt = ended.createdAt,
+                ),
+            )
+        entityManager.flush()
+        entityManager.clear()
+
+        mockMvc
+            .delete("/api/conversations/${ended.id}") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect { status { isOk() } }
+
+        entityManager.clear()
+        // 카드를 지우면 방까지 지우는 반대 방향과 짝을 맞춘다 — 삭제된 방에 살아 있는 카드를 남기지 않는다.
+        assertNotNull(cardRepository.findById(card.id).get().deletedAt)
+    }
+
+    @Test
+    fun `채팅방을 일괄 삭제하면 삭제된 개수를 돌려주고 카드도 함께 지워진다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val active = conversationRepository.save(Conversation(member.id))
+        val ended = conversationRepository.save(Conversation(member.id).apply { end() })
+        val card =
+            cardRepository.save(
+                Card(
+                    memberId = member.id,
+                    conversationId = ended.id,
+                    emotion = EmotionType.ANGER,
+                    summary = "지울 방의 카드",
+                    message = "얘 오늘 건들면 안 됨.",
+                    conversationCreatedAt = ended.createdAt,
+                ),
+            )
+        entityManager.flush()
+        entityManager.clear()
+
+        mockMvc
+            .delete("/api/conversations") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"conversationIds":[${active.id},${ended.id}]}"""
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.deletedCount") { value(2) }
+            }
+
+        entityManager.clear()
+        assertNotNull(cardRepository.findById(card.id).get().deletedAt)
+    }
+
+    @Test
+    fun `일괄 삭제에 남의 채팅방이 섞여 있으면 그것만 빠지고 나머지는 삭제된다`() {
+        val me = memberRepository.save(Member("me@a.com"))
+        val other = memberRepository.save(Member("other@a.com"))
+        val mine = conversationRepository.save(Conversation(me.id))
+        val others = conversationRepository.save(Conversation(other.id))
+
+        mockMvc
+            .delete("/api/conversations") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(me))
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"conversationIds":[${mine.id},${others.id},99999]}"""
+            }.andExpect {
+                status { isOk() }
+                // 남의 방이 존재하는지도 응답으로 드러나지 않는다.
+                jsonPath("$.data.deletedCount") { value(1) }
+            }
+
+        entityManager.clear()
+        assertEquals(ConversationStatus.ACTIVE, conversationRepository.findById(others.id).get().status)
+    }
+
+    @Test
+    fun `일괄 삭제를 연속 호출해도 이미 지운 방은 다시 세지 않는다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val conversation = conversationRepository.save(Conversation(member.id))
+        val body = """{"conversationIds":[${conversation.id}]}"""
+
+        mockMvc
+            .delete("/api/conversations") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content = body
+            }.andExpect { jsonPath("$.data.deletedCount") { value(1) } }
+
+        mockMvc
+            .delete("/api/conversations") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content = body
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.deletedCount") { value(0) }
+            }
+    }
+
+    @Test
+    fun `일괄 삭제에 빈 목록을 보내면 400을 반환한다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+
+        mockMvc
+            .delete("/api/conversations") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"conversationIds":[]}"""
+            }.andExpect {
+                status { isBadRequest() }
+                jsonPath("$.error.code") { value("INVALID_INPUT") }
+            }
+    }
+
+    @Test
+    fun `일괄 삭제에 상한을 넘는 개수를 보내면 400을 반환한다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val tooMany = (1..DeleteConversationsRequest.MAX_IDS + 1).joinToString(",")
+
+        mockMvc
+            .delete("/api/conversations") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"conversationIds":[$tooMany]}"""
+            }.andExpect {
+                status { isBadRequest() }
+                jsonPath("$.error.code") { value("INVALID_INPUT") }
+            }
+    }
+
+    @Test
+    fun `일괄 삭제된 채팅방에는 메시지를 저장할 수 없다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val conversation = conversationRepository.save(Conversation(member.id))
+
+        mockMvc
+            .delete("/api/conversations") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"conversationIds":[${conversation.id}]}"""
+            }.andExpect { status { isOk() } }
+
+        // 단건 삭제와 같은 계약이어야 한다.
+        mockMvc
+            .post("/api/conversations/messages") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"conversationId":${conversation.id},"content":"지운 방에 쓰기"}"""
+            }.andExpect {
+                status { isConflict() }
+                jsonPath("$.error.code") { value("CONVERSATION_ALREADY_DELETED") }
             }
     }
 
