@@ -46,3 +46,13 @@ scrape_configs:
         labels: { env: dev, server: gamss-dev }
       - targets: ["192.168.0.141:9102"]
         labels: { env: prod, server: gamss-prod }
+
+  # 관측 도구 자신의 상태. Loki 가 rate limit(ingestion_rate_mb)으로 로그를 버리는 중인지,
+  # compactor 의 보존 삭제가 실패하고 있는지는 여기서만 보인다 — 대시보드에는 그저
+  # '로그가 적다'로만 나타나 원인을 짚을 수 없다. 같은 compose 네트워크라 서비스명으로 붙는다.
+  - job_name: monitor-stack
+    static_configs:
+      - targets: ["loki:3100"]
+        labels: { env: monitor, server: gamss-monitor, component: loki }
+      - targets: ["grafana:3000"]
+        labels: { env: monitor, server: gamss-monitor, component: grafana }

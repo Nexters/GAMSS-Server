@@ -25,8 +25,12 @@ common:
 
 schema_config:
   configs:
-    # 신규 설치라 처음부터 최신 스키마(v13 + tsdb)로 시작한다.
-    - from: 2026-08-15
+    # 신규 설치라 처음부터 최신 스키마(v13 + tsdb)로 시작한다. from 은 배포일이 아니라 충분히
+    # 과거로 둔다 — Loki 는 로그 타임스탬프에 맞는 schema 가 없으면 그 엔트리를 거부하는데,
+    # (1) promtail 이 기존 컨테이너 로그를 처음 읽을 때 며칠 전 라인이 함께 올라오고
+    # (2) from 은 UTC 로 해석돼 KST 오전 기동 시 아직 전날인 구간이 생긴다.
+    # 신규 설치라 과거 인덱스가 없어 앞당겨도 부작용이 없다.
+    - from: 2026-01-01
       store: tsdb
       object_store: filesystem
       schema: v13

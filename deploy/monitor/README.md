@@ -93,10 +93,12 @@ ssh -i ~/nexters/ssh-keypair-gamss-monitor.pem ubuntu@1.201.126.136 \
   'cd ~/app && docker compose up -d && docker compose exec -T nginx nginx -s reload'
 ```
 
-Prometheus 설정만 바꿨다면 재기동 없이 반영할 수 있다(`--web.enable-lifecycle` 켜져 있음):
+Prometheus 설정만 바꿨다면 재기동 없이 반영할 수 있다. SIGHUP 은 플래그와 무관하게 동작하고,
+도커가 시그널을 보내므로 이미지 안에 `kill` 유틸이 있는지도 상관없다.
+(`--web.enable-lifecycle` 은 별개 경로인 `POST /-/reload` 를 열어주는 플래그다.)
 
 ```bash
-docker compose exec -T prometheus kill -HUP 1
+docker compose kill -s HUP prometheus
 ```
 
 ## 보존 정책

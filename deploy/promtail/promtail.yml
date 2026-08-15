@@ -32,11 +32,15 @@ scrape_configs:
       - host: unix:///var/run/docker.sock
         refresh_interval: 15s
     relabel_configs:
-      # 라벨은 셋(env·container·stream)으로 고정한다. Loki 는 라벨 조합마다 스트림을 만들어서,
+      # 라벨은 넷(env·container·service·stream)으로 고정한다. Loki 는 라벨 조합마다 스트림을 만들어서,
       # 요청 ID 같은 값을 라벨로 붙이면 스트림이 폭증해 조회가 급격히 느려진다.
       - source_labels: ["__meta_docker_container_name"]
         regex: "/(.*)"
         target_label: container
+      # compose 서비스명(app·db·nginx…). 컨테이너 이름에는 프로젝트 접두사가 붙어
+      # (app-app-1) 조회 조건으로 쓰기 나쁘고, 서비스명은 배포와 무관하게 안정적이다.
+      - source_labels: ["__meta_docker_container_label_com_docker_compose_service"]
+        target_label: service
       - source_labels: ["__meta_docker_container_log_stream"]
         target_label: stream
       - target_label: env
