@@ -28,8 +28,16 @@ class ConversationRepositoryAutoCardTargetTest {
         conversationRepository.deleteAll()
     }
 
-    /** 지금 만든 방들이 모두 "그 전에 생성된" 것이 되도록 넉넉히 미래로 잡은 기준 시각. */
+    /** 지금 만든 방들이 모두 "그 전에 생성된" 것이 되도록 넉넉히 미래로 잡은 상한. */
     private val tomorrow: Instant = Instant.now().plus(1, ChronoUnit.DAYS)
+
+    /** 지금 만든 방들이 모두 하한 안에 들도록 넉넉히 과거로 잡은 하한. */
+    private val yesterday: Instant = Instant.now().minus(1, ChronoUnit.DAYS)
+
+    private fun findTargets(
+        createdAfter: Instant = yesterday,
+        createdBefore: Instant = tomorrow,
+    ): List<Long> = conversationRepository.findAutoCardTargetIds(createdAfter, createdBefore)
 
     private fun markCardGenerated(conversationId: Long) {
         conversationRepository.updateCardGenerationStatus(
@@ -56,21 +64,16 @@ class ConversationRepositoryAutoCardTargetTest {
         // 종료까지만 되고 카드 생성에서 끊긴 방 — 다음 실행이 이어서 처리해야 한다.
         val endedWithoutCard = saveWithSummary(ended = true)
 
-        val targets = conversationRepository.findAutoCardTargetIds(tomorrow)
-
-        assertEquals(listOf(active, endedWithoutCard), targets)
+        assertEquals(listOf(active, endedWithoutCard), findTargets())
     }
 
     @Test
-    fun `요약이 없는 대화방은 대상에서 빠진다`() {
-        // 카드 대사를 만들 근거가 없어 종료할 이유도 없다. 요약을 저장하기 전에 만들어진 방들이
-        // 첫 실행에서 통째로 종료되는 것을 막는 조건이기도 하다.
-        conversationRepository.save(Conversation(memberId = 1L))
+    fun `요약이 없는 대화방도 자동 종료 대상이다`() {
+        // 카드는 못 만들지만 종료는 한다 — 어제자 진행 중인 방을 전부 닫는 것이 이 배치의 계약이다.
+        val noSummary = conversationRepository.save(Conversation(memberId = 1L))
         val withSummary = saveWithSummary()
 
-        val targets = conversationRepository.findAutoCardTargetIds(tomorrow)
-
-        assertEquals(listOf(withSummary), targets)
+        assertEquals(listOf(noSummary.id, withSummary), findTargets())
     }
 
     @Test
@@ -79,9 +82,7 @@ class ConversationRepositoryAutoCardTargetTest {
         markCardGenerated(done)
         val pending = saveWithSummary()
 
-        val targets = conversationRepository.findAutoCardTargetIds(tomorrow)
-
-        assertEquals(listOf(pending), targets)
+        assertEquals(listOf(pending), findTargets())
     }
 
     @Test
@@ -90,19 +91,24 @@ class ConversationRepositoryAutoCardTargetTest {
         conversationRepository.updateSummary(deleted.id, "삭제된 방 요약")
         val alive = saveWithSummary()
 
-        val targets = conversationRepository.findAutoCardTargetIds(tomorrow)
-
-        assertEquals(listOf(alive), targets)
+        assertEquals(listOf(alive), findTargets())
     }
 
     @Test
-    fun `기준 시각 이후에 만들어진 대화방은 대상에서 빠진다`() {
+    fun `상한 이후에 만들어진 대화방은 대상에서 빠진다`() {
         saveWithSummary()
 
         // 오늘 만들어진 방은 KST 오늘 자정 기준으로 아직 대상이 아니다(오늘 기록은 오늘 밤까지 열어둔다).
-        val targets = conversationRepository.findAutoCardTargetIds(Instant.now().minus(1, ChronoUnit.DAYS))
+        assertTrue(findTargets(createdBefore = Instant.now().minus(1, ChronoUnit.DAYS)).isEmpty())
+    }
 
-        assertTrue(targets.isEmpty())
+    @Test
+    fun `하한 이전에 만들어진 대화방은 대상에서 빠진다`() {
+        // 요약 저장이 배포되기 전에 만들어진 방들 — 요약이 없어 카드를 만들 수 없으므로,
+        // 하한이 없으면 첫 실행이 이 방들을 전부 카드 없이 닫아버린다.
+        saveWithSummary()
+
+        assertTrue(findTargets(createdAfter = Instant.now().plus(1, ChronoUnit.HOURS)).isEmpty())
     }
 
     @Test
@@ -110,8 +116,6 @@ class ConversationRepositoryAutoCardTargetTest {
         val mine = saveWithSummary(memberId = 1L)
         val others = saveWithSummary(memberId = 2L)
 
-        val targets = conversationRepository.findAutoCardTargetIds(tomorrow)
-
-        assertEquals(listOf(mine, others), targets)
+        assertEquals(listOf(mine, others), findTargets())
     }
 }

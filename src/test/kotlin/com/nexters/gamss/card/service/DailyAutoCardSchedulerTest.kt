@@ -1,5 +1,6 @@
 package com.nexters.gamss.card.service
 
+import com.nexters.gamss.card.config.CardProperties
 import com.nexters.gamss.card.domain.Card
 import com.nexters.gamss.conversation.domain.Conversation
 import com.nexters.gamss.conversation.repository.ConversationRepository
@@ -23,10 +24,12 @@ class DailyAutoCardSchedulerTest {
     private val conversationService = mockk<ConversationService>()
     private val memberService = mockk<MemberService> { every { getById(any()) } returns Member() }
     private val cardService = mockk<CardService>()
+    private val properties = CardProperties(autoCardStartDate = LocalDate.of(2026, 8, 20))
     private val scheduler =
-        DailyAutoCardScheduler(conversationRepository, conversationService, memberService, cardService)
+        DailyAutoCardScheduler(conversationRepository, conversationService, memberService, cardService, properties)
 
-    private val createdBefore: Instant = Instant.parse("2026-08-15T15:00:00Z")
+    private val createdAfter: Instant = Instant.parse("2026-08-19T15:00:00Z")
+    private val createdBefore: Instant = Instant.parse("2026-08-25T15:00:00Z")
 
     private fun conversation(
         memberId: Long = MEMBER_ID,
@@ -34,7 +37,7 @@ class DailyAutoCardSchedulerTest {
     ): Conversation = Conversation(memberId).apply { summary?.let { updateSummary(it) } }
 
     private fun stubTargets(vararg ids: Long) {
-        every { conversationRepository.findAutoCardTargetIds(any(), any(), any()) } returns ids.toList()
+        every { conversationRepository.findAutoCardTargetIds(any(), any(), any(), any()) } returns ids.toList()
     }
 
     @Test
@@ -43,7 +46,7 @@ class DailyAutoCardSchedulerTest {
         every { conversationService.endForAutoBatch(10L) } returns conversation()
         every { cardService.createCard(any(), any(), any(), any()) } returns mockk<Card>()
 
-        scheduler.runFor(createdBefore)
+        scheduler.runFor(createdAfter, createdBefore)
 
         // emotion을 null로 넘겨 서버가 유저 메시지로 분류하게 한다 — 배치엔 클라이언트가 없다.
         verify(exactly = 1) { cardService.createCard(MEMBER_ID, 10L, null, "오늘 억울한 일이 있었다") }
@@ -57,7 +60,7 @@ class DailyAutoCardSchedulerTest {
         every { cardService.createCard(any(), 10L, any(), any()) } returns mockk<Card>()
         every { cardService.createCard(any(), 30L, any(), any()) } returns mockk<Card>()
 
-        scheduler.runFor(createdBefore)
+        scheduler.runFor(createdAfter, createdBefore)
 
         verify(exactly = 1) { cardService.createCard(any(), 10L, any(), any()) }
         verify(exactly = 1) { cardService.createCard(any(), 30L, any(), any()) }
@@ -70,7 +73,7 @@ class DailyAutoCardSchedulerTest {
         every { conversationService.endForAutoBatch(20L) } returns conversation(summary = "   ")
         every { cardService.createCard(any(), any(), any(), any()) } returns mockk<Card>()
 
-        scheduler.runFor(createdBefore)
+        scheduler.runFor(createdAfter, createdBefore)
 
         verify(exactly = 1) { conversationService.endForAutoBatch(10L) }
         verify(exactly = 1) { conversationService.endForAutoBatch(20L) }
@@ -82,7 +85,7 @@ class DailyAutoCardSchedulerTest {
         stubTargets(10L)
         every { conversationService.endForAutoBatch(10L) } returns null
 
-        scheduler.runFor(createdBefore)
+        scheduler.runFor(createdAfter, createdBefore)
 
         verify(exactly = 0) { cardService.createCard(any(), any(), any(), any()) }
     }
@@ -96,7 +99,7 @@ class DailyAutoCardSchedulerTest {
         every { conversationService.endForAutoBatch(20L) } returns conversation(memberId = OTHER_MEMBER_ID)
         every { cardService.createCard(any(), any(), any(), any()) } returns mockk<Card>()
 
-        scheduler.runFor(createdBefore)
+        scheduler.runFor(createdAfter, createdBefore)
 
         // 탈퇴 후에는 그 사람의 대화로 새 카드를 만들지 않는다.
         verify(exactly = 0) { cardService.createCard(MEMBER_ID, any(), any(), any()) }
@@ -115,7 +118,7 @@ class DailyAutoCardSchedulerTest {
         } throws BusinessException(ErrorCode.CARD_GENERATION_IN_PROGRESS)
         every { cardService.createCard(any(), 30L, any(), any()) } returns mockk<Card>()
 
-        scheduler.runFor(createdBefore)
+        scheduler.runFor(createdAfter, createdBefore)
 
         verify(exactly = 1) { cardService.createCard(any(), 30L, any(), any()) }
     }
@@ -129,7 +132,7 @@ class DailyAutoCardSchedulerTest {
         } throws BusinessException(ErrorCode.DAILY_TOKEN_LIMIT_EXCEEDED)
         every { cardService.createCard(any(), 20L, any(), any()) } returns mockk<Card>()
 
-        scheduler.runFor(createdBefore)
+        scheduler.runFor(createdAfter, createdBefore)
 
         verify(exactly = 1) { cardService.createCard(any(), 20L, any(), any()) }
     }
@@ -138,23 +141,26 @@ class DailyAutoCardSchedulerTest {
     fun `대상이 없으면 아무것도 하지 않는다`() {
         stubTargets()
 
-        scheduler.runFor(createdBefore)
+        scheduler.runFor(createdAfter, createdBefore)
 
         verify(exactly = 0) { conversationService.endForAutoBatch(any()) }
         verify(exactly = 0) { cardService.createCard(any(), any(), any(), any()) }
     }
 
     @Test
-    fun `스케줄 진입점은 KST 오늘 자정 이전에 만들어진 대화방을 대상으로 삼는다`() {
-        val capturedCreatedBefore = slot<Instant>()
+    fun `스케줄 진입점은 설정한 시작일부터 KST 오늘 자정까지 만들어진 대화방을 대상으로 삼는다`() {
+        val capturedAfter = slot<Instant>()
+        val capturedBefore = slot<Instant>()
         every {
-            conversationRepository.findAutoCardTargetIds(capture(capturedCreatedBefore), any(), any())
+            conversationRepository.findAutoCardTargetIds(capture(capturedAfter), capture(capturedBefore), any(), any())
         } returns emptyList()
 
         scheduler.autoEndAndCreateCards()
 
         val zone = ZoneId.of("Asia/Seoul")
-        assertEquals(LocalDate.now(zone).atStartOfDay(zone).toInstant(), capturedCreatedBefore.captured)
+        // 하한은 요약 저장이 배포된 날(설정값), 상한은 오늘 자정 — 오늘 기록은 오늘 밤까지 열어둔다.
+        assertEquals(LocalDate.of(2026, 8, 20).atStartOfDay(zone).toInstant(), capturedAfter.captured)
+        assertEquals(LocalDate.now(zone).atStartOfDay(zone).toInstant(), capturedBefore.captured)
     }
 
     companion object {

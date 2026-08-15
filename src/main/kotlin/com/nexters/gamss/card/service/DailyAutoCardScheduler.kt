@@ -1,5 +1,6 @@
 package com.nexters.gamss.card.service
 
+import com.nexters.gamss.card.config.CardProperties
 import com.nexters.gamss.conversation.repository.ConversationRepository
 import com.nexters.gamss.conversation.service.ConversationService
 import com.nexters.gamss.global.exception.BusinessException
@@ -23,6 +24,10 @@ import java.time.ZoneId
  * 요약([com.nexters.gamss.conversation.domain.Conversation.summary])이 없는 방은 카드 대사를 만들
  * 근거가 없으므로 종료만 하고 카드는 건너뛴다 — 요약은 프론트가 메시지마다 보내주는 값이라
  * 한 번도 보내지 않은 방에서만 생기는 경우다.
+ *
+ * 단, 요약 저장이 배포되기 **전에** 만들어진 방은 예외 없이 요약이 없어 전부 이 경우에 해당하므로,
+ * 대상 자체를 [CardProperties.autoCardStartDate] 이후로 제한한다 — 그러지 않으면 첫 실행이 기존
+ * 사용자들의 진행 중인 방을 전부 카드 없이 닫아버린다.
  */
 @Component
 class DailyAutoCardScheduler(
@@ -30,23 +35,30 @@ class DailyAutoCardScheduler(
     private val conversationService: ConversationService,
     private val memberService: MemberService,
     private val cardService: CardService,
+    private val properties: CardProperties,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
     @Scheduled(cron = CRON, zone = ZONE_ID)
     fun autoEndAndCreateCards() {
         val zone = ZoneId.of(ZONE_ID)
-        runFor(LocalDate.now(zone).atStartOfDay(zone).toInstant())
+        runFor(
+            createdAfter = properties.autoCardStartDate.atStartOfDay(zone).toInstant(),
+            createdBefore = LocalDate.now(zone).atStartOfDay(zone).toInstant(),
+        )
     }
 
     /**
-     * [createdBefore] 전에 만들어진 대상들을 처리한다. 스케줄 진입점과 분리해 둔 것은 테스트가
-     * 기준 시각을 직접 주기 위해서다.
+     * [createdAfter]와 [createdBefore] 사이에 만들어진 대상들을 처리한다. 스케줄 진입점과 분리해
+     * 둔 것은 테스트가 기준 시각을 직접 주기 위해서다.
      */
-    fun runFor(createdBefore: Instant) {
-        val targetIds = conversationRepository.findAutoCardTargetIds(createdBefore)
+    fun runFor(
+        createdAfter: Instant,
+        createdBefore: Instant,
+    ) {
+        val targetIds = conversationRepository.findAutoCardTargetIds(createdAfter, createdBefore)
         if (targetIds.isEmpty()) {
-            log.info("자동 카드 생성 배치: 대상 없음 (기준={})", createdBefore)
+            log.info("자동 카드 생성 배치: 대상 없음 (기준={}~{})", createdAfter, createdBefore)
             return
         }
         val counts = mutableMapOf<AutoCardOutcome, Int>()
