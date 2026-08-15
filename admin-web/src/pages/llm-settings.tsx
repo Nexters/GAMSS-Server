@@ -55,9 +55,11 @@ const TABS: Record<PromptType, PromptTab> = {
   CARD: {
     value: 'CARD',
     label: '카드',
-    hint: '대화 종료 시 대표 캐릭터가 유저를 대신해 남기는 한 줄 카드 대사.',
-    editorLabel: '타입 프롬프트',
-    editorNote: '이 타입의 역할·규칙·출력형식입니다. 생성 시 공통 프롬프트 뒤에 붙습니다.',
+    hint: '대화 종료 시 그날 있었던 일을 유저 시점 한 줄(공백 포함 50자 이하)로 요약하는 생성.',
+    editorLabel: '카드 한 줄 프롬프트',
+    editorNote:
+      '캐릭터 말투를 쓰지 않는 요약이라 공통 프롬프트와 조립하지 않고 단독으로 쓰입니다. 길이는 45자로 지시하되 50자를 넘으면 서버가 어절 경계에서 자릅니다.',
+    standalone: true,
   },
   CARD_EMOTION: {
     value: 'CARD_EMOTION',
@@ -255,7 +257,7 @@ function PromptSection() {
           <Layers className="size-4 shrink-0 text-muted-foreground/70" />
           <span>
             실제 시스템 프롬프트는 <span className="font-medium text-foreground">공통</span> +{' '}
-            <span className="font-medium text-foreground">타입(댓글·답글·카드)</span> 으로 조립됩니다. 캐릭터 성격 등
+            <span className="font-medium text-foreground">타입(댓글·답글)</span> 으로 조립됩니다. 캐릭터 성격 등
             공통 부분은 <span className="font-medium text-foreground">공통</span> 탭에서 한 번에 바꾸세요.
           </span>
         </div>
