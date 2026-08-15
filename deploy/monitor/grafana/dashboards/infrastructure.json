@@ -1,7 +1,7 @@
 {
   "uid": "gamss-infra",
-  "title": "GAMSS · 인프라",
-  "description": "호스트·컨테이너 자원. 환경을 여러 개 골라 dev·prod·monitor 를 한 화면에서 비교한다.",
+  "title": "3 · 서버 자원 (CPU·메모리·디스크)",
+  "description": "서버 자원이 의심될 때, 또는 앱이 통째로 죽었을 때. 환경을 여러 개 골라 dev·prod·monitor 를 한 화면에서 비교한다.",
   "tags": [
     "gamss"
   ],

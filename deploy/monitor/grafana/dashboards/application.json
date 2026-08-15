@@ -1,7 +1,7 @@
 {
   "uid": "gamss-app",
-  "title": "GAMSS · 애플리케이션",
-  "description": "JVM·톰캣·커넥션 풀. 서비스 개요에서 이상을 본 뒤 원인을 좁히는 화면이다.",
+  "title": "2 · 앱 성능 (JVM·스레드·DB풀)",
+  "description": "앱은 살아 있는데 느리거나 불안정할 때. 스레드가 모자란 것인지 LLM 응답을 기다리며 묶인 것인지 가른다.",
   "tags": [
     "gamss"
   ],
