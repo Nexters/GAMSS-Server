@@ -41,6 +41,17 @@ write_env_value() {
   echo "${key}=${value}" >> "$file"
 }
 
+# 모니터링 수집 포트(9100·9101·9102)를 바인딩할 사설 IP.
+# 기본 라우트가 나가는 인터페이스의 주소를 쓴다 — `hostname -I` 는 docker0(172.17.x) 같은
+# 브리지 주소가 먼저 나올 수 있어 신뢰할 수 없다. 못 찾으면 빈 값을 반환하고, compose 가
+# 127.0.0.1 로 떨어뜨려 수집만 안 되게 한다(0.0.0.0 으로 열리는 것보다 안전한 실패다).
+detect_private_ip() {
+  local iface
+  iface="$(ip -4 route show default 2>/dev/null | awk '{print $5; exit}')" || return 0
+  [[ -n "$iface" ]] || return 0
+  ip -4 -o addr show dev "$iface" scope global 2>/dev/null | awk '{print $4; exit}' | cut -d/ -f1
+}
+
 wait_for_health() {
   local attempt
   for ((attempt = 1; attempt <= HEALTH_RETRIES; attempt++)); do
@@ -105,6 +116,16 @@ main() {
   log "이전 태그: ${prev_tag:-(없음)} → 새 태그: ${NEW_TAG}"
 
   write_env_value IMAGE_TAG "$NEW_TAG" .env
+
+  # 매 배포마다 다시 감지한다 — 서버를 옮기거나 NIC 가 바뀌어도 .env 를 손대지 않아도 되게.
+  local private_ip
+  private_ip="$(detect_private_ip)"
+  if [[ -n "$private_ip" ]]; then
+    write_env_value PRIVATE_IP "$private_ip" .env
+    log "사설 IP 감지: ${private_ip} (모니터링 수집 포트 바인딩)"
+  else
+    log "사설 IP 를 찾지 못했다 — 수집 포트는 127.0.0.1 에만 열린다(외부 노출 없음)"
+  fi
 
   log "이미지 pull: ${NEW_TAG}"
   if ! docker compose pull app admin; then
