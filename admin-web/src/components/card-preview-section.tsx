@@ -159,7 +159,8 @@ export function CardPreviewSection() {
               <div className="rounded-lg border bg-muted/30 p-3">
                 <p className="text-base font-medium">{result.line}</p>
                 <p className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground">
-                  <span className={cn('tabular-nums', (result.length ?? 0) > MAX_LENGTH && 'text-destructive')}>
+                  {/* line은 서버가 이미 자른 값이라 상한을 넘지 않는다 — 넘긴 쪽은 원문이다. */}
+                  <span className={cn('tabular-nums', result.truncated && 'text-destructive')}>
                     {result.length}자 / {MAX_LENGTH}자
                   </span>
                   {result.truncated && (
