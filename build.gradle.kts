@@ -52,8 +52,12 @@ dependencies {
     // API Docs (Swagger)
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.0")
 
-    // Actuator (헬스체크)
+    // Actuator (헬스체크 · 메트릭)
     implementation("org.springframework.boot:spring-boot-starter-actuator")
+
+    // Prometheus 노출 포맷. 앱 코드는 Micrometer 코어 API(Actuator에 포함)만 쓰고 이 레지스트리는
+    // /actuator/prometheus 응답을 만드는 런타임 구현이라 runtimeOnly 로 둔다.
+    runtimeOnly("io.micrometer:micrometer-registry-prometheus")
 
     // LLM — Gemini 공식 SDK (버전은 구현 시 Maven Central에서 최신으로 재확인)
     implementation("com.google.genai:google-genai:1.51.0")
