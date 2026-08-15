@@ -15,7 +15,7 @@ enum class CardGenerationStatus {
     FAILED,
 
     /**
-     * 자동 생성을 포기한 상태. 요약이 없어 카드 대사를 만들 근거가 없는데, 종료된 방에는 메시지를
+     * 자동 생성을 포기한 상태. 요약이 없어 카드 한 줄을 만들 근거가 없는데, 종료된 방에는 메시지를
      * 더 보낼 수 없어 요약이 채워질 수도 없다 — 그대로 두면 배치가 매일 밤 같은 방을 다시 집어
      * 같은 결론을 반복한다([com.nexters.gamss.card.service.DailyAutoCardScheduler]).
      *

@@ -1,11 +1,15 @@
 package com.nexters.gamss.llm.preview
 
+import com.nexters.gamss.card.domain.CardSummary
 import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.llm.config.GeminiPricing
 import com.nexters.gamss.llm.config.ModelPricing
+import com.nexters.gamss.llm.error.CardGenerationFailedException
 import com.nexters.gamss.llm.error.CommentGenerationFailedException
+import com.nexters.gamss.llm.generation.CardMessageGenerator
+import com.nexters.gamss.llm.generation.CardMessageOutput
 import com.nexters.gamss.llm.generation.CommentGenerationOutput
 import com.nexters.gamss.llm.generation.CommentGenerator
 import com.nexters.gamss.llm.generation.ReplyGenerationOutput
@@ -27,6 +31,7 @@ import io.mockk.verify
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -36,6 +41,7 @@ class PromptPreviewServiceTest {
     private val promptProvider = PromptProvider()
     private val eongttungTopicSelector = mockk<EongttungTopicSelector>()
     private val commentGenerator = mockk<CommentGenerator>()
+    private val cardMessageGenerator = mockk<CardMessageGenerator>()
     private val commentFeedValidator = mockk<CommentFeedValidator>()
     private val geminiPricing =
         GeminiPricing(models = mapOf("test-model" to ModelPricing(inputPer1M = 1.0, cachedInputPer1M = 0.1, outputPer1M = 2.0)))
@@ -46,6 +52,7 @@ class PromptPreviewServiceTest {
             promptProvider,
             eongttungTopicSelector,
             commentGenerator,
+            cardMessageGenerator,
             commentFeedValidator,
             geminiPricing,
             generationLogRecorder,
@@ -267,4 +274,51 @@ class PromptPreviewServiceTest {
             characters = characters,
             tikitakaCount = tikitakaCount,
         )
+
+    @Test
+    fun `카드 미리보기는 공통 프롬프트 없이 카드 프롬프트만 쓴다`() {
+        // 카드 프롬프트는 조립되지 않으므로 미리보기도 같은 규칙이어야 한다 — 여기서 조립되면
+        // 관리자가 시험한 결과와 실제 생성이 서로 다른 프롬프트를 쓰게 된다.
+        every { systemPromptResolver.resolveStandaloneForPreview(PromptType.CARD, "카드 시험") } returns settings
+        every { cardMessageGenerator.generate(EmotionType.ANGER, "오늘 요약", settings) } returns
+            CardMessageOutput("팀장이 자기 할 일을 다 떠넘겼어요", 10, 0)
+
+        val result = service.previewCard(CardPreviewCommand("카드 시험", EmotionType.ANGER, "오늘 요약"))
+
+        assertEquals("test-model", result.model)
+        assertEquals("조립된 프롬프트", result.systemPrompt)
+        assertEquals("팀장이 자기 할 일을 다 떠넘겼어요", result.line)
+        assertFalse(result.truncated)
+        assertNull(result.generationError)
+        assertTrue(result.userContent.contains("[대표 감정] 분노"))
+    }
+
+    @Test
+    fun `카드 미리보기는 자르기 전후를 함께 돌려준다`() {
+        // 프롬프트의 길이 지시가 지켜지는지 보려면 관리자가 원문 길이를 알아야 한다.
+        val raw = "가".repeat(CardSummary.MAX_LENGTH + 10)
+        every { systemPromptResolver.resolveStandaloneForPreview(PromptType.CARD, null) } returns settings
+        every { cardMessageGenerator.generate(EmotionType.JOY, "오늘 요약", settings) } returns CardMessageOutput(raw, 10, 0)
+
+        val result = service.previewCard(CardPreviewCommand(null, EmotionType.JOY, "오늘 요약"))
+
+        assertEquals(raw, result.rawLine)
+        assertEquals(raw.length, result.rawLength)
+        assertTrue(result.truncated)
+        assertTrue(checkNotNull(result.line).length <= CardSummary.MAX_LENGTH)
+    }
+
+    @Test
+    fun `카드 생성이 실패해도 예외 대신 결과에 담아 돌려준다`() {
+        every { systemPromptResolver.resolveStandaloneForPreview(PromptType.CARD, null) } returns settings
+        every { cardMessageGenerator.generate(EmotionType.ANGER, "오늘 요약", settings) } throws
+            CardGenerationFailedException("카드 한 줄 JSON 파싱에 실패했습니다.", usedTokens = 7, cachedTokens = 0)
+
+        val result = service.previewCard(CardPreviewCommand(null, EmotionType.ANGER, "오늘 요약"))
+
+        assertNull(result.line)
+        assertEquals("카드 한 줄 JSON 파싱에 실패했습니다.", result.generationError)
+        // 검증 실패한 시도도 호출은 됐으니 과금된다 — 토큰이 결과에 실려야 한다.
+        assertEquals(7, result.usage.usedTokens)
+    }
 }

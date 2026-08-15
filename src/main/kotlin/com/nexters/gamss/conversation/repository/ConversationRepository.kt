@@ -66,7 +66,7 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
      *   없다 — DONE과 함께 아예 제외한다.
      * - 실패한 방([CardGenerationStatus.FAILED])은 재시도가 살아 있어야 하므로 상태로 뺄 수 없다.
      *   대신 마지막 시도가 이번 하루 안이면 건너뛰어 **하루 한 번**으로 제한한다. 배치 카드는
-     *   감정 분류·대사 생성 2회를 부르므로, 영구적으로 실패하는 방이 생겨도 태우는 양이 예측
+     *   감정 분류·한 줄 생성 2회를 부르므로, 영구적으로 실패하는 방이 생겨도 태우는 양이 예측
      *   가능한 선에서 묶인다.
      */
     @Query(

@@ -76,19 +76,23 @@ class PromptProvider {
         }
     }
 
-    /** 대표 감정 캐릭터가 유저를 대신해 남기는 카드 한 줄을 요청하는 유저 콘텐츠. */
+    /**
+     * 클라이언트가 만든 대화 요약을 다듬어, 카드에 남길 하루 기록 한 줄을 요청하는 유저 콘텐츠.
+     *
+     * 감정을 캐릭터 id(`bunno`)가 아니라 한글 라벨(`분노`)로 넘긴다 — 캐릭터 id는 그 자체로 말투를
+     * 연상시켜, 캐릭터 말투를 쓰지 말라는 시스템 프롬프트와 반대로 끌어당긴다. 카드 한 줄에서
+     * 감정은 '누가 말하는지'가 아니라 '어떤 사건을 고를지'의 기준이므로 감정 이름이면 충분하다.
+     */
     fun buildCardUserContent(
         emotion: EmotionType,
         summary: String,
-    ): String {
-        val characterId = PromptCharacterId.of(emotion).promptId
-        return buildString {
-            appendLine("[대표 감정 캐릭터] $characterId")
+    ): String =
+        buildString {
+            appendLine("[대표 감정] ${emotion.label}")
             appendLine("[오늘 대화 요약]")
             appendLine(summary.normalizeForPrompt())
-            append("위 캐릭터가 유저를 대신해 불특정 다수에게 남기는, 이 하루를 대표하는 카드 한 줄을 JSON으로 출력해.")
+            append("위 요약에서 오늘을 대표하는 사건 하나를 골라, 유저 시점의 카드 한 줄을 JSON으로 출력해.")
         }
-    }
 
     companion object {
         private const val MAX_CARD_EMOTION_INPUT_CHARS = 4000

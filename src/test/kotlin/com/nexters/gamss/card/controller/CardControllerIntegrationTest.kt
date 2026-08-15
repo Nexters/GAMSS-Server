@@ -1,6 +1,7 @@
 package com.nexters.gamss.card.controller
 
 import com.nexters.gamss.card.domain.Card
+import com.nexters.gamss.card.domain.CardSummary
 import com.nexters.gamss.card.repository.CardRepository
 import com.nexters.gamss.conversation.domain.Conversation
 import com.nexters.gamss.conversation.domain.ConversationStatus
@@ -17,6 +18,7 @@ import com.nexters.gamss.support.FakeEmotionExtractorConfig
 import com.nexters.gamss.support.TestcontainersConfig
 import jakarta.persistence.EntityManager
 import jakarta.persistence.PersistenceContext
+import org.hamcrest.Matchers.startsWith
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -24,6 +26,7 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.delete
@@ -36,6 +39,7 @@ import org.springframework.web.context.WebApplicationContext
 import tools.jackson.databind.ObjectMapper
 import java.time.ZoneId
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -55,6 +59,9 @@ class CardControllerIntegrationTest {
 
     @Autowired
     private lateinit var messageRepository: MessageRepository
+
+    @Autowired
+    private lateinit var jdbcTemplate: JdbcTemplate
 
     @Autowired
     private lateinit var cardRepository: CardRepository
@@ -93,14 +100,21 @@ class CardControllerIntegrationTest {
                     """{"conversationId":${conversation.id},"emotion":"ANGER","summary":"$summary"}"""
             }.andExpect {
                 status { isOk() }
-                jsonPath("$.data.summary") { value(summary) }
+                // 카드에는 원본이 아니라 LLM이 다듬은 한 줄이 들어간다. Fake가 결정적인 값을
+                // 돌려주므로 접두사까지 확인한다 — "원본만 아니면 통과"로 두면 엉뚱한 값도 넘어간다.
+                jsonPath("$.data.summary") { value(startsWith("ANGER 카드 한 줄:")) }
             }
 
         entityManager.flush()
         entityManager.clear()
 
+        // 대화방 요약은 다른 채팅방 댓글의 '과거 맥락'으로 쓰이므로 클라이언트 원본 그대로 남아야 한다.
         val persistedConversation = conversationRepository.findById(conversation.id).orElseThrow()
         assertEquals(summary, persistedConversation.summary)
+
+        // 클라이언트가 어느 필드를 읽든 같은 문구가 보여야 한다(Card KDoc 참고).
+        val persistedCard = cardRepository.findAll().single { it.conversationId == conversation.id }
+        assertEquals(persistedCard.summary, persistedCard.message)
         assertEquals(1, cardRepository.count())
     }
 
@@ -137,8 +151,11 @@ class CardControllerIntegrationTest {
                     """{"conversationId":${conversation.id},"emotion":"ANGER","summary":"$summary"}"""
             }.andExpect {
                 status { isOk() }
-                jsonPath("$.data.summary") { value(summary) }
             }
+
+        // 요청 상한(2000자)과 카드에 남는 한 줄의 상한(50자)은 별개다.
+        val card = cardRepository.findAll().single { it.conversationId == conversation.id }
+        assertTrue(card.summary.length <= CardSummary.MAX_LENGTH)
     }
 
     @Test
@@ -710,6 +727,44 @@ class CardControllerIntegrationTest {
     // ── 카드 단건 조회 ──
 
     @Test
+    fun `상한 도입 이전 카드도 조회하면 한 줄 요약으로 나온다`() {
+        // 그 시절 summary는 클라이언트 원본이라 길고 개행이 섞여 있다. 저장된 값을 백필로 덮는 대신
+        // 읽는 쪽에서 흡수하므로, 엔티티 로딩(init 미실행)과 응답 변환이 둘 다 맞아야 통과한다.
+        val member = memberRepository.save(Member("legacy-card@test.com"))
+        val conversation = conversationRepository.save(Conversation(member.id).apply { end() })
+        val legacySummary = "오늘은 회사에서 정말 힘든 일이 많았다.\n그래도 친구와 통화하며 조금은 괜찮아졌다. " + "가".repeat(100)
+        jdbcTemplate.update(
+            """
+            insert into cards (member_id, conversation_id, emotion, summary, message, conversation_created_at)
+            values (?, ?, 'ANGER', ?, '얘 오늘 건들면 안 됨.', now(6))
+            """.trimIndent(),
+            member.id,
+            conversation.id,
+            legacySummary,
+        )
+        val cardId = jdbcTemplate.queryForObject("select id from cards where conversation_id = ?", Long::class.java, conversation.id)
+
+        val summary =
+            mockMvc
+                .get("/api/cards/$cardId") {
+                    header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                }.andExpect { status { isOk() } }
+                .andReturn()
+                .response
+                .contentAsString
+                .let {
+                    objectMapper
+                        .readTree(it)
+                        .path("data")
+                        .path("summary")
+                        .asText()
+                }
+
+        assertTrue(CardSummary.graphemeCount(summary) <= CardSummary.MAX_LENGTH)
+        assertFalse(summary.contains('\n'))
+    }
+
+    @Test
     fun `id로 본인 카드를 조회하면 날짜별 조회와 같은 내용을 돌려준다`() {
         val member = memberRepository.save(Member("getone@test.com"))
         val card = createCardVia(member, "조회할 카드")
@@ -735,7 +790,7 @@ class CardControllerIntegrationTest {
                 }.andExpect {
                     status { isOk() }
                     jsonPath("$.data.id") { value(card.id) }
-                    jsonPath("$.data.summary") { value("조회할 카드") }
+                    jsonPath("$.data.summary") { value(card.summary) }
                 }.andReturn()
                 .response
                 .contentAsString
