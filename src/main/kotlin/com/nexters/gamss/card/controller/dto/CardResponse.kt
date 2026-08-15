@@ -21,7 +21,9 @@ data class CardResponse(
     )
     val summary: String,
     @field:Schema(
-        description = "summary와 같은 값. 카드에 캐릭터 대사를 싣던 시절의 필드이며 더 이상 쓰지 않는다(deprecated)",
+        description =
+            "카드에 캐릭터 대사를 싣던 시절의 필드이며 더 이상 쓰지 않는다(deprecated) — summary를 읽을 것. " +
+                "새로 만들어지는 카드는 summary와 같은 값이지만, 카드 개편 이전에 만들어진 카드에는 캐릭터 대사가 들어 있어 summary와 다르다.",
         example = "우산을 안 챙겨서 옷이 다 젖어버렸어요",
         deprecated = true,
     )
