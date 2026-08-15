@@ -114,6 +114,40 @@ class AdminLlmSettingsControllerIntegrationTest {
     }
 
     @Test
+    fun `카드 감정 프롬프트도 조회·수정되고 리비전이 남는다`() {
+        // 백오피스 API는 PromptType 제네릭이라 enum·시딩만으로 신규 타입이 동작해야 한다(#134·#135).
+        mockMvc
+            .get("/api/admin/llm-settings/prompt?promptType=CARD_EMOTION") {
+                header(HttpHeaders.AUTHORIZATION, adminBearer())
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.promptType") { value("CARD_EMOTION") }
+                // 본문 문구가 아니라 "시딩된 값이 있다"까지만 본다 — 프롬프트 튜닝으로 다시 시드되면
+                // (V26이 캐릭터 개편으로 COMMON·COMMENT·CARD 본문을 통째로 갈아치운 선례가 있다)
+                // 조회·수정·리비전과 무관한 이유로 이 테스트가 깨진다.
+                jsonPath("$.data.systemPrompt") { isNotEmpty() }
+            }
+
+        mockMvc
+            .put("/api/admin/llm-settings/prompt") {
+                header(HttpHeaders.AUTHORIZATION, adminBearer())
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"promptType":"CARD_EMOTION","systemPrompt":"수정한 감정 분류 프롬프트"}"""
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.systemPrompt") { value("수정한 감정 분류 프롬프트") }
+            }
+
+        mockMvc
+            .get("/api/admin/llm-settings/prompt/revisions?promptType=CARD_EMOTION") {
+                header(HttpHeaders.AUTHORIZATION, adminBearer())
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.content[0].savedBy") { value("admin@gamss.kr") }
+            }
+    }
+
+    @Test
     fun `인증 없이 리비전 목록을 조회하면 401`() {
         mockMvc
             .get("/api/admin/llm-settings/prompt/revisions?promptType=COMMENT")
