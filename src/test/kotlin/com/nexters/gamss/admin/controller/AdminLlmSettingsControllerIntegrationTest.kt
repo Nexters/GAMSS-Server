@@ -2,7 +2,6 @@ package com.nexters.gamss.admin.controller
 
 import com.nexters.gamss.global.security.JwtIssuer
 import com.nexters.gamss.support.TestcontainersConfig
-import org.hamcrest.Matchers.containsString
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -123,7 +122,10 @@ class AdminLlmSettingsControllerIntegrationTest {
             }.andExpect {
                 status { isOk() }
                 jsonPath("$.data.promptType") { value("CARD_EMOTION") }
-                jsonPath("$.data.systemPrompt") { value(containsString("감정 분류기")) }
+                // 본문 문구가 아니라 "시딩된 값이 있다"까지만 본다 — 프롬프트 튜닝으로 다시 시드되면
+                // (V26이 캐릭터 개편으로 COMMON·COMMENT·CARD 본문을 통째로 갈아치운 선례가 있다)
+                // 조회·수정·리비전과 무관한 이유로 이 테스트가 깨진다.
+                jsonPath("$.data.systemPrompt") { isNotEmpty() }
             }
 
         mockMvc
