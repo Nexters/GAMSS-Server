@@ -102,16 +102,19 @@ ROOT=$(grep '^DB_ROOT_PASSWORD=' .env | cut -d= -f2-)
 docker compose exec -T db mysql -uroot -p"$ROOT" <<SQL
 CREATE USER IF NOT EXISTS 'exporter'@'%' IDENTIFIED BY '<시크릿과 같은 값>';
 ALTER USER 'exporter'@'%' IDENTIFIED BY '<시크릿과 같은 값>';
-GRANT PROCESS, REPLICATION CLIENT ON *.* TO 'exporter'@'%';
 FLUSH PRIVILEGES;
 SQL
 ```
 
-지금 켜 둔 수집기(`global_status`·`global_variables`)에는 `PROCESS` 와 `REPLICATION CLIENT` 만 있으면 된다.
-**애플리케이션 데이터에 대한 `SELECT` 은 주지 않는다** — 이 계정이 유출돼도 대화·회원 데이터는 읽히지 않는다.
+**권한을 하나도 주지 않는다.** 지금 켜 둔 수집기(`global_status`·`global_variables`)는 `SHOW GLOBAL STATUS`·
+`SHOW GLOBAL VARIABLES` 만 쓰는데, 이 두 명령에는 별도 권한이 필요 없다. 계정 생성만으로 붙는 `USAGE`
+상태에서 실제로 935개 지표가 수집되는 것을 확인했다(대시보드가 쓰는 지표 8종 전부 포함).
 
-나중에 `info_schema`·`perf_schema` 계열 수집기를 켜게 되면 그 수집기가 요구하는 스키마에만
-(`GRANT SELECT ON performance_schema.*` 처럼) 권한을 더한다. `*.*` 로 넓히지 않는다.
+계정이 유출돼도 읽을 수 있는 것이 서버 상태 변수뿐이다 — 대화·회원 데이터는 물론, 다른 세션의
+쿼리 목록(`PROCESS`)이나 복제 상태(`REPLICATION CLIENT`)도 보이지 않는다.
+
+나중에 `info_schema`·`perf_schema`·`slave_status` 계열 수집기를 켜게 되면 **그때 그 수집기가 요구하는
+권한만** 더한다(각각 `PROCESS`, `SELECT ON performance_schema.*`, `REPLICATION CLIENT`). `*.*` 로 넓히지 않는다.
 
 ## 갱신 (설정·대시보드 변경 후)
 
