@@ -92,6 +92,23 @@ docker compose exec -T prometheus kill -HUP 1
 
 ## 접근 정보
 
-- 대시보드: https://monitor.gamss.kr (admin / `.env` 의 `GRAFANA_ADMIN_PASSWORD`)
+- 대시보드: https://monitor.gamss.kr — 계정은 GitHub 시크릿 `GRAFANA_ADMIN_USER`·`GRAFANA_ADMIN_PASSWORD`
+  (서버 `.env` 에도 같은 값이 들어 있다)
 - 데이터소스·대시보드·알림은 전부 프로비저닝이라 **UI 에서 고쳐도 재기동 시 덮어써진다.**
   변경은 `grafana/` 아래 파일을 고쳐 커밋한 뒤 위 갱신 절차를 따른다.
+
+## 계정 변경
+
+`GF_SECURITY_ADMIN_USER`·`GF_SECURITY_ADMIN_PASSWORD` 는 **컨테이너를 처음 띄울 때만** 반영된다.
+이후로는 Grafana 내부 DB 의 계정이 정본이라 `.env` 만 고치고 재기동해도 바뀌지 않는다.
+운영 중에는 아래처럼 관리 API 로 바꾸고, `.env` 와 GitHub 시크릿도 같은 값으로 맞춰둔다(다음 재설치 때 쓰인다).
+
+```bash
+cd ~/app
+# 아이디 변경
+docker compose exec -T grafana curl -s -u <현재ID>:<현재PW> -X PUT localhost:3000/api/users/1 \
+  -H 'Content-Type: application/json' -d '{"login":"<새ID>","email":"admin@gamss.kr","name":"GAMSS Admin"}'
+# 비밀번호 변경(아이디를 먼저 바꿨다면 새 아이디로 인증한다)
+docker compose exec -T grafana curl -s -u <새ID>:<현재PW> -X PUT localhost:3000/api/admin/users/1/password \
+  -H 'Content-Type: application/json' -d '{"password":"<새PW>"}'
+```

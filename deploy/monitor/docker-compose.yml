@@ -22,6 +22,9 @@ services:
     restart: unless-stopped
     logging: *default-logging
     environment:
+      # 이 두 값은 최초 기동 때만 반영된다(그 뒤로는 Grafana 내부 DB 의 계정이 정본이다).
+      # 운영 중 계정 변경은 관리 API 로 한다 — README 의 '계정 변경' 참고.
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
       # 공개 URL. 알림 메시지의 대시보드 링크가 이 값을 기준으로 만들어진다.
       GF_SERVER_ROOT_URL: https://monitor.gamss.kr
