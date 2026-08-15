@@ -15,8 +15,14 @@ import java.time.Instant
 interface DeletedConversationCleaner {
     /**
      * [conversationIds] 채팅방이 삭제되어 더는 살아 있을 이유가 없는 자원을 지운다.
-     * 삭제와 같은 트랜잭션에서 실행되고, [deletedAt]은 채팅방 삭제와 같은 시각이다 — 한 번의
-     * 삭제로 사라진 자원들이 이력에서 서로 다른 요청처럼 보이지 않아야 한다.
+     *
+     * 채팅방 삭제와 **같은 트랜잭션**에서, 채팅방 행을 잡기 **전에** 실행된다 — 반대 방향인 카드
+     * 삭제가 카드 → 채팅방 순으로 행을 잡으므로 여기서 반대로 잡으면 동시 요청이 데드락으로 죽는다
+     * ([com.nexters.gamss.card.service.CardService.deleteCardsWithConversations] KDoc의 잠금 순서
+     * 설명). 먼저 지우더라도 뒤이은 채팅방 삭제가 실패하면 같은 트랜잭션이라 함께 롤백된다.
+     *
+     * [deletedAt]은 한 번의 요청에서 정리되는 모든 자원이 공유한다 — 함께 사라진 자원들이 이력에서
+     * 서로 다른 요청처럼 보이지 않아야 한다.
      */
     fun clean(
         conversationIds: Collection<Long>,

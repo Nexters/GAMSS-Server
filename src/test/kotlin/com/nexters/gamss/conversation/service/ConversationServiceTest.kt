@@ -320,6 +320,7 @@ class ConversationServiceTest {
     @Test
     fun `채팅방을 삭제하면 상태가 DELETED가 된다`() {
         val conversation = Conversation(memberId = 1L)
+        every { conversationRepository.findById(10L) } returns Optional.of(conversation)
         every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
 
         val deleted = conversationService.deleteConversation(1L, 10L)
@@ -332,6 +333,7 @@ class ConversationServiceTest {
         // 카드가 대표적인 대상 — 방이 사라졌는데 카드만 살아 있으면 반대 방향(카드 삭제가 방까지
         // 지운다)과 데이터가 어긋난다.
         val conversation = Conversation(memberId = 1L)
+        every { conversationRepository.findById(10L) } returns Optional.of(conversation)
         every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
 
         conversationService.deleteConversation(1L, 10L)
@@ -385,7 +387,9 @@ class ConversationServiceTest {
 
     @Test
     fun `삭제에 실패하면 딸린 자원도 정리하지 않는다`() {
+        // 정리가 채팅방 잠금보다 앞서므로(데드락 회피) 소유권·삭제 여부는 그보다 먼저 판정돼야 한다.
         val alreadyDeleted = Conversation(memberId = 1L).apply { delete() }
+        every { conversationRepository.findById(10L) } returns Optional.of(alreadyDeleted)
         every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(alreadyDeleted)
 
         assertFailsWith<BusinessException> { conversationService.deleteConversation(1L, 10L) }
@@ -396,6 +400,7 @@ class ConversationServiceTest {
     @Test
     fun `종료된 채팅방도 삭제할 수 있다`() {
         val conversation = Conversation(memberId = 1L).apply { end() }
+        every { conversationRepository.findById(10L) } returns Optional.of(conversation)
         every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
 
         val deleted = conversationService.deleteConversation(1L, 10L)
@@ -406,6 +411,7 @@ class ConversationServiceTest {
     @Test
     fun `이미 삭제된 채팅방을 다시 삭제하면 CONVERSATION_ALREADY_DELETED`() {
         val conversation = Conversation(memberId = 1L).apply { delete() }
+        every { conversationRepository.findById(10L) } returns Optional.of(conversation)
         every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
 
         val exception =
@@ -419,6 +425,7 @@ class ConversationServiceTest {
     @Test
     fun `남의 채팅방을 삭제하면 CONVERSATION_ACCESS_DENIED`() {
         val conversation = Conversation(memberId = 2L)
+        every { conversationRepository.findById(10L) } returns Optional.of(conversation)
         every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
 
         val exception =

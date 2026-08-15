@@ -4,6 +4,7 @@ import com.nexters.gamss.card.domain.Card
 import com.nexters.gamss.card.repository.CardRepository
 import com.nexters.gamss.conversation.domain.Conversation
 import com.nexters.gamss.conversation.repository.ConversationRepository
+import com.nexters.gamss.conversation.service.ConversationService
 import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
@@ -35,6 +36,9 @@ import kotlin.test.assertTrue
 class CardDeleteConcurrencyIntegrationTest {
     @Autowired
     private lateinit var cardService: CardService
+
+    @Autowired
+    private lateinit var conversationService: ConversationService
 
     @Autowired
     private lateinit var cardRepository: CardRepository
@@ -169,5 +173,68 @@ class CardDeleteConcurrencyIntegrationTest {
             conversationRepository.findById(conversation.id).orElseThrow().isDeleted(),
             "카드와 함께 대화방도 삭제돼야 한다",
         )
+    }
+
+    /**
+     * 카드에서 시작하는 삭제와 대화방에서 시작하는 삭제가 같은 짝을 동시에 건드리는 경로 검증.
+     *
+     * 네 경로 모두 카드 → 대화방 순으로 행을 잡아야 한다. 대화방 쪽이 반대로(대화방 → 카드) 잡으면
+     * 서로가 잡은 행을 기다리다 InnoDB가 한쪽을 데드락으로 죽인다 — 실제로 순서를 뒤집으면 이
+     * 테스트는 `CannotAcquireLockException` 으로 실패한다.
+     */
+    @Test
+    fun `카드 삭제와 대화방 삭제가 동시에 들어와도 데드락이 나지 않는다`() {
+        val unexpectedFailures = Collections.synchronizedList(mutableListOf<Throwable>())
+        val executor = Executors.newFixedThreadPool(DELETE_PATHS)
+
+        repeat(ROUNDS) { round ->
+            val memberId = 1000L + round
+            val conversation = conversationRepository.save(Conversation(memberId).apply { end() })
+            val card =
+                cardRepository.save(
+                    Card(
+                        memberId = memberId,
+                        conversationId = conversation.id,
+                        emotion = EmotionType.ANGER,
+                        summary = "잠금 순서 검증 대상",
+                        message = "오늘은 다들 나만 찾네.",
+                        conversationCreatedAt = Instant.now(),
+                    ),
+                )
+            val tasks: List<() -> Unit> =
+                listOf(
+                    { cardService.deleteCard(memberId, card.id) },
+                    { cardService.deleteAllCards(memberId) },
+                    { conversationService.deleteConversation(memberId, conversation.id) },
+                    { conversationService.deleteConversations(memberId, listOf(conversation.id)) },
+                )
+
+            val startLine = CyclicBarrier(tasks.size)
+            val futures =
+                tasks.map { task ->
+                    executor.submit {
+                        startLine.await() // 모든 스레드를 동시에 출발시켜 경합을 유도한다
+                        try {
+                            task()
+                        } catch (e: BusinessException) {
+                            // 경합에서 진 쪽의 정상 결과(CARD_ALREADY_DELETED 등)라 실패로 치지 않는다.
+                        } catch (e: Throwable) {
+                            unexpectedFailures.add(e)
+                        }
+                    }
+                }
+            futures.forEach { it.get(30, TimeUnit.SECONDS) }
+
+            assertNotNull(cardRepository.findById(card.id).orElseThrow().deletedAt)
+            assertTrue(conversationRepository.findById(conversation.id).orElseThrow().isDeleted())
+        }
+        executor.shutdown()
+
+        assertTrue(unexpectedFailures.isEmpty(), "데드락 등 예상 밖 실패가 없어야 한다: $unexpectedFailures")
+    }
+
+    companion object {
+        private const val ROUNDS = 10
+        private const val DELETE_PATHS = 4
     }
 }
