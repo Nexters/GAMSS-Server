@@ -16,8 +16,10 @@ import io.mockk.verify
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.ZonedDateTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class DailyAutoCardSchedulerTest {
     private val conversationRepository = mockk<ConversationRepository>()
@@ -148,7 +150,7 @@ class DailyAutoCardSchedulerTest {
     }
 
     @Test
-    fun `스케줄 진입점은 설정한 시작일부터 KST 오늘 자정까지 만들어진 대화방을 대상으로 삼는다`() {
+    fun `스케줄 진입점은 설정한 시작일부터 가장 최근 하루 경계까지를 대상으로 삼는다`() {
         val capturedAfter = slot<Instant>()
         val capturedBefore = slot<Instant>()
         every {
@@ -158,9 +160,19 @@ class DailyAutoCardSchedulerTest {
         scheduler.autoEndAndCreateCards()
 
         val zone = ZoneId.of("Asia/Seoul")
-        // 하한은 요약 저장이 배포된 날(설정값), 상한은 오늘 자정 — 오늘 기록은 오늘 밤까지 열어둔다.
-        assertEquals(LocalDate.of(2026, 8, 20).atStartOfDay(zone).toInstant(), capturedAfter.captured)
-        assertEquals(LocalDate.now(zone).atStartOfDay(zone).toInstant(), capturedBefore.captured)
+        // 하한은 요약 저장이 배포된 날의 하루 시작(05시).
+        val startDayBegin = LocalDate.of(2026, 8, 20).atTime(5, 0).atZone(zone)
+        assertEquals(startDayBegin.toInstant(), capturedAfter.captured)
+
+        // 상한은 자정이 아니라 하루 경계여야 한다 — 자정을 쓰면 0~5시에 만든 방이 어제에 속하는데도
+        // "오늘 것"으로 분류돼 하루를 더 열린 채로 기다린다.
+        val boundary = capturedBefore.captured.atZone(zone)
+        assertEquals(5, boundary.hour)
+        assertEquals(0, boundary.minute)
+        // 그리고 이미 지난 경계여야 한다(미래 경계를 쓰면 아직 진행 중인 하루까지 닫아버린다).
+        val now = ZonedDateTime.now(zone)
+        assertTrue(boundary <= now, "이미 지난 하루 경계여야 한다: $boundary")
+        assertTrue(boundary > now.minusDays(1), "가장 최근 경계여야 한다: $boundary")
     }
 
     companion object {

@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.ZonedDateTime
 
 /**
  * 사용자가 종료 버튼을 누르지 않아 아직 열려 있는 어제까지의 대화방을 매일 새벽 자동으로 종료하고
@@ -43,10 +44,31 @@ class DailyAutoCardScheduler(
     fun autoEndAndCreateCards() {
         val zone = ZoneId.of(ZONE_ID)
         runFor(
-            createdAfter = properties.autoCardStartDate.atStartOfDay(zone).toInstant(),
-            createdBefore = LocalDate.now(zone).atStartOfDay(zone).toInstant(),
+            createdAfter = dayStart(properties.autoCardStartDate, zone),
+            createdBefore = lastDayBoundary(zone),
         )
     }
+
+    /**
+     * 지금 시점 기준으로 가장 최근에 지난 하루 경계(KST [DAY_BOUNDARY_HOUR]시).
+     *
+     * 이 서비스의 하루는 자정이 아니라 새벽 [DAY_BOUNDARY_HOUR]시에 바뀐다. 자정을 상한으로 쓰면
+     * **0시~5시에 만든 방이 어제에 속하는데도 "오늘 것"으로 분류돼** 하루를 더 열린 채로 기다린다.
+     *
+     * 아직 오늘 경계 전이면 어제 경계가 기준이다([DailyTokenLimitService.windowStart]와 같은 계산) —
+     * 스케줄이 밀리거나 수동으로 돌려도 "지난 하루까지"라는 의미가 흔들리지 않는다.
+     */
+    private fun lastDayBoundary(zone: ZoneId): Instant {
+        val now = ZonedDateTime.now(zone)
+        val todayBoundary = dayStart(now.toLocalDate(), zone).atZone(zone)
+        return if (now < todayBoundary) todayBoundary.minusDays(1).toInstant() else todayBoundary.toInstant()
+    }
+
+    /** [date]의 하루가 시작하는 시각(KST [DAY_BOUNDARY_HOUR]시). */
+    private fun dayStart(
+        date: LocalDate,
+        zone: ZoneId,
+    ): Instant = date.atTime(DAY_BOUNDARY_HOUR, 0).atZone(zone).toInstant()
 
     /**
      * [createdAfter]와 [createdBefore] 사이에 만들어진 대상들을 처리한다. 스케줄 진입점과 분리해
@@ -129,17 +151,24 @@ class DailyAutoCardScheduler(
         private const val ZONE_ID = "Asia/Seoul"
 
         /**
-         * 매일 KST 05:00. 사용자 활동이 가장 적은 시간대라 LLM 호출이 몰려도 서비스 영향이 작다.
-         *
-         * 일일 토큰 리셋 시각(`token_policy.reset_hour`, 시드값 5)과 같은 시각이라 배치가 쓰는
-         * 토큰은 **방금 리셋된 오늘 예산**에서 빠진다. 리셋 직전(04시 등)으로 옮기면 곧 만료될
-         * 어제 예산에 잡혀 오늘 예산을 안 건드리지만, 어제 상한을 다 쓴 사용자는 스킵돼 카드를
-         * 아예 못 받는다. 카드 1장은 감정 분류·대사 생성 2회로 하루 상한 대비 미미하므로 카드를
-         * 확실히 만드는 쪽을 택했다.
-         *
-         * `reset_hour`는 백오피스에서 바꿀 수 있는 값이다 — 조정하면 위 판단의 전제가 조용히
-         * 달라지므로 이 상수와 함께 봐야 한다.
+         * 이 서비스의 하루 경계(KST). 자정이 아니라 새벽 5시에 하루가 바뀐다 — 새벽까지 이어 쓴
+         * 기록은 그 전날에 속한다. 일일 토큰 리셋(`token_policy.reset_hour`, 시드값 5)이 같은
+         * 시각인 것도 같은 이유다.
          */
-        private const val CRON = "0 0 5 * * *"
+        private const val DAY_BOUNDARY_HOUR = 5
+
+        /**
+         * 하루 경계([DAY_BOUNDARY_HOUR])에 맞춰 돈다 — 하루가 끝나는 순간 그 하루를 정리한다.
+         * 사용자 활동이 가장 적은 시간대라 LLM 호출이 몰려도 서비스 영향이 작다.
+         *
+         * 토큰 리셋도 같은 시각이라 배치가 쓰는 토큰은 **방금 리셋된 오늘 예산**에서 빠진다.
+         * 리셋 직전(04시 등)으로 옮기면 곧 만료될 어제 예산에 잡혀 오늘 예산을 안 건드리지만,
+         * 어제 상한을 다 쓴 사용자는 스킵돼 카드를 아예 못 받는다. 카드 1장은 감정 분류·대사 생성
+         * 2회로 하루 상한 대비 미미하므로 카드를 확실히 만드는 쪽을 택했다.
+         *
+         * `reset_hour`는 백오피스에서 바꿀 수 있는 값이다 — 하루 경계를 옮기게 되면 이 상수와
+         * [DAY_BOUNDARY_HOUR]도 함께 봐야 한다.
+         */
+        private const val CRON = "0 0 $DAY_BOUNDARY_HOUR * * *"
     }
 }
