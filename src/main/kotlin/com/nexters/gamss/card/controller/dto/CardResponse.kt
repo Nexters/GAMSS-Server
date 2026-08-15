@@ -1,6 +1,7 @@
 package com.nexters.gamss.card.controller.dto
 
 import com.nexters.gamss.card.domain.Card
+import com.nexters.gamss.card.domain.CardSummary
 import io.swagger.v3.oas.annotations.media.Schema
 import java.time.LocalDate
 import java.time.ZoneId
@@ -37,7 +38,10 @@ data class CardResponse(
                 conversationId = card.conversationId,
                 emotion = card.emotion.name,
                 emotionLabel = card.emotion.label,
-                summary = card.summary,
+                // 이 PR 이전 카드는 클라이언트 원본(최대 2000자·개행 포함)이 그대로 들어 있다.
+                // 응답이 스키마가 약속한 한 줄 계약을 지키도록 읽는 쪽에서 흡수한다 — 원본을 백필로
+                // 덮으면 되돌릴 수 없고, 저장된 값 자체는 남겨둘 이유가 있다.
+                summary = CardSummary.normalize(card.summary),
                 message = card.message,
                 date = card.conversationCreatedAt.atZone(ZONE).toLocalDate(),
             )
