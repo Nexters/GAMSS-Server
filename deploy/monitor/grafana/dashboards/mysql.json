@@ -1,6 +1,6 @@
 {
   "uid": "gamss-mysql",
-  "title": "5 · MySQL (쿼리·버퍼풀·커넥션)",
+  "title": "3 · MySQL (쿼리·버퍼풀·커넥션)",
   "description": "DB 엔진 자체의 상태. 앱 쪽 Hikari 지표가 '커넥션을 못 얻었다'까지만 보여줄 때, 그 원인을 여기서 찾는다.",
   "tags": [
     "gamss"

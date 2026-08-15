@@ -137,7 +137,8 @@ docker compose kill -s HUP prometheus
 
 ## 접근 정보
 
-- 대시보드 5종(이름 앞 번호가 진단 순서): 1 서비스 상태 · 2 앱 성능 · 3 서버 자원 · 4 LLM 생성 · 5 MySQL
+- 대시보드 5종. 이름 앞 번호가 진단 순서다 — 요청이 지나가는 경로(엣지 → 앱 → DB)를 따라가고
+  그 뒤에 인프라·도메인을 둔다: 1 서비스 상태 · 2 앱 성능 · 3 MySQL · 4 서버 자원 · 5 LLM 생성
 - 대시보드: https://monitor.gamss.kr — 계정은 GitHub 시크릿 `GRAFANA_ADMIN_USER`·`GRAFANA_ADMIN_PASSWORD`
   (서버 `.env` 에도 같은 값이 들어 있다)
 - 데이터소스·대시보드·알림은 전부 프로비저닝이라 **UI 에서 고쳐도 재기동 시 덮어써진다.**
