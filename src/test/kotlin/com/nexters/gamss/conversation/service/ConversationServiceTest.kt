@@ -24,7 +24,9 @@ import kotlin.test.assertFailsWith
 class ConversationServiceTest {
     private val conversationRepository = mockk<ConversationRepository>()
     private val messageRepository = mockk<MessageRepository>()
-    private val conversationService = ConversationService(conversationRepository, messageRepository)
+    private val cleaner = mockk<DeletedConversationCleaner>(relaxed = true)
+    private val conversationService =
+        ConversationService(conversationRepository, messageRepository, DeletedConversationCleaners(listOf(cleaner)))
 
     @Test
     fun `conversationId 없이 저장하면 새 채팅방을 만들어 메시지를 담는다`() {
@@ -323,6 +325,28 @@ class ConversationServiceTest {
         val deleted = conversationService.deleteConversation(1L, 10L)
 
         assertEquals(ConversationStatus.DELETED, deleted.status)
+    }
+
+    @Test
+    fun `채팅방을 삭제하면 딸린 자원도 같은 요청으로 함께 정리된다`() {
+        // 카드가 대표적인 대상 — 방이 사라졌는데 카드만 살아 있으면 반대 방향(카드 삭제가 방까지
+        // 지운다)과 데이터가 어긋난다.
+        val conversation = Conversation(memberId = 1L)
+        every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
+
+        conversationService.deleteConversation(1L, 10L)
+
+        verify(exactly = 1) { cleaner.clean(listOf(10L), any()) }
+    }
+
+    @Test
+    fun `삭제에 실패하면 딸린 자원도 정리하지 않는다`() {
+        val alreadyDeleted = Conversation(memberId = 1L).apply { delete() }
+        every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(alreadyDeleted)
+
+        assertFailsWith<BusinessException> { conversationService.deleteConversation(1L, 10L) }
+
+        verify(exactly = 0) { cleaner.clean(any(), any()) }
     }
 
     @Test

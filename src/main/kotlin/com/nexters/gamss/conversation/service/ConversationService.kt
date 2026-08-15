@@ -13,6 +13,7 @@ import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -20,6 +21,7 @@ import java.time.ZoneId
 class ConversationService(
     private val conversationRepository: ConversationRepository,
     private val messageRepository: MessageRepository,
+    private val cleaners: DeletedConversationCleaners,
 ) {
     /**
      * 사용자 메시지를 저장한다. conversationId가 없으면 새 채팅방을 만들어 담는다.
@@ -66,7 +68,12 @@ class ConversationService(
         return conversation
     }
 
-    /** 채팅방을 삭제한다. 삭제 후에는 채팅방 목록·메시지 조회에 나타나지 않는다. */
+    /**
+     * 채팅방을 삭제한다. 삭제 후에는 채팅방 목록·메시지 조회에 나타나지 않는다.
+     *
+     * 이 방에 딸린 자원(카드 등)도 같은 시각으로 함께 정리한다([DeletedConversationCleaner]) —
+     * 방이 사라졌는데 카드만 살아 있으면 반대 방향(카드를 지우면 방까지 지운다)과 데이터가 어긋난다.
+     */
     @Transactional
     fun deleteConversation(
         memberId: Long,
@@ -74,6 +81,7 @@ class ConversationService(
     ): Conversation {
         val conversation = getOwnedConversationForUpdate(conversationId, memberId)
         conversation.delete()
+        cleaners.cleanAll(listOf(conversationId), Instant.now())
         return conversation
     }
 

@@ -40,6 +40,7 @@ import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 @SpringBootTest
@@ -636,6 +637,34 @@ class ConversationControllerIntegrationTest {
                 jsonPath("$.data.id") { value(conversation.id) }
                 jsonPath("$.data.status") { value("DELETED") }
             }
+    }
+
+    @Test
+    fun `채팅방을 삭제하면 그 방의 카드에도 삭제 시각이 찍힌다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val ended = conversationRepository.save(Conversation(member.id).apply { end() })
+        val card =
+            cardRepository.save(
+                Card(
+                    memberId = member.id,
+                    conversationId = ended.id,
+                    emotion = EmotionType.ANGER,
+                    summary = "지울 방의 카드",
+                    message = "얘 오늘 건들면 안 됨.",
+                    conversationCreatedAt = ended.createdAt,
+                ),
+            )
+        entityManager.flush()
+        entityManager.clear()
+
+        mockMvc
+            .delete("/api/conversations/${ended.id}") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect { status { isOk() } }
+
+        entityManager.clear()
+        // 카드를 지우면 방까지 지우는 반대 방향과 짝을 맞춘다 — 삭제된 방에 살아 있는 카드를 남기지 않는다.
+        assertNotNull(cardRepository.findById(card.id).get().deletedAt)
     }
 
     @Test
