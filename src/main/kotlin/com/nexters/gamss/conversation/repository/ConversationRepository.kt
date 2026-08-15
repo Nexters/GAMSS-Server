@@ -136,6 +136,12 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
         @Param("deletedStatus") deletedStatus: ConversationStatus = ConversationStatus.DELETED,
     ): Int
 
+    /** [status] 상태의 대화방 수. 모니터링 게이지(진행 중 대화 수)용 — 시점 스냅샷이라 인덱스만 탄다. */
+    fun countByStatus(status: ConversationStatus): Long
+
+    /** [cardGenerationStatus] 상태의 대화방 수. 모니터링 게이지(카드 생성 적체·실패 누적)용. */
+    fun countByCardGenerationStatus(cardGenerationStatus: CardGenerationStatus): Long
+
     /** [from, to) 사이 생성된 대화방 수. 대시보드의 '오늘 시작한 대화' KPI. */
     @Query("select count(c) from Conversation c where c.createdAt >= :from and c.createdAt < :to")
     fun countCreatedBetween(

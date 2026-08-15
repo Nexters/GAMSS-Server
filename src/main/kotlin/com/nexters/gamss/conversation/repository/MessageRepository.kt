@@ -99,6 +99,9 @@ interface MessageRepository : JpaRepository<Message, Long> {
         @Param("to") to: Instant,
     ): Long
 
+    /** [commentStatus] 상태의 메시지 수. 모니터링 게이지(댓글 생성 적체)용 — 시각 조건 없이 현재 총량만 본다. */
+    fun countByCommentStatus(commentStatus: CommentStatus): Long
+
     /** [status] 상태로 [before] 이전부터 머문 메시지 수. 대시보드의 '막힌 PENDING'(고아 생성) KPI. */
     @Query(
         "select count(m) from Message m " +
