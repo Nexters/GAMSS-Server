@@ -7,6 +7,9 @@ import com.nexters.gamss.conversation.service.ConversationService
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.member.service.MemberService
+import io.micrometer.core.instrument.Counter
+import io.micrometer.core.instrument.MeterRegistry
+import io.micrometer.core.instrument.Timer
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
@@ -38,8 +41,20 @@ class DailyAutoCardScheduler(
     private val memberService: MemberService,
     private val cardService: CardService,
     private val properties: CardProperties,
+    private val meterRegistry: MeterRegistry,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
+
+    /**
+     * 배치 1회의 소요 시간. 이 배치는 새벽 5시에 하루 치 방을 한꺼번에 돌며 방마다 LLM 을 호출하므로,
+     * 대상이 늘면 소요 시간이 선형으로 늘어난다 — 다음 스케줄까지 안 끝나는 상황을 미리 보기 위한 값이다.
+     * 로그에도 결과가 남지만 로그는 임계치 알림을 걸 수 없다.
+     */
+    private val batchTimer =
+        Timer
+            .builder("gamss.autocard.batch")
+            .description("자동 카드 생성 배치 1회 소요 시간")
+            .register(meterRegistry)
 
     @Scheduled(cron = CRON, zone = ZONE_ID)
     fun autoEndAndCreateCards() {
@@ -79,23 +94,44 @@ class DailyAutoCardScheduler(
         createdAfter: Instant,
         createdBefore: Instant,
     ) {
-        val targetIds = conversationRepository.findAutoCardTargetIds(createdAfter, createdBefore)
-        if (targetIds.isEmpty()) {
-            log.info("자동 카드 생성 배치: 대상 없음 (기준={}~{})", createdAfter, createdBefore)
-            return
+        // 대상이 없어 일찍 끝나는 실행도 시간에 포함한다 — '배치가 아예 안 돌았다'와
+        // '돌았는데 대상이 없었다'는 다른 상황이고, 타이머 count 가 그 둘을 갈라준다.
+        val started = Timer.start(meterRegistry)
+        try {
+            val targetIds = conversationRepository.findAutoCardTargetIds(createdAfter, createdBefore)
+            if (targetIds.isEmpty()) {
+                log.info("자동 카드 생성 배치: 대상 없음 (기준={}~{})", createdAfter, createdBefore)
+                return
+            }
+            val counts = mutableMapOf<AutoCardOutcome, Int>()
+            targetIds.forEach { conversationId ->
+                val outcome = process(conversationId)
+                counts.merge(outcome, 1, Int::plus)
+            }
+            // 결과 종류가 늘어도 집계가 어긋나지 않도록 enum을 그대로 훑는다.
+            AutoCardOutcome.entries.forEach { outcome ->
+                counts[outcome]?.let { outcomeCounter(outcome).increment(it.toDouble()) }
+            }
+            log.info(
+                "자동 카드 생성 배치 완료: 대상={}, {}",
+                targetIds.size,
+                AutoCardOutcome.entries.joinToString(", ") { "${it.label}=${counts[it] ?: 0}" },
+            )
+        } finally {
+            started.stop(batchTimer)
         }
-        val counts = mutableMapOf<AutoCardOutcome, Int>()
-        targetIds.forEach { conversationId ->
-            val outcome = process(conversationId)
-            counts.merge(outcome, 1, Int::plus)
-        }
-        // 결과 종류가 늘어도 집계가 어긋나지 않도록 enum을 그대로 훑는다.
-        log.info(
-            "자동 카드 생성 배치 완료: 대상={}, {}",
-            targetIds.size,
-            AutoCardOutcome.entries.joinToString(", ") { "${it.label}=${counts[it] ?: 0}" },
-        )
     }
+
+    /**
+     * 결과별 처리 건수. FAILED 만 세지 않고 전 종류를 올린다 — 예를 들어 NO_SUMMARY 나 TOKEN_LIMIT 이
+     * 갑자기 늘어나는 것은 실패는 아니지만 카드가 안 만들어지고 있다는 뜻이라 똑같이 봐야 한다.
+     */
+    private fun outcomeCounter(outcome: AutoCardOutcome): Counter =
+        Counter
+            .builder("gamss.autocard.outcome")
+            .description("자동 카드 생성 배치가 처리한 대화방 수(결과별)")
+            .tag("outcome", outcome.name)
+            .register(meterRegistry)
 
     private fun process(conversationId: Long): AutoCardOutcome =
         try {

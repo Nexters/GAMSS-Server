@@ -10,6 +10,7 @@ import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.member.domain.Member
 import com.nexters.gamss.member.service.MemberService
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -29,7 +30,14 @@ class DailyAutoCardSchedulerTest {
     private val cardService = mockk<CardService>()
     private val properties = CardProperties(autoCardStartDate = START_DATE)
     private val scheduler =
-        DailyAutoCardScheduler(conversationRepository, conversationService, memberService, cardService, properties)
+        DailyAutoCardScheduler(
+            conversationRepository,
+            conversationService,
+            memberService,
+            cardService,
+            properties,
+            SimpleMeterRegistry(),
+        )
 
     private val createdAfter: Instant = Instant.parse("2026-08-19T15:00:00Z")
     private val createdBefore: Instant = Instant.parse("2026-08-25T15:00:00Z")
