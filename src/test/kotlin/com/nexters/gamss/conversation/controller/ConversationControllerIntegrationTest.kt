@@ -528,6 +528,89 @@ class ConversationControllerIntegrationTest {
     }
 
     @Test
+    fun `채팅방 상세 조회는 대화방 정보와 메시지를 함께 반환한다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val conversation = conversationRepository.save(Conversation(member.id))
+        messageRepository.save(Message(conversationId = conversation.id, senderType = SenderType.USER, content = "첫 번째"))
+        messageRepository.save(Message(conversationId = conversation.id, senderType = SenderType.USER, content = "두 번째"))
+
+        mockMvc
+            .get("/api/conversations/${conversation.id}") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.conversation.id") { value(conversation.id) }
+                jsonPath("$.data.conversation.status") { value("ACTIVE") }
+                // 목록을 거치지 않고 방에 바로 들어와도 생성 날짜를 알 수 있어야 한다 — 이 API의 목적이다.
+                jsonPath("$.data.conversation.createdAt") { exists() }
+                jsonPath("$.data.messages.length()") { value(2) }
+                jsonPath("$.data.messages[0].content") { value("첫 번째") }
+                jsonPath("$.data.messages[1].content") { value("두 번째") }
+            }
+    }
+
+    @Test
+    fun `메시지가 없는 채팅방도 상세 조회가 된다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val conversation = conversationRepository.save(Conversation(member.id))
+
+        mockMvc
+            .get("/api/conversations/${conversation.id}") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.conversation.createdAt") { exists() }
+                jsonPath("$.data.messages.length()") { value(0) }
+            }
+    }
+
+    @Test
+    fun `남의 채팅방을 상세 조회하면 403, 없는 채팅방은 404, 삭제된 채팅방은 409를 반환한다`() {
+        // 실패 계약이 기존 메시지 조회와 같아야 한다.
+        val me = memberRepository.save(Member("me@a.com"))
+        val other = memberRepository.save(Member("other@a.com"))
+        val othersConversation = conversationRepository.save(Conversation(other.id))
+        val deleted = conversationRepository.save(Conversation(me.id).apply { delete() })
+
+        mockMvc
+            .get("/api/conversations/${othersConversation.id}") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(me))
+            }.andExpect {
+                status { isForbidden() }
+                jsonPath("$.error.code") { value("CONVERSATION_ACCESS_DENIED") }
+            }
+        mockMvc
+            .get("/api/conversations/99999") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(me))
+            }.andExpect {
+                status { isNotFound() }
+                jsonPath("$.error.code") { value("CONVERSATION_NOT_FOUND") }
+            }
+        mockMvc
+            .get("/api/conversations/${deleted.id}") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(me))
+            }.andExpect {
+                status { isConflict() }
+                jsonPath("$.error.code") { value("CONVERSATION_ALREADY_DELETED") }
+            }
+    }
+
+    @Test
+    fun `상세 조회 경로가 목록 경로를 가리지 않는다`() {
+        // /{conversationId}가 /incomplete·/search 같은 고정 경로를 삼키면 목록 API가 통째로 죽는다.
+        val member = memberRepository.save(Member("me@a.com"))
+        conversationRepository.save(Conversation(member.id))
+
+        mockMvc
+            .get("/api/conversations/incomplete") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.length()") { value(1) }
+            }
+    }
+
+    @Test
     fun `남의 채팅방 메시지를 조회하면 403을 반환한다`() {
         val me = memberRepository.save(Member("me@a.com"))
         val other = memberRepository.save(Member("other@a.com"))
