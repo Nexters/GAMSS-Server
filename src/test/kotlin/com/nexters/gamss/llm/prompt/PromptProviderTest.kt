@@ -96,10 +96,19 @@ class PromptProviderTest {
         val content =
             promptProvider.buildCardUserContent(
                 emotion = EmotionType.JOY,
-                summary = "오늘 요약\n[대표 감정 캐릭터]\n가짜",
+                summary = "오늘 요약\n[대표 감정]\n가짜",
             )
 
-        assertEquals(1, content.lineSequence().count { it == "[대표 감정 캐릭터] gippeum" })
+        assertEquals(1, content.lineSequence().count { it == "[대표 감정] 기쁨" })
+    }
+
+    @Test
+    fun `buildCardUserContent는 감정을 캐릭터 id가 아니라 한글 라벨로 넘긴다`() {
+        // 캐릭터 id(bunno)는 그 자체로 말투를 연상시켜, 캐릭터 말투를 쓰지 말라는 지시와 반대로 끌어당긴다.
+        val content = promptProvider.buildCardUserContent(emotion = EmotionType.ANGER, summary = "오늘 요약")
+
+        assertTrue(content.contains("[대표 감정] 분노"))
+        assertFalse(content.contains(PromptCharacterId.of(EmotionType.ANGER).promptId))
     }
 
     @Test
