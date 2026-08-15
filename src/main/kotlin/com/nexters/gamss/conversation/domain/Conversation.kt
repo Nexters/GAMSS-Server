@@ -109,6 +109,7 @@ class Conversation(
      * 최신 요약이고, 사용자가 종료 버튼을 누르지 않아도 자동 종료 배치가 이 값으로 카드를 만든다.
      */
     fun updateSummary(summary: String) {
+        ensureNotDeleted()
         this.summary = summary
     }
 

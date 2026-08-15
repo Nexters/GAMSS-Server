@@ -4,6 +4,7 @@ import com.nexters.gamss.conversation.repository.ConversationRepository
 import com.nexters.gamss.conversation.service.ConversationService
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
+import com.nexters.gamss.member.service.MemberService
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
@@ -27,6 +28,7 @@ import java.time.ZoneId
 class DailyAutoCardScheduler(
     private val conversationRepository: ConversationRepository,
     private val conversationService: ConversationService,
+    private val memberService: MemberService,
     private val cardService: CardService,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -74,7 +76,12 @@ class DailyAutoCardScheduler(
 
     private fun createCardForEndedConversation(conversationId: Long): AutoCardOutcome {
         val conversation =
-            conversationService.endForAutoBatch(conversationId) ?: return AutoCardOutcome.ALREADY_HANDLED
+            conversationService.endForAutoBatch(conversationId) ?: return AutoCardOutcome.SKIPPED_DELETED
+        // 탈퇴는 회원 행만 익명화하고 대화방은 남긴다. 종료까지는 상태 정리라 무해하지만, 카드는
+        // 탈퇴한 사람의 대화로 만드는 새 개인 데이터라 여기서 멈춘다.
+        if (memberService.getById(conversation.memberId).isWithdrawn()) {
+            return AutoCardOutcome.WITHDRAWN_MEMBER
+        }
         val summary = conversation.summary
         if (summary.isNullOrBlank()) {
             log.info("요약이 없어 카드 생성을 건너뛴다(종료는 완료): conversationId={}", conversationId)
@@ -109,7 +116,18 @@ class DailyAutoCardScheduler(
     companion object {
         private const val ZONE_ID = "Asia/Seoul"
 
-        /** 매일 KST 05:00. 사용자 활동이 가장 적은 시간대라 LLM 호출이 몰려도 서비스 영향이 작다. */
+        /**
+         * 매일 KST 05:00. 사용자 활동이 가장 적은 시간대라 LLM 호출이 몰려도 서비스 영향이 작다.
+         *
+         * 일일 토큰 리셋 시각(`token_policy.reset_hour`, 시드값 5)과 같은 시각이라 배치가 쓰는
+         * 토큰은 **방금 리셋된 오늘 예산**에서 빠진다. 리셋 직전(04시 등)으로 옮기면 곧 만료될
+         * 어제 예산에 잡혀 오늘 예산을 안 건드리지만, 어제 상한을 다 쓴 사용자는 스킵돼 카드를
+         * 아예 못 받는다. 카드 1장은 감정 분류·대사 생성 2회로 하루 상한 대비 미미하므로 카드를
+         * 확실히 만드는 쪽을 택했다.
+         *
+         * `reset_hour`는 백오피스에서 바꿀 수 있는 값이다 — 조정하면 위 판단의 전제가 조용히
+         * 달라지므로 이 상수와 함께 봐야 한다.
+         */
         private const val CRON = "0 0 5 * * *"
     }
 }

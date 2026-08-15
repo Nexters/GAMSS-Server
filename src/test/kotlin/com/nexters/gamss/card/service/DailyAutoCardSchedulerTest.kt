@@ -6,6 +6,8 @@ import com.nexters.gamss.conversation.repository.ConversationRepository
 import com.nexters.gamss.conversation.service.ConversationService
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
+import com.nexters.gamss.member.domain.Member
+import com.nexters.gamss.member.service.MemberService
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -19,8 +21,10 @@ import kotlin.test.assertEquals
 class DailyAutoCardSchedulerTest {
     private val conversationRepository = mockk<ConversationRepository>()
     private val conversationService = mockk<ConversationService>()
+    private val memberService = mockk<MemberService> { every { getById(any()) } returns Member() }
     private val cardService = mockk<CardService>()
-    private val scheduler = DailyAutoCardScheduler(conversationRepository, conversationService, cardService)
+    private val scheduler =
+        DailyAutoCardScheduler(conversationRepository, conversationService, memberService, cardService)
 
     private val createdBefore: Instant = Instant.parse("2026-08-15T15:00:00Z")
 
@@ -84,6 +88,22 @@ class DailyAutoCardSchedulerTest {
     }
 
     @Test
+    fun `탈퇴한 회원의 대화방에는 카드를 만들지 않는다`() {
+        stubTargets(10L, 20L)
+        every { conversationService.endForAutoBatch(any()) } returns conversation()
+        every { memberService.getById(MEMBER_ID) } returns Member().apply { withdraw() }
+        every { memberService.getById(OTHER_MEMBER_ID) } returns Member()
+        every { conversationService.endForAutoBatch(20L) } returns conversation(memberId = OTHER_MEMBER_ID)
+        every { cardService.createCard(any(), any(), any(), any()) } returns mockk<Card>()
+
+        scheduler.runFor(createdBefore)
+
+        // 탈퇴 후에는 그 사람의 대화로 새 카드를 만들지 않는다.
+        verify(exactly = 0) { cardService.createCard(MEMBER_ID, any(), any(), any()) }
+        verify(exactly = 1) { cardService.createCard(OTHER_MEMBER_ID, 20L, any(), any()) }
+    }
+
+    @Test
     fun `이미 카드가 있거나 생성 중이면 삼키고 다음 대화방을 처리한다`() {
         stubTargets(10L, 20L, 30L)
         every { conversationService.endForAutoBatch(any()) } returns conversation()
@@ -139,5 +159,6 @@ class DailyAutoCardSchedulerTest {
 
     companion object {
         private const val MEMBER_ID = 1L
+        private const val OTHER_MEMBER_ID = 2L
     }
 }
