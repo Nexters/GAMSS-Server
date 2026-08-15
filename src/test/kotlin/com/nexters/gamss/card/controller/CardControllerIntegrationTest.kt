@@ -18,7 +18,7 @@ import com.nexters.gamss.support.FakeEmotionExtractorConfig
 import com.nexters.gamss.support.TestcontainersConfig
 import jakarta.persistence.EntityManager
 import jakarta.persistence.PersistenceContext
-import org.hamcrest.Matchers.not
+import org.hamcrest.Matchers.startsWith
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -100,8 +100,9 @@ class CardControllerIntegrationTest {
                     """{"conversationId":${conversation.id},"emotion":"ANGER","summary":"$summary"}"""
             }.andExpect {
                 status { isOk() }
-                // 카드에는 원본이 아니라 LLM이 다듬은 한 줄이 들어간다.
-                jsonPath("$.data.summary") { value(not(summary)) }
+                // 카드에는 원본이 아니라 LLM이 다듬은 한 줄이 들어간다. Fake가 결정적인 값을
+                // 돌려주므로 접두사까지 확인한다 — "원본만 아니면 통과"로 두면 엉뚱한 값도 넘어간다.
+                jsonPath("$.data.summary") { value(startsWith("ANGER 카드 한 줄:")) }
             }
 
         entityManager.flush()
