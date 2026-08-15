@@ -55,8 +55,11 @@ class Conversation(
         protected set
 
     /**
-     * 카드 생성 시점에 저장되는 이 대화 전체의 요약. 다른 대화방 댓글 생성 시 과거 맥락으로 참고한다.
-     * 값 자체는 [com.nexters.gamss.conversation.repository.ConversationRepository.updateSummary]로만 갱신한다.
+     * 이 대화 전체를 프론트가 압축한 요약. 진행 중에는 메시지를 보낼 때마다 최신 임시 요약으로
+     * 갱신되고([updateSummary]), 카드 생성 시점에 그때의 확정 요약으로 덮인다
+     * ([com.nexters.gamss.conversation.repository.ConversationRepository.updateSummary] — 엔티티를
+     * 로드하지 않는 경로라 벌크 쿼리를 쓴다). 종료된 방의 요약은 다른 대화방 댓글 생성 시 과거
+     * 맥락으로 참고하고, 자동 종료 배치는 카드 요약으로 쓴다.
      */
     @Column(name = "summary", columnDefinition = "TEXT")
     var summary: String? = null
@@ -99,6 +102,15 @@ class Conversation(
     fun delete() {
         ensureNotDeleted()
         status = ConversationStatus.DELETED
+    }
+
+    /**
+     * 진행 중 요약을 최신값으로 갱신한다. 메시지를 보낼 때마다 호출되므로 마지막 값이 곧 그 대화의
+     * 최신 요약이고, 사용자가 종료 버튼을 누르지 않아도 자동 종료 배치가 이 값으로 카드를 만든다.
+     */
+    fun updateSummary(summary: String) {
+        ensureNotDeleted()
+        this.summary = summary
     }
 
     /** 채팅방 제목을 지정·변경한다. 여러 번 호출할 수 있으며, 삭제된 방은 변경할 수 없다. */

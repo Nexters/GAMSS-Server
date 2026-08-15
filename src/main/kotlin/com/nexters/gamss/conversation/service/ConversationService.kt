@@ -28,6 +28,10 @@ class ConversationService(
      *
      * [excludeCharacters]는 새 채팅방을 만들 때만 반영된다 — 기존 채팅방(conversationId 있음)에
      * 이어서 보내는 요청에 함께 와도 조용히 무시하고 최초 설정을 그대로 둔다.
+     *
+     * [currentConversationSummary]는 프론트가 매 요청마다 보내는 이 대화의 압축본으로, 댓글 생성
+     * 컨텍스트로 쓰는 것과 별개로 여기서 최신값을 저장해둔다 — 사용자가 종료 버튼을 누르지 않아도
+     * 자동 종료 배치가 이 값으로 카드를 만들 수 있어야 하기 때문이다. 빈 값은 저장하지 않는다.
      */
     @Transactional
     fun saveUserMessage(
@@ -36,6 +40,7 @@ class ConversationService(
         content: String,
         repliesToMessageId: Long? = null,
         excludeCharacters: List<EmotionType>? = null,
+        currentConversationSummary: String? = null,
     ): Message {
         if (conversationId == null && repliesToMessageId != null) {
             throw BusinessException(ErrorCode.INVALID_INPUT, "새 채팅방을 만들면서 답장할 수 없습니다.")
@@ -47,6 +52,7 @@ class ConversationService(
         if (repliesToMessageId != null) {
             validateReplyTarget(repliesToMessageId, conversation.id)
         }
+        currentConversationSummary?.takeIf { it.isNotBlank() }?.let { conversation.updateSummary(it) }
         val message =
             conversation.createMessage(
                 senderType = SenderType.USER,
@@ -65,6 +71,23 @@ class ConversationService(
     ): Conversation {
         val conversation = getOwnedConversationForUpdate(conversationId, memberId)
         conversation.end()
+        return conversation
+    }
+
+    /**
+     * 자동 종료 배치용 종료. 사용자 요청이 아니므로 소유권을 검사하지 않고, 이미 종료된 방도 예외
+     * 없이 그대로 돌려준다 — 종료까지만 되고 카드 생성에서 끊긴 방을 다음 실행이 이어서 처리해야
+     * 하기 때문이다. 삭제된 방은 대상이 아니므로 null.
+     */
+    @Transactional
+    fun endForAutoBatch(conversationId: Long): Conversation? {
+        val conversation = conversationRepository.findByIdForUpdate(conversationId).orElse(null) ?: return null
+        if (conversation.isDeleted()) {
+            return null
+        }
+        if (conversation.status == ConversationStatus.ACTIVE) {
+            conversation.end()
+        }
         return conversation
     }
 

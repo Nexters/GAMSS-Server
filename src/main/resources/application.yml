@@ -35,6 +35,13 @@ admin:
 conversation:
   pending-generation-timeout: PT3M
 
+card:
+  # 자동 종료·카드 생성 배치가 다루는 가장 이른 대화방 생성일(KST). 이 날 이전에 만들어진 방은
+  # 요약이 없어(요약 저장이 이 기능부터 시작됐다) 카드는 못 만들고 종료만 되므로 아예 제외한다.
+  # 배포일에 맞춰 조정한다 — 늦게 잡으면 그 사이 방들이 배치 대상에서 빠질 뿐이지만, 이르게 잡으면
+  # 요약 없는 방들이 카드 없이 닫힌다.
+  auto-card-start-date: 2026-08-15
+
 gemini:
   api-key: ${GEMINI_API_KEY}
   model: gemini-3.1-flash-lite

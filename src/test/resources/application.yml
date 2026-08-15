@@ -19,6 +19,11 @@ firebase:
 conversation:
   pending-generation-timeout: PT3M
 
+card:
+  # 자동 카드 배치의 대상 시작일. 스케줄러 검증은 단위 테스트가 값을 직접 주입하므로 여기 값은
+  # 컨텍스트가 뜨기 위한 것이다. 다만 미래 날짜를 두면 조회 구간이 뒤집히므로 과거로 둔다.
+  auto-card-start-date: 2026-01-01
+
 gemini:
   api-key: test-gemini-api-key-dummy-value
   model: gemini-3.1-flash-lite
