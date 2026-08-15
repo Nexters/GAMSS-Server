@@ -34,9 +34,9 @@ const TABS: Record<PromptType, PromptTab> = {
   COMMON: {
     value: 'COMMON',
     label: '공통',
-    hint: '댓글·답글·카드가 공유하는 톤·경계·말맛지침·보이스카드. 여기를 바꾸면 그 세 타입에 모두 반영됩니다(카드 감정·엉뚱이 소재는 제외).',
+    hint: '댓글·답글이 공유하는 톤·경계·말맛지침·보이스카드. 여기를 바꾸면 두 타입에 반영됩니다(카드·카드 감정·엉뚱이 소재는 제외).',
     editorLabel: '공통 프롬프트',
-    editorNote: '캐릭터 보이스카드·말맛지침 등 댓글·답글·카드가 공유하는 부분입니다. 신중히 수정하세요.',
+    editorNote: '캐릭터 보이스카드·말맛지침 등 댓글·답글이 공유하는 부분입니다. 신중히 수정하세요.',
   },
   COMMENT: {
     value: 'COMMENT',
@@ -64,7 +64,7 @@ const TABS: Record<PromptType, PromptTab> = {
   CARD_EMOTION: {
     value: 'CARD_EMOTION',
     label: '카드 감정',
-    hint: '카드 생성 요청에 감정이 없을 때, 유저가 보낸 메시지만 보고 감정 6종 중 하나를 고르는 분류.',
+    hint: '카드 생성 요청에 감정이 없을 때, 유저가 보낸 메시지(없으면 요청 요약)를 보고 감정 6종 중 하나를 고르는 분류.',
     editorLabel: '감정 분류 프롬프트',
     editorNote: '분류 작업이라 공통 프롬프트와 조립하지 않고 단독으로 쓰입니다. 응답은 감정 6종으로 강제됩니다.',
     standalone: true,
