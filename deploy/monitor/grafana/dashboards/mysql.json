@@ -1,0 +1,1116 @@
+{
+  "uid": "gamss-mysql",
+  "title": "5 · MySQL (쿼리·버퍼풀·커넥션)",
+  "description": "DB 엔진 자체의 상태. 앱 쪽 Hikari 지표가 '커넥션을 못 얻었다'까지만 보여줄 때, 그 원인을 여기서 찾는다.",
+  "tags": [
+    "gamss"
+  ],
+  "timezone": "browser",
+  "editable": false,
+  "graphTooltip": 1,
+  "schemaVersion": 39,
+  "version": 1,
+  "weekStart": "",
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "30s",
+      "1m",
+      "5m",
+      "15m",
+      "1h"
+    ]
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "env",
+        "label": "환경",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": {
+          "qryType": 1,
+          "query": "label_values(mysql_up, env)",
+          "refId": "env"
+        },
+        "definition": "label_values(mysql_up, env)",
+        "refresh": 1,
+        "sort": 1,
+        "includeAll": false,
+        "multi": false,
+        "hide": 0,
+        "current": {
+          "selected": true,
+          "text": "prod",
+          "value": "prod"
+        }
+      }
+    ]
+  },
+  "annotations": {
+    "list": [
+      {
+        "name": "앱 재기동",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "enable": true,
+        "iconColor": "#8F6FE8",
+        "expr": "changes(process_start_time_seconds{env=\"$env\"}[1m]) > 0",
+        "titleFormat": "앱 재기동",
+        "step": "60s"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "row",
+      "title": "현재 상태",
+      "id": 1,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "MySQL 가동",
+      "id": 2,
+      "description": "exporter 가 DB 에 붙어 있는지. 0 이면 DB 가 죽었거나 모니터링 계정 인증이 깨진 것이다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#D64550",
+                "value": null
+              },
+              {
+                "color": "#2E9E4F",
+                "value": 1
+              }
+            ]
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "textMode": "auto",
+        "orientation": "auto",
+        "wideLayout": true,
+        "text": {
+          "titleSize": 14,
+          "valueSize": 36
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "mysql_up{env=\"$env\"}",
+          "legendFormat": "",
+          "refId": "A",
+          "editorMode": "code",
+          "range": true
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "커넥션 사용률",
+      "id": 3,
+      "description": "max_connections 대비. 여기가 100% 에 닿으면 앱은 커넥션을 못 얻어 Hikari 대기로 나타난다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#2E9E4F",
+                "value": null
+              },
+              {
+                "color": "#C99A06",
+                "value": 70
+              },
+              {
+                "color": "#D64550",
+                "value": 90
+              }
+            ]
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "textMode": "auto",
+        "orientation": "auto",
+        "wideLayout": true,
+        "text": {
+          "titleSize": 14,
+          "valueSize": 36
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "mysql_global_status_threads_connected{env=\"$env\"} / clamp_min(mysql_global_variables_max_connections{env=\"$env\"}, 1) * 100",
+          "legendFormat": "",
+          "refId": "A",
+          "editorMode": "code",
+          "range": true
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "버퍼풀 적중률",
+      "id": 4,
+      "description": "읽기 요청 중 메모리에서 해결된 비율. 99% 아래로 떨어지면 버퍼풀(2G)이 데이터 크기를 못 따라가는 것이다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#D64550",
+                "value": null
+              },
+              {
+                "color": "#C99A06",
+                "value": 95
+              },
+              {
+                "color": "#2E9E4F",
+                "value": 99
+              }
+            ]
+          },
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "textMode": "auto",
+        "orientation": "auto",
+        "wideLayout": true,
+        "text": {
+          "titleSize": 14,
+          "valueSize": 36
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "(1 - rate(mysql_global_status_innodb_buffer_pool_reads{env=\"$env\"}[10m]) / clamp_min(rate(mysql_global_status_innodb_buffer_pool_read_requests{env=\"$env\"}[10m]), 1)) * 100",
+          "legendFormat": "",
+          "refId": "A",
+          "editorMode": "code",
+          "range": true
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "분당 슬로우 쿼리",
+      "id": 5,
+      "description": "long_query_time 을 넘긴 쿼리 수. 꾸준히 0 이 아니면 인덱스가 빠진 쿼리가 있다는 뜻이다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#2E9E4F",
+                "value": null
+              },
+              {
+                "color": "#C99A06",
+                "value": 1
+              },
+              {
+                "color": "#D64550",
+                "value": 10
+              }
+            ]
+          },
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "textMode": "auto",
+        "orientation": "auto",
+        "wideLayout": true,
+        "text": {
+          "titleSize": 14,
+          "valueSize": 36
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "rate(mysql_global_status_slow_queries{env=\"$env\"}[10m]) * 60",
+          "legendFormat": "",
+          "refId": "A",
+          "editorMode": "code",
+          "range": true
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "쿼리 · 처리량",
+      "id": 6,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "쿼리 처리량",
+      "id": 7,
+      "description": "초당 쿼리 수. 트래픽이 그대로인데 쿼리가 늘면 N+1 같은 쿼리 증폭을 의심한다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true,
+            "gradientMode": "none",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "전체 쿼리"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#4C8DF6"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "슬로우 쿼리"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#D64550"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "rate(mysql_global_status_questions{env=\"$env\"}[$__rate_interval])",
+          "legendFormat": "전체 쿼리",
+          "refId": "A",
+          "editorMode": "code",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "rate(mysql_global_status_slow_queries{env=\"$env\"}[$__rate_interval])",
+          "legendFormat": "슬로우 쿼리",
+          "refId": "B",
+          "editorMode": "code",
+          "range": true
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "명령 종류별 비중",
+      "id": 8,
+      "description": "읽기·쓰기 비율의 변화는 사용 패턴이나 배치 동작이 바뀌었다는 신호다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 25,
+            "showPoints": "never",
+            "spanNulls": true,
+            "gradientMode": "none",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "showLegend": true,
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (command) (rate(mysql_global_status_commands_total{env=\"$env\", command=~\"select|insert|update|delete|commit\"}[$__rate_interval]))",
+          "legendFormat": "{{command}}",
+          "refId": "A",
+          "editorMode": "code",
+          "range": true
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "메모리 · 저장",
+      "id": 9,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "InnoDB 버퍼풀",
+      "id": 10,
+      "description": "설정 크기(2G)를 데이터가 가득 채우면 그 뒤부터는 디스크를 읽는다 — 적중률 하락과 같이 본다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 15
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true,
+            "gradientMode": "none",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "설정 크기"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#8E8E8E"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "데이터 점유"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#4C8DF6"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "mysql_global_status_buffer_pool_page_changes_total{env=\"$env\"} * 0 + mysql_global_variables_innodb_buffer_pool_size{env=\"$env\"}",
+          "legendFormat": "설정 크기",
+          "refId": "A",
+          "editorMode": "code",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "mysql_global_status_buffer_pool_pages{env=\"$env\", state=\"data\"} * 16384",
+          "legendFormat": "데이터 점유",
+          "refId": "B",
+          "editorMode": "code",
+          "range": true
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "디스크 기반 임시 테이블",
+      "id": 11,
+      "description": "메모리에 못 담아 디스크로 넘어간 임시 테이블. 정렬·그룹 쿼리가 무거워졌다는 직접적인 신호다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 15
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true,
+            "gradientMode": "none",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "분당 디스크 임시 테이블"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#D9722E"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "분당 임시 테이블(전체)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#8E8E8E"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "rate(mysql_global_status_created_tmp_disk_tables{env=\"$env\"}[$__rate_interval]) * 60",
+          "legendFormat": "분당 디스크 임시 테이블",
+          "refId": "A",
+          "editorMode": "code",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "rate(mysql_global_status_created_tmp_tables{env=\"$env\"}[$__rate_interval]) * 60",
+          "legendFormat": "분당 임시 테이블(전체)",
+          "refId": "B",
+          "editorMode": "code",
+          "range": true
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "동시성 · 잠금",
+      "id": 12,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 23
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "스레드",
+      "id": 13,
+      "description": "'실행 중'이 지속적으로 높으면 쿼리가 밀리고 있다는 뜻이다. 앱 쪽 Hikari 대기와 같은 시각으로 맞춰 본다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": true,
+            "gradientMode": "none",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "연결됨"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#4C8DF6"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "실행 중"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#D9722E"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "상한"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#8E8E8E"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "mysql_global_status_threads_connected{env=\"$env\"}",
+          "legendFormat": "연결됨",
+          "refId": "A",
+          "editorMode": "code",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "mysql_global_status_threads_running{env=\"$env\"}",
+          "legendFormat": "실행 중",
+          "refId": "B",
+          "editorMode": "code",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "mysql_global_variables_max_connections{env=\"$env\"}",
+          "legendFormat": "상한",
+          "refId": "C",
+          "editorMode": "code",
+          "range": true
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "행 잠금 대기",
+      "id": 14,
+      "description": "CAS 선점(카드·댓글 생성)이 같은 행을 두고 경합하면 여기서 보인다. 대기가 길어지면 생성 적체로 이어진다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": true,
+            "gradientMode": "none",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "분당 잠금 대기"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#D64550"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "평균 대기 시간(ms)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#A8811C"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "rate(mysql_global_status_innodb_row_lock_waits{env=\"$env\"}[$__rate_interval]) * 60",
+          "legendFormat": "분당 잠금 대기",
+          "refId": "A",
+          "editorMode": "code",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "mysql_global_status_innodb_row_lock_time_avg{env=\"$env\"}",
+          "legendFormat": "평균 대기 시간(ms)",
+          "refId": "B",
+          "editorMode": "code",
+          "range": true
+        }
+      ]
+    }
+  ]
+}

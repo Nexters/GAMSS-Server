@@ -815,6 +815,406 @@
               }
             }
           ]
+        },
+        {
+          "uid": "gamss-cert-expiry",
+          "title": "인증서 만료 임박",
+          "condition": "C",
+          "for": "1h",
+          "isPaused": false,
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "labels": {
+            "severity": "warning"
+          },
+          "annotations": {
+            "summary": "{{ $labels.instance }} 인증서 {{ humanize $values.B.Value }}일 남음",
+            "description": "certbot 자동 갱신이 실패하고 있을 수 있다. 모니터링 서버에서 `docker compose logs certbot` 으로 갱신 시도를 확인하고, 필요하면 수동 갱신한다. 만료되면 브라우저가 접속을 막는다."
+          },
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 3600,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "(probe_ssl_earliest_cert_expiry - time()) / 86400",
+                "instant": false,
+                "range": true,
+                "editorMode": "code",
+                "intervalMs": 60000,
+                "maxDataPoints": 43200,
+                "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus"
+                }
+              }
+            },
+            {
+              "refId": "B",
+              "relativeTimeRange": {
+                "from": 3600,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "settings": {
+                  "mode": "dropNN"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "lt",
+                      "params": [
+                        30
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "B"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "uid": "gamss-probe-down",
+          "title": "외부에서 접속 불가",
+          "condition": "C",
+          "for": "5m",
+          "isPaused": false,
+          "noDataState": "Alerting",
+          "execErrState": "Error",
+          "labels": {
+            "severity": "critical"
+          },
+          "annotations": {
+            "summary": "{{ $labels.instance }} 외부 접속 실패",
+            "description": "모니터링 서버가 인터넷을 통해 접속했으나 실패했다. 앱 메트릭이 정상인데 이것만 실패하면 DNS·인증서·nginx 앞단 등 앱 바깥의 문제다."
+          },
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 300,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "probe_success",
+                "instant": false,
+                "range": true,
+                "editorMode": "code",
+                "intervalMs": 60000,
+                "maxDataPoints": 43200,
+                "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus"
+                }
+              }
+            },
+            {
+              "refId": "B",
+              "relativeTimeRange": {
+                "from": 300,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "settings": {
+                  "mode": "dropNN"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "lt",
+                      "params": [
+                        1
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "B"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "uid": "gamss-mysql-connections",
+          "title": "MySQL 커넥션 포화",
+          "condition": "C",
+          "for": "10m",
+          "isPaused": false,
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "labels": {
+            "severity": "warning"
+          },
+          "annotations": {
+            "summary": "{{ $labels.env }} MySQL 커넥션 {{ humanize $values.B.Value }}% 사용",
+            "description": "max_connections 에 근접했다. 여기가 차면 앱은 커넥션을 얻지 못해 Hikari 대기로 나타나고, 결국 요청 지연·타임아웃으로 번진다."
+          },
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 300,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "mysql_global_status_threads_connected / clamp_min(mysql_global_variables_max_connections, 1) * 100",
+                "instant": false,
+                "range": true,
+                "editorMode": "code",
+                "intervalMs": 60000,
+                "maxDataPoints": 43200,
+                "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus"
+                }
+              }
+            },
+            {
+              "refId": "B",
+              "relativeTimeRange": {
+                "from": 300,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "settings": {
+                  "mode": "dropNN"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        80
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "B"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "uid": "gamss-mysql-slow",
+          "title": "슬로우 쿼리 급증",
+          "condition": "C",
+          "for": "15m",
+          "isPaused": false,
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "labels": {
+            "severity": "warning"
+          },
+          "annotations": {
+            "summary": "{{ $labels.env }} 분당 슬로우 쿼리 {{ humanize $values.B.Value }}건",
+            "description": "long_query_time 을 넘긴 쿼리가 계속 나온다. 인덱스가 빠진 쿼리이거나 데이터가 늘어 기존 쿼리가 무거워진 경우다. MySQL 대시보드의 버퍼풀 적중률·디스크 임시 테이블과 함께 본다."
+          },
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 300,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "rate(mysql_global_status_slow_queries[10m]) * 60",
+                "instant": false,
+                "range": true,
+                "editorMode": "code",
+                "intervalMs": 60000,
+                "maxDataPoints": 43200,
+                "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus"
+                }
+              }
+            },
+            {
+              "refId": "B",
+              "relativeTimeRange": {
+                "from": 300,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "settings": {
+                  "mode": "dropNN"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        10
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "B"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ]
         }
       ]
     }

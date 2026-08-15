@@ -56,3 +56,38 @@ scrape_configs:
         labels: { env: monitor, server: gamss-monitor, component: loki }
       - targets: ["grafana:3000"]
         labels: { env: monitor, server: gamss-monitor, component: grafana }
+
+  # 외부 관점 프로브. blackbox_exporter 가 각 도메인에 실제로 HTTPS 요청을 보내고,
+  # 그 결과(도달 여부·응답 시간·인증서 만료 시각)를 메트릭으로 돌려준다.
+  # 60초 간격이면 충분하다 — 인증서는 하루 단위로 움직이고, 도달성은 앱 스크레이프가 더 촘촘하다.
+  - job_name: blackbox
+    scrape_interval: 60s
+    metrics_path: /probe
+    params:
+      module: [https_check]
+    static_configs:
+      - targets: ["https://api.gamss.kr", "https://admin.gamss.kr"]
+        labels: { env: prod }
+      - targets: ["https://dev-api.gamss.kr", "https://dev-admin.gamss.kr"]
+        labels: { env: dev }
+      - targets: ["https://monitor.gamss.kr"]
+        labels: { env: monitor }
+    relabel_configs:
+      # 프로브는 '대상 URL 을 파라미터로 받는 exporter' 를 긁는 구조다. 그래서 타겟 주소를
+      # __param_target 으로 옮기고, 실제 스크레이프 주소는 exporter 자신으로 바꾼다.
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  # MySQL 엔진 상태. 앱 포트를 열지 않는 원칙 그대로, dev·prod 의 nginx 내부 블록(9102)이
+  # /metrics/mysql 로 프록시한다 — 보안그룹에 포트를 추가하지 않아도 된다.
+  - job_name: mysql
+    metrics_path: /metrics/mysql
+    static_configs:
+      - targets: ["192.168.0.231:9102"]
+        labels: { env: dev, server: gamss-dev }
+      - targets: ["192.168.0.141:9102"]
+        labels: { env: prod, server: gamss-prod }

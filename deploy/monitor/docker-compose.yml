@@ -95,6 +95,17 @@ services:
       - /:/host:ro,rslave
     networks: [monitor]
 
+  # 외부에서 본 도달성·인증서 만료를 잰다. 안에서 보는 지표로는 인증서 갱신 실패를 알 수 없다.
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.28.0
+    restart: unless-stopped
+    mem_limit: 128m
+    logging: *default-logging
+    command: --config.file=/etc/blackbox/blackbox.yml
+    volumes:
+      - ./blackbox/blackbox.yml:/etc/blackbox/blackbox.yml:ro
+    networks: [monitor]
+
   nginx:
     image: nginx:1.27-alpine
     mem_limit: 128m

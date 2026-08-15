@@ -21,12 +21,14 @@ flowchart LR
     direction TB
     NE["node_exporter<br/>:9100 · 호스트 자원"]
     CA["cAdvisor<br/>:9101 · 컨테이너 자원"]
-    NG["nginx 내부 전용<br/>:9102 · /actuator/prometheus"]
+    NG["nginx 내부 전용 :9102<br/>/actuator/prometheus · /metrics/mysql"]
+    MY["mysqld_exporter<br/>포트 미노출"]
     PT["promtail<br/>컨테이너 로그"]
   end
 
   subgraph M["gamss-monitor · 192.168.0.63"]
     direction TB
+    BB["blackbox_exporter<br/>외부 프로브"]
     PR["Prometheus<br/>30일 · 20GB"]
     LK["Loki<br/>:3100 · 14일"]
     GR["Grafana"]
@@ -35,7 +37,9 @@ flowchart LR
   NE -- "scrape (pull)" --> PR
   CA -- "scrape (pull)" --> PR
   NG -- "scrape (pull)" --> PR
+  MY -. "nginx 경유" .-> NG
   PT -- "push" --> LK
+  BB -- "probe" --> PR
   PR --> GR
   LK --> GR
   GR --> W["monitor.gamss.kr<br/>nginx + certbot"]
@@ -85,6 +89,27 @@ docker compose up -d
 
 `monitor.gamss.kr` A 레코드가 `1.201.126.136` 로 이미 떠 있어야 4번이 성공한다.
 
+## MySQL 모니터링 계정 (dev·prod 각 1회)
+
+`mysqld_exporter` 는 앱 계정(gamss)이 아니라 읽기 전용 전용 계정을 쓴다. Flyway 마이그레이션으로
+만들 수 없어(앱 계정에 GRANT 권한이 없다) 서버에서 한 번 실행한다. 비밀번호는 GitHub 환경 시크릿
+`MYSQL_EXPORTER_PASSWORD` 와 같은 값이어야 한다.
+
+```bash
+# dev·prod 각 서버에서
+cd ~/app
+ROOT=$(grep '^DB_ROOT_PASSWORD=' .env | cut -d= -f2-)
+docker compose exec -T db mysql -uroot -p"$ROOT" <<SQL
+CREATE USER IF NOT EXISTS 'exporter'@'%' IDENTIFIED BY '<시크릿과 같은 값>';
+ALTER USER 'exporter'@'%' IDENTIFIED BY '<시크릿과 같은 값>';
+GRANT PROCESS, REPLICATION CLIENT, SELECT ON *.* TO 'exporter'@'%';
+FLUSH PRIVILEGES;
+SQL
+```
+
+`PROCESS`(스레드 목록)·`REPLICATION CLIENT`(상태 변수)·`SELECT`(performance_schema) 세 가지만 준다.
+쓰기 권한은 없으므로 이 계정이 새면 읽히는 것 외의 피해는 없다.
+
 ## 갱신 (설정·대시보드 변경 후)
 
 ```bash
@@ -112,6 +137,7 @@ docker compose kill -s HUP prometheus
 
 ## 접근 정보
 
+- 대시보드 5종(이름 앞 번호가 진단 순서): 1 서비스 상태 · 2 앱 성능 · 3 서버 자원 · 4 LLM 생성 · 5 MySQL
 - 대시보드: https://monitor.gamss.kr — 계정은 GitHub 시크릿 `GRAFANA_ADMIN_USER`·`GRAFANA_ADMIN_PASSWORD`
   (서버 `.env` 에도 같은 값이 들어 있다)
 - 데이터소스·대시보드·알림은 전부 프로비저닝이라 **UI 에서 고쳐도 재기동 시 덮어써진다.**

@@ -72,6 +72,106 @@
   },
   "panels": [
     {
+      "type": "alertlist",
+      "title": "발화 중인 알림",
+      "id": 18,
+      "description": "지금 울리고 있는 알림. 디스코드를 확인하지 않아도 대시보드를 여는 순간 상태가 보인다.",
+      "gridPos": {
+        "h": 6,
+        "w": 16,
+        "x": 0,
+        "y": 0
+      },
+      "options": {
+        "viewMode": "list",
+        "groupMode": "default",
+        "maxItems": 10,
+        "sortOrder": 1,
+        "stateFilter": {
+          "firing": true,
+          "pending": true,
+          "noData": false,
+          "normal": false,
+          "error": true
+        },
+        "alertInstanceLabelFilter": "",
+        "dashboardAlerts": false,
+        "showInstances": true,
+        "datasource": "",
+        "alertName": "",
+        "folder": "",
+        "showOptions": "current"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "배포된 빌드",
+      "id": 19,
+      "description": "현재 이 환경에서 돌고 있는 이미지 태그. '3시 배포가 원인인가'를 판단하려면 재기동 시각만으로는 부족하다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "name",
+        "orientation": "auto",
+        "wideLayout": true,
+        "text": {
+          "titleSize": 14,
+          "valueSize": 28
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "gamss_build_info{env=\"$env\"}",
+          "legendFormat": "{{image_tag}}",
+          "refId": "A",
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        }
+      ]
+    },
+    {
       "type": "row",
       "title": "현재 상태",
       "id": 1,
@@ -80,7 +180,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 0
+        "y": 7
       },
       "panels": []
     },
@@ -97,7 +197,7 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 1
+        "y": 8
       },
       "fieldConfig": {
         "defaults": {
@@ -173,7 +273,7 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 1
+        "y": 8
       },
       "fieldConfig": {
         "defaults": {
@@ -241,7 +341,7 @@
         "h": 4,
         "w": 4,
         "x": 8,
-        "y": 1
+        "y": 8
       },
       "fieldConfig": {
         "defaults": {
@@ -317,7 +417,7 @@
         "h": 4,
         "w": 4,
         "x": 12,
-        "y": 1
+        "y": 8
       },
       "fieldConfig": {
         "defaults": {
@@ -393,7 +493,7 @@
         "h": 4,
         "w": 4,
         "x": 16,
-        "y": 1
+        "y": 8
       },
       "fieldConfig": {
         "defaults": {
@@ -469,7 +569,7 @@
         "h": 4,
         "w": 4,
         "x": 20,
-        "y": 1
+        "y": 8
       },
       "fieldConfig": {
         "defaults": {
@@ -541,7 +641,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 5
+        "y": 12
       },
       "panels": []
     },
@@ -558,7 +658,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 6
+        "y": 13
       },
       "fieldConfig": {
         "defaults": {
@@ -688,7 +788,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 6
+        "y": 13
       },
       "fieldConfig": {
         "defaults": {
@@ -840,7 +940,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 14
+        "y": 21
       },
       "fieldConfig": {
         "defaults": {
@@ -924,7 +1024,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 14
+        "y": 21
       },
       "fieldConfig": {
         "defaults": {
@@ -1004,7 +1104,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 22
+        "y": 29
       },
       "panels": []
     },
@@ -1021,7 +1121,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 23
+        "y": 30
       },
       "fieldConfig": {
         "defaults": {
@@ -1178,7 +1278,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 23
+        "y": 30
       },
       "fieldConfig": {
         "defaults": {
@@ -1342,6 +1442,171 @@
     },
     {
       "type": "row",
+      "title": "외부 관점 (blackbox 프로브)",
+      "id": 20,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 38
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "외부 도달성",
+      "id": 21,
+      "description": "모니터링 서버가 인터넷을 통해 실제로 접속해 본 결과다. 앱 메트릭이 정상인데 이 값이 0이면 DNS·인증서·nginx 앞단처럼 앱 바깥에서 끊긴 것이다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 39
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "max": 1,
+          "decimals": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "fillOpacity": 20,
+            "showPoints": "never",
+            "spanNulls": true,
+            "gradientMode": "none",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "showLegend": true,
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "min"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "probe_success{env=\"$env\"}",
+          "legendFormat": "{{instance}}",
+          "refId": "A",
+          "editorMode": "code",
+          "range": true
+        }
+      ]
+    },
+    {
+      "type": "bargauge",
+      "title": "인증서 만료까지 남은 일수 (전 도메인)",
+      "id": 22,
+      "description": "certbot 이 자동 갱신하지만 갱신 실패는 조용하다. 30일 아래로 내려가면 알림이 간다. 환경 변수와 무관하게 모든 도메인을 함께 본다.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 39
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "d",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#D64550",
+                "value": null
+              },
+              {
+                "color": "#C99A06",
+                "value": 14
+              },
+              {
+                "color": "#2E9E4F",
+                "value": 30
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "minVizHeight": 16,
+        "minVizWidth": 8,
+        "valueMode": "color"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "(probe_ssl_earliest_cert_expiry - time()) / 86400",
+          "legendFormat": "{{instance}}",
+          "refId": "A",
+          "editorMode": "code",
+          "range": true
+        }
+      ]
+    },
+    {
+      "type": "row",
       "title": "에러 로그",
       "id": 16,
       "collapsed": false,
@@ -1349,7 +1614,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 31
+        "y": 47
       },
       "panels": []
     },
@@ -1366,7 +1631,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 32
+        "y": 48
       },
       "options": {
         "showTime": true,

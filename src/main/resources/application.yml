@@ -37,6 +37,12 @@ admin:
   # 백오피스 접근 허용 이메일(쉼표 구분). 구글 로그인 후 이 목록에 있어야 관리자 토큰을 발급한다.
   emails: ${ADMIN_EMAILS:}
 
+gamss:
+  build:
+    # 배포 스크립트가 서버 .env 에 넣고 compose 가 컨테이너로 넘기는 이미지 태그.
+    # 로컬·테스트에는 없으므로 unknown 으로 떨어진다(메트릭 라벨로만 쓰인다).
+    image-tag: ${IMAGE_TAG:unknown}
+
 conversation:
   pending-generation-timeout: PT3M
 
