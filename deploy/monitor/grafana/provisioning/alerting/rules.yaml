@@ -1415,6 +1415,106 @@
               }
             }
           ]
+        },
+        {
+          "uid": "gamss-mysql-down",
+          "title": "MySQL 연결 실패",
+          "condition": "C",
+          "for": "5m",
+          "isPaused": false,
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "labels": {
+            "severity": "critical"
+          },
+          "annotations": {
+            "summary": "{{ $labels.env }} exporter 가 MySQL 에 붙지 못한다",
+            "description": "exporter 는 살아 있는데(스크레이프 200) DB 연결·인증에 실패한 상태다. 실제로 재현해보면 HTTP 200 에 mysql_up 0 만 남고 나머지 지표는 하나도 나오지 않는다 — 그래서 '수집기 다운' 규칙에는 걸리지 않는다. 모니터링 계정(exporter)이 그 서버에 만들어져 있는지, 비밀번호가 환경 시크릿(MYSQL_EXPORTER_PASSWORD)과 같은지 확인한다(계정 생성은 수동 절차다)."
+          },
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 300,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "mysql_up{job=\"mysql\"}",
+                "instant": false,
+                "range": true,
+                "editorMode": "code",
+                "intervalMs": 60000,
+                "maxDataPoints": 43200,
+                "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus"
+                }
+              }
+            },
+            {
+              "refId": "B",
+              "relativeTimeRange": {
+                "from": 300,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "settings": {
+                  "mode": "dropNN"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "lt",
+                      "params": [
+                        1
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "B"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ]
         }
       ]
     }
