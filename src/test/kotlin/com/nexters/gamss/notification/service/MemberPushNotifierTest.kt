@@ -2,6 +2,7 @@ package com.nexters.gamss.notification.service
 
 import com.nexters.gamss.member.domain.Member
 import com.nexters.gamss.member.repository.MemberRepository
+import com.nexters.gamss.notification.domain.DeviceToken
 import com.nexters.gamss.notification.domain.FcmToken
 import com.nexters.gamss.notification.push.PushMessage
 import com.nexters.gamss.notification.push.PushSendResult
@@ -153,6 +154,23 @@ class MemberPushNotifierTest {
         assertNotNull(deviceTokenRepository.findByToken(FcmToken("token-alive")))
     }
 
+    /**
+     * 조회·삭제 모두 `IN` 절을 500개씩 나눠 넣는다. 청크별 결과를 합치는 부분이 어긋나면 뒤쪽
+     * 회원들이 조용히 빠지거나 죽은 토큰이 남는데, 작은 목록으로는 드러나지 않는다.
+     */
+    @Test
+    fun `한 번에 넣는 개수를 넘는 대상도 나눠서 모두 처리한다`() {
+        val members = memberRepository.saveAll((1..OVER_CHUNK_SIZE).map { Member("many-$it@a.com") })
+        val tokens = members.map { "token-${it.id}" }
+        deviceTokenRepository.saveAll(members.mapIndexed { index, m -> DeviceToken(m.id, FcmToken(tokens[index])) })
+        sender.invalidTokens = tokens
+
+        notifier.send(members.map { it.id }, MESSAGE)
+
+        assertEquals(OVER_CHUNK_SIZE, assertNotNull(sender.sentTokens).size, "조회가 청크를 모두 합쳐야 한다")
+        assertEquals(0, deviceTokenRepository.count(), "삭제도 청크를 모두 돌아야 한다")
+    }
+
     private fun register(
         email: String,
         vararg tokens: String,
@@ -164,5 +182,8 @@ class MemberPushNotifierTest {
 
     companion object {
         private val MESSAGE = PushMessage(title = "제목", body = "본문")
+
+        /** MemberPushNotifier 가 IN 절에 한 번에 넣는 개수(500)보다 하나 많게 잡는다. */
+        private const val OVER_CHUNK_SIZE = 501
     }
 }
