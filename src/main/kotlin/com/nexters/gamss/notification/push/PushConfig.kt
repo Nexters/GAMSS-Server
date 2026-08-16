@@ -55,7 +55,16 @@ class PushConfig {
             APP_NAME,
         )
 
-    private fun decode(credentialsBase64: String) = Base64.getDecoder().decode(credentialsBase64.trim()).inputStream()
+    /**
+     * 공백을 전부 털고 디코딩한다. base64 는 구현에 따라 76자마다 줄을 바꾸고(GNU 기본값), 값이
+     * 어디를 거쳐 왔는지에 따라 CRLF 가 섞일 수도 있다. 기본 디코더는 알파벳 밖의 문자를 만나면
+     * 거부하므로 **줄바꿈 하나에 기동이 막힌다** — 앞뒤 [String.trim] 만으로는 중간의 개행을 못 지운다.
+     *
+     * 공백만 지우고 나머지는 그대로 둔다. 알파벳 밖 문자를 통째로 무시하는 디코더(MIME)를 쓰면
+     * 진짜 망가진 값도 조용히 통과해 엉뚱한 자격증명 오류로 나타난다.
+     */
+    private fun decode(credentialsBase64: String) =
+        Base64.getDecoder().decode(credentialsBase64.filterNot { it.isWhitespace() }).inputStream()
 
     companion object {
         private const val APP_NAME = "gamss-push"

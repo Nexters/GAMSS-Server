@@ -157,7 +157,7 @@ jobs:
           # 로그에 잘 드러나지 않는다. 지금 등록된 값은 한 줄이지만 키를 교체할 때 다시 열리는
           # 함정이라 여기서 막는다.
           printf 'FIREBASE_CREDENTIALS_BASE64=%s\n' \
-            "$(printf '%s' "$FIREBASE_CREDENTIALS_BASE64" | tr -d '\n')" >> .env
+            "$(printf '%s' "$FIREBASE_CREDENTIALS_BASE64" | tr -d '\r\n')" >> .env
 
       - name: Create nginx .htpasswd
         # 스웨거 Basic Auth 계정(user:해시)은 레포에 커밋하지 않고 시크릿(SWAGGER_HTPASSWD)에서
