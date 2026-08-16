@@ -146,6 +146,7 @@ jobs:
           DB_ROOT_PASSWORD=${{ secrets.DB_ROOT_PASSWORD }}
           JWT_SECRET=${{ secrets.JWT_SECRET }}
           GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+          MYSQL_EXPORTER_PASSWORD=${{ secrets.MYSQL_EXPORTER_PASSWORD }}
           ADMIN_EMAILS=${{ vars.ADMIN_EMAILS }}
           EOF
 
@@ -166,7 +167,7 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT }}
-          source: "deploy/${{ github.ref_name }}/docker-compose.yml,deploy/nginx/conf/gamss.conf,deploy/nginx/conf/.htpasswd,.github/scripts/deploy-app.sh,.env"
+          source: "deploy/${{ github.ref_name }}/docker-compose.yml,deploy/nginx/conf/gamss.conf,deploy/nginx/conf/.htpasswd,deploy/promtail/promtail.yml,.github/scripts/deploy-app.sh,.env"
           target: /tmp/gamss-deploy/
 
       - name: Deploy
@@ -188,10 +189,11 @@ jobs:
             TMP_DIR="/tmp/gamss-deploy"
             trap "rm -rf '${TMP_DIR}'; docker logout ghcr.io >/dev/null 2>&1 || true" EXIT
 
-            mkdir -p "${DEPLOY_DIR}/nginx/conf"
+            mkdir -p "${DEPLOY_DIR}/nginx/conf" "${DEPLOY_DIR}/promtail"
             cp "${TMP_DIR}/deploy/${ENV_NAME}/docker-compose.yml" "${DEPLOY_DIR}/"
             cp "${TMP_DIR}/deploy/nginx/conf/gamss.conf" "${DEPLOY_DIR}/nginx/conf/"
             cp "${TMP_DIR}/deploy/nginx/conf/.htpasswd" "${DEPLOY_DIR}/nginx/conf/"
+            cp "${TMP_DIR}/deploy/promtail/promtail.yml" "${DEPLOY_DIR}/promtail/"
             cp "${TMP_DIR}/.github/scripts/deploy-app.sh" "${DEPLOY_DIR}/"
             chmod +x "${DEPLOY_DIR}/deploy-app.sh"
 

@@ -1,0 +1,33 @@
+# 알림을 받을 곳(Discord)과 라우팅 정책.
+#
+# 웹훅 URL 은 레포에 두지 않고 compose 가 넘긴 환경변수를 Grafana 가 확장한다($DISCORD_WEBHOOK_URL).
+# 값이 비어 있으면 컨택포인트 생성이 실패하고 Grafana 로그에 남는다 — 알림이 조용히 사라지지 않는다.
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: discord
+    receivers:
+      - uid: discord-gamss
+        type: discord
+        settings:
+          url: $DISCORD_WEBHOOK_URL
+          # 제목은 상태와 규칙 이름만. 본문에서 환경·값·판단 근거를 준다.
+          title: "{{ if eq .Status \"firing\" }}🔴{{ else }}🟢 해소{{ end }} {{ .CommonLabels.alertname }}"
+          message: |
+            {{ range .Alerts }}**{{ .Annotations.summary }}**
+            {{ .Annotations.description }}
+            {{ end }}
+        # 해소 알림도 보낸다. 언제 정상으로 돌아왔는지 모르면 야간 대응에서 판단할 수 없다.
+        disableResolveMessage: false
+
+policies:
+  - orgId: 1
+    receiver: discord
+    # 같은 규칙·같은 환경끼리 묶는다. dev 와 prod 가 한 메시지에 섞이면 어디가 문제인지 흐려진다.
+    group_by: [alertname, env]
+    # 첫 알림은 30초 모아서 한 번에. 연달아 터지는 규칙들을 한 메시지로 받는다.
+    group_wait: 30s
+    group_interval: 5m
+    # 해결될 때까지 4시간마다 재알림. 더 짧으면 채널이 도배되고, 더 길면 잊힌다.
+    repeat_interval: 4h

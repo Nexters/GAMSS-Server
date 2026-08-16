@@ -16,6 +16,14 @@ jwt:
 firebase:
   project-id: gamss-test
 
+# 배포와 같은 actuator 노출 범위를 테스트에서도 재현한다. 이 설정이 없으면 prometheus 엔드포인트가
+# 웹에 노출되지 않아, 노출 범위나 공개 경로가 실수로 되돌아가도 테스트가 그대로 통과한다.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+
 conversation:
   pending-generation-timeout: PT3M
 

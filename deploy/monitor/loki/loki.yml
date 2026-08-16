@@ -1,0 +1,54 @@
+# Loki 단일 바이너리(monolithic) 설정. 로그량이 서버 2대분이라 마이크로서비스 모드는 과하다.
+#
+# 저장소는 파일시스템이다(S3 같은 오브젝트 스토리지 없음). 그래서 보존 기간이 곧 디스크 사용량이고,
+# compactor 의 retention 이 실제로 삭제를 수행한다 — retention_period 만 적고
+# compactor.retention_enabled 를 켜지 않으면 조회에서만 잘리고 파일은 계속 쌓인다(디스크가 찬다).
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9096
+  # 기본 로그 레벨이 info 면 스크레이프마다 요청 로그가 남아 Loki 자신의 로그가 시끄럽다.
+  log_level: warn
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    # 신규 설치라 처음부터 최신 스키마(v13 + tsdb)로 시작한다. from 은 배포일이 아니라 충분히
+    # 과거로 둔다 — Loki 는 로그 타임스탬프에 맞는 schema 가 없으면 그 엔트리를 거부하는데,
+    # (1) promtail 이 기존 컨테이너 로그를 처음 읽을 때 며칠 전 라인이 함께 올라오고
+    # (2) from 은 UTC 로 해석돼 KST 오전 기동 시 아직 전날인 구간이 생긴다.
+    # 신규 설치라 과거 인덱스가 없어 앞당겨도 부작용이 없다.
+    - from: 2026-01-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+limits_config:
+  # 14일 보존. 장애 원인 추적은 대부분 며칠 안에 끝나고, 그보다 오래된 로그는
+  # 50GB 디스크를 갉아먹는 값에 비해 쓰임이 적다.
+  retention_period: 336h
+  # 폭주하는 컨테이너 하나가 디스크를 다 먹는 걸 막는 상한(초당 8MB, 순간 16MB).
+  ingestion_rate_mb: 8
+  ingestion_burst_size_mb: 16
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h
+
+compactor:
+  working_directory: /loki/compactor
+  retention_enabled: true
+  delete_request_store: filesystem
