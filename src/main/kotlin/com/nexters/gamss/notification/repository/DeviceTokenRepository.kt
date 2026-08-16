@@ -21,8 +21,22 @@ interface DeviceTokenRepository : JpaRepository<DeviceToken, Long> {
      *
      * `ON DUPLICATE KEY UPDATE` 는 MySQL 문법이다. 이 프로젝트는 MySQL 전용이라(flyway-mysql,
      * mysql-connector) 감수하고 쓴다.
+     *
+     * `flushAutomatically` 는 대기 중인 변경을 이 문장보다 먼저 내보낸다. 한 트랜잭션에서 해제하고
+     * 다시 등록하면(권한을 껐다 켜는 흐름) 대기 중인 delete 가 이 insert 뒤로 밀려 유니크 제약에
+     * 걸린다.
+     *
+     * `clearAutomatically` 는 **일부러 켜지 않았다**. 이 문장은 엔티티를 로드하지 않으므로 스스로
+     * 만들어내는 낡은 엔티티가 없다. 반면 clear 의 효과는 이 리포지토리가 아니라 **트랜잭션의
+     * 영속성 컨텍스트 전체**라, 이 호출이 더 큰 트랜잭션 안으로 들어가는 날 호출자가 들고 있던
+     * 엔티티가 전부 준영속이 되고 그 뒤의 변경은 조용히 사라진다(flush 가 지켜주는 것은 호출
+     * 이전 변경분까지다).
+     *
+     * 대신 감수하는 것: 같은 트랜잭션에서 이 토큰을 **이미 읽어둔 뒤** 소유자가 옮겨가면, 이후
+     * 조회가 1차 캐시의 옛 `memberId` 를 돌려준다. 그런 경로는 지금 없다 — 생기면 그 지점에서
+     * 다시 읽도록 하거나 여기서 clear 를 켜는 대신, 그 트랜잭션의 범위를 먼저 의심하는 게 맞다.
      */
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Modifying(flushAutomatically = true)
     @Query(
         value =
             "insert into device_tokens (member_id, token, created_at, updated_at) " +
