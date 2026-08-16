@@ -133,18 +133,24 @@ class FcmPushSender(
         private const val MAX_TOKENS_PER_REQUEST = 500
 
         /**
-         * 다시 시도해도 소용없어서 지워야 하는 실패 코드.
+         * 지워야 하는 실패 코드. **토큰이 죽었다는 것 말고 다른 설명이 없는 코드만** 넣는다.
          *
-         * - `UNREGISTERED`: 앱이 지워졌거나 토큰이 갱신돼 이 토큰을 받는 기기가 없다.
-         * - `INVALID_ARGUMENT`: FCM 이 토큰 형식 자체를 거부했다.
+         * `UNREGISTERED` 는 앱이 지워졌거나 토큰이 갱신돼 이 토큰을 받는 기기가 없다는 뜻이고,
+         * 그 원인은 이것 하나뿐이다.
          *
-         * 나머지(할당량 초과·FCM 일시 장애 등)는 다음 발송에서 성공할 수 있는 값이라 남겨둔다.
+         * 재시도로 풀리지 않는데도 **일부러 뺀** 코드가 둘 있다. 둘 다 같은 이유다 — 토큰이
+         * 죽었을 때와 **우리가 잘못했을 때** 구분 없이 같은 코드가 온다.
          *
-         * `SENDER_ID_MISMATCH` 는 일부러 넣지 않았다. 재시도로 풀리지 않는 것은 맞지만(다른
-         * Firebase 프로젝트에 등록된 토큰) **우리 설정 실수일 때도 같은 코드가 온다** — 키를 잘못
-         * 넣은 배포 한 번에 멀쩡한 기기들의 등록이 전부 지워지는 쪽이 더 나쁘다. 매 발송마다 같은
-         * 실패가 반복되므로, 이 코드가 쌓이면 지울 것이 아니라 자격증명을 의심해야 한다.
+         * - `INVALID_ARGUMENT`: 토큰 형식 오류뿐 아니라 **메시지 payload 오류**에도 온다. payload 는
+         *   묶음 전체가 공유하므로, 문구를 잘못 만든 발송 한 번이면 모든 응답이 이 코드가 되고
+         *   멀쩡한 기기의 등록이 전부 지워진다.
+         * - `SENDER_ID_MISMATCH`: 다른 Firebase 프로젝트에 등록된 토큰이지만, 우리가 키를 잘못
+         *   넣었을 때도 같은 코드가 온다.
+         *
+         * 대신 감수하는 것: 정말 망가진 토큰은 지워지지 않고 매 발송마다 같은 실패를 반복한다.
+         * 그 신호는 부분 실패 로그로 남으므로, 특정 코드가 쌓이면 지울 것이 아니라 **우리 쪽을
+         * 먼저 의심**하는 것이 맞다. 남는 쓰레기 토큰 몇 개보다 멀쩡한 등록을 지우는 쪽이 훨씬 비싸다.
          */
-        private val DEAD_TOKEN_CODES = setOf(MessagingErrorCode.UNREGISTERED, MessagingErrorCode.INVALID_ARGUMENT)
+        private val DEAD_TOKEN_CODES = setOf(MessagingErrorCode.UNREGISTERED)
     }
 }

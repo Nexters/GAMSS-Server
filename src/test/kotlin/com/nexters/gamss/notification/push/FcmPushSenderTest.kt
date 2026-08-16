@@ -29,16 +29,39 @@ class FcmPushSenderTest {
     fun `죽은 토큰만 무효로 분류한다`() {
         givenResponses(
             failure(MessagingErrorCode.UNREGISTERED),
-            failure(MessagingErrorCode.INVALID_ARGUMENT),
             failure(MessagingErrorCode.QUOTA_EXCEEDED),
             failure(MessagingErrorCode.UNAVAILABLE),
         )
 
-        val result = sender.send(listOf("dead", "malformed", "quota", "unavailable"), MESSAGE)
+        val result = sender.send(listOf("dead", "quota", "unavailable"), MESSAGE)
 
         // 할당량 초과·일시 장애는 다음 발송에서 성공할 수 있는 값이라 지울 대상이 아니다.
-        assertEquals(listOf("dead", "malformed"), result.invalidTokens)
-        assertEquals(4, result.failureCount)
+        assertEquals(listOf("dead"), result.invalidTokens)
+        assertEquals(3, result.failureCount)
+    }
+
+    /**
+     * `INVALID_ARGUMENT` 는 토큰 형식 오류뿐 아니라 payload 오류에도 온다. payload 는 묶음 전체가
+     * 공유하므로, 문구를 잘못 만든 발송 한 번에 멀쩡한 기기의 등록이 전부 지워질 수 있다.
+     */
+    @Test
+    fun `INVALID_ARGUMENT은 실패로만 세고 지울 대상으로 삼지 않는다`() {
+        givenResponses(
+            failure(MessagingErrorCode.INVALID_ARGUMENT),
+            failure(MessagingErrorCode.INVALID_ARGUMENT),
+        )
+
+        val result = sender.send(listOf("a", "b"), MESSAGE)
+
+        assertEquals(emptyList(), result.invalidTokens)
+        assertEquals(2, result.failureCount)
+    }
+
+    @Test
+    fun `SENDER_ID_MISMATCH도 지울 대상으로 삼지 않는다`() {
+        givenResponses(failure(MessagingErrorCode.SENDER_ID_MISMATCH))
+
+        assertEquals(emptyList(), sender.send(listOf("other-project"), MESSAGE).invalidTokens)
     }
 
     @Test
