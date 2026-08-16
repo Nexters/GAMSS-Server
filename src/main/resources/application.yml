@@ -53,6 +53,11 @@ card:
   # 요약 없는 방들이 카드 없이 닫힌다.
   auto-card-start-date: 2026-08-15
 
+fcm:
+  # Firebase 서비스 계정 JSON 을 base64 로 한 줄로 만든 값(배포는 GitHub 시크릿에서 주입).
+  # 비워두면 푸시를 보내지 않는 구현이 선택된다 — 로컬·테스트는 자격증명 없이 기동해야 한다.
+  credentials-base64: ${FIREBASE_CREDENTIALS_BASE64:}
+
 gemini:
   api-key: ${GEMINI_API_KEY}
   model: gemini-3.1-flash-lite

@@ -140,6 +140,8 @@ jobs:
       - name: Create .env
         # compose가 참조하는 시크릿만 채운다. IMAGE_TAG는 서버의 기존 값(롤백 기준)을
         # 보존해야 하므로 여기서 넣지 않고 배포 스크립트가 갱신한다.
+        env:
+          FIREBASE_CREDENTIALS_BASE64: ${{ secrets.FIREBASE_CREDENTIALS_BASE64 }}
         run: |
           cat > .env << 'EOF'
           DB_PASSWORD=${{ secrets.DB_PASSWORD }}
@@ -149,6 +151,13 @@ jobs:
           MYSQL_EXPORTER_PASSWORD=${{ secrets.MYSQL_EXPORTER_PASSWORD }}
           ADMIN_EMAILS=${{ vars.ADMIN_EMAILS }}
           EOF
+          # Firebase 키만 개행을 털어 따로 붙인다. base64 는 구현에 따라 76자마다 줄을 바꾸는데
+          # (GNU 기본값. macOS 는 한 줄) .env 는 한 줄 단위라, 개행이 섞이면 compose 가 에러 없이
+          # 첫 줄까지만 읽는다. 잘린 base64 는 앱 기동 실패 → 자동 롤백으로 이어지고 원인은
+          # 로그에 잘 드러나지 않는다. 지금 등록된 값은 한 줄이지만 키를 교체할 때 다시 열리는
+          # 함정이라 여기서 막는다.
+          printf 'FIREBASE_CREDENTIALS_BASE64=%s\n' \
+            "$(printf '%s' "$FIREBASE_CREDENTIALS_BASE64" | tr -d '\r\n')" >> .env
 
       - name: Create nginx .htpasswd
         # 스웨거 Basic Auth 계정(user:해시)은 레포에 커밋하지 않고 시크릿(SWAGGER_HTPASSWD)에서
