@@ -7,8 +7,8 @@ import { Select } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { PageHeader } from '@/components/page-header'
+import { SegmentedTabs } from '@/components/segmented-tabs'
 import { PromptRevisionHistory } from '@/pages/prompt-revision-history'
-import { cn } from '@/lib/utils'
 
 type PromptType = 'COMMON' | 'COMMENT' | 'REPLY' | 'CARD' | 'CARD_EMOTION' | 'EONGTTUNG_TOPIC'
 
@@ -263,23 +263,11 @@ function PromptSection() {
         </div>
       )}
 
-      <div className="inline-flex items-center rounded-lg border bg-muted/40 p-1">
-        {Object.values(TABS).map((tab) => (
-          <button
-            key={tab.value}
-            type="button"
-            onClick={() => setType(tab.value)}
-            className={cn(
-              'rounded-md px-4 py-1.5 text-sm font-medium transition-colors',
-              type === tab.value
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <SegmentedTabs
+        value={type}
+        onChange={setType}
+        options={Object.values(TABS).map((tab) => ({ value: tab.value, label: tab.label }))}
+      />
 
       <p className="text-sm text-muted-foreground">{activeTab.hint}</p>
 
