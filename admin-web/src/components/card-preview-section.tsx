@@ -164,10 +164,10 @@ export function CardPreviewSection() {
           <>
             {/* 지표는 성공·실패와 무관하게 보여준다. 서버는 파싱이 실패해도 이미 과금된 토큰을 실어
                 보내주는데(GeminiCardMessageGenerator 가 파싱 전에 뽑아둔다), 화면에서 가리면
-                원인을 좁히려고 한 번 더 호출하게 된다. */}
+                원인을 좁히려고 한 번 더 호출하게 된다. 지연 단위는 위쪽 실험과 같은 초 단위다. */}
             <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
               <MetricTile icon={Cpu} label="모델" value={result.model.replace('gemini-', '')} />
-              <MetricTile icon={Clock} label="지연" value={`${result.latencyMs.toLocaleString()}ms`} />
+              <MetricTile icon={Clock} label="지연" value={`${(result.latencyMs / 1000).toFixed(1)}s`} />
               <MetricTile icon={Ruler} label="토큰" value={result.usedTokens.toLocaleString()} />
               <MetricTile icon={CircleDollarSign} label="비용" value={`$${result.estimatedCostUsd.toFixed(5)}`} />
             </div>
