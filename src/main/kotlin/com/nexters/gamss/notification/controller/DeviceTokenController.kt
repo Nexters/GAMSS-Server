@@ -39,8 +39,8 @@ class DeviceTokenController(
                 "|---|---|---|\n" +
                 "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·무효) |\n" +
                 "| EXPIRED_TOKEN | 401 | accessToken 만료 — 재발급 후 재시도 |\n" +
-                "| INVALID_INPUT | 400 | token 누락 |\n" +
-                "| INVALID_DEVICE_TOKEN | 400 | 공백이거나 512자를 넘는 토큰 |",
+                "| INVALID_INPUT | 400 | token 누락 또는 공백 |\n" +
+                "| INVALID_DEVICE_TOKEN | 400 | 512자를 넘는 토큰 |",
     )
     @PostMapping
     fun register(
@@ -64,8 +64,8 @@ class DeviceTokenController(
                 "|---|---|---|\n" +
                 "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·무효) |\n" +
                 "| EXPIRED_TOKEN | 401 | accessToken 만료 — 재발급 후 재시도 |\n" +
-                "| INVALID_INPUT | 400 | token 누락 |\n" +
-                "| INVALID_DEVICE_TOKEN | 400 | 공백이거나 512자를 넘는 토큰 |",
+                "| INVALID_INPUT | 400 | token 누락 또는 공백 |\n" +
+                "| INVALID_DEVICE_TOKEN | 400 | 512자를 넘는 토큰 |",
     )
     @DeleteMapping
     fun unregister(

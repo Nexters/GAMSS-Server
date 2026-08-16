@@ -141,6 +141,22 @@ class DeviceTokenControllerIntegrationTest {
             }
     }
 
+    /** 공백은 값 객체까지 가지 않고 `@NotBlank` 에서 걸린다(닉네임 API 와 같은 규약). */
+    @Test
+    fun `token이 공백뿐이면 400을 반환한다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+
+        mockMvc
+            .post(PATH) {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"token":"   "}"""
+            }.andExpect {
+                status { isBadRequest() }
+                jsonPath("$.error.code") { value("INVALID_INPUT") }
+            }
+    }
+
     @Test
     fun `토큰이 컬럼 크기를 넘으면 400을 반환한다`() {
         val member = memberRepository.save(Member("me@a.com"))
