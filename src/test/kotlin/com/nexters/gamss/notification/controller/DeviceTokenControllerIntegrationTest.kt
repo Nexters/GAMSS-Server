@@ -94,11 +94,16 @@ class DeviceTokenControllerIntegrationTest {
     fun `등록한 토큰을 해제한다`() {
         val member = memberRepository.save(Member("me@a.com"))
         val bearer = bearerFor(member)
-        mockMvc.post(PATH) {
-            header(HttpHeaders.AUTHORIZATION, bearer)
-            contentType = MediaType.APPLICATION_JSON
-            content = """{"token":"$TOKEN"}"""
-        }
+        mockMvc
+            .post(PATH) {
+                header(HttpHeaders.AUTHORIZATION, bearer)
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"token":"$TOKEN"}"""
+            }.andExpect {
+                status { isOk() }
+            }
+        // 준비가 실패하면 아래 assertNull 은 저절로 통과한다 — 지울 것이 있었음을 먼저 못 박는다.
+        assertNotNull(deviceTokenRepository.findByToken(FcmToken(TOKEN)))
 
         mockMvc
             .delete(PATH) {
