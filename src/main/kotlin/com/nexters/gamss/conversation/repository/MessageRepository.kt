@@ -13,6 +13,12 @@ import java.time.Instant
 interface MessageRepository : JpaRepository<Message, Long> {
     fun findAllByConversationIdOrderByIdAsc(conversationId: Long): List<Message>
 
+    /** 특정 발신주체의 메시지만 작성순으로 조회한다(카드 감정 분류는 유저 메시지만 입력으로 쓴다). */
+    fun findAllByConversationIdAndSenderTypeOrderByIdAsc(
+        conversationId: Long,
+        senderType: SenderType,
+    ): List<Message>
+
     /** 특정 일기(root) 메시지에 달린 캐릭터 댓글·티키타카 전체를 작성순으로 조회한다. */
     fun findAllByRootMessageIdOrderByIdAsc(rootMessageId: Long): List<Message>
 
@@ -92,6 +98,9 @@ interface MessageRepository : JpaRepository<Message, Long> {
         @Param("from") from: Instant,
         @Param("to") to: Instant,
     ): Long
+
+    /** [commentStatus] 상태의 메시지 수. 모니터링 게이지(댓글 생성 적체)용 — 시각 조건 없이 현재 총량만 본다. */
+    fun countByCommentStatus(commentStatus: CommentStatus): Long
 
     /** [status] 상태로 [before] 이전부터 머문 메시지 수. 대시보드의 '막힌 PENDING'(고아 생성) KPI. */
     @Query(

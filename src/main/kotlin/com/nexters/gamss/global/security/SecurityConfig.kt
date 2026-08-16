@@ -71,6 +71,10 @@ class SecurityConfig(
                 // 관리자 로그인만 공개. /api/admin/** 의 나머지는 ROLE_ADMIN 을 요구한다.
                 "/api/admin/auth/login",
                 "/actuator/health",
+                // 모니터링 서버(gamss-monitor)가 긁어가는 메트릭. 공개 nginx 는 /actuator 전체를
+                // 404 로 막고 사설망 전용 블록(9102)만 이 경로를 프록시하므로, 외부에서는 도달할 수
+                // 없다 — 인증을 걸면 스크레이프마다 토큰을 관리해야 해서 네트워크 계층에서 통제한다.
+                "/actuator/prometheus",
                 "/swagger-ui/**",
                 "/swagger-ui.html",
                 "/v3/api-docs/**",

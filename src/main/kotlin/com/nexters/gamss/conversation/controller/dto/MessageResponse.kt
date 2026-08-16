@@ -14,7 +14,7 @@ data class MessageResponse(
     @field:Schema(
         description = "감정 캐릭터 (캐릭터 메시지에만 존재)",
         example = "JOY",
-        allowableValues = ["JOY", "ANGER", "ANXIETY", "GRUMPY", "WARM", "QUIRKY"],
+        allowableValues = ["JOY", "SADNESS", "ANGER", "ANXIETY", "GRUMPY", "QUIRKY"],
         nullable = true,
     )
     val emotionType: String?,

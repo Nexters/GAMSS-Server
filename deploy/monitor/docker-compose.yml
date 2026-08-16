@@ -1,0 +1,146 @@
+# GAMSS 모니터링 서버용 (gamss-monitor, 192.168.0.63)
+#
+# 관측 대상(dev·prod)과 관측 도구를 분리한 서버다. 앱 서버가 죽어도 알림은 살아 있어야 하므로
+# 여기에 스택을 따로 올린다. 필요한 환경변수는 같은 디렉토리 .env 에 정의한다(.env.example 참고).
+#
+# 배포는 dev/prod 와 달리 CD 가 없다(설정 변경 빈도가 낮고, 모니터링이 배포 파이프라인에
+# 의존하면 파이프라인이 고장났을 때 관측도 함께 잃는다). 갱신 절차는 README.md 참고.
+#
+# 4GB 서버 기준 실측 사용량: Grafana 86M / Prometheus 59M / Loki 50M / 그 외 16M (합 ~210M).
+# 각 서비스에 mem_limit 을 건다 — 카디널리티가 늘거나 큰 쿼리가 들어와 한 컨테이너가 호스트
+# 메모리를 잠식하면 커널 OOM killer 가 무엇을 죽일지 보장되지 않고, 관측 스택이 통째로
+# 사라지면 알림도 함께 사라진다. 상한에 걸리면 그 컨테이너만 재시작되고 cAdvisor 의 재시작
+# 지표에 흔적이 남는다. 값은 실측의 5~10배로, 합계(2.9G)가 호스트(3.9G)를 넘지 않게 잡았다.
+# 메모리보다 디스크(50GB)가 먼저 차므로 양쪽 다 보존 정책으로 상한을 건다
+# (Prometheus 30일·20GB, Loki 14일). 보존 정책 없이 두면 125번 이슈(도커 로그 무한 적재)와
+# 같은 방식으로 디스크가 차서 스택 전체가 멈춘다.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  grafana:
+    image: grafana/grafana:11.6.0
+    mem_limit: 512m
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      # 이 두 값은 최초 기동 때만 반영된다(그 뒤로는 Grafana 내부 DB 의 계정이 정본이다).
+      # 운영 중 계정 변경은 관리 API 로 한다 — README 의 '계정 변경' 참고.
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      # 공개 URL. 알림 메시지의 대시보드 링크가 이 값을 기준으로 만들어진다.
+      GF_SERVER_ROOT_URL: https://monitor.gamss.kr
+      # 가입 차단 — 계정은 admin 이 직접 만든다(공인 IP로 열려 있는 서비스다).
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      # 알림 컨택포인트(Discord)의 웹훅 URL. 프로비저닝 YAML 이 이 변수를 참조한다.
+      # 값이 없으면 compose 가 여기서 멈춘다 — 빈 값으로 뜨면 Grafana 가 컨택포인트 검증에
+      # 걸려 재시작을 반복하는데, 그때는 원인이 로그 깊숙이 묻혀 찾기 어렵다.
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:?DISCORD_WEBHOOK_URL 을 .env 에 설정해야 한다}
+    volumes:
+      - grafana-data:/var/lib/grafana
+      # 데이터소스·대시보드·알림은 전부 코드로 관리한다(UI 수정은 재기동 시 덮어써진다).
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    # 포트 미노출 → 앞단 nginx(monitor.gamss.kr)만 접근한다.
+    networks: [monitor]
+
+  prometheus:
+    image: prom/prometheus:v3.2.1
+    mem_limit: 1g
+    restart: unless-stopped
+    logging: *default-logging
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      # 시간·용량 두 조건 중 먼저 걸리는 쪽으로 삭제된다. 용량 상한이 최후의 안전장치다.
+      - --storage.tsdb.retention.time=30d
+      - --storage.tsdb.retention.size=20GB
+      - --web.enable-lifecycle
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks: [monitor]
+
+  loki:
+    image: grafana/loki:3.4.2
+    mem_limit: 1g
+    restart: unless-stopped
+    logging: *default-logging
+    command: -config.file=/etc/loki/loki.yml
+    volumes:
+      - ./loki/loki.yml:/etc/loki/loki.yml:ro
+      - loki-data:/loki
+    ports:
+      # dev·prod 의 promtail 이 여기로 로그를 밀어 넣는다. 사설 IP 에만 바인딩하고,
+      # 가비아 보안그룹에서도 dev·prod 사설 IP 만 허용한다(이중 차단).
+      # 도커 publish 는 ufw 를 우회하므로 바인딩 주소가 사실상 유일한 호스트단 방어선이다.
+      - "${PRIVATE_IP:-127.0.0.1}:3100:3100"
+    networks: [monitor]
+
+  # 모니터링 서버 자신의 리소스도 수집한다. 4GB 로 충분한지 판단할 근거이자,
+  # 관측 도구가 자기 디스크에 깔려 죽는 상황을 미리 잡기 위한 것이다.
+  node-exporter:
+    image: prom/node-exporter:v1.9.1
+    mem_limit: 128m
+    restart: unless-stopped
+    logging: *default-logging
+    command:
+      - --path.rootfs=/host
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc|var/lib/docker/.+)($$|/)
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+    networks: [monitor]
+
+  # 외부에서 본 도달성·인증서 만료를 잰다. 안에서 보는 지표로는 인증서 갱신 실패를 알 수 없다.
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.28.0
+    restart: unless-stopped
+    mem_limit: 128m
+    logging: *default-logging
+    command: --config.file=/etc/blackbox/blackbox.yml
+    volumes:
+      - ./blackbox/blackbox.yml:/etc/blackbox/blackbox.yml:ro
+    networks: [monitor]
+
+  nginx:
+    image: nginx:1.27-alpine
+    mem_limit: 128m
+    restart: unless-stopped
+    logging: *default-logging
+    depends_on: [grafana]
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf:/etc/nginx/conf.d:ro
+      - certbot-www:/var/www/certbot:ro
+      - certbot-conf:/etc/letsencrypt:ro
+    # 갱신된 인증서를 주기적으로 반영한다(무중단 reload). 90일 갱신 주기 대비.
+    command: sh -c "while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g 'daemon off;'"
+    networks: [monitor]
+
+  # HTTPS 인증서 발급·자동 갱신. 최초 발급은 서버에서 수동 1회(README 참고), 이후 12시간마다 갱신 시도.
+  certbot:
+    image: certbot/certbot:v5.7.0
+    mem_limit: 128m
+    restart: unless-stopped
+    logging: *default-logging
+    volumes:
+      - certbot-www:/var/www/certbot
+      - certbot-conf:/etc/letsencrypt
+    entrypoint: sh -c "trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done"
+    networks: [monitor]
+
+volumes:
+  grafana-data:
+  prometheus-data:
+  loki-data:
+  certbot-www: # ACME HTTP-01 챌린지 웹루트 (certbot 작성 → nginx 서빙)
+  certbot-conf: # 발급된 인증서(/etc/letsencrypt)
+
+networks:
+  monitor:

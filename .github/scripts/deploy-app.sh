@@ -41,6 +41,26 @@ write_env_value() {
   echo "${key}=${value}" >> "$file"
 }
 
+# 모니터링 수집 포트(9100·9101·9102)를 바인딩할 사설 IP.
+# 기본 라우트가 나가는 인터페이스의 주소를 쓴다 — `hostname -I` 는 docker0(172.17.x) 같은
+# 브리지 주소가 먼저 나올 수 있어 신뢰할 수 없다.
+#
+# 결과는 RFC1918 대역(10/8·172.16~31/12·192.168/16)으로 한정한다. `scope global` 은 사설이
+# 아니라 '링크로컬이 아님'을 뜻해서 공인 주소도 포함하는데, 그대로 쓰면 공인 인터페이스에
+# 수집 포트를 열어버린다. 못 찾으면 빈 값을 반환하고, compose 가 127.0.0.1 로 떨어뜨려
+# 수집만 안 되게 한다(0.0.0.0 으로 열리는 것보다 안전한 실패다).
+detect_private_ip() {
+  local iface addr
+  iface="$(ip -4 route show default 2>/dev/null | awk '{print $5; exit}')" || return 0
+  [[ -n "$iface" ]] || return 0
+  addr="$(
+    ip -4 -o addr show dev "$iface" scope global 2>/dev/null |
+      awk '{print $4}' | cut -d/ -f1 |
+      grep -E '^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.)' | head -n1 || true
+  )"
+  printf '%s' "$addr"
+}
+
 wait_for_health() {
   local attempt
   for ((attempt = 1; attempt <= HEALTH_RETRIES; attempt++)); do
@@ -51,6 +71,17 @@ wait_for_health() {
     sleep "$HEALTH_INTERVAL"
   done
   return 1
+}
+
+restart_promtail() {
+  # promtail.yml 은 bind mount 라, 파일만 바뀌면 `up -d` 가 컨테이너를 다시 만들지 않는다.
+  # 그러면 새 설정이 반영되지 않은 채 이전 설정으로 계속 돈다(라벨이 바뀌어도 그대로).
+  # 재시작 비용은 로그 수집 1~2초 공백뿐이고, 위치는 positions 볼륨에 남아 유실되지 않는다.
+  if docker compose restart promtail >/dev/null 2>&1; then
+    log "promtail 재시작 완료(설정 반영)"
+    return
+  fi
+  log "promtail 재시작 실패 — 수집 설정이 이전 값일 수 있다"
 }
 
 reload_nginx() {
@@ -106,6 +137,19 @@ main() {
 
   write_env_value IMAGE_TAG "$NEW_TAG" .env
 
+  # 매 배포마다 다시 감지한다 — 서버를 옮기거나 NIC 가 바뀌어도 .env 를 손대지 않아도 되게.
+  local private_ip
+  private_ip="$(detect_private_ip || true)"
+  if [[ -n "$private_ip" ]]; then
+    write_env_value PRIVATE_IP "$private_ip" .env
+    log "사설 IP 감지: ${private_ip} (모니터링 수집 포트 바인딩)"
+  else
+    # 실패했을 때 이전 값을 남겨두면 그 주소에 계속 바인딩된다(서버 이전·NIC 교체 후 위험).
+    # 빈 값으로 덮어써야 compose 의 기본값(127.0.0.1)이 실제로 적용된다.
+    write_env_value PRIVATE_IP "" .env
+    log "사설 IP 를 찾지 못했다 — 수집 포트는 127.0.0.1 에만 열린다(외부 노출 없음)"
+  fi
+
   log "이미지 pull: ${NEW_TAG}"
   if ! docker compose pull app admin; then
     write_env_value IMAGE_TAG "${prev_tag}" .env
@@ -126,6 +170,7 @@ main() {
   log "헬스체크 대기 (최대 $((HEALTH_RETRIES * HEALTH_INTERVAL))초)"
   if wait_for_health; then
     reload_nginx
+    restart_promtail
     log "배포 완료: ${NEW_TAG}"
     docker image prune -f >/dev/null 2>&1 || true
     exit 0

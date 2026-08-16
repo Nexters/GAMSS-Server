@@ -1,0 +1,21 @@
+# 외부에서 본 서비스 상태를 재는 프로브 설정.
+#
+# 안에서 보는 지표(앱 메트릭·호스트 자원)로는 알 수 없는 것들이 있다 — 인증서 만료, DNS 문제,
+# nginx 앞단에서 끊기는 경우다. 특히 인증서는 certbot 이 자동 갱신하지만 **갱신 실패를 아무도
+# 모르는 것**이 문제였다. 90일 뒤 사이트가 죽고 나서야 알게 된다.
+modules:
+  https_check:
+    prober: http
+    timeout: 10s
+    http:
+      valid_http_versions: [HTTP/1.1, HTTP/2.0]
+      # 목적이 '살아 있고 인증서가 유효한가' 라서 인증 요구(401)·없는 경로(404)도 성공으로 본다.
+      # api.gamss.kr 루트는 인증이 필요하고 admin 은 SPA 를 돌려주는 등 도메인마다 응답이 다르다.
+      valid_status_codes: [200, 301, 302, 401, 403, 404]
+      method: GET
+      # 리다이렉트를 따라가면 최종 도착지의 인증서를 재게 된다. 각 도메인 자신의 인증서를 봐야 한다.
+      follow_redirects: false
+      preferred_ip_protocol: ip4
+      tls_config:
+        # 만료·체인 오류를 그대로 잡아내야 하므로 검증을 건너뛰지 않는다.
+        insecure_skip_verify: false

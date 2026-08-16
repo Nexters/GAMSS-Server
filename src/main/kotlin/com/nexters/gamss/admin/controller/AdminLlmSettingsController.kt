@@ -35,8 +35,10 @@ import org.springframework.web.bind.annotation.RestController
     name = "백오피스 LLM 설정",
     description =
         "LLM 모델·시스템 프롬프트 조회·수정 (ROLE_ADMIN 필요). 재배포 없이 다음 생성부터 반영. " +
-            "모델은 앱 전체 단일 설정이고, 프롬프트는 타입별(COMMON 공통 + COMMENT/REPLY/CARD)로 조립된다. " +
-            "EONGTTUNG_TOPIC은 조립에 쓰이지 않는 엉뚱이 소재 목록(한 줄에 소재 하나)으로, 생성 시 서버가 한 줄을 무작위로 골라 유저 콘텐츠에 넣는다.",
+            "모델은 앱 전체 단일 설정이고, 프롬프트는 타입별(COMMON 공통 + COMMENT/REPLY)로 조립된다. " +
+            "EONGTTUNG_TOPIC은 조립에 쓰이지 않는 엉뚱이 소재 목록(한 줄에 소재 하나)으로, 생성 시 서버가 한 줄을 무작위로 골라 유저 콘텐츠에 넣는다. " +
+            "CARD_EMOTION도 조립에 쓰이지 않는다 — 카드 생성 요청에 emotion이 없을 때 유저 메시지(없으면 요청 summary)를 보고 감정 6종 중 하나를 고르는 분류 프롬프트로 단독 사용된다. " +
+            "CARD 역시 조립하지 않는다 — 카드 한 줄은 캐릭터 말투를 쓰지 않는 요약이라, 캐릭터 보이스 카드가 담긴 COMMON을 앞에 붙이면 지시가 서로 충돌한다.",
 )
 @Validated
 @RestController
@@ -53,7 +55,7 @@ class AdminLlmSettingsController(
     @Operation(
         summary = "모델 수정",
         description =
-            "앱 전체 모델을 갱신합니다(댓글·답글·카드 공통).\n\n" +
+            "앱 전체 모델을 갱신합니다(댓글·답글·카드 생성과 카드 감정 분류 공통).\n\n" +
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +

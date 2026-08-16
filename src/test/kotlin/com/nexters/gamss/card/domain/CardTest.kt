@@ -30,6 +30,17 @@ class CardTest {
     }
 
     @Test
+    fun `요약이 상한을 넘으면 생성할 수 없다`() {
+        // 길이를 맞추는 것은 CardSummary.normalize의 몫이다 — 그걸 거치지 않은 경로가 생기면 여기서 걸린다.
+        assertFailsWith<IllegalArgumentException> { card(summary = "가".repeat(CardSummary.MAX_LENGTH + 1)) }
+    }
+
+    @Test
+    fun `요약에 개행이 있으면 생성할 수 없다`() {
+        assertFailsWith<IllegalArgumentException> { card(summary = "첫 줄\n둘째 줄") }
+    }
+
+    @Test
     fun `대사가 비어 있으면 생성할 수 없다`() {
         assertFailsWith<IllegalArgumentException> { card(message = " ") }
     }

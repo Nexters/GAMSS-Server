@@ -1,0 +1,17 @@
+# 대시보드는 UI 가 아니라 파일로 관리한다. UI 에서 고친 내용은 재기동 시 이 파일들로 덮어써진다
+# (allowUiUpdates 를 켜지 않는 이유 — 누가 언제 무엇을 바꿨는지 레포 히스토리에만 남게 하려는 것이다).
+apiVersion: 1
+
+providers:
+  - name: gamss
+    orgId: 1
+    type: file
+    disableDeletion: false
+    # 폴더 없이 최상단에 둔다. 대시보드가 4개뿐이라 폴더는 클릭만 늘린다.
+    folder: ""
+    updateIntervalSeconds: 30
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards
+      # 파일 경로 구조를 Grafana 폴더로 그대로 옮기지 않는다(모두 최상단).
+      foldersFromFilesStructure: false

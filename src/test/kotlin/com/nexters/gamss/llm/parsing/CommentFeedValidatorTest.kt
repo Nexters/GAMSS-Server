@@ -6,7 +6,7 @@ import kotlin.test.assertFailsWith
 
 class CommentFeedValidatorTest {
     private val validator = CommentFeedValidator()
-    private val characters = listOf(EmotionType.JOY, EmotionType.WARM, EmotionType.GRUMPY)
+    private val characters = listOf(EmotionType.JOY, EmotionType.SADNESS, EmotionType.GRUMPY)
     private val tikitakaCount = 3
 
     private fun validFeed() =
@@ -14,8 +14,8 @@ class CommentFeedValidatorTest {
             comments = characters.map { CommentDraft(it, "댓글-$it") },
             tikitaka =
                 listOf(
-                    TikitakaDraft(EmotionType.JOY, EmotionType.WARM, "티키타카1"),
-                    TikitakaDraft(EmotionType.WARM, EmotionType.GRUMPY, "티키타카2"),
+                    TikitakaDraft(EmotionType.JOY, EmotionType.SADNESS, "티키타카1"),
+                    TikitakaDraft(EmotionType.SADNESS, EmotionType.GRUMPY, "티키타카2"),
                     TikitakaDraft(EmotionType.GRUMPY, EmotionType.JOY, "티키타카3"),
                 ),
         )
@@ -70,7 +70,7 @@ class CommentFeedValidatorTest {
 
     @Test
     fun `tikitaka 개수가 요청한 개수와 다르면 실패한다`() {
-        val feed = validFeed().copy(tikitaka = listOf(TikitakaDraft(EmotionType.JOY, EmotionType.WARM, "한 개뿐")))
+        val feed = validFeed().copy(tikitaka = listOf(TikitakaDraft(EmotionType.JOY, EmotionType.SADNESS, "한 개뿐")))
 
         assertFailsWith<CommentGenerationFailedException> { validator.validate(feed, characters, tikitakaCount) }
     }

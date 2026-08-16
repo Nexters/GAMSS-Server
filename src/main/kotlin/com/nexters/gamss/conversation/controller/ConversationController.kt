@@ -2,8 +2,11 @@ package com.nexters.gamss.conversation.controller
 
 import com.nexters.gamss.conversation.controller.dto.CommentGenerationResponse
 import com.nexters.gamss.conversation.controller.dto.CommentGenerationStatus
+import com.nexters.gamss.conversation.controller.dto.ConversationDeleteResponse
+import com.nexters.gamss.conversation.controller.dto.ConversationDetailResponse
 import com.nexters.gamss.conversation.controller.dto.ConversationResponse
 import com.nexters.gamss.conversation.controller.dto.ConversationSearchResponse
+import com.nexters.gamss.conversation.controller.dto.DeleteConversationsRequest
 import com.nexters.gamss.conversation.controller.dto.GenerateCommentsRequest
 import com.nexters.gamss.conversation.controller.dto.MessageResponse
 import com.nexters.gamss.conversation.controller.dto.ReplyGenerationResponse
@@ -67,6 +70,7 @@ class ConversationController(
                 "| INVALID_INPUT | 400 | content 누락·140자 초과, 잘못된 답장 대상, 또는 excludeCharacters가 전체 캐릭터를 제외함 |\n" +
                 "| CONVERSATION_NOT_FOUND | 404 | 존재하지 않는 채팅방 |\n" +
                 "| CONVERSATION_ACCESS_DENIED | 403 | 본인 채팅방이 아님 |\n" +
+                "| CONVERSATION_ENDED | 409 | 종료된 채팅방 — 매일 새벽 5시 자동 종료로 닫혔을 수 있습니다. 새 채팅방으로 재전송하세요 |\n" +
                 "| CONVERSATION_ALREADY_DELETED | 409 | 삭제된 채팅방 |",
     )
     @PostMapping("/messages")
@@ -81,6 +85,7 @@ class ConversationController(
                 content = request.content,
                 repliesToMessageId = request.repliesToMessageId,
                 excludeCharacters = request.excludeCharacters,
+                currentConversationSummary = request.currentConversationSummary,
             )
         val result = commentGenerationService.generateFor(principal.memberId, message, request.currentConversationSummary)
         return ApiResponse.success(SaveMessageResponse.from(message, result))
@@ -204,9 +209,39 @@ class ConversationController(
     }
 
     @Operation(
-        summary = "채팅방 메시지 전체 조회",
+        summary = "채팅방 상세 조회",
         description =
-            "채팅방의 메시지를 기본적으로 작성순으로 반환하되, 캐릭터끼리 주고받는 티키타카는 자신이 답장한 " +
+            "채팅방 정보와 그 채팅방의 메시지 전체를 함께 반환합니다. 방을 열 때 필요한 값(생성 일시·제목·상태)과 " +
+                "메시지를 한 번의 요청으로 받습니다.\n\n" +
+                "- 메시지는 **전량 반환**합니다(페이징 없음).\n" +
+                "- 메시지 순서 규칙은 `GET /{conversationId}/messages`와 같습니다 — 작성순이되 캐릭터끼리 주고받는 " +
+                "티키타카는 자신이 답장한 댓글 바로 다음에 배치됩니다.\n\n" +
+                "**실패 응답**\n\n" +
+                "| error.code | HTTP | 설명 |\n" +
+                "|---|---|---|\n" +
+                "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·무효) |\n" +
+                "| EXPIRED_TOKEN | 401 | accessToken 만료 — 재발급 후 재시도 |\n" +
+                "| CONVERSATION_NOT_FOUND | 404 | 존재하지 않는 채팅방 |\n" +
+                "| CONVERSATION_ACCESS_DENIED | 403 | 본인 채팅방이 아님 |\n" +
+                "| CONVERSATION_ALREADY_DELETED | 409 | 삭제된 채팅방 |",
+    )
+    @GetMapping("/{conversationId}")
+    fun getConversationDetail(
+        @Parameter(hidden = true) @AuthenticationPrincipal principal: AuthPrincipal,
+        @PathVariable conversationId: Long,
+    ): ApiResponse<ConversationDetailResponse> {
+        val detail = conversationService.getConversationDetail(principal.memberId, conversationId)
+        return ApiResponse.success(ConversationDetailResponse.from(detail))
+    }
+
+    @Operation(
+        summary = "채팅방 메시지 전체 조회 (deprecated)",
+        deprecated = true,
+        description =
+            "**`GET /api/conversations/{conversationId}`(채팅방 상세 조회)로 대체되었습니다.** 그쪽은 같은 메시지에 " +
+                "대화방 정보(생성 일시·제목·상태)까지 함께 내려줍니다. 이 엔드포인트는 기존 클라이언트를 위해 " +
+                "당분간 유지되며, 이전이 끝나면 제거됩니다.\n\n" +
+                "채팅방의 메시지를 기본적으로 작성순으로 반환하되, 캐릭터끼리 주고받는 티키타카는 자신이 답장한 " +
                 "댓글 바로 다음에 오도록 재배치합니다(대화 스레드처럼 보이도록). 그 외 메시지(유저 메시지, " +
                 "유저 답글에 대한 캐릭터 응답 등)는 작성 시각 순서 그대로입니다.\n\n" +
                 "**실패 응답**\n\n" +
@@ -312,6 +347,8 @@ class ConversationController(
         description =
             "채팅방을 삭제합니다. 종료 여부와 무관하게 삭제할 수 있으며, 삭제된 채팅방은 목록 조회·메시지 조회·메시지 추가·종료 등 " +
                 "어떤 요청에도 더 이상 응할 수 없습니다.\n\n" +
+                "- **카드가 만들어진 채팅방을 지우면 그 카드도 함께 삭제됩니다.** 그 카드는 날짜별·월별 조회에서 사라지고, " +
+                "이후 `DELETE /api/cards/{cardId}`는 `CARD_ALREADY_DELETED`(409)로 응답합니다.\n\n" +
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +
@@ -328,6 +365,32 @@ class ConversationController(
     ): ApiResponse<ConversationResponse> {
         val conversation = conversationService.deleteConversation(principal.memberId, conversationId)
         return ApiResponse.success(ConversationResponse.from(conversation))
+    }
+
+    @Operation(
+        summary = "채팅방 일괄 삭제",
+        description =
+            "채팅방 여러 개를 한 번에 삭제하고, 삭제된 개수를 돌려줍니다. 삭제된 채팅방은 단건 삭제와 똑같이 " +
+                "목록 조회·메시지 조회·메시지 추가·종료 등 어떤 요청에도 더 이상 응할 수 없습니다.\n\n" +
+                "- **본인 채팅방만 삭제됩니다.** 남의 채팅방·존재하지 않는 채팅방 ID가 섞여 있어도 그것만 빠지고 " +
+                "나머지는 정상 삭제됩니다(단건 삭제처럼 403·404로 전체가 거절되지 않습니다).\n" +
+                "- 이미 삭제한 채팅방은 다시 세지 않습니다. **연속 호출해도 안전합니다.**\n" +
+                "- 대상이 하나도 없으면 `deletedCount: 0`으로 **성공**합니다.\n" +
+                "- **카드가 만들어진 채팅방을 지우면 그 카드도 함께 삭제됩니다.**\n\n" +
+                "**실패 응답**\n\n" +
+                "| error.code | HTTP | 설명 |\n" +
+                "|---|---|---|\n" +
+                "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·무효) |\n" +
+                "| EXPIRED_TOKEN | 401 | accessToken 만료 — 재발급 후 재시도 |\n" +
+                "| INVALID_INPUT | 400 | conversationIds가 비었거나 ${DeleteConversationsRequest.MAX_IDS}개를 넘음 |",
+    )
+    @DeleteMapping
+    fun deleteConversations(
+        @Parameter(hidden = true) @AuthenticationPrincipal principal: AuthPrincipal,
+        @Valid @RequestBody request: DeleteConversationsRequest,
+    ): ApiResponse<ConversationDeleteResponse> {
+        val deletedCount = conversationService.deleteConversations(principal.memberId, request.conversationIds)
+        return ApiResponse.success(ConversationDeleteResponse(deletedCount))
     }
 
     companion object {

@@ -45,7 +45,7 @@ enum class ErrorCode(
 
     // 카드
     CARD_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 카드가 생성된 채팅방입니다."),
-    CARD_GENERATION_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "카드 대사 생성에 실패했습니다. 잠시 후 다시 시도해주세요."),
+    CARD_GENERATION_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "카드 생성에 실패했습니다. 잠시 후 다시 시도해주세요."),
     CARD_GENERATION_IN_PROGRESS(HttpStatus.CONFLICT, "카드를 생성하는 중입니다. 잠시 후 다시 시도해주세요."),
     CARD_NOT_FOUND(HttpStatus.NOT_FOUND, "카드를 찾을 수 없습니다."),
     CARD_ACCESS_DENIED(HttpStatus.FORBIDDEN, "본인의 카드만 접근할 수 있습니다."),

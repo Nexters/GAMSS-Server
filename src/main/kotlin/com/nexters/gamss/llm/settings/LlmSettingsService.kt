@@ -10,7 +10,8 @@ import org.springframework.transaction.annotation.Transactional
 
 /**
  * LLM 생성 설정 조회·수정. 두 종류를 관리한다:
- * - **모델**: 앱 전체 단일 설정(댓글·답글·카드가 같은 모델 사용). 물리적으로는 [PromptType.COMMON] 행에 저장한다.
+ * - **모델**: 앱 전체 단일 설정(댓글·답글·카드 생성과 카드 감정 분류가 같은 모델 사용).
+ *   물리적으로는 [PromptType.COMMON] 행에 저장한다.
  * - **프롬프트**: [PromptType]별 원본(백오피스 편집 단위). 생성기가 쓰는 조립본(COMMON + 타입)은 [SystemPromptResolver]가 만든다.
  *
  * 프롬프트의 단일 원본은 DB다 — V23 시딩이 모든 타입의 행을 보장하므로 코드 폴백은 없고,

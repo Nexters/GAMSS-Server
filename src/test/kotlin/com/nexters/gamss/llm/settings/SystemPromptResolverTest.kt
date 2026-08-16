@@ -14,12 +14,12 @@ class SystemPromptResolverTest {
     @Test
     fun `단일 모델과 공통+타입 조립 프롬프트를 돌려준다`() {
         every { llmSettingsService.currentCommonView() } returns LlmSettingsView("gemini-2.5-flash", "공통규칙")
-        every { llmSettingsService.currentPrompt(PromptType.CARD) } returns "카드규칙"
+        every { llmSettingsService.currentPrompt(PromptType.COMMENT) } returns "댓글규칙"
 
-        val result = resolver.resolve(PromptType.CARD)
+        val result = resolver.resolve(PromptType.COMMENT)
 
         assertEquals("gemini-2.5-flash", result.model)
-        assertEquals("공통규칙\n\n카드규칙", result.systemPrompt)
+        assertEquals("공통규칙\n\n댓글규칙", result.systemPrompt)
     }
 
     @Test
@@ -34,6 +34,17 @@ class SystemPromptResolverTest {
     @Test
     fun `소재 목록 타입은 시스템 프롬프트로 조립할 수 없다`() {
         assertFailsWith<IllegalArgumentException> { resolver.resolve(PromptType.EONGTTUNG_TOPIC) }
+    }
+
+    @Test
+    fun `감정 분류 타입은 시스템 프롬프트로 조립할 수 없다`() {
+        assertFailsWith<IllegalArgumentException> { resolver.resolve(PromptType.CARD_EMOTION) }
+    }
+
+    @Test
+    fun `카드 타입은 시스템 프롬프트로 조립할 수 없다`() {
+        // 조립하면 COMMON의 "캐릭터 말투를 지켜라"와 CARD의 "캐릭터 말투를 쓰지 마라"가 충돌한다.
+        assertFailsWith<IllegalArgumentException> { resolver.resolve(PromptType.CARD) }
     }
 
     @Test
@@ -67,6 +78,20 @@ class SystemPromptResolverTest {
     fun `미리보기 조립도 소재 목록 타입을 거부한다`() {
         assertFailsWith<IllegalArgumentException> {
             resolver.resolveForPreview(PromptType.EONGTTUNG_TOPIC, null, null)
+        }
+    }
+
+    @Test
+    fun `미리보기 조립도 감정 분류 타입을 거부한다`() {
+        assertFailsWith<IllegalArgumentException> {
+            resolver.resolveForPreview(PromptType.CARD_EMOTION, null, null)
+        }
+    }
+
+    @Test
+    fun `미리보기 조립도 카드 타입을 거부한다`() {
+        assertFailsWith<IllegalArgumentException> {
+            resolver.resolveForPreview(PromptType.CARD, null, null)
         }
     }
 }

@@ -13,6 +13,7 @@ import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -20,12 +21,17 @@ import java.time.ZoneId
 class ConversationService(
     private val conversationRepository: ConversationRepository,
     private val messageRepository: MessageRepository,
+    private val cleaners: DeletedConversationCleaners,
 ) {
     /**
      * 사용자 메시지를 저장한다. conversationId가 없으면 새 채팅방을 만들어 담는다.
      *
      * [excludeCharacters]는 새 채팅방을 만들 때만 반영된다 — 기존 채팅방(conversationId 있음)에
      * 이어서 보내는 요청에 함께 와도 조용히 무시하고 최초 설정을 그대로 둔다.
+     *
+     * [currentConversationSummary]는 프론트가 매 요청마다 보내는 이 대화의 압축본으로, 댓글 생성
+     * 컨텍스트로 쓰는 것과 별개로 여기서 최신값을 저장해둔다 — 사용자가 종료 버튼을 누르지 않아도
+     * 자동 종료 배치가 이 값으로 카드를 만들 수 있어야 하기 때문이다. 빈 값은 저장하지 않는다.
      */
     @Transactional
     fun saveUserMessage(
@@ -34,6 +40,7 @@ class ConversationService(
         content: String,
         repliesToMessageId: Long? = null,
         excludeCharacters: List<EmotionType>? = null,
+        currentConversationSummary: String? = null,
     ): Message {
         if (conversationId == null && repliesToMessageId != null) {
             throw BusinessException(ErrorCode.INVALID_INPUT, "새 채팅방을 만들면서 답장할 수 없습니다.")
@@ -45,6 +52,7 @@ class ConversationService(
         if (repliesToMessageId != null) {
             validateReplyTarget(repliesToMessageId, conversation.id)
         }
+        currentConversationSummary?.takeIf { it.isNotBlank() }?.let { conversation.updateSummary(it) }
         val message =
             conversation.createMessage(
                 senderType = SenderType.USER,
@@ -66,15 +74,78 @@ class ConversationService(
         return conversation
     }
 
-    /** 채팅방을 삭제한다. 삭제 후에는 채팅방 목록·메시지 조회에 나타나지 않는다. */
+    /**
+     * 자동 종료 배치용 종료. 사용자 요청이 아니므로 소유권을 검사하지 않고, 이미 종료된 방도 예외
+     * 없이 그대로 돌려준다 — 종료까지만 되고 카드 생성에서 끊긴 방을 다음 실행이 이어서 처리해야
+     * 하기 때문이다. 삭제된 방은 대상이 아니므로 null.
+     */
+    @Transactional
+    fun endForAutoBatch(conversationId: Long): Conversation? {
+        val conversation = conversationRepository.findByIdForUpdate(conversationId).orElse(null) ?: return null
+        if (conversation.isDeleted()) {
+            return null
+        }
+        if (conversation.status == ConversationStatus.ACTIVE) {
+            conversation.end()
+        }
+        return conversation
+    }
+
+    /**
+     * 채팅방을 삭제한다. 삭제 후에는 채팅방 목록·메시지 조회에 나타나지 않는다.
+     *
+     * 이 방에 딸린 자원(카드 등)도 같은 시각으로 함께 정리한다([DeletedConversationCleaner]) —
+     * 방이 사라졌는데 카드만 살아 있으면 반대 방향(카드를 지우면 방까지 지운다)과 데이터가 어긋난다.
+     *
+     * **정리를 채팅방 잠금보다 먼저 한다.** 카드 단건 삭제
+     * ([com.nexters.gamss.card.service.CardService.deleteCard])가 카드 → 채팅방 순으로 행을 잡으므로,
+     * 여기서 채팅방을 먼저 잠그면 동시에 들어온 두 요청이 서로가 잡은 행을 기다리다 데드락으로 죽는다.
+     * 그래서 소유권·삭제 여부는 잠그지 않는 읽기로 먼저 확인하고, 상태 전이는 잠금을 잡은 뒤
+     * [Conversation.delete]가 다시 판정한다 — 그 사이 다른 요청이 삭제를 끝냈다면 여기서
+     * CONVERSATION_ALREADY_DELETED로 실패하고 앞서 지운 자원도 함께 롤백된다.
+     */
     @Transactional
     fun deleteConversation(
         memberId: Long,
         conversationId: Long,
     ): Conversation {
+        getOwnedConversation(conversationId, memberId).ensureNotDeleted()
+        cleaners.cleanAll(listOf(conversationId), Instant.now())
         val conversation = getOwnedConversationForUpdate(conversationId, memberId)
         conversation.delete()
         return conversation
+    }
+
+    /**
+     * 채팅방 여러 개를 한 번에 삭제하고 실제로 삭제된 개수를 돌려준다.
+     *
+     * 본인 방만 지운다 — 남의 방·없는 방·이미 지운 방 id가 섞여 있어도 그것만 빠지고 나머지는
+     * 정상 삭제된다(카드 일괄 삭제와 같은 계약). 단건 삭제처럼 403·404·409로 전체를 거절하면 id
+     * 하나 때문에 나머지를 못 지우고, 연속 호출도 안전하지 않다.
+     *
+     * 행 잠금을 쓰지 않는다 — 삭제는 `status <> DELETED` 조건부 UPDATE라 동시에 들어온 요청이
+     * 같은 방을 두 번 세지 않는다.
+     *
+     * **딸린 자원을 먼저 정리하고 채팅방을 지운다.** 카드 일괄 삭제
+     * ([com.nexters.gamss.card.service.CardService.deleteCardsWithConversations])가 카드 → 채팅방
+     * 순으로 행을 잡으므로, 반대로 잡으면 동시에 들어온 두 요청이 데드락으로 죽는다. 대상은
+     * [ConversationRepository.findDeletableIds]로 이미 확정해둔 뒤라 순서를 바꿔도 지워지는 집합은
+     * 같다.
+     */
+    @Transactional
+    fun deleteConversations(
+        memberId: Long,
+        conversationIds: List<Long>,
+    ): Int {
+        val deletableIds = conversationRepository.findDeletableIds(memberId, conversationIds.distinct())
+        if (deletableIds.isEmpty()) {
+            return 0
+        }
+        // 채팅방과 딸린 자원에 같은 시각을 찍는다 — 한 번의 삭제로 사라진 것들이 이력에서 서로 다른
+        // 요청처럼 보이지 않아야 한다(카드 일괄 삭제도 같은 이유로 시각을 공유한다).
+        val now = Instant.now()
+        cleaners.cleanAll(deletableIds, now)
+        return conversationRepository.softDeleteByIds(deletableIds, now)
     }
 
     /**
@@ -150,15 +221,34 @@ class ConversationService(
     fun getInProgressConversations(memberId: Long): List<Conversation> =
         conversationRepository.findAllByMemberIdAndStatus(memberId, ConversationStatus.ACTIVE)
 
+    /**
+     * 채팅방 하나와 그 메시지 전부를 함께 읽는다. 방을 열 때 필요한 건 메시지만이 아니라 생성 날짜
+     * 같은 방 자체의 정보이기도 한데, 둘을 따로 읽으면 소유권·삭제 판정을 두 번 하게 되고 그 사이
+     * 상태가 바뀔 수도 있다 — 한 트랜잭션에서 한 번의 판정으로 묶는다.
+     *
+     * 메시지는 전량 반환한다(페이징 없음) — [getMessages]와 같은 계약이다.
+     */
+    @Transactional(readOnly = true)
+    fun getConversationDetail(
+        memberId: Long,
+        conversationId: Long,
+    ): ConversationDetail {
+        val conversation = getOwnedConversation(conversationId, memberId)
+        conversation.ensureNotDeleted()
+        val messages =
+            MessageThreadOrder.reorderTikitakaAfterTarget(messageRepository.findAllByConversationIdOrderByIdAsc(conversationId))
+        return ConversationDetail(conversation, messages)
+    }
+
+    /**
+     * 메시지만 조회한다. 상세 조회를 그대로 태워, 순서·티키타카 재배치·권한·삭제 판정이 두 경로에서
+     * 갈라지지 않게 한다.
+     */
     @Transactional(readOnly = true)
     fun getMessages(
         memberId: Long,
         conversationId: Long,
-    ): List<Message> {
-        val conversation = getOwnedConversation(conversationId, memberId)
-        conversation.ensureNotDeleted()
-        return MessageThreadOrder.reorderTikitakaAfterTarget(messageRepository.findAllByConversationIdOrderByIdAsc(conversationId))
-    }
+    ): List<Message> = getConversationDetail(memberId, conversationId).messages
 
     private fun getOwnedConversation(
         conversationId: Long,

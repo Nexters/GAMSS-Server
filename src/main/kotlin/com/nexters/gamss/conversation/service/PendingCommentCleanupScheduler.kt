@@ -2,6 +2,8 @@ package com.nexters.gamss.conversation.service
 
 import com.nexters.gamss.conversation.config.ConversationProperties
 import com.nexters.gamss.conversation.repository.MessageRepository
+import io.micrometer.core.instrument.Counter
+import io.micrometer.core.instrument.MeterRegistry
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
@@ -15,13 +17,26 @@ import java.time.Instant
 class PendingCommentCleanupScheduler(
     private val messageRepository: MessageRepository,
     private val properties: ConversationProperties,
+    meterRegistry: MeterRegistry,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
+
+    // 되돌린 고아 PENDING 건수. 평소 0 이다가 튀면 그 시각에 앱이 끊겼다는 뜻이라 배포·크래시의 흔적이 된다.
+    private val staleResetCounter =
+        Counter
+            .builder("gamss.pending.stale.reset")
+            .description("타임아웃으로 NONE 으로 되돌린 고아 PENDING 건수")
+            .tag("kind", "comment")
+            .register(meterRegistry)
 
     @Scheduled(fixedDelay = CHECK_INTERVAL_MILLIS)
     fun resetStalePending() {
         val threshold = Instant.now().minus(properties.pendingGenerationTimeout)
-        PendingCleanupSupport.resetStalePendingAndLog(log, threshold, "댓글 생성") { messageRepository.resetStalePending(it) }
+        val resetCount =
+            PendingCleanupSupport.resetStalePendingAndLog(log, threshold, "댓글 생성") {
+                messageRepository.resetStalePending(it)
+            }
+        staleResetCounter.increment(resetCount.toDouble())
     }
 
     companion object {

@@ -18,6 +18,11 @@ spring:
 # 앱 포트는 127.0.0.1 에만 바인딩돼 nginx만 접근하므로 이 헤더를 신뢰해도 안전하다(외부에서 위조 주입 불가).
 server:
   forward-headers-strategy: framework
+  tomcat:
+    mbeanregistry:
+      # 톰캣 스레드풀 메트릭(tomcat.threads.busy 등)은 MBean 등록이 켜져야 노출된다.
+      # LLM 호출이 응답까지 요청 스레드를 붙잡는 구조라 스레드 포화가 곧 장애다 — 반드시 관측해야 한다.
+      enabled: true
 
 jwt:
   secret: ${JWT_SECRET}
@@ -32,8 +37,21 @@ admin:
   # 백오피스 접근 허용 이메일(쉼표 구분). 구글 로그인 후 이 목록에 있어야 관리자 토큰을 발급한다.
   emails: ${ADMIN_EMAILS:}
 
+gamss:
+  build:
+    # 배포 스크립트가 서버 .env 에 넣고 compose 가 컨테이너로 넘기는 이미지 태그.
+    # 로컬·테스트에는 없으므로 unknown 으로 떨어진다(메트릭 라벨로만 쓰인다).
+    image-tag: ${IMAGE_TAG:unknown}
+
 conversation:
   pending-generation-timeout: PT3M
+
+card:
+  # 자동 종료·카드 생성 배치가 다루는 가장 이른 대화방 생성일(KST). 이 날 이전에 만들어진 방은
+  # 요약이 없어(요약 저장이 이 기능부터 시작됐다) 카드는 못 만들고 종료만 되므로 아예 제외한다.
+  # 배포일에 맞춰 조정한다 — 늦게 잡으면 그 사이 방들이 배치 대상에서 빠질 뿐이지만, 이르게 잡으면
+  # 요약 없는 방들이 카드 없이 닫힌다.
+  auto-card-start-date: 2026-08-15
 
 gemini:
   api-key: ${GEMINI_API_KEY}
@@ -56,9 +74,23 @@ springdoc:
 management:
   endpoints:
     web:
+      # prometheus 는 모니터링 서버(gamss-monitor)가 15초마다 긁어가는 메트릭 엔드포인트다.
+      # 공개 nginx(gamss.conf)는 /actuator 전체를 404로 막고, 사설망 전용 nginx 블록(9102)만
+      # 이 경로를 프록시한다 — 노출 범위는 네트워크 계층에서 통제한다.
       exposure:
-        include: health
+        include: health,prometheus
   endpoint:
     health:
       show-details: never
+  metrics:
+    distribution:
+      # p95·p99 를 Prometheus 쪽(histogram_quantile)에서 계산하려면 버킷이 필요하다.
+      # 앱이 미리 계산한 분위수는 인스턴스 간 합산이 불가능하고 시간 범위도 고정된다.
+      percentiles-histogram:
+        "[http.server.requests]": true
+        "[gamss.llm.generation]": true
+      # 버킷 상한. 기본 상한(30초)을 쓰면 LLM 생성(최대 120초)이 전부 +Inf 버킷에 몰려
+      # 분위수가 상한값에 붙어버린다.
+      maximum-expected-value:
+        "[gamss.llm.generation]": 120s
 

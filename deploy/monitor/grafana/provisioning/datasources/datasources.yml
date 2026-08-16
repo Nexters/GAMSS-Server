@@ -1,0 +1,22 @@
+# 데이터소스는 UI 에서 만들지 않고 여기서 관리한다(재기동해도 동일하게 복구된다).
+# uid 는 대시보드 JSON 이 참조하므로 바꾸면 대시보드가 전부 깨진다 — 고정값이다.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    jsonData:
+      # 스크레이프 간격과 맞춰야 Grafana 가 $__rate_interval 을 제대로 계산한다.
+      timeInterval: 15s
+    editable: false
+
+  - name: Loki
+    uid: loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    editable: false

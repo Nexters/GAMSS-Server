@@ -11,7 +11,7 @@ data class UpdatePromptRequest(
     @field:Schema(
         description = "수정할 프롬프트 타입",
         example = "COMMENT",
-        allowableValues = ["COMMON", "COMMENT", "REPLY", "CARD", "EONGTTUNG_TOPIC"],
+        allowableValues = ["COMMON", "COMMENT", "REPLY", "CARD", "CARD_EMOTION", "EONGTTUNG_TOPIC"],
     )
     val promptType: PromptType?,
     @field:NotBlank(message = "systemPrompt는 필수입니다.")

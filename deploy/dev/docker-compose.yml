@@ -24,6 +24,9 @@ services:
         condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: dev
+      # 지금 어떤 빌드가 돌고 있는지 메트릭 라벨로 노출하기 위해 넘긴다(gamss.build.info).
+      # 대시보드에서 "3시 배포가 원인인가"를 판단하려면 재기동 시각만으로는 부족하다.
+      IMAGE_TAG: ${IMAGE_TAG:-unknown}
       DB_URL: jdbc:mysql://db:3306/gamss
       DB_USERNAME: gamss
       DB_PASSWORD: ${DB_PASSWORD}
@@ -54,6 +57,9 @@ services:
     ports:
       - "80:80"
       - "443:443"
+      # 앱 메트릭 전용(내부). 앱 포트를 사설망에 여는 대신 nginx 가 /actuator/prometheus 하나만
+      # 프록시한다 — 사설망이라도 API 전체를 노출할 이유는 없다.
+      - "${PRIVATE_IP:-127.0.0.1}:9102:9102"
     volumes:
       - ./nginx/conf:/etc/nginx/conf.d:ro
       - certbot-www:/var/www/certbot:ro
@@ -72,6 +78,86 @@ services:
       - certbot-conf:/etc/letsencrypt
     entrypoint: sh -c "trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done"
     networks: [gamss]
+
+  # ── 모니터링 수집 에이전트 ─────────────────────────────────────────────────────
+  # 세 컨테이너 모두 포트를 **사설 IP 에만** 연다. 가비아 보안그룹에서도 모니터링 서버
+  # (192.168.0.63)만 허용해 이중으로 막는다. 도커의 포트 publish 는 ufw 를 우회하므로
+  # (DOCKER-USER 체인이 먼저 평가된다) 바인딩 주소가 호스트단의 사실상 유일한 방어선이다.
+  # PRIVATE_IP 는 배포 스크립트가 .env 에 써 넣는다 — 비어 있으면 127.0.0.1 로 떨어져
+  # 수집이 안 될 뿐 외부로 열리지는 않는다(안전한 실패 방향).
+  node-exporter:
+    image: prom/node-exporter:v1.9.1
+    restart: unless-stopped
+    logging: *default-logging
+    command:
+      - --path.rootfs=/host
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc|var/lib/docker/.+)($$|/)
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+    ports:
+      - "${PRIVATE_IP:-127.0.0.1}:9100:9100"
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.52.1
+    restart: unless-stopped
+    logging: *default-logging
+    command:
+      # 기본 1초 주기는 CPU 를 상시로 갉는다. 스크레이프가 15초라 30초로도 해상도가 충분하다.
+      - --housekeeping_interval=30s
+      # 쓰지 않는 수집기를 꺼 메모리·CPU 를 아낀다(특히 percpu 는 코어 수만큼 시계열이 늘어난다).
+      - --disable_metrics=percpu,sched,process,hugetlb,referenced_memory,cpu_topology,resctrl
+    # privileged 없이 동작하는 것을 실제로 확인했다(컨테이너·머신 메트릭 모두 수집됨).
+    # 컨테이너 자원을 보겠다고 호스트 전체 권한을 주는 것은 대가가 너무 크다.
+    devices:
+      - /dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    ports:
+      # 컨테이너 안에서는 8080 이라, 앱 포트와 겹치지 않게 호스트에서 9101 로 옮긴다.
+      - "${PRIVATE_IP:-127.0.0.1}:9101:8080"
+
+  # MySQL 엔진 상태(슬로우 쿼리·버퍼풀 적중률·커넥션·락 대기). Hikari 지표는 '커넥션을 못 얻었다'
+  # 까지만 보여주고 그 원인은 DB 안을 봐야 안다.
+  #
+  # 포트를 열지 않는다 — 같은 compose 네트워크의 nginx 내부 블록(9102)이 /metrics/mysql 로
+  # 프록시하므로 보안그룹 규칙을 늘리지 않아도 된다. DB 자체도 여전히 외부 미노출이다.
+  mysqld-exporter:
+    image: prom/mysqld-exporter:v0.20.0
+    restart: unless-stopped
+    logging: *default-logging
+    depends_on:
+      db:
+        condition: service_healthy
+    command:
+      - --mysqld.address=db:3306
+      - --mysqld.username=exporter
+      # 복제를 쓰지 않으므로 꺼 둔다(켜두면 매 스크레이프마다 오류 로그가 쌓인다).
+      - --no-collect.slave_status
+    environment:
+      # 읽기 전용 모니터링 계정. 앱 계정(gamss)과 분리해 권한을 최소로 준다.
+      MYSQLD_EXPORTER_PASSWORD: ${MYSQL_EXPORTER_PASSWORD:?MYSQL_EXPORTER_PASSWORD 가 필요하다}
+    networks: [gamss]
+
+  # 컨테이너 로그를 Loki 로 push 한다. 긁어가는 방식이면 앱 서버에 수집 포트를 하나 더 열어야 하는데,
+  # 보내는 쪽이 밀면 인바운드를 늘리지 않아도 된다.
+  promtail:
+    image: grafana/promtail:3.4.2
+    restart: unless-stopped
+    logging: *default-logging
+    command: -config.file=/etc/promtail/promtail.yml -config.expand-env=true
+    environment:
+      # env 라벨의 출처. dev·prod 가 같은 설정 파일을 쓰고 이 값만 다르다.
+      ENV_NAME: dev
+    volumes:
+      - ./promtail/promtail.yml:/etc/promtail/promtail.yml:ro
+      # 도커 API 로 컨테이너 로그를 읽는다. 소켓을 넘기는 것은 사실상 호스트 root 를 주는 것과 같지만,
+      # 대안인 Loki 로그 드라이버는 `docker logs` 를 못 쓰게 만들어 정작 장애 때 대응이 나빠진다.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - promtail-positions:/promtail
 
   db:
     image: mysql:8.0
@@ -102,6 +188,7 @@ services:
 
 volumes:
   db-data:
+  promtail-positions: # 어디까지 보냈는지 기록(재시작 후 중복 전송 방지)
   certbot-www: # ACME HTTP-01 챌린지 웹루트 (certbot 작성 → nginx 서빙)
   certbot-conf: # 발급된 인증서(/etc/letsencrypt). SCP로 안 지워지는 영속 볼륨.
 

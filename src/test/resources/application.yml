@@ -16,8 +16,21 @@ jwt:
 firebase:
   project-id: gamss-test
 
+# 배포와 같은 actuator 노출 범위를 테스트에서도 재현한다. 이 설정이 없으면 prometheus 엔드포인트가
+# 웹에 노출되지 않아, 노출 범위나 공개 경로가 실수로 되돌아가도 테스트가 그대로 통과한다.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+
 conversation:
   pending-generation-timeout: PT3M
+
+card:
+  # 자동 카드 배치의 대상 시작일. 스케줄러 검증은 단위 테스트가 값을 직접 주입하므로 여기 값은
+  # 컨텍스트가 뜨기 위한 것이다. 다만 미래 날짜를 두면 조회 구간이 뒤집히므로 과거로 둔다.
+  auto-card-start-date: 2026-01-01
 
 gemini:
   api-key: test-gemini-api-key-dummy-value

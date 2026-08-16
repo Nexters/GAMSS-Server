@@ -80,7 +80,13 @@ class ConversationControllerTest {
     fun `요청의 currentConversationSummary를 그대로 generateFor에 전달한다`() {
         val saved = message(id = 5L)
         every {
-            conversationService.saveUserMessage(memberId = 1L, conversationId = null, content = "오늘 있었던 일", repliesToMessageId = null)
+            conversationService.saveUserMessage(
+                memberId = 1L,
+                conversationId = null,
+                content = "오늘 있었던 일",
+                repliesToMessageId = null,
+                currentConversationSummary = "현재 요약",
+            )
         } returns saved
         every { commentGenerationService.generateFor(1L, saved, "현재 요약") } returns
             GenerationResult(CommentGenerationOutcome.DONE, emptyList(), usedTokens = 1)
@@ -91,6 +97,16 @@ class ConversationControllerTest {
         )
 
         verify(exactly = 1) { commentGenerationService.generateFor(1L, saved, "현재 요약") }
+        // 프롬프트 컨텍스트로 넘기는 것과 별개로, 자동 종료 배치가 쓸 수 있게 저장 경로로도 넘어가야 한다.
+        verify(exactly = 1) {
+            conversationService.saveUserMessage(
+                memberId = 1L,
+                conversationId = null,
+                content = "오늘 있었던 일",
+                repliesToMessageId = null,
+                currentConversationSummary = "현재 요약",
+            )
+        }
     }
 
     @Test

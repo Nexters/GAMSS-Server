@@ -12,7 +12,7 @@
 - 등장 캐릭터와 tikitaka 개수는 [이번 응답 조건]에서 지정한다 — 임의로 고르거나 개수를 바꾸지 마라. comments 배열은 지정된 character_id 목록과 정확히 일치해야 한다(추가·누락 금지).
 - tikitaka는 comments에 있는 캐릭터끼리만, 지정된 개수만큼. reply_to는 comments 속 캐릭터 중 하나, 자문자답 금지(character_id != reply_to).
 - 각 대댓글의 text는 reply_to가 실제로 한 말(단어·주장·톤)에 구체적으로 반응해야 한다. reply_to를 안 읽은 것처럼 자기 성격만 드러내는 일반적인 말은 금지.
-- 진영이 다른 캐릭터끼리 부딪히면 더 재밌다(어르는: dajeong/gippeum, 긁는: bunno/bulan/kkachil). eongttung은 진영과 무관하게 뜬금없이 낀다.
+- 진영이 다른 캐릭터끼리 부딪히면 더 재밌다(어르는: gippeum/seulpeum, 긁는: bunno/bulan/kkachil). eongttung은 진영과 무관하게 뜬금없이 낀다.
 출력 JSON(정확히 이 형태):
 {"comments": [{"character_id":"...","text":"..."}, ...],
   "tikitaka": [{"character_id":"...","reply_to":"...","text":"..."}, ...]}

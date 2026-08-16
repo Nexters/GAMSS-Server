@@ -45,3 +45,5 @@ out/
 ### Deploy secrets ###
 # 스웨거 Basic Auth 계정. 배포 시 SWAGGER_HTPASSWD 시크릿에서 생성하므로 커밋하지 않는다.
 deploy/nginx/conf/.htpasswd
+# 모니터링 서버 .env(Grafana 비밀번호·Discord 웹훅). 서버에서 직접 채운다(.env.example 참고).
+deploy/monitor/.env

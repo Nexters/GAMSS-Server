@@ -2,6 +2,8 @@ package com.nexters.gamss.conversation.service
 
 import com.nexters.gamss.conversation.config.ConversationProperties
 import com.nexters.gamss.conversation.repository.ConversationRepository
+import io.micrometer.core.instrument.Counter
+import io.micrometer.core.instrument.MeterRegistry
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
@@ -15,17 +17,28 @@ import java.time.Instant
 class PendingCardCleanupScheduler(
     private val conversationRepository: ConversationRepository,
     private val properties: ConversationProperties,
+    meterRegistry: MeterRegistry,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
+
+    // 댓글 쪽([PendingCommentCleanupScheduler])과 같은 지표를 kind 라벨로만 구분해 올린다.
+    private val staleResetCounter =
+        Counter
+            .builder("gamss.pending.stale.reset")
+            .description("타임아웃으로 NONE 으로 되돌린 고아 PENDING 건수")
+            .tag("kind", "card")
+            .register(meterRegistry)
 
     @Scheduled(fixedDelay = CHECK_INTERVAL_MILLIS)
     fun resetStalePending() {
         val threshold = Instant.now().minus(properties.pendingGenerationTimeout)
-        PendingCleanupSupport.resetStalePendingAndLog(
-            log,
-            threshold,
-            "카드 생성",
-        ) { conversationRepository.resetStaleCardGenerationPending(it) }
+        val resetCount =
+            PendingCleanupSupport.resetStalePendingAndLog(
+                log,
+                threshold,
+                "카드 생성",
+            ) { conversationRepository.resetStaleCardGenerationPending(it) }
+        staleResetCounter.increment(resetCount.toDouble())
     }
 
     companion object {

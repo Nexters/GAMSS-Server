@@ -46,10 +46,10 @@ interface UsageStats {
 // 감정별 고정 색상(카테고리형이라 구분되는 팔레트를 쓴다).
 const EMOTION_COLOR: Record<string, string> = {
   JOY: '#f59e0b',
+  SADNESS: '#3b82f6',
   ANGER: '#ef4444',
   ANXIETY: '#8b5cf6',
   GRUMPY: '#f97316',
-  WARM: '#ec4899',
   QUIRKY: '#14b8a6',
 }
 const FALLBACK_COLOR = '#a1a1aa'

@@ -20,11 +20,14 @@ import java.util.Optional
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 
 class ConversationServiceTest {
     private val conversationRepository = mockk<ConversationRepository>()
     private val messageRepository = mockk<MessageRepository>()
-    private val conversationService = ConversationService(conversationRepository, messageRepository)
+    private val cleaner = mockk<DeletedConversationCleaner>(relaxed = true)
+    private val conversationService =
+        ConversationService(conversationRepository, messageRepository, DeletedConversationCleaners(listOf(cleaner)))
 
     @Test
     fun `conversationId 없이 저장하면 새 채팅방을 만들어 메시지를 담는다`() {
@@ -115,6 +118,31 @@ class ConversationServiceTest {
 
         assertEquals(emptyList(), conversation.excludedEmotionTypes.values)
         verify(exactly = 0) { conversationRepository.save(any()) }
+    }
+
+    @Test
+    fun `메시지를 보낼 때마다 프론트가 보낸 요약이 대화방의 최신 요약으로 저장된다`() {
+        val conversation = Conversation(memberId = 1L)
+        every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
+        every { messageRepository.save(any()) } answers { firstArg() }
+
+        conversationService.saveUserMessage(1L, 10L, "첫 마디", currentConversationSummary = "예전 요약")
+        conversationService.saveUserMessage(1L, 10L, "두 번째 마디", currentConversationSummary = "최신 요약")
+
+        assertEquals("최신 요약", conversation.summary)
+    }
+
+    @Test
+    fun `요약을 보내지 않거나 공백이면 기존 요약을 덮어쓰지 않는다`() {
+        val conversation = Conversation(memberId = 1L)
+        every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
+        every { messageRepository.save(any()) } answers { firstArg() }
+
+        conversationService.saveUserMessage(1L, 10L, "첫 마디", currentConversationSummary = "지켜져야 하는 요약")
+        conversationService.saveUserMessage(1L, 10L, "요약 없이 보낸 메시지")
+        conversationService.saveUserMessage(1L, 10L, "공백 요약", currentConversationSummary = "   ")
+
+        assertEquals("지켜져야 하는 요약", conversation.summary)
     }
 
     @Test
@@ -242,6 +270,29 @@ class ConversationServiceTest {
     }
 
     @Test
+    fun `상세 조회는 대화방과 메시지를 함께 돌려준다`() {
+        val conversation = Conversation(memberId = 1L)
+        val messages = listOf(Message(conversationId = 10L, senderType = SenderType.USER, content = "안녕"))
+        every { conversationRepository.findById(10L) } returns Optional.of(conversation)
+        every { messageRepository.findAllByConversationIdOrderByIdAsc(10L) } returns messages
+
+        val detail = conversationService.getConversationDetail(1L, 10L)
+
+        assertEquals(conversation, detail.conversation)
+        assertEquals(messages, detail.messages)
+    }
+
+    @Test
+    fun `상세 조회도 삭제된 채팅방이면 CONVERSATION_ALREADY_DELETED`() {
+        val deleted = Conversation(memberId = 1L).apply { delete() }
+        every { conversationRepository.findById(10L) } returns Optional.of(deleted)
+
+        val exception = assertFailsWith<BusinessException> { conversationService.getConversationDetail(1L, 10L) }
+
+        assertEquals(ErrorCode.CONVERSATION_ALREADY_DELETED, exception.errorCode)
+    }
+
+    @Test
     fun `채팅방 메시지 조회는 티키타카를 답장 대상 댓글 바로 다음으로 재배치한다`() {
         val conversation = Conversation(memberId = 1L)
         val comment =
@@ -303,6 +354,38 @@ class ConversationServiceTest {
     }
 
     @Test
+    fun `자동 종료 배치는 진행 중 채팅방을 종료한다`() {
+        val conversation = Conversation(memberId = 1L)
+        every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
+
+        val result = conversationService.endForAutoBatch(10L)
+
+        assertEquals(ConversationStatus.ENDED, conversation.status)
+        assertEquals(conversation, result)
+    }
+
+    @Test
+    fun `자동 종료 배치는 이미 종료된 채팅방을 예외 없이 그대로 돌려준다`() {
+        // 종료까지만 되고 카드 생성에서 끊긴 방을 다음 실행이 이어서 처리해야 한다.
+        val conversation = Conversation(memberId = 1L).apply { end() }
+        every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
+
+        val result = conversationService.endForAutoBatch(10L)
+
+        assertEquals(conversation, result)
+    }
+
+    @Test
+    fun `자동 종료 배치는 삭제된 채팅방과 없는 채팅방을 null로 거른다`() {
+        val deleted = Conversation(memberId = 1L).apply { delete() }
+        every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(deleted)
+        every { conversationRepository.findByIdForUpdate(99L) } returns Optional.empty()
+
+        assertNull(conversationService.endForAutoBatch(10L))
+        assertNull(conversationService.endForAutoBatch(99L))
+    }
+
+    @Test
     fun `종료된 채팅방에 메시지를 저장하면 CONVERSATION_ENDED`() {
         val conversation = Conversation(memberId = 1L).apply { end() }
         every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
@@ -318,6 +401,7 @@ class ConversationServiceTest {
     @Test
     fun `채팅방을 삭제하면 상태가 DELETED가 된다`() {
         val conversation = Conversation(memberId = 1L)
+        every { conversationRepository.findById(10L) } returns Optional.of(conversation)
         every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
 
         val deleted = conversationService.deleteConversation(1L, 10L)
@@ -326,8 +410,78 @@ class ConversationServiceTest {
     }
 
     @Test
+    fun `채팅방을 삭제하면 딸린 자원도 같은 요청으로 함께 정리된다`() {
+        // 카드가 대표적인 대상 — 방이 사라졌는데 카드만 살아 있으면 반대 방향(카드 삭제가 방까지
+        // 지운다)과 데이터가 어긋난다.
+        val conversation = Conversation(memberId = 1L)
+        every { conversationRepository.findById(10L) } returns Optional.of(conversation)
+        every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
+
+        conversationService.deleteConversation(1L, 10L)
+
+        verify(exactly = 1) { cleaner.clean(listOf(10L), any()) }
+    }
+
+    @Test
+    fun `일괄 삭제는 본인 방만 지우고 삭제된 개수를 돌려준다`() {
+        // 남의 방·없는 방·이미 지운 방은 findDeletableIds가 걸러낸다 — 섞여 있어도 나머지는 지워진다.
+        every { conversationRepository.findDeletableIds(1L, listOf(10L, 20L, 99L)) } returns listOf(10L, 20L)
+        every { conversationRepository.softDeleteByIds(listOf(10L, 20L), any(), any()) } returns 2
+
+        val deletedCount = conversationService.deleteConversations(1L, listOf(10L, 20L, 99L))
+
+        assertEquals(2, deletedCount)
+        verify(exactly = 1) { cleaner.clean(listOf(10L, 20L), any()) }
+    }
+
+    @Test
+    fun `일괄 삭제는 지울 방이 없으면 0을 돌려주고 아무것도 건드리지 않는다`() {
+        every { conversationRepository.findDeletableIds(1L, listOf(99L)) } returns emptyList()
+
+        assertEquals(0, conversationService.deleteConversations(1L, listOf(99L)))
+
+        verify(exactly = 0) { conversationRepository.softDeleteByIds(any(), any(), any()) }
+        verify(exactly = 0) { cleaner.clean(any(), any()) }
+    }
+
+    @Test
+    fun `일괄 삭제는 중복 id를 한 번만 조회한다`() {
+        every { conversationRepository.findDeletableIds(1L, listOf(10L)) } returns listOf(10L)
+        every { conversationRepository.softDeleteByIds(listOf(10L), any(), any()) } returns 1
+
+        assertEquals(1, conversationService.deleteConversations(1L, listOf(10L, 10L, 10L)))
+    }
+
+    @Test
+    fun `일괄 삭제는 채팅방과 딸린 자원에 같은 시각을 찍는다`() {
+        val conversationDeletedAt = slot<Instant>()
+        val cardDeletedAt = slot<Instant>()
+        every { conversationRepository.findDeletableIds(1L, listOf(10L)) } returns listOf(10L)
+        every { conversationRepository.softDeleteByIds(listOf(10L), capture(conversationDeletedAt), any()) } returns 1
+        every { cleaner.clean(any(), capture(cardDeletedAt)) } returns Unit
+
+        conversationService.deleteConversations(1L, listOf(10L))
+
+        // 한 번의 삭제로 사라진 것들이 이력에서 다른 요청처럼 보이면 안 된다.
+        assertEquals(conversationDeletedAt.captured, cardDeletedAt.captured)
+    }
+
+    @Test
+    fun `삭제에 실패하면 딸린 자원도 정리하지 않는다`() {
+        // 정리가 채팅방 잠금보다 앞서므로(데드락 회피) 소유권·삭제 여부는 그보다 먼저 판정돼야 한다.
+        val alreadyDeleted = Conversation(memberId = 1L).apply { delete() }
+        every { conversationRepository.findById(10L) } returns Optional.of(alreadyDeleted)
+        every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(alreadyDeleted)
+
+        assertFailsWith<BusinessException> { conversationService.deleteConversation(1L, 10L) }
+
+        verify(exactly = 0) { cleaner.clean(any(), any()) }
+    }
+
+    @Test
     fun `종료된 채팅방도 삭제할 수 있다`() {
         val conversation = Conversation(memberId = 1L).apply { end() }
+        every { conversationRepository.findById(10L) } returns Optional.of(conversation)
         every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
 
         val deleted = conversationService.deleteConversation(1L, 10L)
@@ -338,6 +492,7 @@ class ConversationServiceTest {
     @Test
     fun `이미 삭제된 채팅방을 다시 삭제하면 CONVERSATION_ALREADY_DELETED`() {
         val conversation = Conversation(memberId = 1L).apply { delete() }
+        every { conversationRepository.findById(10L) } returns Optional.of(conversation)
         every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
 
         val exception =
@@ -351,6 +506,7 @@ class ConversationServiceTest {
     @Test
     fun `남의 채팅방을 삭제하면 CONVERSATION_ACCESS_DENIED`() {
         val conversation = Conversation(memberId = 2L)
+        every { conversationRepository.findById(10L) } returns Optional.of(conversation)
         every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
 
         val exception =
