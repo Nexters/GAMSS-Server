@@ -49,7 +49,7 @@ class FcmToken(
     override fun toString(): String = "FcmToken(${value.take(MASK_LENGTH)}...)"
 
     companion object {
-        /** DB 컬럼 크기(V30). FCM 토큰은 보통 300자 안쪽이지만 상한이 보장돼 있지 않아 여유를 둔다. */
+        /** DB 컬럼 크기(V31). FCM 토큰은 보통 300자 안쪽이지만 상한이 보장돼 있지 않아 여유를 둔다. */
         const val COLUMN_LENGTH = 512
 
         private const val MASK_LENGTH = 8
