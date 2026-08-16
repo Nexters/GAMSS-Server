@@ -95,6 +95,25 @@ interface DeviceTokenRepository : JpaRepository<DeviceToken, Long> {
 
     fun findByToken(token: FcmToken): DeviceToken?
 
+    /** 발송 대상 회원들의 기기를 한 번에 모은다. 회원 수만큼 조회하지 않기 위한 것이다. */
+    fun findAllByMemberIdIn(memberIds: Collection<Long>): List<DeviceToken>
+
+    /**
+     * 발송 응답이 죽었다고 알려준 토큰들을 지운다. 지운 건수를 돌려줘 로그로 남길 수 있게 한다.
+     *
+     * 임베디드 값(`token`) 대신 그 안의 문자열로 비교한다 — 발송 결과가 돌려주는 것이 문자열이고,
+     * 값 객체를 다시 만들어 넣어봐야 어차피 같은 컬럼 비교다.
+     *
+     * 지울 대상은 발송 어댑터가 이미 가려서 넘긴다. 재시도로 풀릴 수 있는 실패(할당량 초과·일시
+     * 장애)는 여기까지 오지 않는다 — 그 판단을 이 메서드가 다시 하지 않는다.
+     */
+    @Transactional
+    @Modifying
+    @Query("delete from DeviceToken d where d.token.value in :tokens")
+    fun deleteByTokenValueIn(
+        @Param("tokens") tokens: Collection<String>,
+    ): Int
+
     /** 탈퇴 정리. 회원이 사라지면 그 기기로 보낼 알림도 없다. */
     fun deleteByMemberId(memberId: Long)
 }
