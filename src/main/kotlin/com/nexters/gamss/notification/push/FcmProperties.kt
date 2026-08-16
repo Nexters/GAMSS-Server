@@ -16,6 +16,13 @@ import org.springframework.boot.context.properties.ConfigurationProperties
  * 이쪽은 비밀이며, 발송을 다른 서비스로 옮기면 이 설정만 사라진다.
  */
 @ConfigurationProperties(prefix = "fcm")
-data class FcmProperties(
+class FcmProperties(
     val credentialsBase64: String?,
-)
+) {
+    /**
+     * 값이 새지 않게 가린다. data class 였다면 자동 생성된 toString 이 자격증명 전체를 담고,
+     * 이 객체가 로그나 예외 메시지에 얹히는 순간(바인딩 실패 메시지 등) 키가 그대로 찍힌다.
+     * 지금 그렇게 쓰는 코드가 없더라도, 비밀값을 담은 객체는 애초에 출력될 수 없어야 한다.
+     */
+    override fun toString(): String = "FcmProperties(credentialsBase64=${if (credentialsBase64.isNullOrBlank()) "없음" else "설정됨"})"
+}
