@@ -82,11 +82,23 @@ class FcmPushSender(
                 invalidTokens += tokens[index]
             }
         }
-        return PushSendResult(
-            successCount = successCount,
-            failureCount = responses.size - successCount,
-            invalidTokens = invalidTokens,
-        )
+        val result =
+            PushSendResult(
+                successCount = successCount,
+                failureCount = responses.size - successCount,
+                invalidTokens = invalidTokens,
+            )
+        // 실패 사유를 아는 것은 어댑터뿐이라 여기서 한 번 남긴다. 호출부에 맡기면 알림을 거는
+        // 자리마다 같은 로그가 복사되고, 그전까지는 '푸시가 안 온다'를 쫓을 근거가 없다.
+        if (result.failureCount > 0) {
+            log.warn(
+                "푸시 일부 실패: 성공={}건, 실패={}건, 무효토큰={}건",
+                result.successCount,
+                result.failureCount,
+                result.invalidTokens.size,
+            )
+        }
+        return result
     }
 
     /**
