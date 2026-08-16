@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
+import org.springframework.transaction.annotation.Transactional
 
 interface DeviceTokenRepository : JpaRepository<DeviceToken, Long> {
     /**
@@ -52,6 +53,10 @@ interface DeviceTokenRepository : JpaRepository<DeviceToken, Long> {
      * 다시 등록하면(권한을 껐다 켜는 흐름) 대기 중인 delete 가 이 insert 뒤로 밀려 유니크 제약에
      * 걸린다.
      *
+     * `@Transactional` 을 명시한다. 호출자가 열어준 트랜잭션에 기대면, 트랜잭션 없이 부르는 호출부가
+     * 생기는 날 그 자리에서 `TransactionRequiredException` 이 난다 — 호출하는 순간에야 드러나는
+     * 종류다. 이 레포의 다른 `@Modifying` 메서드도 같은 이유로 함께 달고 있다.
+     *
      * `clearAutomatically` 는 **일부러 켜지 않았다**. 이 문장은 엔티티를 로드하지 않으므로 스스로
      * 만들어내는 낡은 엔티티가 없다. 반면 clear 의 효과는 이 리포지토리가 아니라 **트랜잭션의
      * 영속성 컨텍스트 전체**라, 이 호출이 더 큰 트랜잭션 안으로 들어가는 날 호출자가 들고 있던
@@ -62,6 +67,7 @@ interface DeviceTokenRepository : JpaRepository<DeviceToken, Long> {
      * 조회가 1차 캐시의 옛 `memberId` 를 돌려준다. 그런 경로는 지금 없다 — 생기면 그 지점에서
      * 다시 읽도록 하거나 여기서 clear 를 켜는 대신, 그 트랜잭션의 범위를 먼저 의심하는 게 맞다.
      */
+    @Transactional
     @Modifying(flushAutomatically = true)
     @Query(
         value =
