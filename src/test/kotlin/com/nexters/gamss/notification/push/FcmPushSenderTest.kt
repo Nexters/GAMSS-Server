@@ -66,6 +66,29 @@ class FcmPushSenderTest {
         assertEquals(TOKEN_COUNT, result.successCount)
     }
 
+    /**
+     * FCM 은 토큰이 하나라도 비어 있으면 묶음 전체를 거부한다. 거르지 않으면 빈 값 하나 때문에
+     * 같은 묶음의 나머지가 발송조차 되지 않는다.
+     */
+    @Test
+    fun `빈 토큰은 제외하고 나머지는 정상 발송한다`() {
+        givenResponses(success(), success())
+
+        val result = sender.send(listOf("a", "", "   ", "b"), MESSAGE)
+
+        assertEquals(2, result.successCount)
+        assertEquals(0, result.failureCount)
+        verify(exactly = 1) { messaging.sendEachForMulticast(any()) }
+    }
+
+    @Test
+    fun `보낼 수 있는 토큰이 하나도 없으면 발송을 부르지 않는다`() {
+        val result = sender.send(listOf("", "   "), MESSAGE)
+
+        assertEquals(0, result.failureCount)
+        verify(exactly = 0) { messaging.sendEachForMulticast(any()) }
+    }
+
     @Test
     fun `대상이 없으면 발송을 부르지 않는다`() {
         val result = sender.send(emptyList(), MESSAGE)

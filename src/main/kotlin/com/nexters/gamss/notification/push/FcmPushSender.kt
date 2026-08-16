@@ -25,15 +25,33 @@ class FcmPushSender(
         tokens: List<String>,
         message: PushMessage,
     ): PushSendResult {
-        if (tokens.isEmpty()) {
+        val sendable = sendable(tokens)
+        if (sendable.isEmpty()) {
             return PushSendResult.none()
         }
         // FCM 은 한 번에 받는 토큰 수를 제한한다. 넘겨받은 목록의 크기를 호출하는 쪽이 신경 쓰지
         // 않도록 여기서 나눠 보낸다.
-        return tokens
+        return sendable
             .chunked(MAX_TOKENS_PER_REQUEST)
             .map { chunk -> sendChunk(chunk, message) }
             .reduce(::merge)
+    }
+
+    /**
+     * 빈 토큰을 걸러낸다. [MulticastMessage] 는 하나라도 비어 있으면 **묶음 전체**를 거부하므로
+     * (`none of the tokens can be null or empty`), 그대로 넘기면 빈 값 하나 때문에 같은 묶음의
+     * 나머지 499건이 발송조차 되지 않는다.
+     *
+     * 저장 계층이 걸러줄 것이라고 가정하지 않는다 — 이 포트가 토큰을 [String] 으로 받기로 한 이상
+     * 어떤 문자열이 들어올지는 여기서 책임진다.
+     */
+    private fun sendable(tokens: List<String>): List<String> {
+        val sendable = tokens.filter { it.isNotBlank() }
+        if (sendable.size != tokens.size) {
+            // 빈 토큰이 저장돼 있다는 신호다. 발송은 계속하되 흔적을 남긴다.
+            log.warn("빈 디바이스 토큰을 발송 대상에서 제외했다: {}건", tokens.size - sendable.size)
+        }
+        return sendable
     }
 
     private fun sendChunk(
