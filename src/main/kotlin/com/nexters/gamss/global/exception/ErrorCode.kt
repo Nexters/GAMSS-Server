@@ -61,6 +61,9 @@ enum class ErrorCode(
 
     // 프롬프트 리비전
     PROMPT_REVISION_NOT_FOUND(HttpStatus.NOT_FOUND, "프롬프트 리비전을 찾을 수 없습니다."),
+
+    // 알림
+    INVALID_DEVICE_TOKEN(HttpStatus.BAD_REQUEST, "사용할 수 없는 디바이스 토큰입니다."),
     ;
 
     val code: String get() = name
