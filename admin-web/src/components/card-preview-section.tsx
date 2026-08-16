@@ -136,7 +136,8 @@ export function CardPreviewSection() {
         </div>
         {requestError && <p className="text-sm text-destructive">{requestError}</p>}
 
-        {result && !result.generationError && (
+        {/* 실패했을 때도 보여준다 — 오버라이드가 잘못돼 실패한 경우 무엇을 보냈는지가 바로 단서다. */}
+        {result && (
           <PromptInspector
             systemPrompt={result.systemPrompt}
             userContent={result.userContent}
@@ -159,16 +160,11 @@ export function CardPreviewSection() {
               </p>
             </div>
           </Card>
-        ) : result.generationError ? (
-          <div className="flex items-start gap-2.5 rounded-lg border border-destructive/30 bg-destructive/5 p-3.5 text-sm">
-            <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
-            <div>
-              <p className="font-medium text-destructive">생성 실패</p>
-              <p className="mt-0.5 break-keep text-muted-foreground">{result.generationError}</p>
-            </div>
-          </div>
         ) : (
           <>
+            {/* 지표는 성공·실패와 무관하게 보여준다. 서버는 파싱이 실패해도 이미 과금된 토큰을 실어
+                보내주는데(GeminiCardMessageGenerator 가 파싱 전에 뽑아둔다), 화면에서 가리면
+                원인을 좁히려고 한 번 더 호출하게 된다. */}
             <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
               <MetricTile icon={Cpu} label="모델" value={result.model.replace('gemini-', '')} />
               <MetricTile icon={Clock} label="지연" value={`${result.latencyMs.toLocaleString()}ms`} />
@@ -176,22 +172,35 @@ export function CardPreviewSection() {
               <MetricTile icon={CircleDollarSign} label="비용" value={`$${result.estimatedCostUsd.toFixed(5)}`} />
             </div>
 
-            <Card className="space-y-3 p-5">
-              <div className="flex items-center gap-2">
-                <p className="text-xs font-medium text-muted-foreground">카드에 남을 한 줄</p>
-                {result.truncated && (
-                  <Badge variant="destructive" className="gap-1 text-[10px]">
-                    <Scissors className="size-3" />
-                    서버가 자름
-                  </Badge>
-                )}
+            {result.generationError && (
+              <div className="flex items-start gap-2.5 rounded-lg border border-destructive/30 bg-destructive/5 p-3.5 text-sm">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
+                <div>
+                  <p className="font-medium text-destructive">생성 실패</p>
+                  <p className="mt-0.5 break-keep text-muted-foreground">{result.generationError}</p>
+                </div>
               </div>
-              <p className="break-keep text-lg font-medium leading-relaxed">{result.line}</p>
-              {/* line은 서버가 이미 자른 값이라 상한을 넘지 않는다 — 넘긴 쪽은 원문이다. */}
-              <p className={cn('text-[11px] tabular-nums text-muted-foreground', result.truncated && 'text-destructive')}>
-                {result.length}자 / {MAX_LENGTH}자
-              </p>
-            </Card>
+            )}
+
+            {/* 한 줄은 실패 시 null 이라 성공했을 때만 그린다. */}
+            {!result.generationError && (
+              <Card className="space-y-3 p-5">
+                <div className="flex items-center gap-2">
+                  <p className="text-xs font-medium text-muted-foreground">카드에 남을 한 줄</p>
+                  {result.truncated && (
+                    <Badge variant="destructive" className="gap-1 text-[10px]">
+                      <Scissors className="size-3" />
+                      서버가 자름
+                    </Badge>
+                  )}
+                </div>
+                <p className="break-keep text-lg font-medium leading-relaxed">{result.line}</p>
+                {/* line은 서버가 이미 자른 값이라 상한을 넘지 않는다 — 넘긴 쪽은 원문이다. */}
+                <p className={cn('text-[11px] tabular-nums text-muted-foreground', result.truncated && 'text-destructive')}>
+                  {result.length}자 / {MAX_LENGTH}자
+                </p>
+              </Card>
+            )}
 
             {result.truncated && (
               <Card className="space-y-1.5 border-dashed p-4">
