@@ -101,17 +101,7 @@ class FcmPushSender(
         return result
     }
 
-    /**
-     * 다시 시도해도 소용없는 실패인지 가른다.
-     *
-     * - `UNREGISTERED`: 앱이 지워졌거나 토큰이 갱신돼 이 토큰을 받는 기기가 없다.
-     * - `INVALID_ARGUMENT`: FCM 이 토큰 형식 자체를 거부했다.
-     *
-     * 나머지(할당량 초과·FCM 일시 장애 등)는 다음 발송에서 성공할 수 있는 값이라 남겨둔다.
-     */
-    private fun isInvalidToken(response: SendResponse): Boolean =
-        response.exception?.messagingErrorCode in
-            setOf(MessagingErrorCode.UNREGISTERED, MessagingErrorCode.INVALID_ARGUMENT)
+    private fun isInvalidToken(response: SendResponse): Boolean = response.exception?.messagingErrorCode in DEAD_TOKEN_CODES
 
     private fun multicastOf(
         tokens: List<String>,
@@ -139,7 +129,22 @@ class FcmPushSender(
         )
 
     companion object {
-        /** FCM 이 멀티캐스트 한 번에 받는 토큰 수 상한. */
+        /** FCM 이 멀티캐스트 한 번에 받는 토큰 수 상한(`no more than 500 tokens can be specified`). */
         private const val MAX_TOKENS_PER_REQUEST = 500
+
+        /**
+         * 다시 시도해도 소용없어서 지워야 하는 실패 코드.
+         *
+         * - `UNREGISTERED`: 앱이 지워졌거나 토큰이 갱신돼 이 토큰을 받는 기기가 없다.
+         * - `INVALID_ARGUMENT`: FCM 이 토큰 형식 자체를 거부했다.
+         *
+         * 나머지(할당량 초과·FCM 일시 장애 등)는 다음 발송에서 성공할 수 있는 값이라 남겨둔다.
+         *
+         * `SENDER_ID_MISMATCH` 는 일부러 넣지 않았다. 재시도로 풀리지 않는 것은 맞지만(다른
+         * Firebase 프로젝트에 등록된 토큰) **우리 설정 실수일 때도 같은 코드가 온다** — 키를 잘못
+         * 넣은 배포 한 번에 멀쩡한 기기들의 등록이 전부 지워지는 쪽이 더 나쁘다. 매 발송마다 같은
+         * 실패가 반복되므로, 이 코드가 쌓이면 지울 것이 아니라 자격증명을 의심해야 한다.
+         */
+        private val DEAD_TOKEN_CODES = setOf(MessagingErrorCode.UNREGISTERED, MessagingErrorCode.INVALID_ARGUMENT)
     }
 }
