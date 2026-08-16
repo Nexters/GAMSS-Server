@@ -10,6 +10,7 @@ import io.micrometer.core.instrument.MeterRegistry
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
+import java.time.Instant
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -21,7 +22,10 @@ import java.util.concurrent.atomic.AtomicLong
  *
  * 게이지는 스크레이프(15초)마다 DB 를 때리는 대신 주기적으로 뜬 스냅샷을 읽는다. 스크레이프 경로에
  * DB 조회를 두면 DB 가 느려질 때 메트릭 수집까지 함께 막혀, 정작 장애 순간에 관측을 잃는다.
- * 갱신 실패도 삼킨다 — 모니터링이 서비스를 흔들면 안 되고, 값이 멈추면 그 자체가 신호가 된다.
+ *
+ * 갱신 실패는 삼키되 [lastSuccessEpochSeconds] 로 드러낸다 — 실패해도 게이지에는 마지막 성공 값이
+ * 그대로 남아 있어서, 값이 멈춘 것인지 정말 변하지 않은 것인지 대시보드에서 구분할 수 없기 때문이다.
+ * 알림은 이 시각이 오래 갱신되지 않는 것을 본다(rules.yaml 의 '도메인 지표 갱신 중단').
  */
 @Component
 class DomainStateMetrics(
@@ -36,20 +40,37 @@ class DomainStateMetrics(
     private val pendingCardGenerations = AtomicLong(0)
     private val failedCardGenerations = AtomicLong(0)
 
+    /** 마지막으로 네 값을 모두 읽어낸 시각(epoch 초). 0 이면 아직 한 번도 성공하지 못한 것이다. */
+    private val lastSuccessEpochSeconds = AtomicLong(0)
+
     init {
         register(registry, "gamss.conversation.active", "진행 중(ACTIVE) 대화방 수", activeConversations)
         register(registry, "gamss.comment.generation.pending", "댓글 생성 선점(PENDING) 상태 메시지 수", pendingComments)
         register(registry, "gamss.card.generation.pending", "카드 생성 선점(PENDING) 상태 대화방 수", pendingCardGenerations)
         register(registry, "gamss.card.generation.failed", "카드 생성 실패(FAILED)로 남은 대화방 수", failedCardGenerations)
+        register(
+            registry,
+            "gamss.domain.metrics.last.success.timestamp.seconds",
+            "도메인 상태 스냅샷을 마지막으로 성공한 시각(epoch 초)",
+            lastSuccessEpochSeconds,
+        )
     }
 
     @Scheduled(fixedDelay = REFRESH_INTERVAL_MILLIS)
     fun refresh() {
         runCatching {
-            activeConversations.set(conversationRepository.countByStatus(ConversationStatus.ACTIVE))
-            pendingComments.set(messageRepository.countByCommentStatus(CommentStatus.PENDING))
-            pendingCardGenerations.set(conversationRepository.countByCardGenerationStatus(CardGenerationStatus.PENDING))
-            failedCardGenerations.set(conversationRepository.countByCardGenerationStatus(CardGenerationStatus.FAILED))
+            // 네 값을 먼저 다 읽고 나서 한꺼번에 반영한다. 중간에 실패하면 일부만 새 값이 되어
+            // '앞의 지표는 방금 값, 뒤의 지표는 몇 시간 전 값'인 상태가 되는데, 그건 아무도 눈치채지 못한다.
+            val active = conversationRepository.countByStatus(ConversationStatus.ACTIVE)
+            val comments = messageRepository.countByCommentStatus(CommentStatus.PENDING)
+            val cardPending = conversationRepository.countByCardGenerationStatus(CardGenerationStatus.PENDING)
+            val cardFailed = conversationRepository.countByCardGenerationStatus(CardGenerationStatus.FAILED)
+
+            activeConversations.set(active)
+            pendingComments.set(comments)
+            pendingCardGenerations.set(cardPending)
+            failedCardGenerations.set(cardFailed)
+            lastSuccessEpochSeconds.set(Instant.now().epochSecond)
         }.onFailure { log.warn("도메인 상태 메트릭 갱신 실패(무시)", it) }
     }
 

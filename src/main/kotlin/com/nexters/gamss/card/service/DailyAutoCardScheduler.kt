@@ -56,6 +56,20 @@ class DailyAutoCardScheduler(
             .description("자동 카드 생성 배치 1회 소요 시간")
             .register(meterRegistry)
 
+    /**
+     * 결과별 카운터를 미리 0 으로 등록해 둔다. 처음 발생할 때 만들면 그 시계열이 '없다가 생긴' 것이
+     * 되는데, increase() 는 구간의 첫 값을 기준으로 삼아 그 증가를 세지 않는다 — 즉 FAILED 가 처음
+     * 난 날의 알림이 조용히 빠진다. 게이지를 init 에서 등록하는 것과 같은 이유다.
+     */
+    private val outcomeCounters: Map<AutoCardOutcome, Counter> =
+        AutoCardOutcome.entries.associateWith { outcome ->
+            Counter
+                .builder("gamss.autocard.outcome")
+                .description("자동 카드 생성 배치가 처리한 대화방 수(결과별)")
+                .tag("outcome", outcome.name)
+                .register(meterRegistry)
+        }
+
     @Scheduled(cron = CRON, zone = ZONE_ID)
     fun autoEndAndCreateCards() {
         val zone = ZoneId.of(ZONE_ID)
@@ -110,7 +124,7 @@ class DailyAutoCardScheduler(
             }
             // 결과 종류가 늘어도 집계가 어긋나지 않도록 enum을 그대로 훑는다.
             AutoCardOutcome.entries.forEach { outcome ->
-                counts[outcome]?.let { outcomeCounter(outcome).increment(it.toDouble()) }
+                counts[outcome]?.let { outcomeCounters.getValue(outcome).increment(it.toDouble()) }
             }
             log.info(
                 "자동 카드 생성 배치 완료: 대상={}, {}",
@@ -121,17 +135,6 @@ class DailyAutoCardScheduler(
             started.stop(batchTimer)
         }
     }
-
-    /**
-     * 결과별 처리 건수. FAILED 만 세지 않고 전 종류를 올린다 — 예를 들어 NO_SUMMARY 나 TOKEN_LIMIT 이
-     * 갑자기 늘어나는 것은 실패는 아니지만 카드가 안 만들어지고 있다는 뜻이라 똑같이 봐야 한다.
-     */
-    private fun outcomeCounter(outcome: AutoCardOutcome): Counter =
-        Counter
-            .builder("gamss.autocard.outcome")
-            .description("자동 카드 생성 배치가 처리한 대화방 수(결과별)")
-            .tag("outcome", outcome.name)
-            .register(meterRegistry)
 
     private fun process(conversationId: Long): AutoCardOutcome =
         try {

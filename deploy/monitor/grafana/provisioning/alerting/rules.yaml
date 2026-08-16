@@ -129,7 +129,7 @@
           },
           "annotations": {
             "summary": "{{ $labels.env }} 5xx 비율 {{ humanize $values.B.Value }}%",
-            "description": "서버 오류 응답이 5분 넘게 5% 를 넘었다. 서비스 개요 대시보드의 '요청률(결과별)'과 '최근 ERROR 로그'를 같은 시각으로 맞춰 본다."
+            "description": "서버 오류 응답이 5분 넘게 5% 를 넘었다. 서비스 개요 대시보드의 '요청률(결과별)'과 '최근 ERROR 로그'를 같은 시각으로 맞춰 본다. 표본이 20건 미만인 구간은 제외한다 — 새벽에 몇 건 중 몇 건이 실패한 것을 '급증'으로 알리면, 정작 트래픽이 많을 때의 알림까지 함께 무시하게 된다."
           },
           "data": [
             {
@@ -141,7 +141,7 @@
               "datasourceUid": "prometheus",
               "model": {
                 "refId": "A",
-                "expr": "sum by (env) (rate(http_server_requests_seconds_count{status=~\"5..\"}[5m])) / clamp_min(sum by (env) (rate(http_server_requests_seconds_count[5m])), 0.001) * 100",
+                "expr": "(sum by (env) (rate(http_server_requests_seconds_count{status=~\"5..\"}[5m])) / clamp_min(sum by (env) (rate(http_server_requests_seconds_count[5m])), 0.001) * 100) and (sum by (env) (increase(http_server_requests_seconds_count[5m])) >= 20)",
                 "instant": false,
                 "range": true,
                 "editorMode": "code",
@@ -529,7 +529,7 @@
           },
           "annotations": {
             "summary": "{{ $labels.env }} LLM 생성 실패율 {{ humanize $values.B.Value }}%",
-            "description": "재시도까지 소진한 최종 실패가 10분 넘게 20% 를 넘었다. Gemini 장애·프롬프트 변경·토큰 상한을 의심한다."
+            "description": "재시도까지 소진한 최종 실패가 10분 넘게 20% 를 넘었다. Gemini 장애·프롬프트 변경·토큰 상한을 의심한다. 표본이 10건 미만인 구간은 제외한다 — 새벽에 몇 건 중 몇 건이 실패한 것을 '급증'으로 알리면, 정작 트래픽이 많을 때의 알림까지 함께 무시하게 된다."
           },
           "data": [
             {
@@ -541,7 +541,7 @@
               "datasourceUid": "prometheus",
               "model": {
                 "refId": "A",
-                "expr": "sum by (env) (rate(gamss_llm_generation_seconds_count{success=\"false\"}[10m])) / clamp_min(sum by (env) (rate(gamss_llm_generation_seconds_count[10m])), 0.0001) * 100",
+                "expr": "(sum by (env) (rate(gamss_llm_generation_seconds_count{success=\"false\"}[10m])) / clamp_min(sum by (env) (rate(gamss_llm_generation_seconds_count[10m])), 0.0001) * 100) and (sum by (env) (increase(gamss_llm_generation_seconds_count[10m])) >= 10)",
                 "instant": false,
                 "range": true,
                 "editorMode": "code",
@@ -1196,6 +1196,206 @@
                       "type": "gt",
                       "params": [
                         10
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "B"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "uid": "gamss-exporter-down",
+          "title": "수집기 다운",
+          "condition": "C",
+          "for": "5m",
+          "isPaused": false,
+          "noDataState": "Alerting",
+          "execErrState": "Error",
+          "labels": {
+            "severity": "critical"
+          },
+          "annotations": {
+            "summary": "{{ $labels.env }} {{ $labels.job }} 수집기가 응답하지 않는다",
+            "description": "이 수집기가 죽으면 그 지표가 통째로 사라진다. 디스크·메모리 규칙은 noDataState 가 OK 라 '해소'로 떨어지므로, 디스크가 계속 차고 있는데도 마지막으로 받은 알림이 해소가 된다. mysql 이면 모니터링 계정(exporter)이 서버에 만들어졌는지도 함께 확인한다."
+          },
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 300,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "up{job=~\"node|cadvisor|mysql\"}",
+                "instant": false,
+                "range": true,
+                "editorMode": "code",
+                "intervalMs": 60000,
+                "maxDataPoints": 43200,
+                "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus"
+                }
+              }
+            },
+            {
+              "refId": "B",
+              "relativeTimeRange": {
+                "from": 300,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "settings": {
+                  "mode": "dropNN"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "lt",
+                      "params": [
+                        1
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "B"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "uid": "gamss-domain-metrics-stale",
+          "title": "도메인 지표 갱신 중단",
+          "condition": "C",
+          "for": "5m",
+          "isPaused": false,
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "labels": {
+            "severity": "warning"
+          },
+          "annotations": {
+            "summary": "{{ $labels.env }} 도메인 지표가 {{ humanize $values.B.Value }}초째 갱신되지 않는다",
+            "description": "적체 게이지(PENDING·FAILED·진행 중 대화방)는 갱신에 실패해도 마지막 성공 값을 그대로 들고 있어, 대시보드만 봐서는 '변화가 없는 것'과 구분되지 않는다. DB 조회가 실패하고 있을 가능성이 크다."
+          },
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 900,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "time() - gamss_domain_metrics_last_success_timestamp_seconds",
+                "instant": false,
+                "range": true,
+                "editorMode": "code",
+                "intervalMs": 60000,
+                "maxDataPoints": 43200,
+                "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus"
+                }
+              }
+            },
+            {
+              "refId": "B",
+              "relativeTimeRange": {
+                "from": 900,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "settings": {
+                  "mode": "dropNN"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        300
                       ]
                     },
                     "operator": {
