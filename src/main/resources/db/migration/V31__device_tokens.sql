@@ -8,10 +8,17 @@
 -- 알림 수신 동의는 별도로 두지 않는다 — **행이 있으면 수신 동의**다. OS 알림 권한을 허용해야
 -- 토큰이 발급되므로 등록 시점이 곧 동의 시점이고, 앱이 권한 해제·로그아웃 시 해제 API 를 호출해
 -- 행을 지운다. 알림 종류가 늘거나 광고성 푸시가 붙으면 그때 별도 설정 테이블로 확장한다.
+--
+-- token 은 collation 을 컬럼에 못 박는다(utf8mb4_bin). 서버 기본값을 따르면 대소문자를 무시하는
+-- collation 이라 대소문자만 다른 두 토큰이 **같은 유니크 키**가 되고, upsert 가 남의 행 소유자를
+-- 덮어써 그 회원은 등록이 사라지고 새 회원에게는 남의 토큰이 묶인다(mysql 8.0 에서 재현 확인).
+-- 실제로 그런 토큰 쌍이 생길 확률은 사실상 없지만, 토큰은 대소문자를 구분하는 불투명한 값이라
+-- 언어 인식 비교를 적용할 이유 자체가 없다. 컬럼에 못 박는 것은 환경 의존을 없애는 목적도 있다 —
+-- 운영은 utf8mb4_unicode_ci(compose 플래그), 테스트컨테이너는 utf8mb4_0900_ai_ci 로 서로 다르다.
 CREATE TABLE device_tokens (
     id         BIGINT       NOT NULL AUTO_INCREMENT,
     member_id  BIGINT       NOT NULL,
-    token      VARCHAR(512) NOT NULL,
+    token      VARCHAR(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
     created_at DATETIME(6)  NOT NULL,
     updated_at DATETIME(6)  NOT NULL,
     PRIMARY KEY (id),

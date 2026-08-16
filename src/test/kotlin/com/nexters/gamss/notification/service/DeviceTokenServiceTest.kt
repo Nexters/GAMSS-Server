@@ -69,6 +69,23 @@ class DeviceTokenServiceTest : RepositoryTest() {
         assertEquals(2, deviceTokenRepository.findAll().count { it.isOwnedBy(member.id) })
     }
 
+    /**
+     * 토큰은 대소문자를 구분하는 값이라 대소문자만 다르면 다른 기기다. 컬럼 collation 을 못 박지
+     * 않으면(V31) DB 기본값이 둘을 같은 유니크 키로 보고 한 행으로 합쳐, 뒤에 등록한 회원에게 남의
+     * 토큰이 묶이고 앞 회원은 등록이 사라진다.
+     */
+    @Test
+    fun `대소문자만 다른 토큰은 다른 기기로 취급한다`() {
+        val upper = memberRepository.save(Member("upper@a.com"))
+        val lower = memberRepository.save(Member("lower@a.com"))
+
+        deviceTokenService.register(upper.id, FcmToken("AbC-token"))
+        deviceTokenService.register(lower.id, FcmToken("abc-token"))
+
+        assertEquals(upper.id, deviceTokenRepository.findByToken(FcmToken("AbC-token"))?.memberId)
+        assertEquals(lower.id, deviceTokenRepository.findByToken(FcmToken("abc-token"))?.memberId)
+    }
+
     @Test
     fun `해제하면 토큰이 지워진다`() {
         val member = memberRepository.save(Member("me@a.com"))
