@@ -65,6 +65,8 @@ services:
       - "${PRIVATE_IP:-127.0.0.1}:9102:9102"
     volumes:
       - ./nginx/conf:/etc/nginx/conf.d:ro
+      # 공유 링크 도메인(gamss.kr)이 서빙하는 정적 파일 — 랜딩과 앱 검증 파일.
+      - ./nginx/www:/var/www/gamss:ro
       - certbot-www:/var/www/certbot:ro
       - certbot-conf:/etc/letsencrypt:ro
     # 갱신된 인증서를 주기적으로 반영한다(무중단 reload). 배포 시에도 reload 되지만 90일 갱신 주기 대비.
