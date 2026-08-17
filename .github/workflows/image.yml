@@ -176,7 +176,7 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT }}
-          source: "deploy/${{ github.ref_name }}/docker-compose.yml,deploy/nginx/conf/gamss.conf,deploy/nginx/www/index.html,deploy/nginx/conf/.htpasswd,deploy/promtail/promtail.yml,.github/scripts/deploy-app.sh,.env"
+          source: "deploy/${{ github.ref_name }}/docker-compose.yml,deploy/nginx/conf/gamss.conf,deploy/nginx/www,deploy/nginx/conf/.htpasswd,deploy/promtail/promtail.yml,.github/scripts/deploy-app.sh,.env"
           target: /tmp/gamss-deploy/
 
       - name: Deploy
@@ -201,7 +201,12 @@ jobs:
             mkdir -p "${DEPLOY_DIR}/nginx/conf" "${DEPLOY_DIR}/nginx/www" "${DEPLOY_DIR}/promtail"
             cp "${TMP_DIR}/deploy/${ENV_NAME}/docker-compose.yml" "${DEPLOY_DIR}/"
             cp "${TMP_DIR}/deploy/nginx/conf/gamss.conf" "${DEPLOY_DIR}/nginx/conf/"
-            cp "${TMP_DIR}/deploy/nginx/www/index.html" "${DEPLOY_DIR}/nginx/www/"
+            # 디렉터리째 옮긴다. 앞으로 .well-known/ 하위에 검증 파일이 들어오는데, 파일마다
+            # scp source 와 이 줄을 같이 고쳐야 하면 한쪽만 빠졌을 때 배포는 성공하면서 그
+            # 파일만 404 가 된다. 글롭(www/*)은 점으로 시작하는 .well-known 을 조용히 빼먹는다.
+            # 끝의 점이 숨은 항목까지 포함시킨다. 다만 cp 는 지운 파일을 따라가지 않으므로,
+            # 잘못 올린 검증 파일은 서버에서 직접 지워야 한다.
+            cp -a "${TMP_DIR}/deploy/nginx/www/." "${DEPLOY_DIR}/nginx/www/"
             cp "${TMP_DIR}/deploy/nginx/conf/.htpasswd" "${DEPLOY_DIR}/nginx/conf/"
             cp "${TMP_DIR}/deploy/promtail/promtail.yml" "${DEPLOY_DIR}/promtail/"
             cp "${TMP_DIR}/.github/scripts/deploy-app.sh" "${DEPLOY_DIR}/"
