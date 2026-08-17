@@ -165,10 +165,18 @@ class MemberPushNotifierTest {
         deviceTokenRepository.saveAll(members.mapIndexed { index, m -> DeviceToken(m.id, FcmToken(tokens[index])) })
         sender.invalidTokens = tokens
 
-        notifier.send(members.map { it.id }, MESSAGE)
+        val memberIds = members.map { it.id }
+
+        notifier.send(memberIds, MESSAGE)
 
         assertEquals(OVER_CHUNK_SIZE, assertNotNull(sender.sentTokens).size, "조회가 청크를 모두 합쳐야 한다")
-        assertEquals(0, deviceTokenRepository.count(), "삭제도 청크를 모두 돌아야 한다")
+        // 전체 행 수를 세면 커밋하는 다른 테스트가 남긴 행에 판정이 흔들린다. 이 테스트가 만든
+        // 회원의 기기만 본다.
+        assertEquals(
+            emptyList(),
+            deviceTokenRepository.findTokenValuesByMemberIdIn(memberIds),
+            "삭제도 청크를 모두 돌아야 한다",
+        )
     }
 
     private fun register(
