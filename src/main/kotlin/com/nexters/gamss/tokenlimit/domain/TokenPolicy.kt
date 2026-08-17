@@ -13,7 +13,7 @@ import java.time.Instant
 
 /**
  * 유저별 일일 토큰 상한 정책. 앱 전체 단일 행(id=1, V15 시드)으로 존재하며 백오피스에서 값을 조절한다.
- * 상한을 실제로 적용할지 여부(prod만)는 이 엔티티가 아니라 코드 설정(gamss.token-limit.enabled)이 정한다 —
+ * 상한을 실제로 적용할지 여부(배포 환경만)는 이 엔티티가 아니라 코드 설정(gamss.token-limit.enabled)이 정한다 —
  * 여기서는 '얼마나([dailyTokenLimit])'와 '언제 리셋([resetHour], KST 시각)'만 관리한다.
  */
 @Entity
