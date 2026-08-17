@@ -16,6 +16,8 @@ import com.nexters.gamss.llm.error.CardGenerationFailedException
 import com.nexters.gamss.llm.generation.CardMessageGenerator
 import com.nexters.gamss.llm.generation.CardMessageOutput
 import com.nexters.gamss.llm.generation.EmotionExtractor
+import com.nexters.gamss.llm.generation.LlmRetryExecutor
+import com.nexters.gamss.llm.generation.TokenUsageAccumulator
 import com.nexters.gamss.monitoring.domain.GenerationType
 import com.nexters.gamss.monitoring.service.GenerationLogRecorder
 import com.nexters.gamss.tokenlimit.service.DailyTokenLimitService
@@ -43,6 +45,7 @@ class CardService(
     private val generationLogRecorder: GenerationLogRecorder,
     private val dailyTokenLimitService: DailyTokenLimitService,
     private val cardPersistenceService: CardPersistenceService,
+    private val llmRetryExecutor: LlmRetryExecutor = LlmRetryExecutor(),
 ) {
     /**
      * 종료된 대화에 대해 그날 있었던 일 한 줄을 생성해 카드를 저장한다. 외부 LLM 호출이 DB
@@ -160,38 +163,26 @@ class CardService(
     ): EmotionType {
         val input = loadUserMessages(conversationId, summary)
         val startedAt = System.currentTimeMillis()
+        val tokens = TokenUsageAccumulator()
         val output =
             try {
-                emotionExtractor.extract(input)
+                llmRetryExecutor.execute(
+                    retryOn = CardGenerationFailedException::class,
+                    maxAttempts = CARD_MAX_ATTEMPTS,
+                    onAttemptFailure = { _, e -> tokens.addFailed(e) },
+                    onExhausted = { attempt, e ->
+                        recordCard(GenerationType.CARD_EMOTION, false, attempt, startedAt, memberId, conversationId, tokens, e)
+                        markCardGenerationStatus(conversationId, CardGenerationStatus.FAILED)
+                    },
+                ) { attempt ->
+                    emotionExtractor.extract(input).also {
+                        tokens.add(it)
+                        recordCard(GenerationType.CARD_EMOTION, true, attempt, startedAt, memberId, conversationId, tokens)
+                    }
+                }
             } catch (e: CardGenerationFailedException) {
-                generationLogRecorder.record(
-                    type = GenerationType.CARD_EMOTION,
-                    success = false,
-                    attemptCount = 1,
-                    latencyMs = System.currentTimeMillis() - startedAt,
-                    memberId = memberId,
-                    conversationId = conversationId,
-                    usedTokens = e.usedTokens,
-                    cachedTokens = e.cachedTokens,
-                    inputTokens = e.inputTokens,
-                    outputTokens = e.outputTokens,
-                    failureReason = (e.cause ?: e).javaClass.simpleName,
-                )
-                markCardGenerationStatus(conversationId, CardGenerationStatus.FAILED)
                 throw BusinessException(ErrorCode.CARD_GENERATION_FAILED, e.message).apply { initCause(e) }
             }
-        generationLogRecorder.record(
-            type = GenerationType.CARD_EMOTION,
-            success = true,
-            attemptCount = 1,
-            latencyMs = System.currentTimeMillis() - startedAt,
-            memberId = memberId,
-            conversationId = conversationId,
-            usedTokens = output.usedTokens,
-            cachedTokens = output.cachedTokens,
-            inputTokens = output.inputTokens,
-            outputTokens = output.outputTokens,
-        )
         return output.emotion
     }
 
@@ -225,39 +216,55 @@ class CardService(
         conversationId: Long,
     ): CardMessageOutput {
         val startedAt = System.currentTimeMillis()
-        val output =
-            try {
-                cardMessageGenerator.generate(emotion, summary)
-            } catch (e: CardGenerationFailedException) {
-                generationLogRecorder.record(
-                    type = GenerationType.CARD,
-                    success = false,
-                    attemptCount = 1,
-                    latencyMs = System.currentTimeMillis() - startedAt,
-                    memberId = memberId,
-                    conversationId = conversationId,
-                    usedTokens = e.usedTokens,
-                    cachedTokens = e.cachedTokens,
-                    inputTokens = e.inputTokens,
-                    outputTokens = e.outputTokens,
-                    failureReason = (e.cause ?: e).javaClass.simpleName,
-                )
-                markCardGenerationStatus(conversationId, CardGenerationStatus.FAILED)
-                throw BusinessException(ErrorCode.CARD_GENERATION_FAILED, e.message).apply { initCause(e) }
+        val tokens = TokenUsageAccumulator()
+        return try {
+            llmRetryExecutor.execute(
+                retryOn = CardGenerationFailedException::class,
+                maxAttempts = CARD_MAX_ATTEMPTS,
+                onAttemptFailure = { _, e -> tokens.addFailed(e) },
+                onExhausted = { attempt, e ->
+                    recordCard(GenerationType.CARD, false, attempt, startedAt, memberId, conversationId, tokens, e)
+                    markCardGenerationStatus(conversationId, CardGenerationStatus.FAILED)
+                },
+            ) { attempt ->
+                cardMessageGenerator.generate(emotion, summary).also {
+                    tokens.add(it)
+                    recordCard(GenerationType.CARD, true, attempt, startedAt, memberId, conversationId, tokens)
+                }
             }
+        } catch (e: CardGenerationFailedException) {
+            throw BusinessException(ErrorCode.CARD_GENERATION_FAILED, e.message).apply { initCause(e) }
+        }
+    }
+
+    /**
+     * 카드 경로의 생성 로그 한 줄. 감정 분류·한 줄 생성이 [type]만 다르고 나머지가 같아 한 곳에 모은다.
+     * 성공·실패 모두 [tokens]에 **그때까지 누적된 합계**를 싣는다 — 파싱에 실패한 시도도 호출은 됐으니
+     * 과금되기 때문에, 마지막 한 시도만 기록하면 비용이 과소 집계된다.
+     */
+    private fun recordCard(
+        type: GenerationType,
+        success: Boolean,
+        attempt: Int,
+        startedAt: Long,
+        memberId: Long,
+        conversationId: Long,
+        tokens: TokenUsageAccumulator,
+        error: CardGenerationFailedException? = null,
+    ) {
         generationLogRecorder.record(
-            type = GenerationType.CARD,
-            success = true,
-            attemptCount = 1,
+            type = type,
+            success = success,
+            attemptCount = attempt,
             latencyMs = System.currentTimeMillis() - startedAt,
             memberId = memberId,
             conversationId = conversationId,
-            usedTokens = output.usedTokens,
-            cachedTokens = output.cachedTokens,
-            inputTokens = output.inputTokens,
-            outputTokens = output.outputTokens,
+            usedTokens = tokens.used,
+            cachedTokens = tokens.cached,
+            inputTokens = tokens.input,
+            outputTokens = tokens.output,
+            failureReason = error?.let { (it.cause ?: it).javaClass.simpleName },
         )
-        return output
     }
 
     private fun markCardGenerationStatus(
@@ -428,6 +435,11 @@ class CardService(
     }
 
     companion object {
+        /**
+         * 카드 경로는 아직 재시도하지 않는다. 한 요청이 감정 분류·한 줄 생성으로 LLM을 두 번 순차
+         * 호출하는 구간이라, 시도 횟수를 늘리려면 nginx `proxy_read_timeout`까지 다시 계산해야 한다(#162).
+         */
+        private const val CARD_MAX_ATTEMPTS = 1
         private val ZONE = ZoneId.of("Asia/Seoul")
         private val log = LoggerFactory.getLogger(CardService::class.java)
     }
