@@ -176,7 +176,7 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT }}
-          source: "deploy/${{ github.ref_name }}/docker-compose.yml,deploy/nginx/conf/gamss.conf,deploy/nginx/conf/.htpasswd,deploy/promtail/promtail.yml,.github/scripts/deploy-app.sh,.env"
+          source: "deploy/${{ github.ref_name }}/docker-compose.yml,deploy/nginx/conf/gamss.conf,deploy/nginx/www/index.html,deploy/nginx/conf/.htpasswd,deploy/promtail/promtail.yml,.github/scripts/deploy-app.sh,.env"
           target: /tmp/gamss-deploy/
 
       - name: Deploy
@@ -198,9 +198,10 @@ jobs:
             TMP_DIR="/tmp/gamss-deploy"
             trap "rm -rf '${TMP_DIR}'; docker logout ghcr.io >/dev/null 2>&1 || true" EXIT
 
-            mkdir -p "${DEPLOY_DIR}/nginx/conf" "${DEPLOY_DIR}/promtail"
+            mkdir -p "${DEPLOY_DIR}/nginx/conf" "${DEPLOY_DIR}/nginx/www" "${DEPLOY_DIR}/promtail"
             cp "${TMP_DIR}/deploy/${ENV_NAME}/docker-compose.yml" "${DEPLOY_DIR}/"
             cp "${TMP_DIR}/deploy/nginx/conf/gamss.conf" "${DEPLOY_DIR}/nginx/conf/"
+            cp "${TMP_DIR}/deploy/nginx/www/index.html" "${DEPLOY_DIR}/nginx/www/"
             cp "${TMP_DIR}/deploy/nginx/conf/.htpasswd" "${DEPLOY_DIR}/nginx/conf/"
             cp "${TMP_DIR}/deploy/promtail/promtail.yml" "${DEPLOY_DIR}/promtail/"
             cp "${TMP_DIR}/.github/scripts/deploy-app.sh" "${DEPLOY_DIR}/"
