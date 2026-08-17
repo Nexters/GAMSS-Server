@@ -62,7 +62,7 @@ class MemberPushNotifier(
         // 청크마다 따로 삼킨다. 바깥에서 한 번에 감싸면 중간 청크가 터졌을 때 뒤쪽 청크는 시도조차
         // 못 하고, 앞 청크는 자기 트랜잭션으로 이미 커밋된 상태라 로그의 건수도 사실과 어긋난다.
         val removed = invalidTokens.chunked(QUERY_CHUNK_SIZE).sumOf { removeChunk(it) }
-        log.info("죽은 디바이스 토큰 정리: 보고={}건, 삭제={}건", invalidTokens.size, removed)
+        log.info("죽은 디바이스 토큰 정리: 무효={}건, 삭제={}건", invalidTokens.size, removed)
     }
 
     private fun removeChunk(tokens: List<String>): Int =
