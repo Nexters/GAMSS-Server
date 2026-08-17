@@ -9,6 +9,7 @@ import com.nexters.gamss.notification.push.PushSendResult
 import com.nexters.gamss.notification.push.PushSender
 import com.nexters.gamss.notification.repository.DeviceTokenRepository
 import com.nexters.gamss.support.TestcontainersConfig
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -16,15 +17,15 @@ import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
 import org.springframework.context.annotation.Primary
-import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionTemplate
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 @SpringBootTest
 @Import(TestcontainersConfig::class, MemberPushNotifierTest.RecordingSenderConfig::class)
-@Transactional
 class MemberPushNotifierTest {
     @Autowired
     private lateinit var notifier: MemberPushNotifier
@@ -40,6 +41,16 @@ class MemberPushNotifierTest {
 
     @Autowired
     private lateinit var sender: RecordingPushSender
+
+    @Autowired
+    private lateinit var transactionTemplate: TransactionTemplate
+
+    @AfterEach
+    fun cleanUp() {
+        // 발송이 트랜잭션 밖에서 돌아야 해서 @Transactional 롤백을 쓸 수 없다. 직접 치운다.
+        deviceTokenRepository.deleteAll()
+        memberRepository.deleteAll()
+    }
 
     @BeforeEach
     fun resetSender() {
@@ -177,6 +188,22 @@ class MemberPushNotifierTest {
             deviceTokenRepository.findTokenValuesByMemberIdIn(memberIds),
             "삭제도 청크를 모두 돌아야 한다",
         )
+    }
+
+    /**
+     * `@Transactional` 을 안 붙이는 것만으로는 트랜잭션 밖에서 돈다고 보장되지 않는다. 부르는 쪽에
+     * 트랜잭션이 열려 있으면 이 코드도 그 안에서 돌고, **결과는 정상이라 아무도 모른 채** FCM 왕복
+     * 내내 DB 커넥션을 쥔다. 그 실수를 그 자리에서 드러내는 것이 가드의 목적이다.
+     */
+    @Test
+    fun `트랜잭션 안에서 부르면 거부한다`() {
+        val member = register("me@a.com", "token-one")
+
+        assertFailsWith<IllegalStateException> {
+            transactionTemplate.execute { notifier.send(listOf(member), MESSAGE) }
+        }
+
+        assertNull(sender.sentTokens, "거부했으면 발송도 하지 않아야 한다")
     }
 
     private fun register(
