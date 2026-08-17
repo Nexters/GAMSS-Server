@@ -1,7 +1,5 @@
 package com.nexters.gamss.notification.service
 
-import com.nexters.gamss.notification.domain.DeviceToken
-import com.nexters.gamss.notification.domain.FcmToken
 import com.nexters.gamss.notification.push.PushMessage
 import com.nexters.gamss.notification.push.PushSendResult
 import com.nexters.gamss.notification.push.PushSender
@@ -23,7 +21,7 @@ class MemberPushNotifierCleanupFailureTest {
 
     @Test
     fun `정리가 실패해도 예외를 던지지 않고 발송 결과를 돌려준다`() {
-        every { repository.findAllByMemberIdIn(any()) } returns listOf(DeviceToken(MEMBER_ID, FcmToken(DEAD_TOKEN)))
+        every { repository.findTokenValuesByMemberIdIn(any()) } returns listOf(DEAD_TOKEN)
         every { repository.deleteByTokenValueIn(any()) } throws IllegalStateException("DB 연결 끊김")
 
         val result = notifier.send(listOf(MEMBER_ID), MESSAGE)

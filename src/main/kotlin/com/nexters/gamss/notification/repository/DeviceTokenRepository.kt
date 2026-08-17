@@ -95,8 +95,17 @@ interface DeviceTokenRepository : JpaRepository<DeviceToken, Long> {
 
     fun findByToken(token: FcmToken): DeviceToken?
 
-    /** 발송 대상 회원들의 기기를 한 번에 모은다. 회원 수만큼 조회하지 않기 위한 것이다. */
-    fun findAllByMemberIdIn(memberIds: Collection<Long>): List<DeviceToken>
+    /**
+     * 발송 대상 회원들의 토큰 문자열만 모은다. 회원 수만큼 조회하지 않기 위한 것이다.
+     *
+     * 엔티티가 아니라 문자열을 뽑는 이유는 **메모리** 때문이다. 발송에 필요한 것은 토큰 문자열
+     * 하나뿐인데 엔티티로 받으면 나머지 필드까지 만들어 영속성 컨텍스트에 얹는다 — 04:30 리마인더는
+     * 대상이 전체 회원이 될 수 있어서, 회원이 늘수록 쓰지도 않을 객체가 그만큼 쌓인다.
+     */
+    @Query("select d.token.value from DeviceToken d where d.memberId in :memberIds")
+    fun findTokenValuesByMemberIdIn(
+        @Param("memberIds") memberIds: Collection<Long>,
+    ): List<String>
 
     /**
      * 발송 응답이 죽었다고 알려준 토큰들을 지운다. 지운 건수를 돌려줘 로그로 남길 수 있게 한다.

@@ -49,8 +49,7 @@ class MemberPushNotifier(
         memberIds
             .distinct()
             .chunked(QUERY_CHUNK_SIZE)
-            .flatMap { deviceTokenRepository.findAllByMemberIdIn(it) }
-            .map { it.token.value }
+            .flatMap { deviceTokenRepository.findTokenValuesByMemberIdIn(it) }
 
     /**
      * 발송이 끝난 뒤라 여기서 실패해도 발송 결과까지 잃을 이유는 없다. 다음 발송이 같은 토큰을
