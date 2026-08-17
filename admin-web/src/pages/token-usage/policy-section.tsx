@@ -66,7 +66,7 @@ export function PolicySection() {
       <div className="flex flex-wrap items-center gap-2">
         <Gauge className="size-4 text-muted-foreground" />
         <span className="text-sm font-medium">유저 일일 토큰 상한</span>
-        <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700">prod에만 적용</span>
+        <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700">이 환경에 적용</span>
       </div>
 
       {isError && !policy ? (
@@ -127,7 +127,7 @@ export function PolicySection() {
           </div>
           <p className="text-xs text-muted-foreground">
             한 유저가 하루에 소비할 수 있는 총 토큰입니다. 매일 <span className="font-medium text-foreground">{String(resetHour).padStart(2, '0')}:00</span>(KST)에
-            사용량이 초기화됩니다. 상한을 넘으면 메시지 저장은 유지된 채 댓글·답글·카드 생성만 차단됩니다. dev 환경에는 상한이 적용되지 않습니다.
+            사용량이 초기화됩니다. 상한을 넘으면 메시지 저장은 유지된 채 댓글·답글·카드 생성만 차단됩니다. 여기서 저장한 값은 지금 보고 있는 환경(dev/prod)에만 적용됩니다.
           </p>
         </>
       )}
