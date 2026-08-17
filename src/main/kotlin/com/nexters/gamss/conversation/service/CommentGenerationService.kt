@@ -11,6 +11,7 @@ import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.llm.error.CommentGenerationFailedException
 import com.nexters.gamss.llm.generation.CommentGenerationOutput
 import com.nexters.gamss.llm.generation.CommentGenerator
+import com.nexters.gamss.llm.generation.LlmRetryExecutor
 import com.nexters.gamss.llm.generation.LlmRetryPolicy
 import com.nexters.gamss.llm.generation.ReplyGenerationOutput
 import com.nexters.gamss.llm.parsing.CommentFeedValidator
@@ -43,6 +44,7 @@ class CommentGenerationService(
     private val commentPersistenceService: CommentPersistenceService,
     private val generationLogRecorder: GenerationLogRecorder,
     private val dailyTokenLimitService: DailyTokenLimitService,
+    private val llmRetryExecutor: LlmRetryExecutor = LlmRetryExecutor(),
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -240,79 +242,43 @@ class CommentGenerationService(
     ): ReplyGenerationOutput {
         val startedAt = System.currentTimeMillis()
         val tokens = TokenUsageAccumulator()
-        var lastError: CommentGenerationFailedException? = null
-        repeat(LlmRetryPolicy.MAX_ATTEMPTS) { attempt ->
-            try {
-                val output =
-                    commentGenerator.generateReply(
-                        diaryContent,
-                        PromptCharacterId.of(characterMessage.emotionType!!).promptId,
-                        characterMessage.content,
-                        userReply,
-                    )
-                try {
-                    commentFeedValidator.validateReply(output.text)
-                } catch (e: CommentGenerationFailedException) {
-                    // 검증은 통과 못 했어도 호출은 됐으니, 실패 로그에 실제 과금 토큰이 남도록 실어 던진다.
-                    throw CommentGenerationFailedException(
-                        e.message ?: "답글 검증 실패",
-                        e.cause,
-                        output.usedTokens,
-                        output.cachedTokens,
-                        output.inputTokens,
-                        output.outputTokens,
-                    )
-                }
-                tokens.add(output)
-                generationLogRecorder.record(
-                    type = GenerationType.REPLY,
-                    success = true,
-                    attemptCount = attempt + 1,
-                    latencyMs = System.currentTimeMillis() - startedAt,
-                    memberId = memberId,
-                    conversationId = conversationId,
-                    usedTokens = tokens.used,
-                    cachedTokens = tokens.cached,
-                    inputTokens = tokens.input,
-                    outputTokens = tokens.output,
-                )
-                return output
-            } catch (e: CommentGenerationFailedException) {
-                lastError = e
-                tokens.addFailed(e)
-                log.warn("답글 생성 {}차 시도 실패: {}", attempt + 1, e.message)
-            } catch (e: Exception) {
-                // 재시도 대상이 아닌 예외: 실패로 기록한 뒤 즉시 던진다(재시도하지 않음).
-                generationLogRecorder.record(
-                    type = GenerationType.REPLY,
-                    success = false,
-                    attemptCount = attempt + 1,
-                    latencyMs = System.currentTimeMillis() - startedAt,
-                    memberId = memberId,
-                    conversationId = conversationId,
-                    usedTokens = tokens.used,
-                    cachedTokens = tokens.cached,
-                    inputTokens = tokens.input,
-                    outputTokens = tokens.output,
-                    failureReason = failureReasonOf(e),
-                )
-                throw e
-            }
+        val recordFailure: (Int, Exception) -> Unit = { attempt, e ->
+            recordGeneration(GenerationType.REPLY, false, attempt, startedAt, memberId, conversationId, tokens, e)
         }
-        generationLogRecorder.record(
-            type = GenerationType.REPLY,
-            success = false,
-            attemptCount = LlmRetryPolicy.MAX_ATTEMPTS,
-            latencyMs = System.currentTimeMillis() - startedAt,
-            memberId = memberId,
-            conversationId = conversationId,
-            usedTokens = tokens.used,
-            cachedTokens = tokens.cached,
-            inputTokens = tokens.input,
-            outputTokens = tokens.output,
-            failureReason = failureReasonOf(lastError),
-        )
-        throw checkNotNull(lastError)
+
+        return llmRetryExecutor.execute(
+            retryOn = CommentGenerationFailedException::class,
+            onAttemptFailure = { attempt, e ->
+                tokens.addFailed(e)
+                log.warn("답글 생성 {}차 시도 실패: {}", attempt, e.message)
+            },
+            onNonRetryable = recordFailure,
+            onExhausted = recordFailure,
+        ) { attempt ->
+            val output =
+                commentGenerator.generateReply(
+                    diaryContent,
+                    PromptCharacterId.of(characterMessage.emotionType!!).promptId,
+                    characterMessage.content,
+                    userReply,
+                )
+            try {
+                commentFeedValidator.validateReply(output.text)
+            } catch (e: CommentGenerationFailedException) {
+                // 검증은 통과 못 했어도 호출은 됐으니, 실패 로그에 실제 과금 토큰이 남도록 실어 던진다.
+                throw CommentGenerationFailedException(
+                    e.message ?: "답글 검증 실패",
+                    e.cause,
+                    output.usedTokens,
+                    output.cachedTokens,
+                    output.inputTokens,
+                    output.outputTokens,
+                )
+            }
+            tokens.add(output)
+            recordGeneration(GenerationType.REPLY, true, attempt, startedAt, memberId, conversationId, tokens)
+            output
+        }
     }
 
     /** 생성 로그의 실패 원인 요약. 근본 원인(예외 cause)의 클래스명을 우선 쓰고, 없으면 예외 자체의 클래스명을 쓴다. */
@@ -348,63 +314,59 @@ class CommentGenerationService(
             )
         val startedAt = System.currentTimeMillis()
         val tokens = TokenUsageAccumulator()
-        var lastError: CommentGenerationFailedException? = null
-        repeat(LlmRetryPolicy.MAX_ATTEMPTS) { attempt ->
-            try {
-                val output = commentGenerator.generateComment(context)
-                try {
-                    commentFeedValidator.validate(output.feed, characters, tikitakaCount)
-                } catch (e: CommentGenerationFailedException) {
-                    // 검증은 통과 못 했어도 호출은 됐으니, 실패 로그에 실제 과금 토큰이 남도록 실어 던진다.
-                    throw CommentGenerationFailedException(
-                        e.message ?: "댓글 검증 실패",
-                        e.cause,
-                        output.usedTokens,
-                        output.cachedTokens,
-                        output.inputTokens,
-                        output.outputTokens,
-                    )
-                }
-                tokens.add(output)
-                generationLogRecorder.record(
-                    type = GenerationType.COMMENT,
-                    success = true,
-                    attemptCount = attempt + 1,
-                    latencyMs = System.currentTimeMillis() - startedAt,
-                    memberId = memberId,
-                    conversationId = conversationId,
-                    usedTokens = tokens.used,
-                    cachedTokens = tokens.cached,
-                    inputTokens = tokens.input,
-                    outputTokens = tokens.output,
-                )
-                return output
-            } catch (e: CommentGenerationFailedException) {
-                lastError = e
-                tokens.addFailed(e)
-                log.warn("댓글 생성 {}차 시도 실패: {}", attempt + 1, e.message)
-            } catch (e: Exception) {
-                // 재시도 대상이 아닌 예외: 실패로 기록한 뒤 즉시 던진다(재시도하지 않음).
-                generationLogRecorder.record(
-                    type = GenerationType.COMMENT,
-                    success = false,
-                    attemptCount = attempt + 1,
-                    latencyMs = System.currentTimeMillis() - startedAt,
-                    memberId = memberId,
-                    conversationId = conversationId,
-                    usedTokens = tokens.used,
-                    cachedTokens = tokens.cached,
-                    inputTokens = tokens.input,
-                    outputTokens = tokens.output,
-                    failureReason = failureReasonOf(e),
-                )
-                throw e
-            }
+        // 재시도 대상이 아닌 예외로 중단할 때와 시도를 모두 소진했을 때는 남길 것이 같다 —
+        // 그때까지 누적된 토큰과 마지막 실패 원인.
+        val recordFailure: (Int, Exception) -> Unit = { attempt, e ->
+            recordGeneration(GenerationType.COMMENT, false, attempt, startedAt, memberId, conversationId, tokens, e)
         }
+
+        return llmRetryExecutor.execute(
+            retryOn = CommentGenerationFailedException::class,
+            onAttemptFailure = { attempt, e ->
+                tokens.addFailed(e)
+                log.warn("댓글 생성 {}차 시도 실패: {}", attempt, e.message)
+            },
+            onNonRetryable = recordFailure,
+            onExhausted = recordFailure,
+        ) { attempt ->
+            val output = commentGenerator.generateComment(context)
+            try {
+                commentFeedValidator.validate(output.feed, characters, tikitakaCount)
+            } catch (e: CommentGenerationFailedException) {
+                // 검증은 통과 못 했어도 호출은 됐으니, 실패 로그에 실제 과금 토큰이 남도록 실어 던진다.
+                throw CommentGenerationFailedException(
+                    e.message ?: "댓글 검증 실패",
+                    e.cause,
+                    output.usedTokens,
+                    output.cachedTokens,
+                    output.inputTokens,
+                    output.outputTokens,
+                )
+            }
+            tokens.add(output)
+            recordGeneration(GenerationType.COMMENT, true, attempt, startedAt, memberId, conversationId, tokens)
+            output
+        }
+    }
+
+    /**
+     * 생성 로그 한 줄. 성공·실패 모두 [tokens]에 **그때까지 누적된 합계**를 싣는다 — 검증에 실패한
+     * 시도도 호출은 됐으니 과금되기 때문에, 마지막 한 시도만 기록하면 비용이 과소 집계된다.
+     */
+    private fun recordGeneration(
+        type: GenerationType,
+        success: Boolean,
+        attempt: Int,
+        startedAt: Long,
+        memberId: Long,
+        conversationId: Long,
+        tokens: TokenUsageAccumulator,
+        error: Throwable? = null,
+    ) {
         generationLogRecorder.record(
-            type = GenerationType.COMMENT,
-            success = false,
-            attemptCount = LlmRetryPolicy.MAX_ATTEMPTS,
+            type = type,
+            success = success,
+            attemptCount = attempt,
             latencyMs = System.currentTimeMillis() - startedAt,
             memberId = memberId,
             conversationId = conversationId,
@@ -412,9 +374,8 @@ class CommentGenerationService(
             cachedTokens = tokens.cached,
             inputTokens = tokens.input,
             outputTokens = tokens.output,
-            failureReason = failureReasonOf(lastError),
+            failureReason = failureReasonOf(error),
         )
-        throw checkNotNull(lastError)
     }
 
     private fun currentStatusResult(messageId: Long): GenerationResult {
