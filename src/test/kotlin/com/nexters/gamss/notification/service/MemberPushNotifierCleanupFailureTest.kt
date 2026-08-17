@@ -6,6 +6,7 @@ import com.nexters.gamss.notification.push.PushSender
 import com.nexters.gamss.notification.repository.DeviceTokenRepository
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -30,6 +31,29 @@ class MemberPushNotifierCleanupFailureTest {
         assertEquals(1, result.failureCount)
     }
 
+    /**
+     * 청크 하나가 터져도 나머지는 계속 지워야 한다. 바깥에서 한 번에 감싸면 뒤쪽 청크가 시도조차
+     * 되지 않아, 죽은 토큰이 남은 채로 다음 발송에서 같은 실패를 반복한다.
+     */
+    @Test
+    fun `중간 청크가 실패해도 나머지 청크는 계속 지운다`() {
+        val tokens = (1..OVER_CHUNK_SIZE).map { "token-$it" }
+        every { repository.findTokenValuesByMemberIdIn(any()) } returns tokens
+        var call = 0
+        every { repository.deleteByTokenValueIn(any()) } answers {
+            call++
+            if (call == 1) {
+                throw IllegalStateException("DB 연결 끊김")
+            }
+            firstArg<Collection<String>>().size
+        }
+
+        val result = notifier.send(listOf(MEMBER_ID), MESSAGE)
+
+        verify(exactly = 2) { repository.deleteByTokenValueIn(any()) }
+        assertEquals(tokens, result.invalidTokens)
+    }
+
     /** 받은 토큰을 전부 죽은 것으로 보고해 정리 경로를 타게 한다. */
     private class StubPushSender : PushSender {
         override fun send(
@@ -41,6 +65,9 @@ class MemberPushNotifierCleanupFailureTest {
     companion object {
         private const val MEMBER_ID = 1L
         private const val DEAD_TOKEN = "token-dead"
+
+        /** MemberPushNotifier 가 IN 절에 한 번에 넣는 개수(500)보다 하나 많게 잡는다. */
+        private const val OVER_CHUNK_SIZE = 501
         private val MESSAGE = PushMessage(title = "제목", body = "본문")
     }
 }
