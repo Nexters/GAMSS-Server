@@ -5,7 +5,7 @@ spring:
     password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
-# 유저별 일일 토큰 상한은 prod에서만 적용한다(dev/local은 미적용). 상한 값·리셋 시각은 백오피스(token_policy)에서 조절.
+# 유저별 일일 토큰 상한은 배포 환경(dev/prod)에서 적용한다(local은 미적용). 상한 값·리셋 시각은 백오피스(token_policy)에서 조절.
 gamss:
   token-limit:
     enabled: true

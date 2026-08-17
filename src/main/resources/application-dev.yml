@@ -12,3 +12,9 @@ spring:
 logging:
   level:
     org.hibernate.SQL: debug
+
+# dev도 상한을 켠다 — 끄면 token-usage 응답의 dailyLimit이 null이라 클라이언트가 사용량 UI를 검증할 수 없다.
+# 다만 dev는 QA용이라 실제로 막히면 곤란하므로, 상한 값(token_policy)은 백오피스에서 넉넉하게 잡아둔다.
+gamss:
+  token-limit:
+    enabled: true

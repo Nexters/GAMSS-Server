@@ -93,7 +93,7 @@ class MemberController(
         summary = "내 오늘 토큰 사용량 조회",
         description =
             "로그인한 회원 본인의 오늘(KST, 정책 리셋 시각 기준) 토큰 사용량과 일일 상한을 반환합니다. " +
-                "상한이 적용되지 않는 환경(dev 등)에서는 dailyLimit이 null(무제한)로 내려갑니다.\n\n" +
+                "상한이 적용되지 않는 환경(local 등)에서는 dailyLimit이 null(무제한)로 내려갑니다.\n\n" +
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +
