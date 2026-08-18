@@ -8,6 +8,7 @@ import java.time.ZoneId
 import java.time.ZonedDateTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
  * 두 배치(05:00 자동 종료, 04:30 리마인더)가 같은 대상을 보게 하는 기준이라, 경계 판정이 이 기능의
@@ -50,6 +51,28 @@ class AutoCardWindowTest {
             Instant.parse("2026-08-17T20:00:00Z"),
             window.createdBefore(kst("2026-08-19T00:10:00")),
         )
+    }
+
+    /**
+     * 이 기능의 핵심 관계다. 04:30 리마인더는 **30분 뒤 배치가 닫을 방**을 알려야 하므로, 두 시점이
+     * 같은 상한을 봐야 한다. 어긋나면 어젯밤에 쓰다 만 방이 알림 없이 닫힌다.
+     */
+    @Test
+    fun `04시 30분 리마인더와 30분 뒤 배치는 같은 상한을 본다`() {
+        assertEquals(
+            window.createdBefore(kst("2026-08-19T05:00:00")),
+            window.createdBeforeOfNextRun(kst("2026-08-19T04:30:00")),
+        )
+    }
+
+    /** 가장 흔한 경우 — 어젯밤에 쓰다 만 방은 리마인더 대상에 들어와야 한다. */
+    @Test
+    fun `어젯밤에 만든 방도 리마인더 대상 기간에 들어온다`() {
+        val lastNight = Instant.parse("2026-08-18T13:00:00Z") // KST 08-18 22:00
+
+        val upperBound = window.createdBeforeOfNextRun(kst("2026-08-19T04:30:00"))
+
+        assertTrue(lastNight < upperBound, "30분 뒤 닫힐 방이 리마인더 기간에 들어와야 한다")
     }
 
     @Test

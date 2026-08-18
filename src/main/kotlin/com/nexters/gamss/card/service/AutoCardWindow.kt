@@ -38,6 +38,19 @@ class AutoCardWindow(
         return if (now < todayBoundary) todayBoundary.minusDays(1).toInstant() else todayBoundary.toInstant()
     }
 
+    /**
+     * **다음 배치가 상한으로 쓸** 경계. 04:30 리마인더처럼 "이따 배치가 닫을 방"을 미리 알려야 하는
+     * 쪽이 본다.
+     *
+     * [createdBefore] 를 그대로 쓰면 안 된다. 그쪽은 '지금 기준 지난 경계'라서 04:30 에 부르면 어제
+     * 05:00 이 나오고, **정작 30분 뒤에 닫힐 어젯밤 방들이 통째로 빠진다** — 리마인더가 잡는 것은
+     * 이전 배치가 못 닫은 잔여분뿐이라 사실상 아무도 못 받는다.
+     */
+    fun createdBeforeOfNextRun(now: ZonedDateTime = ZonedDateTime.now(ZONE)): Instant {
+        val todayBoundary = dayStart(now.toLocalDate()).atZone(ZONE)
+        return if (now < todayBoundary) todayBoundary.toInstant() else todayBoundary.plusDays(1).toInstant()
+    }
+
     /** [date]의 하루가 시작하는 시각(KST [DAY_BOUNDARY_HOUR]시). */
     private fun dayStart(date: LocalDate): Instant = date.atTime(DAY_BOUNDARY_HOUR, 0).atZone(ZONE).toInstant()
 

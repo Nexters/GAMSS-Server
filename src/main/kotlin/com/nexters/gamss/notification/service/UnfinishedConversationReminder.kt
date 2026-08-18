@@ -14,9 +14,9 @@ import java.time.Instant
  * 배치는 종료 버튼을 누르지 않은 방을 대신 닫고 카드를 만든다. 사용자 입장에서는 모르는 사이에 방이
  * 닫히는 셈이라, 직접 마무리할 기회를 먼저 준다.
  *
- * 대상은 5시 배치와 **같은 창**을 본다([AutoCardWindow]). 04:30 은 아직 오늘 경계(05:00) 전이라
- * 상한이 어제 05:00 으로 잡히는데, 그것이 곧 5시 배치가 이따 다룰 범위와 같다. 창이 갈라지면 닫히지도
- * 않을 방을 두고 마무리하라고 알리게 된다.
+ * 대상은 **30분 뒤 배치가 닫을 방**과 같아야 한다. 그래서 상한으로 지난 경계가 아니라 다음 배치가 쓸
+ * 경계를 본다([AutoCardWindow.createdBeforeOfNextRun]) — 지난 경계를 쓰면 어젯밤에 쓰다 만 방이 전부
+ * 빠져서, 정작 30분 뒤에 닫히는 사람들이 알림을 못 받는다.
  *
  * **트랜잭션을 열지 않는다.** 발송은 외부 호출이라 트랜잭션 안에서 돌면 FCM 왕복 내내 DB 커넥션을
  * 쥔다([MemberPushNotifier] 가 그 상태를 거부한다).
@@ -33,7 +33,7 @@ class UnfinishedConversationReminder(
     fun remindUnfinished() {
         runFor(
             createdAfter = window.createdAfter(),
-            createdBefore = window.createdBefore(),
+            createdBefore = window.createdBeforeOfNextRun(),
         )
     }
 
