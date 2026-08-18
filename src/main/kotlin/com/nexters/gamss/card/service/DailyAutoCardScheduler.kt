@@ -77,7 +77,6 @@ class DailyAutoCardScheduler(
         )
     }
 
-
     /**
      * [createdAfter]와 [createdBefore] 사이에 만들어진 대상들을 처리한다. 스케줄 진입점과 분리해
      * 둔 것은 테스트가 기준 시각을 직접 주기 위해서다.

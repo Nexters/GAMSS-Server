@@ -28,13 +28,12 @@ class AutoCardWindow(
      * 지금 시점 기준으로 가장 최근에 지난 하루 경계(KST [DAY_BOUNDARY_HOUR]시).
      *
      * 이 배치가 보는 하루는 자정이 아니라 새벽 [DAY_BOUNDARY_HOUR]시에 바뀐다. 자정을 상한으로 쓰면
-     * **0시~5시에 만든 방이 어제에 속하는데도 "오늘 것"으로 분류돼** 하루를 더 열린 채로 기다린다.
+     * **0시~5시에 만든 방이 어제에 속하는데도 "오늘 것"으로 분류돼** 하루를 더 미종료로 기다린다.
      *
      * 아직 오늘 경계 전이면 어제 경계가 기준이다 — 스케줄이 밀리거나 수동으로 돌려도, 04:30 에
      * 리마인더가 돌아도 "지난 하루까지"라는 의미가 흔들리지 않는다.
      */
-    fun createdBefore(): Instant {
-        val now = ZonedDateTime.now(ZONE)
+    fun createdBefore(now: ZonedDateTime = ZonedDateTime.now(ZONE)): Instant {
         val todayBoundary = dayStart(now.toLocalDate()).atZone(ZONE)
         return if (now < todayBoundary) todayBoundary.minusDays(1).toInstant() else todayBoundary.toInstant()
     }

@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component
 import java.time.Instant
 
 /**
- * 새벽 5시 배치가 방을 대신 닫기 **30분 전에**, 아직 열려 있는 방을 가진 회원에게 한 번 알린다.
+ * 새벽 5시 배치가 방을 대신 닫기 **30분 전에**, 아직 미종료 상태인 방을 가진 회원에게 한 번 알린다.
  *
  * 배치는 종료 버튼을 누르지 않은 방을 대신 닫고 카드를 만든다. 사용자 입장에서는 모르는 사이에 방이
  * 닫히는 셈이라, 직접 마무리할 기회를 먼저 준다.
@@ -38,7 +38,7 @@ class UnfinishedConversationReminder(
     }
 
     /**
-     * [createdAfter] 와 [createdBefore] 사이에 만들어진 방 중 아직 열려 있는 것들의 주인에게 알린다.
+     * [createdAfter] 와 [createdBefore] 사이에 만들어진 방 중 아직 미종료인 것들의 주인에게 알린다.
      * 스케줄 진입점과 분리해 둔 것은 테스트가 기준 시각을 직접 주기 위해서다([DailyAutoCardScheduler]
      * 와 같은 이유).
      */
@@ -46,7 +46,7 @@ class UnfinishedConversationReminder(
         createdAfter: Instant,
         createdBefore: Instant,
     ) {
-        val memberIds = conversationRepository.findMemberIdsWithOpenConversations(createdAfter, createdBefore)
+        val memberIds = conversationRepository.findMemberIdsWithUnfinishedConversations(createdAfter, createdBefore)
         if (memberIds.isEmpty()) {
             log.info("미종료 대화방 리마인더: 대상 없음 (기준={}~{})", createdAfter, createdBefore)
             return

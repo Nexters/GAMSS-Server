@@ -87,7 +87,7 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
     ): List<Long>
 
     /**
-     * 아직 **열려 있는** 방을 가진 회원들. 04:30 리마인더가 "곧 자동으로 닫힌다"고 알릴 대상이다.
+     * 아직 **미종료** 상태인 방을 가진 회원들. 04:30 리마인더가 "곧 자동으로 닫힌다"고 알릴 대상이다.
      *
      * [findAutoCardTargetIds] 를 재사용하면 안 된다. 그 쿼리는 `cardGenerationStatus` 기준이라
      * **이미 종료됐는데 카드만 없는 방**까지 포함한다 — 직접 마무리한 사람에게 "마무리하세요"가 간다.
@@ -104,7 +104,7 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
             "where c.status = :activeStatus " +
             "and c.createdAt >= :createdAfter and c.createdAt < :createdBefore",
     )
-    fun findMemberIdsWithOpenConversations(
+    fun findMemberIdsWithUnfinishedConversations(
         @Param("createdAfter") createdAfter: Instant,
         @Param("createdBefore") createdBefore: Instant,
         @Param("activeStatus") activeStatus: ConversationStatus = ConversationStatus.ACTIVE,
