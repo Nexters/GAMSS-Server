@@ -7,6 +7,7 @@ import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.member.service.MemberService
 import io.micrometer.core.instrument.Counter
+import com.nexters.gamss.notification.service.CardCreatedNotifier
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
 import org.slf4j.LoggerFactory
@@ -41,6 +42,7 @@ class DailyAutoCardScheduler(
     private val cardService: CardService,
     private val window: AutoCardWindow,
     private val meterRegistry: MeterRegistry,
+    private val cardCreatedNotifier: CardCreatedNotifier,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -95,9 +97,15 @@ class DailyAutoCardScheduler(
                 return
             }
             val counts = mutableMapOf<AutoCardOutcome, Int>()
+            // 한 사람이 방을 여러 개 만들면 카드도 여러 장 나온다. 그대로 두면 새벽에 푸시가 연달아
+            // 가므로, 이번 실행에서 이미 알린 회원은 건너뛴다(add 가 false 를 돌려준다).
+            val notifiedMemberIds = mutableSetOf<Long>()
             targetIds.forEach { conversationId ->
-                val outcome = process(conversationId)
-                counts.merge(outcome, 1, Int::plus)
+                val result = process(conversationId)
+                counts.merge(result.outcome, 1, Int::plus)
+                result.cardCreatedMemberId
+                    ?.takeIf { notifiedMemberIds.add(it) }
+                    ?.let { cardCreatedNotifier.notifyCardCreated(it) }
             }
             // 결과 종류가 늘어도 집계가 어긋나지 않도록 enum을 그대로 훑는다.
             AutoCardOutcome.entries.forEach { outcome ->
@@ -108,30 +116,40 @@ class DailyAutoCardScheduler(
                 targetIds.size,
                 AutoCardOutcome.entries.joinToString(", ") { "${it.label}=${counts[it] ?: 0}" },
             )
+            log.info("카드 생성 알림: {}명", notifiedMemberIds.size)
         } finally {
             started.stop(batchTimer)
         }
     }
 
-    private fun process(conversationId: Long): AutoCardOutcome =
+    /**
+     * 방 하나를 처리한 결과. 카드를 실제로 만든 경우에만 [cardCreatedMemberId] 가 채워진다 —
+     * 그 자리에서 알림을 보낼 대상이다.
+     */
+    private data class ProcessResult(
+        val outcome: AutoCardOutcome,
+        val cardCreatedMemberId: Long? = null,
+    )
+
+    private fun process(conversationId: Long): ProcessResult =
         try {
             createCardForEndedConversation(conversationId)
         } catch (e: BusinessException) {
-            classify(e, conversationId)
+            ProcessResult(classify(e, conversationId))
         } catch (e: Exception) {
             // 방 하나의 예상 못 한 실패가 남은 방들을 막지 않게 한다. 카드 생성 상태는 실패 경로에서
             // 이미 FAILED로 되돌아가 있어 다음 실행이 다시 시도한다.
             log.error("자동 카드 생성 실패: conversationId={}", conversationId, e)
-            AutoCardOutcome.FAILED
+            ProcessResult(AutoCardOutcome.FAILED)
         }
 
-    private fun createCardForEndedConversation(conversationId: Long): AutoCardOutcome {
+    private fun createCardForEndedConversation(conversationId: Long): ProcessResult {
         val conversation =
-            conversationService.endForAutoBatch(conversationId) ?: return AutoCardOutcome.SKIPPED_DELETED
+            conversationService.endForAutoBatch(conversationId) ?: return ProcessResult(AutoCardOutcome.SKIPPED_DELETED)
         // 탈퇴는 회원 행만 익명화하고 대화방은 남긴다. 종료까지는 상태 정리라 무해하지만, 카드는
         // 탈퇴한 사람의 대화로 만드는 새 개인 데이터라 여기서 멈춘다.
         if (memberService.getById(conversation.memberId).isWithdrawn()) {
-            return AutoCardOutcome.WITHDRAWN_MEMBER
+            return ProcessResult(AutoCardOutcome.WITHDRAWN_MEMBER)
         }
         val summary = conversation.summary
         if (summary.isNullOrBlank()) {
@@ -139,10 +157,10 @@ class DailyAutoCardScheduler(
             // 대상에서 빠지게 한다. 그러지 않으면 결론이 같은 방을 매일 밤 다시 집는다.
             markCardGenerationSkipped(conversationId)
             log.info("요약이 없어 카드 생성을 건너뛴다(종료는 완료): conversationId={}", conversationId)
-            return AutoCardOutcome.NO_SUMMARY
+            return ProcessResult(AutoCardOutcome.NO_SUMMARY)
         }
         cardService.createCard(conversation.memberId, conversationId, emotion = null, summary = summary)
-        return AutoCardOutcome.CREATED
+        return ProcessResult(AutoCardOutcome.CREATED, cardCreatedMemberId = conversation.memberId)
     }
 
     /**
