@@ -111,29 +111,6 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
     ): List<Long>
 
     /**
-     * [since] 이후에 카드 생성이 끝난 방의 주인들. 05:00 알림이 "카드가 만들어졌다"고 알릴 대상이다.
-     *
-     * 카드 테이블에는 생성 시각이 없어(있는 것은 캘린더용 `conversation_created_at`) 카드로는 이번
-     * 실행에서 만들어진 것을 고를 수 없다. 대신 대화방 쪽 상태 전이 시각을 본다 — 배치가 카드를
-     * 저장하면서 `DONE` 으로 바꾸는 그 시각이다. V17 의 `(card_generation_status,
-     * card_generation_status_updated_at)` 인덱스를 그대로 탄다.
-     *
-     * 같은 구간에 **사용자가 직접 만든 카드**도 함께 잡힌다. 새벽 5시대에 앱에서 카드를 만드는 경우는
-     * 사실상 없고, 잡히더라도 "카드가 도착했다"는 문구가 그 사람에게도 사실이라 굳이 가르지 않는다.
-     *
-     * 회원당 한 번만 알리므로 방이 아니라 **회원 id** 를 중복 없이 돌려준다.
-     */
-    @Query(
-        "select distinct c.memberId from Conversation c " +
-            "where c.cardGenerationStatus = :doneStatus " +
-            "and c.cardGenerationStatusUpdatedAt >= :since",
-    )
-    fun findMemberIdsWithCardCreatedSince(
-        @Param("since") since: Instant,
-        @Param("doneStatus") doneStatus: CardGenerationStatus = CardGenerationStatus.DONE,
-    ): List<Long>
-
-    /**
      * 상태를 바꾸는 요청(메시지 저장·종료·삭제)에서 사용한다. 행을 잠가 다른 상태 변경 요청이
      * 커밋될 때까지 대기하게 만들어, 삭제 이후 작업 차단 계약이 경합으로 깨지지 않도록 한다.
      */
