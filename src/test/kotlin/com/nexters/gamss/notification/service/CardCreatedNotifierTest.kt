@@ -60,6 +60,29 @@ class CardCreatedNotifierTest {
         assertFailsWith<PushInTransactionException> { cardCreatedNotifier.notifyCardCreated(MEMBER_ID) }
     }
 
+    /** 부르는 쪽(배치)이 실제로 몇 건이 나갔는지 남길 수 있어야 한다. */
+    @Test
+    fun `발송 결과를 그대로 돌려준다`() {
+        every { notifier.send(any(), any()) } returns
+            PushSendResult(successCount = 2, failureCount = 1, invalidTokens = listOf("dead"))
+
+        val result = cardCreatedNotifier.notifyCardCreated(MEMBER_ID)
+
+        assertEquals(2, result.successCount)
+        assertEquals(1, result.failureCount)
+    }
+
+    /** 발송이 터진 경우에도 결과 자리는 비워서 돌려준다 — 배치가 합산을 이어갈 수 있어야 한다. */
+    @Test
+    fun `발송이 실패하면 빈 결과를 돌려준다`() {
+        every { notifier.send(any(), any()) } throws RuntimeException("DB 연결 끊김")
+
+        val result = cardCreatedNotifier.notifyCardCreated(MEMBER_ID)
+
+        assertEquals(0, result.successCount)
+        assertEquals(0, result.failureCount)
+    }
+
     /**
      * 카드 내용은 담지 않는다(잠금화면 노출). 장수도 담지 않는다 — 첫 카드 시점에는 그 사람이 최종
      * 몇 장을 받을지 알 수 없어서 "한 장"이라고 쓰면 틀린 말이 된다.

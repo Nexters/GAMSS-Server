@@ -1,6 +1,7 @@
 package com.nexters.gamss.notification.service
 
 import com.nexters.gamss.notification.push.PushMessage
+import com.nexters.gamss.notification.push.PushSendResult
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 
@@ -21,7 +22,9 @@ class CardCreatedNotifier(
     private val log = LoggerFactory.getLogger(javaClass)
 
     /**
-     * [memberId] 에게 카드 도착을 알린다.
+     * [memberId] 에게 카드 도착을 알린다. **발송 결과를 돌려준다** — 부르는 쪽이 몇 건이 실제로
+     * 나갔는지 남길 수 있어야 한다. 알림을 끈 회원(등록된 기기 없음)에게는 아무것도 나가지 않는데,
+     * 시도한 회원 수만 세면 그 상태와 정상 발송이 로그에서 구분되지 않는다.
      *
      * **발송 실패를 밖으로 내보내지 않는다.** 부르는 쪽은 카드 생성 배치이고, 알림이 실패했다고 해서
      * 이미 만들어진 카드가 실패로 집계되면 안 된다 — 배치는 방 하나의 예외를 그 방의 실패로 처리한다.
@@ -36,15 +39,15 @@ class CardCreatedNotifier(
      * 도는 것보다 낫다고 봤다 — 가드가 발동했다는 것은 배치가 트랜잭션 안에 있다는 뜻이고, 그 상태로
      * 끝까지 돌면 DB 커넥션을 붙잡은 채 LLM 을 수백 번 부른다.
      */
-    fun notifyCardCreated(memberId: Long) {
+    fun notifyCardCreated(memberId: Long): PushSendResult =
         try {
             notifier.send(listOf(memberId), MESSAGE)
         } catch (e: PushInTransactionException) {
             throw e
         } catch (e: Exception) {
             log.error("카드 생성 알림 실패: memberId={}", memberId, e)
+            PushSendResult.none()
         }
-    }
 
     companion object {
         /**

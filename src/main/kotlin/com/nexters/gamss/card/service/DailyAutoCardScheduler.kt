@@ -104,12 +104,16 @@ class DailyAutoCardScheduler(
             // 한 사람이 방을 여러 개 만들면 카드도 여러 장 나온다. 그대로 두면 새벽에 푸시가 연달아
             // 가므로, 이번 실행에서 이미 알린 회원은 건너뛴다(add 가 false 를 돌려준다).
             val notifiedMemberIds = mutableSetOf<Long>()
+            var notifiedSuccessCount = 0
+            var notifiedFailureCount = 0
             targetIds.forEach { conversationId ->
                 val result = process(conversationId)
                 counts.merge(result.outcome, 1, Int::plus)
                 val cardCreatedMemberId = result.cardCreatedMemberId
                 if (cardCreatedMemberId != null && notifiedMemberIds.add(cardCreatedMemberId)) {
-                    cardCreatedNotifier.notifyCardCreated(cardCreatedMemberId)
+                    val sent = cardCreatedNotifier.notifyCardCreated(cardCreatedMemberId)
+                    notifiedSuccessCount += sent.successCount
+                    notifiedFailureCount += sent.failureCount
                 }
             }
             // 결과 종류가 늘어도 집계가 어긋나지 않도록 enum을 그대로 훑는다.
@@ -121,7 +125,14 @@ class DailyAutoCardScheduler(
                 targetIds.size,
                 AutoCardOutcome.entries.joinToString(", ") { "${it.label}=${counts[it] ?: 0}" },
             )
-            log.info("카드 생성 알림: {}명", notifiedMemberIds.size)
+            // 시도한 회원 수만 남기면 '알림을 끈 사람들' 과 '정상 발송' 이 구분되지 않는다.
+            // 04:30 리마인더와 같은 형식으로 실제 건수까지 남긴다.
+            log.info(
+                "카드 생성 알림: 대상={}명, 성공={}건, 실패={}건",
+                notifiedMemberIds.size,
+                notifiedSuccessCount,
+                notifiedFailureCount,
+            )
         } finally {
             started.stop(batchTimer)
         }
