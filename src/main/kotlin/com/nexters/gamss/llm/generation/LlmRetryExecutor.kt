@@ -33,7 +33,7 @@ class LlmRetryExecutor(
     fun <T, E : Exception> execute(
         retryOn: KClass<E>,
         maxAttempts: Int = LlmRetryPolicy.MAX_ATTEMPTS,
-        backoffMillis: Long = LlmRetryPolicy.RETRY_BACKOFF_MILLIS,
+        backoff: BackoffPolicy = BackoffPolicy.fixed(LlmRetryPolicy.RETRY_BACKOFF_MILLIS),
         onAttemptFailure: (attempt: Int, e: E) -> Unit = { _, _ -> },
         onNonRetryable: (attempt: Int, e: Exception) -> Unit = { _, _ -> },
         onExhausted: (attempt: Int, e: E) -> Unit = { _, _ -> },
@@ -55,9 +55,12 @@ class LlmRetryExecutor(
                 val retryable = e as E
                 lastError = retryable
                 onAttemptFailure(attempt, retryable)
-                // 마지막 시도 뒤에는 잘 이유가 없다. 백오프가 0이면(현재) 아예 재우지 않는다.
-                if (attempt < maxAttempts && backoffMillis > 0) {
-                    sleeper.sleep(backoffMillis)
+                // 마지막 시도 뒤에는 잘 이유가 없다. 정책이 0을 주면(현재 기본값) 아예 재우지 않는다.
+                if (attempt < maxAttempts) {
+                    val delayMillis = backoff.delayMillisFor(attempt, retryable)
+                    if (delayMillis > 0) {
+                        sleeper.sleep(delayMillis)
+                    }
                 }
             }
         }

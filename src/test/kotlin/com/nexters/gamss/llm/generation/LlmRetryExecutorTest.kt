@@ -113,7 +113,7 @@ class LlmRetryExecutorTest {
             executor.execute<String, RetryableFailure>(
                 retryOn = RetryableFailure::class,
                 maxAttempts = 1,
-                backoffMillis = 500L,
+                backoff = BackoffPolicy.fixed(500L),
                 onExhausted = { attempt, _ -> exhaustedAttempt = attempt },
             ) { attempt ->
                 attempts += attempt
@@ -133,7 +133,7 @@ class LlmRetryExecutorTest {
             executor.execute<String, RetryableFailure>(
                 retryOn = RetryableFailure::class,
                 maxAttempts = 3,
-                backoffMillis = 0L,
+                backoff = BackoffPolicy.fixed(0L),
             ) { throw RetryableFailure("실패") }
         }
 
@@ -146,12 +146,50 @@ class LlmRetryExecutorTest {
             executor.execute<String, RetryableFailure>(
                 retryOn = RetryableFailure::class,
                 maxAttempts = 3,
-                backoffMillis = 500L,
+                backoff = BackoffPolicy.fixed(500L),
             ) { throw RetryableFailure("실패") }
         }
 
         // 3회 시도 = 시도 사이 간격 2번.
         assertEquals(listOf(500L, 500L), sleeper.sleptMillis)
+    }
+
+    @Test
+    fun `백오프 정책은 시도마다 다시 호출된다`() {
+        // 시도 번호에 따라 값이 달라지는 정책 — 루프 밖에서 한 번만 계산하면 이 기대값이 깨진다.
+        val perAttempt = BackoffPolicy { attempt, _ -> 100L * attempt }
+
+        assertFailsWith<RetryableFailure> {
+            executor.execute<String, RetryableFailure>(
+                retryOn = RetryableFailure::class,
+                maxAttempts = 3,
+                backoff = perAttempt,
+            ) { throw RetryableFailure("실패") }
+        }
+
+        assertEquals(listOf(100L, 200L), sleeper.sleptMillis)
+    }
+
+    @Test
+    fun `백오프 정책에 그 시도를 실패시킨 예외가 전달된다`() {
+        // #162는 이 예외로 429·검증 실패를 갈라 대기 간격을 정한다. 매번 그 시도의 예외여야 한다.
+        val seenMessages = mutableListOf<String?>()
+        val recording =
+            BackoffPolicy { _, e ->
+                seenMessages += e.message
+                0L
+            }
+
+        assertFailsWith<RetryableFailure> {
+            executor.execute<String, RetryableFailure>(
+                retryOn = RetryableFailure::class,
+                maxAttempts = 3,
+                backoff = recording,
+            ) { attempt -> throw RetryableFailure("${attempt}차 실패") }
+        }
+
+        // 마지막 시도 뒤에는 대기하지 않으므로 2건이다.
+        assertEquals(listOf<String?>("1차 실패", "2차 실패"), seenMessages)
     }
 
     @Test
