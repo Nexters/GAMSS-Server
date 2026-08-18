@@ -214,6 +214,10 @@ class DailyAutoCardSchedulerTest {
         // 탈퇴 후에는 그 사람의 대화로 새 카드를 만들지 않는다.
         verify(exactly = 0) { cardService.createCard(MEMBER_ID, any(), any(), any()) }
         verify(exactly = 1) { cardService.createCard(OTHER_MEMBER_ID, 20L, any(), any()) }
+        // 카드가 없으니 "카드가 도착했어요" 도 가면 안 된다. 탈퇴하면 기기 토큰도 지워지지만
+        // (DeviceTokenCleaner) 방어선이 그것 하나뿐인 상태로 두지 않는다.
+        verify(exactly = 0) { cardCreatedNotifier.notifyCardCreated(MEMBER_ID) }
+        verify(exactly = 1) { cardCreatedNotifier.notifyCardCreated(OTHER_MEMBER_ID) }
     }
 
     @Test
