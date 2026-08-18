@@ -30,6 +30,16 @@ class CardCreatedNotifierTest {
      * 부르는 쪽은 카드 생성 배치다. 알림이 터졌다고 이미 만들어진 카드가 실패로 집계되면 안 된다 —
      * 배치는 방 하나의 예외를 그 방의 실패로 처리한다.
      */
+    /** 가드가 아닌 IllegalStateException(예: CAS 충돌)까지 배치를 멈추면 안 된다. */
+    @Test
+    fun `가드가 아닌 IllegalStateException 은 삼킨다`() {
+        every { notifier.send(any(), any()) } throws IllegalStateException("CAS 충돌 같은 다른 상태 오류")
+
+        cardCreatedNotifier.notifyCardCreated(MEMBER_ID)
+
+        verify(exactly = 1) { notifier.send(any(), any()) }
+    }
+
     @Test
     fun `발송이 실패해도 예외를 밖으로 내보내지 않는다`() {
         every { notifier.send(any(), any()) } throws RuntimeException("DB 연결 끊김")
@@ -45,9 +55,9 @@ class CardCreatedNotifierTest {
      */
     @Test
     fun `트랜잭션 가드 예외는 삼키지 않는다`() {
-        every { notifier.send(any(), any()) } throws IllegalStateException("트랜잭션 안에서 부를 수 없다")
+        every { notifier.send(any(), any()) } throws PushInTransactionException("트랜잭션 안에서 부를 수 없다")
 
-        assertFailsWith<IllegalStateException> { cardCreatedNotifier.notifyCardCreated(MEMBER_ID) }
+        assertFailsWith<PushInTransactionException> { cardCreatedNotifier.notifyCardCreated(MEMBER_ID) }
     }
 
     /**

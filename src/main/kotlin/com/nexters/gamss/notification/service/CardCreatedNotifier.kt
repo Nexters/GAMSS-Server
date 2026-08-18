@@ -26,8 +26,8 @@ class CardCreatedNotifier(
      * **발송 실패를 밖으로 내보내지 않는다.** 부르는 쪽은 카드 생성 배치이고, 알림이 실패했다고 해서
      * 이미 만들어진 카드가 실패로 집계되면 안 된다 — 배치는 방 하나의 예외를 그 방의 실패로 처리한다.
      *
-     * 다만 [IllegalStateException] 은 그대로 올려보낸다. [MemberPushNotifier] 가 "트랜잭션 안에서
-     * 부르지 마라"는 가드를 그 타입으로 던지는데, 그것까지 삼키면 **가드를 넣은 이유가 사라진다** —
+     * 다만 [PushInTransactionException] 은 그대로 올려보낸다. [MemberPushNotifier] 의 "트랜잭션 안에서
+     * 부르지 마라"는 가드인데, 그것까지 삼키면 **가드를 넣은 이유가 사라진다** —
      * 배치를 트랜잭션으로 감싸는 실수가 로그 한 줄로 묻히고 배치는 초록불로 끝난다. 이 타입은 발송
      * 실패가 아니라 코드가 잘못됐다는 신호다.
      *
@@ -39,7 +39,7 @@ class CardCreatedNotifier(
     fun notifyCardCreated(memberId: Long) {
         try {
             notifier.send(listOf(memberId), MESSAGE)
-        } catch (e: IllegalStateException) {
+        } catch (e: PushInTransactionException) {
             throw e
         } catch (e: Exception) {
             log.error("카드 생성 알림 실패: memberId={}", memberId, e)
