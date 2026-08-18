@@ -13,6 +13,7 @@ import java.time.Instant
 import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class UnfinishedConversationReminderTest {
@@ -57,17 +58,20 @@ class UnfinishedConversationReminderTest {
         assertEquals(CREATED_BEFORE, before.captured)
     }
 
-    /** 잠금화면에 그대로 뜨는 값이라 대화 내용이 섞이면 안 된다. */
+    /**
+     * 4시 30분 알림은 **곧 종료된다는 예고**까지만 한다. 카드가 만들어졌다는 소식은 5시 발송이
+     * 따로 맡으므로(#154), 여기서 카드를 약속하면 두 알림이 같은 말을 하게 된다.
+     */
     @Test
-    fun `문구에는 대화 내용이 들어가지 않는다`() {
+    fun `문구는 종료 예고까지만 하고 카드를 약속하지 않는다`() {
         every { conversationRepository.findMemberIdsWithUnfinishedConversations(any(), any(), any()) } returns listOf(1L)
         val message = slot<PushMessage>()
         every { notifier.send(any(), capture(message)) } returns PushSendResult.none()
 
         reminder.runFor(CREATED_AFTER, CREATED_BEFORE)
 
-        assertTrue(message.captured.title.isNotBlank())
-        assertTrue(message.captured.body.isNotBlank())
+        assertTrue(message.captured.title.contains("종료"))
+        assertFalse(message.captured.body.contains("카드"))
     }
 
     companion object {
