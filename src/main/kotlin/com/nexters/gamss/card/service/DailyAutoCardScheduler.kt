@@ -30,7 +30,7 @@ import java.time.ZonedDateTime
  * 한 번도 보내지 않은 방에서만 생기는 경우다.
  *
  * 단, 요약 저장이 배포되기 **전에** 만들어진 방은 예외 없이 요약이 없어 전부 이 경우에 해당하므로,
- * 대상 자체를 [CardProperties.autoCardStartDate] 이후로 제한한다 — 그러지 않으면 첫 실행이 기존
+ * 대상 자체를 [com.nexters.gamss.card.config.CardProperties.autoCardStartDate] 이후로 제한한다 — 그러지 않으면 첫 실행이 기존
  * 사용자들의 진행 중인 방을 전부 카드 없이 닫아버린다.
  */
 @Component
@@ -182,7 +182,7 @@ class DailyAutoCardScheduler(
 
     companion object {
         /**
-         * 하루 경계([DAY_BOUNDARY_HOUR])에 맞춰 돈다 — 하루가 끝나는 순간 그 하루를 정리한다.
+         * 하루 경계([AutoCardWindow.DAY_BOUNDARY_HOUR])에 맞춰 돈다 — 하루가 끝나는 순간 그 하루를 정리한다.
          * 사용자 활동이 가장 적은 시간대라 LLM 호출이 몰려도 서비스 영향이 작다.
          *
          * 토큰 리셋도 같은 시각이라 배치가 쓰는 토큰은 **방금 리셋된 오늘 예산**에서 빠진다.
@@ -191,7 +191,7 @@ class DailyAutoCardScheduler(
          * 2회로 하루 상한 대비 미미하므로 카드를 확실히 만드는 쪽을 택했다.
          *
          * `reset_hour`는 백오피스에서 바꿀 수 있는 값이다 — 하루 경계를 옮기게 되면 이 상수와
-         * [DAY_BOUNDARY_HOUR]도 함께 봐야 한다.
+         * [AutoCardWindow.DAY_BOUNDARY_HOUR]도 함께 봐야 한다.
          */
         private const val CRON = "0 0 ${AutoCardWindow.DAY_BOUNDARY_HOUR} * * *"
     }

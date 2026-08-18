@@ -39,7 +39,7 @@ class UnfinishedConversationReminder(
 
     /**
      * [createdAfter] 와 [createdBefore] 사이에 만들어진 방 중 아직 미종료인 것들의 주인에게 알린다.
-     * 스케줄 진입점과 분리해 둔 것은 테스트가 기준 시각을 직접 주기 위해서다([DailyAutoCardScheduler]
+     * 스케줄 진입점과 분리해 둔 것은 테스트가 기준 시각을 직접 주기 위해서다([com.nexters.gamss.card.service.DailyAutoCardScheduler]
      * 와 같은 이유).
      */
     fun runFor(
