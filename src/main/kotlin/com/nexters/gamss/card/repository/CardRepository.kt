@@ -126,6 +126,9 @@ interface CardRepository : JpaRepository<Card, Long> {
      *
      * 이 필터는 **사용자 조회에만** 적용한다 — 백오피스 지표(countCreatedBetween·countByEmotionSince·
      * findCreatedAtsSince)는 생성 이력이라 사용자 삭제로 소급 변동하면 추이가 왜곡된다.
+     *
+     * 감정으로 한 번 더 거르는 [findAllByMemberIdAndEmotionAndConversationCreatedAtInRange] 도 같은
+     * 가시성 규칙을 쓴다 — 함께 바꿔야 하는 쿼리가 하나 더 있다는 뜻이다.
      */
     @Query(
         "select c from Card c, Conversation cv " +
@@ -137,6 +140,36 @@ interface CardRepository : JpaRepository<Card, Long> {
     )
     fun findAllByMemberIdAndConversationCreatedAtInRange(
         @Param("memberId") memberId: Long,
+        @Param("start") start: Instant,
+        @Param("end") end: Instant,
+        @Param("excludedStatus") excludedStatus: ConversationStatus = ConversationStatus.DELETED,
+    ): List<Card>
+
+    /**
+     * [start, end) 사이(대화 생성시간 기준)에 속한 회원의 카드 중 [emotion] 인 것만 **최신순**으로 조회한다.
+     *
+     * 가시성 조건은 [findAllByMemberIdAndConversationCreatedAtInRange] 와 같다 — 조회·삭제 쿼리들이
+     * 공유하는 규칙이라 **항상 함께 바뀌어야 한다**. 여기서 갈리면 캘린더에는 없는 카드가 감정 탭에서만
+     * 보이는 모순이 생긴다.
+     *
+     * **정렬만 다르다.** 한 달치를 몰아 보는 목록이라 최근 기록이 위에 오는 편이 자연스럽고, 클라이언트가
+     * 응답을 재정렬하지 않아 서버가 내보내는 순서가 곧 화면 순서이기 때문이다. 날짜별·캘린더 조회가
+     * 오름차순인 것은 하루치이거나 날짜 칸에 꽂는 데이터라 배열 순서가 화면에 드러나지 않아서다.
+     *
+     * id 타이브레이크도 같이 뒤집는다 — `conversation_created_at` 이 `DATETIME(6)` 이라 동률이 가능한데
+     * `desc, id asc` 로 두면 동률 구간만 순서가 어긋난다.
+     */
+    @Query(
+        "select c from Card c, Conversation cv " +
+            "where cv.id = c.conversationId and c.memberId = :memberId and c.emotion = :emotion " +
+            "and c.conversationCreatedAt >= :start and c.conversationCreatedAt < :end " +
+            "and cv.status <> :excludedStatus " +
+            "and c.deletedAt is null " +
+            "order by c.conversationCreatedAt desc, c.id desc",
+    )
+    fun findAllByMemberIdAndEmotionAndConversationCreatedAtInRange(
+        @Param("memberId") memberId: Long,
+        @Param("emotion") emotion: EmotionType,
         @Param("start") start: Instant,
         @Param("end") end: Instant,
         @Param("excludedStatus") excludedStatus: ConversationStatus = ConversationStatus.DELETED,
