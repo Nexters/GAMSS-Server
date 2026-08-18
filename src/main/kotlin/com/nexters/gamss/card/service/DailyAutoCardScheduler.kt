@@ -50,6 +50,10 @@ class DailyAutoCardScheduler(
      * 배치 1회의 소요 시간. 이 배치는 새벽 5시에 하루 치 방을 한꺼번에 돌며 방마다 LLM 을 호출하므로,
      * 대상이 늘면 소요 시간이 선형으로 늘어난다 — 다음 스케줄까지 안 끝나는 상황을 미리 보기 위한 값이다.
      * 로그에도 결과가 남지만 로그는 임계치 알림을 걸 수 없다.
+     *
+     * **카드 생성 알림(FCM 왕복)도 이 시간에 포함된다.** 루프 안에서 보내기 때문이다 — 배치가 실제로
+     * 붙잡고 있는 시간이라는 뜻에서는 맞지만, 이 값이 늘었을 때 LLM 때문인지 발송 때문인지는 이
+     * 지표만으로 갈리지 않는다(대시보드 "4 · LLM 생성"이 이 값을 쓴다).
      */
     private val batchTimer =
         Timer
@@ -103,9 +107,10 @@ class DailyAutoCardScheduler(
             targetIds.forEach { conversationId ->
                 val result = process(conversationId)
                 counts.merge(result.outcome, 1, Int::plus)
-                result.cardCreatedMemberId
-                    ?.takeIf { notifiedMemberIds.add(it) }
-                    ?.let { cardCreatedNotifier.notifyCardCreated(it) }
+                val cardCreatedMemberId = result.cardCreatedMemberId
+                if (cardCreatedMemberId != null && notifiedMemberIds.add(cardCreatedMemberId)) {
+                    cardCreatedNotifier.notifyCardCreated(cardCreatedMemberId)
+                }
             }
             // 결과 종류가 늘어도 집계가 어긋나지 않도록 enum을 그대로 훑는다.
             AutoCardOutcome.entries.forEach { outcome ->
