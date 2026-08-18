@@ -323,11 +323,39 @@ class CardService(
         memberId: Long,
         yearMonth: YearMonth,
     ): List<Card> {
+        val (start, end) = monthRange(yearMonth)
+        return cardRepository.findAllByMemberIdAndConversationCreatedAtInRange(memberId, start, end)
+    }
+
+    /**
+     * 월(KST) 전체에서 [emotion] 카드만 최신순으로 조회한다(감정 탭에서 한 달치 몰아보기).
+     *
+     * 캘린더 조회([getCardsByMonth])와 같은 월 경계를 쓰되 카드 내용까지 돌려준다 — 캘린더로 날짜만
+     * 받아 [getCardsByDate] 를 날짜마다 다시 부르는 N+1 호출을 없애려고 만든 조회다.
+     *
+     * 페이지네이션이 없다. 한 달·한 감정이면 사용자가 그 달에 만든 채팅방 수를 넘지 못해 페이징의
+     * 이득보다 복잡도가 크다 — 한 사람이 한 달에 만드는 카드 수가 크게 늘면 이 전제가 깨진다.
+     */
+    @Transactional(readOnly = true)
+    fun getCardsByMonthAndEmotion(
+        memberId: Long,
+        yearMonth: YearMonth,
+        emotion: EmotionType,
+    ): List<Card> {
+        val (start, end) = monthRange(yearMonth)
+        return cardRepository.findAllByMemberIdAndEmotionAndConversationCreatedAtInRange(memberId, emotion, start, end)
+    }
+
+    /**
+     * 월의 KST 자정~자정 경계 `[start, end)`.
+     *
+     * 월별 조회 둘이 같은 경계를 보도록 한 곳에 둔다 — 각자 계산하면 한쪽만 고쳤을 때 캘린더에는
+     * 있는 카드가 감정 탭에서는 빠지는 식으로 갈라진다.
+     */
+    private fun monthRange(yearMonth: YearMonth): Pair<Instant, Instant> {
         val firstDay = yearMonth.atDay(1)
         val nextMonthFirstDay = yearMonth.plusMonths(1).atDay(1)
-        val start = firstDay.atStartOfDay(ZONE).toInstant()
-        val end = nextMonthFirstDay.atStartOfDay(ZONE).toInstant()
-        return cardRepository.findAllByMemberIdAndConversationCreatedAtInRange(memberId, start, end)
+        return firstDay.atStartOfDay(ZONE).toInstant() to nextMonthFirstDay.atStartOfDay(ZONE).toInstant()
     }
 
     /**
