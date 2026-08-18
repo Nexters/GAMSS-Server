@@ -303,6 +303,38 @@ class CommentGenerationServiceTest {
     }
 
     @Test
+    fun `LLM 호출 중 예상 못 한 예외가 나면 재시도하지 않고 실패 로그를 남긴다`() {
+        val message = rootMessage()
+        every { messageRepository.findById(1L) } returns Optional.of(message)
+        every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
+        stubClaimSuccess()
+        every { commentGenerator.generateComment(any()) } throws IllegalStateException("SDK 초기화 실패")
+        every { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) } returns 1
+
+        val result = service.generateComments(memberId = 1L, messageId = 1L, currentConversationSummary = null)
+
+        assertEquals(CommentGenerationOutcome.FAILED, result.outcome)
+        // 다시 불러도 결과가 같을 예외라 재시도하지 않는다.
+        verify(exactly = 1) { commentGenerator.generateComment(any()) }
+        // 백오피스 지표와 토큰 상한이 generation_log만 보므로, 예상 못 한 실패도 반드시 남아야 한다.
+        verify(exactly = 1) {
+            generationLogRecorder.record(
+                type = GenerationType.COMMENT,
+                success = false,
+                attemptCount = 1,
+                latencyMs = any(),
+                memberId = 1L,
+                conversationId = 10L,
+                usedTokens = 0,
+                cachedTokens = 0,
+                inputTokens = 0,
+                outputTokens = 0,
+                failureReason = "IllegalStateException",
+            )
+        }
+    }
+
+    @Test
     fun `1차 실패 후 2차 성공하면 두 시도의 토큰을 합산해 기록한다`() {
         val message = rootMessage()
         every { messageRepository.findById(1L) } returns Optional.of(message)
@@ -634,6 +666,39 @@ class CommentGenerationServiceTest {
         assertEquals(CommentGenerationOutcome.FAILED, result.outcome)
         verify(exactly = 2) { commentGenerator.generateReply(any(), any(), any(), any()) }
         verify(exactly = 1) { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) }
+    }
+
+    @Test
+    fun `답글 LLM 호출 중 예상 못 한 예외가 나면 재시도하지 않고 실패 로그를 남긴다`() {
+        every { messageRepository.findById(1L) } returns Optional.of(userReplyMessage())
+        every { messageRepository.findById(2L) } returns Optional.of(characterMessage())
+        every { messageRepository.findById(3L) } returns Optional.of(diaryMessage())
+        every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
+        every {
+            messageRepository.updateCommentStatus(1L, CommentStatus.PENDING, listOf(CommentStatus.NONE, CommentStatus.FAILED), any())
+        } returns 1
+        every { commentGenerator.generateReply(any(), any(), any(), any()) } throws IllegalStateException("SDK 초기화 실패")
+        every { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) } returns 1
+
+        val result = service.generateReplyComment(memberId = 1L, messageId = 1L)
+
+        assertEquals(CommentGenerationOutcome.FAILED, result.outcome)
+        verify(exactly = 1) { commentGenerator.generateReply(any(), any(), any(), any()) }
+        verify(exactly = 1) {
+            generationLogRecorder.record(
+                type = GenerationType.REPLY,
+                success = false,
+                attemptCount = 1,
+                latencyMs = any(),
+                memberId = 1L,
+                conversationId = 10L,
+                usedTokens = 0,
+                cachedTokens = 0,
+                inputTokens = 0,
+                outputTokens = 0,
+                failureReason = "IllegalStateException",
+            )
+        }
     }
 
     @Test
