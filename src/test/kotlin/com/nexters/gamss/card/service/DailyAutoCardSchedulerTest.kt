@@ -10,6 +10,7 @@ import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.member.domain.Member
 import com.nexters.gamss.member.service.MemberService
+import com.nexters.gamss.notification.service.CardCreatedNotifier
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.mockk.every
 import io.mockk.mockk
@@ -28,6 +29,7 @@ class DailyAutoCardSchedulerTest {
     private val conversationService = mockk<ConversationService>()
     private val memberService = mockk<MemberService> { every { getById(any()) } returns Member() }
     private val cardService = mockk<CardService>()
+    private val cardCreatedNotifier = mockk<CardCreatedNotifier>(relaxed = true)
     private val window = AutoCardWindow(CardProperties(autoCardStartDate = START_DATE))
     private val scheduler =
         DailyAutoCardScheduler(
@@ -37,10 +39,62 @@ class DailyAutoCardSchedulerTest {
             cardService,
             window,
             SimpleMeterRegistry(),
+            cardCreatedNotifier,
         )
 
     private val createdAfter: Instant = Instant.parse("2026-08-19T15:00:00Z")
     private val createdBefore: Instant = Instant.parse("2026-08-25T15:00:00Z")
+
+    @Test
+    fun `카드를 만든 회원에게 알림을 보낸다`() {
+        stubTargets(10L)
+        every { conversationService.endForAutoBatch(10L) } returns conversation()
+        every { cardService.createCard(any(), any(), any(), any()) } returns mockk<Card>()
+
+        scheduler.runFor(createdAfter, createdBefore)
+
+        verify(exactly = 1) { cardCreatedNotifier.notifyCardCreated(MEMBER_ID) }
+    }
+
+    /**
+     * 한 사람이 방을 여러 개 만들면 카드도 여러 장 나온다. 그대로 두면 새벽에 푸시가 연달아 간다.
+     */
+    @Test
+    fun `한 회원이 카드를 여러 장 받아도 알림은 한 번만 간다`() {
+        stubTargets(10L, 20L, 30L)
+        every { conversationService.endForAutoBatch(any()) } returns conversation()
+        every { cardService.createCard(any(), any(), any(), any()) } returns mockk<Card>()
+
+        scheduler.runFor(createdAfter, createdBefore)
+
+        verify(exactly = 1) { cardCreatedNotifier.notifyCardCreated(MEMBER_ID) }
+    }
+
+    @Test
+    fun `회원이 다르면 각각 알린다`() {
+        stubTargets(10L, 20L)
+        every { conversationService.endForAutoBatch(10L) } returns conversation(memberId = MEMBER_ID)
+        every { conversationService.endForAutoBatch(20L) } returns conversation(memberId = OTHER_MEMBER_ID)
+        every { cardService.createCard(any(), any(), any(), any()) } returns mockk<Card>()
+
+        scheduler.runFor(createdAfter, createdBefore)
+
+        verify(exactly = 1) { cardCreatedNotifier.notifyCardCreated(MEMBER_ID) }
+        verify(exactly = 1) { cardCreatedNotifier.notifyCardCreated(OTHER_MEMBER_ID) }
+    }
+
+    /** 카드를 못 만든 결과들이다. 이 사람들에게 "카드가 도착했어요"가 가면 안 된다. */
+    @Test
+    fun `카드를 만들지 못하면 알림을 보내지 않는다`() {
+        stubTargets(10L, 20L)
+        stubMarkSkipped()
+        every { conversationService.endForAutoBatch(10L) } returns conversation(summary = null)
+        every { conversationService.endForAutoBatch(20L) } returns null
+
+        scheduler.runFor(createdAfter, createdBefore)
+
+        verify(exactly = 0) { cardCreatedNotifier.notifyCardCreated(any()) }
+    }
 
     private fun conversation(
         memberId: Long = MEMBER_ID,
