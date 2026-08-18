@@ -11,6 +11,7 @@ import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.member.domain.Member
 import com.nexters.gamss.member.service.MemberService
 import com.nexters.gamss.notification.service.CardCreatedNotifier
+import com.nexters.gamss.notification.service.PushInTransactionException
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.mockk.every
 import io.mockk.mockk
@@ -22,6 +23,7 @@ import java.time.ZoneId
 import java.time.ZonedDateTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class DailyAutoCardSchedulerTest {
@@ -81,6 +83,24 @@ class DailyAutoCardSchedulerTest {
 
         verify(exactly = 1) { cardCreatedNotifier.notifyCardCreated(MEMBER_ID) }
         verify(exactly = 1) { cardCreatedNotifier.notifyCardCreated(OTHER_MEMBER_ID) }
+    }
+
+    /**
+     * 가드 예외는 삼키지 않고 배치를 중단시킨다 — 그 상태로 계속 돌면 DB 커넥션을 붙잡은 채 LLM 을
+     * 수백 번 부르기 때문이다. 루프의 다른 줄은 전부 예외를 삼키고 있어서, 나중에 여기도 감싸는 것이
+     * 개선처럼 보일 수 있다. 그러면 이 대가가 조용히 사라진다.
+     */
+    @Test
+    fun `알림이 트랜잭션 가드에 걸리면 배치를 중단한다`() {
+        stubTargets(10L, 20L, 30L)
+        every { conversationService.endForAutoBatch(any()) } returns conversation()
+        every { cardService.createCard(any(), any(), any(), any()) } returns mockk<Card>()
+        every { cardCreatedNotifier.notifyCardCreated(any()) } throws PushInTransactionException("트랜잭션 안")
+
+        assertFailsWith<PushInTransactionException> { scheduler.runFor(createdAfter, createdBefore) }
+
+        // 첫 카드에서 멈추므로 뒤쪽 방은 손대지 않는다.
+        verify(exactly = 1) { cardService.createCard(any(), any(), any(), any()) }
     }
 
     /** 카드를 못 만든 결과들이다. 이 사람들에게 "카드가 도착했어요"가 가면 안 된다. */
