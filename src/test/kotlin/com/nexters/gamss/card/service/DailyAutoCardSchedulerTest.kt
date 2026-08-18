@@ -28,14 +28,14 @@ class DailyAutoCardSchedulerTest {
     private val conversationService = mockk<ConversationService>()
     private val memberService = mockk<MemberService> { every { getById(any()) } returns Member() }
     private val cardService = mockk<CardService>()
-    private val properties = CardProperties(autoCardStartDate = START_DATE)
+    private val window = AutoCardWindow(CardProperties(autoCardStartDate = START_DATE))
     private val scheduler =
         DailyAutoCardScheduler(
             conversationRepository,
             conversationService,
             memberService,
             cardService,
-            properties,
+            window,
             SimpleMeterRegistry(),
         )
 
