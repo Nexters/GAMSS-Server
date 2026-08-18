@@ -1,0 +1,77 @@
+package com.nexters.gamss.notification.service
+
+import com.nexters.gamss.card.service.AutoCardWindow
+import com.nexters.gamss.conversation.repository.ConversationRepository
+import com.nexters.gamss.notification.push.PushMessage
+import org.slf4j.LoggerFactory
+import org.springframework.scheduling.annotation.Scheduled
+import org.springframework.stereotype.Component
+import java.time.Instant
+
+/**
+ * 새벽 5시 배치가 방을 대신 닫기 **30분 전에**, 아직 열려 있는 방을 가진 회원에게 한 번 알린다.
+ *
+ * 배치는 종료 버튼을 누르지 않은 방을 대신 닫고 카드를 만든다. 사용자 입장에서는 모르는 사이에 방이
+ * 닫히는 셈이라, 직접 마무리할 기회를 먼저 준다.
+ *
+ * 대상은 5시 배치와 **같은 창**을 본다([AutoCardWindow]). 04:30 은 아직 오늘 경계(05:00) 전이라
+ * 상한이 어제 05:00 으로 잡히는데, 그것이 곧 5시 배치가 이따 다룰 범위와 같다. 창이 갈라지면 닫히지도
+ * 않을 방을 두고 마무리하라고 알리게 된다.
+ *
+ * **트랜잭션을 열지 않는다.** 발송은 외부 호출이라 트랜잭션 안에서 돌면 FCM 왕복 내내 DB 커넥션을
+ * 쥔다([MemberPushNotifier] 가 그 상태를 거부한다).
+ */
+@Component
+class UnfinishedConversationReminder(
+    private val conversationRepository: ConversationRepository,
+    private val window: AutoCardWindow,
+    private val notifier: MemberPushNotifier,
+) {
+    private val log = LoggerFactory.getLogger(javaClass)
+
+    @Scheduled(cron = CRON, zone = AutoCardWindow.ZONE_ID)
+    fun remindUnfinished() {
+        runFor(
+            createdAfter = window.createdAfter(),
+            createdBefore = window.createdBefore(),
+        )
+    }
+
+    /**
+     * [createdAfter] 와 [createdBefore] 사이에 만들어진 방 중 아직 열려 있는 것들의 주인에게 알린다.
+     * 스케줄 진입점과 분리해 둔 것은 테스트가 기준 시각을 직접 주기 위해서다([DailyAutoCardScheduler]
+     * 와 같은 이유).
+     */
+    fun runFor(
+        createdAfter: Instant,
+        createdBefore: Instant,
+    ) {
+        val memberIds = conversationRepository.findMemberIdsWithOpenConversations(createdAfter, createdBefore)
+        if (memberIds.isEmpty()) {
+            log.info("미종료 대화방 리마인더: 대상 없음 (기준={}~{})", createdAfter, createdBefore)
+            return
+        }
+        val result = notifier.send(memberIds, MESSAGE)
+        log.info(
+            "미종료 대화방 리마인더 완료: 대상={}명, 성공={}건, 실패={}건",
+            memberIds.size,
+            result.successCount,
+            result.failureCount,
+        )
+    }
+
+    companion object {
+        /** 5시 배치([AutoCardWindow.DAY_BOUNDARY_HOUR])보다 30분 앞선다. */
+        private const val CRON = "0 30 4 * * *"
+
+        /**
+         * 알림 문구. 잠금화면에 그대로 뜨므로 대화 내용은 담지 않는다 — 이 알림이 알려야 하는 것은
+         * "정리할 게 남았다"까지다.
+         */
+        private val MESSAGE =
+            PushMessage(
+                title = "아직 정리하지 못한 이야기가 있어요",
+                body = "곧 오늘의 기록이 정리돼요. 마무리하면 감정 카드로 남겨드릴게요.",
+            )
+    }
+}
