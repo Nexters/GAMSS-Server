@@ -87,6 +87,30 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
     ): List<Long>
 
     /**
+     * 아직 **미종료** 상태인 방을 가진 회원들. 04:30 리마인더가 "곧 자동으로 닫힌다"고 알릴 대상이다.
+     *
+     * [findAutoCardTargetIds] 를 재사용하면 안 된다. 그 쿼리는 `cardGenerationStatus` 기준이라
+     * **이미 종료됐는데 카드만 없는 방**까지 포함한다 — 직접 마무리한 사람에게 "마무리하세요"가 간다.
+     * 여기서는 `status = ACTIVE` 인 방만 본다.
+     *
+     * 기간은 5시 배치와 같은 창을 쓴다([com.nexters.gamss.card.service.AutoCardWindow]). 하한 밖의
+     * 방은 배치가 손대지 않으므로, 알려봐야 닫히지도 않는다.
+     *
+     * 회원당 한 번만 알리므로 방이 아니라 **회원 id** 를 중복 없이 돌려준다. 탈퇴 회원은 따로 거르지
+     * 않는다 — 탈퇴하면 기기 토큰이 함께 지워져(DeviceTokenCleaner) 보낼 대상이 애초에 없다.
+     */
+    @Query(
+        "select distinct c.memberId from Conversation c " +
+            "where c.status = :activeStatus " +
+            "and c.createdAt >= :createdAfter and c.createdAt < :createdBefore",
+    )
+    fun findMemberIdsWithUnfinishedConversations(
+        @Param("createdAfter") createdAfter: Instant,
+        @Param("createdBefore") createdBefore: Instant,
+        @Param("activeStatus") activeStatus: ConversationStatus = ConversationStatus.ACTIVE,
+    ): List<Long>
+
+    /**
      * 상태를 바꾸는 요청(메시지 저장·종료·삭제)에서 사용한다. 행을 잠가 다른 상태 변경 요청이
      * 커밋될 때까지 대기하게 만들어, 삭제 이후 작업 차단 계약이 경합으로 깨지지 않도록 한다.
      */

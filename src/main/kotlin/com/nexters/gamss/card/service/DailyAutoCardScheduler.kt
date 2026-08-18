@@ -1,6 +1,5 @@
 package com.nexters.gamss.card.service
 
-import com.nexters.gamss.card.config.CardProperties
 import com.nexters.gamss.conversation.domain.CardGenerationStatus
 import com.nexters.gamss.conversation.repository.ConversationRepository
 import com.nexters.gamss.conversation.service.ConversationService
@@ -31,7 +30,7 @@ import java.time.ZonedDateTime
  * 한 번도 보내지 않은 방에서만 생기는 경우다.
  *
  * 단, 요약 저장이 배포되기 **전에** 만들어진 방은 예외 없이 요약이 없어 전부 이 경우에 해당하므로,
- * 대상 자체를 [CardProperties.autoCardStartDate] 이후로 제한한다 — 그러지 않으면 첫 실행이 기존
+ * 대상 자체를 [com.nexters.gamss.card.config.CardProperties.autoCardStartDate] 이후로 제한한다 — 그러지 않으면 첫 실행이 기존
  * 사용자들의 진행 중인 방을 전부 카드 없이 닫아버린다.
  */
 @Component
@@ -40,7 +39,7 @@ class DailyAutoCardScheduler(
     private val conversationService: ConversationService,
     private val memberService: MemberService,
     private val cardService: CardService,
-    private val properties: CardProperties,
+    private val window: AutoCardWindow,
     private val meterRegistry: MeterRegistry,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -70,35 +69,13 @@ class DailyAutoCardScheduler(
                 .register(meterRegistry)
         }
 
-    @Scheduled(cron = CRON, zone = ZONE_ID)
+    @Scheduled(cron = CRON, zone = AutoCardWindow.ZONE_ID)
     fun autoEndAndCreateCards() {
-        val zone = ZoneId.of(ZONE_ID)
         runFor(
-            createdAfter = dayStart(properties.autoCardStartDate, zone),
-            createdBefore = lastDayBoundary(zone),
+            createdAfter = window.createdAfter(),
+            createdBefore = window.createdBefore(),
         )
     }
-
-    /**
-     * 지금 시점 기준으로 가장 최근에 지난 하루 경계(KST [DAY_BOUNDARY_HOUR]시).
-     *
-     * 이 배치가 보는 하루는 자정이 아니라 새벽 [DAY_BOUNDARY_HOUR]시에 바뀐다. 자정을 상한으로 쓰면
-     * **0시~5시에 만든 방이 어제에 속하는데도 "오늘 것"으로 분류돼** 하루를 더 열린 채로 기다린다.
-     *
-     * 아직 오늘 경계 전이면 어제 경계가 기준이다([DailyTokenLimitService.windowStart]와 같은 계산) —
-     * 스케줄이 밀리거나 수동으로 돌려도 "지난 하루까지"라는 의미가 흔들리지 않는다.
-     */
-    private fun lastDayBoundary(zone: ZoneId): Instant {
-        val now = ZonedDateTime.now(zone)
-        val todayBoundary = dayStart(now.toLocalDate(), zone).atZone(zone)
-        return if (now < todayBoundary) todayBoundary.minusDays(1).toInstant() else todayBoundary.toInstant()
-    }
-
-    /** [date]의 하루가 시작하는 시각(KST [DAY_BOUNDARY_HOUR]시). */
-    private fun dayStart(
-        date: LocalDate,
-        zone: ZoneId,
-    ): Instant = date.atTime(DAY_BOUNDARY_HOUR, 0).atZone(zone).toInstant()
 
     /**
      * [createdAfter]와 [createdBefore] 사이에 만들어진 대상들을 처리한다. 스케줄 진입점과 분리해
@@ -204,21 +181,8 @@ class DailyAutoCardScheduler(
         }
 
     companion object {
-        private const val ZONE_ID = "Asia/Seoul"
-
         /**
-         * **이 배치가 보는** 하루 경계(KST). 자정이 아니라 새벽 5시로 잡는다 — 새벽까지 이어 쓴
-         * 기록은 그 전날에 속한다고 보고, 일일 토큰 리셋(`token_policy.reset_hour`, 시드값 5)과
-         * 맞춘 값이다.
-         *
-         * 서비스 전체의 날짜 경계는 아니다 — 카드 캘린더·날짜별 대화 조회는 여전히 자정을 쓴다
-         * ([com.nexters.gamss.card.service.CardService]의 getCardsByDate 등). 이 상수를 근거로
-         * 다른 곳의 날짜 경계를 옮기면 그쪽 조회가 어긋난다.
-         */
-        private const val DAY_BOUNDARY_HOUR = 5
-
-        /**
-         * 하루 경계([DAY_BOUNDARY_HOUR])에 맞춰 돈다 — 하루가 끝나는 순간 그 하루를 정리한다.
+         * 하루 경계([AutoCardWindow.DAY_BOUNDARY_HOUR])에 맞춰 돈다 — 하루가 끝나는 순간 그 하루를 정리한다.
          * 사용자 활동이 가장 적은 시간대라 LLM 호출이 몰려도 서비스 영향이 작다.
          *
          * 토큰 리셋도 같은 시각이라 배치가 쓰는 토큰은 **방금 리셋된 오늘 예산**에서 빠진다.
@@ -227,8 +191,8 @@ class DailyAutoCardScheduler(
          * 2회로 하루 상한 대비 미미하므로 카드를 확실히 만드는 쪽을 택했다.
          *
          * `reset_hour`는 백오피스에서 바꿀 수 있는 값이다 — 하루 경계를 옮기게 되면 이 상수와
-         * [DAY_BOUNDARY_HOUR]도 함께 봐야 한다.
+         * [AutoCardWindow.DAY_BOUNDARY_HOUR]도 함께 봐야 한다.
          */
-        private const val CRON = "0 0 $DAY_BOUNDARY_HOUR * * *"
+        private const val CRON = "0 0 ${AutoCardWindow.DAY_BOUNDARY_HOUR} * * *"
     }
 }
