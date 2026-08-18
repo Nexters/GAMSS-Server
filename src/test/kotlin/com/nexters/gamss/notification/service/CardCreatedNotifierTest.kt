@@ -8,6 +8,7 @@ import io.mockk.slot
 import io.mockk.verify
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -31,11 +32,22 @@ class CardCreatedNotifierTest {
      */
     @Test
     fun `발송이 실패해도 예외를 밖으로 내보내지 않는다`() {
-        every { notifier.send(any(), any()) } throws IllegalStateException("DB 연결 끊김")
+        every { notifier.send(any(), any()) } throws RuntimeException("DB 연결 끊김")
 
         cardCreatedNotifier.notifyCardCreated(MEMBER_ID)
 
         verify(exactly = 1) { notifier.send(any(), any()) }
+    }
+
+    /**
+     * 트랜잭션 가드([MemberPushNotifier])는 "배치를 트랜잭션으로 감싸지 마라"는 신호라 묻히면 안 된다.
+     * 여기서 삼키면 그 실수가 로그 한 줄로 남고 배치는 초록불로 끝난다.
+     */
+    @Test
+    fun `트랜잭션 가드 예외는 삼키지 않는다`() {
+        every { notifier.send(any(), any()) } throws IllegalStateException("트랜잭션 안에서 부를 수 없다")
+
+        assertFailsWith<IllegalStateException> { cardCreatedNotifier.notifyCardCreated(MEMBER_ID) }
     }
 
     /**
