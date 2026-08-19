@@ -94,48 +94,84 @@ class DailyAutoCardScheduler(
         // 대상이 없어 일찍 끝나는 실행도 시간에 포함한다 — '배치가 아예 안 돌았다'와
         // '돌았는데 대상이 없었다'는 다른 상황이고, 타이머 count 가 그 둘을 갈라준다.
         val started = Timer.start(meterRegistry)
+        // 집계는 try 밖에 둔다. 루프가 중간에 끊겨도(알림의 트랜잭션 가드) 그때까지 처리한 방들은
+        // 이미 커밋돼 있어, 한 일이 지표에도 로그에도 안 남으면 아무 일 없던 날과 구별되지 않는다.
+        val tally = RunTally()
         try {
             val targetIds = conversationRepository.findAutoCardTargetIds(createdAfter, createdBefore)
             if (targetIds.isEmpty()) {
                 log.info("자동 카드 생성 배치: 대상 없음 (기준={}~{})", createdAfter, createdBefore)
                 return
             }
-            val counts = mutableMapOf<AutoCardOutcome, Int>()
-            // 한 사람이 방을 여러 개 만들면 카드도 여러 장 나온다. 그대로 두면 새벽에 푸시가 연달아
-            // 가므로, 이번 실행에서 이미 알린 회원은 건너뛴다(add 가 false 를 돌려준다).
-            val notifiedMemberIds = mutableSetOf<Long>()
-            var notifiedSuccessCount = 0
-            var notifiedFailureCount = 0
-            targetIds.forEach { conversationId ->
-                val result = process(conversationId)
-                counts.merge(result.outcome, 1, Int::plus)
-                val cardCreatedMemberId = result.cardCreatedMemberId
-                if (cardCreatedMemberId != null && notifiedMemberIds.add(cardCreatedMemberId)) {
-                    val sent = cardCreatedNotifier.notifyCardCreated(cardCreatedMemberId)
-                    notifiedSuccessCount += sent.successCount
-                    notifiedFailureCount += sent.failureCount
-                }
-            }
-            // 결과 종류가 늘어도 집계가 어긋나지 않도록 enum을 그대로 훑는다.
-            AutoCardOutcome.entries.forEach { outcome ->
-                counts[outcome]?.let { outcomeCounters.getValue(outcome).increment(it.toDouble()) }
-            }
-            log.info(
-                "자동 카드 생성 배치 완료: 대상={}, {}",
-                targetIds.size,
-                AutoCardOutcome.entries.joinToString(", ") { "${it.label}=${counts[it] ?: 0}" },
-            )
-            // 시도한 회원 수만 남기면 '알림을 끈 사람들' 과 '정상 발송' 이 구분되지 않는다.
-            // 04:30 리마인더와 같은 형식으로 실제 건수까지 남긴다.
-            log.info(
-                "카드 생성 알림: 대상={}명, 성공={}건, 실패={}건",
-                notifiedMemberIds.size,
-                notifiedSuccessCount,
-                notifiedFailureCount,
-            )
+            tally.targetCount = targetIds.size
+            targetIds.forEach { processAndNotify(it, tally) }
+            tally.completed = true
         } finally {
             started.stop(batchTimer)
+            record(tally)
         }
+    }
+
+    /** 방 하나를 처리하고, 카드가 새로 생긴 회원이면 그 자리에서 알린다. 결과는 [tally] 에 쌓는다. */
+    private fun processAndNotify(
+        conversationId: Long,
+        tally: RunTally,
+    ) {
+        val result = process(conversationId)
+        tally.counts.merge(result.outcome, 1, Int::plus)
+        val cardCreatedMemberId = result.cardCreatedMemberId ?: return
+        // 한 사람이 방을 여러 개 만들면 카드도 여러 장 나온다. 그대로 두면 새벽에 푸시가 연달아
+        // 가므로, 이번 실행에서 이미 알린 회원은 건너뛴다(add 가 false 를 돌려준다).
+        if (!tally.notifiedMemberIds.add(cardCreatedMemberId)) {
+            return
+        }
+        val sent = cardCreatedNotifier.notifyCardCreated(cardCreatedMemberId)
+        tally.notifiedSuccessCount += sent.successCount
+        tally.notifiedFailureCount += sent.failureCount
+    }
+
+    /**
+     * 이번 실행의 결과를 지표와 로그에 남긴다. 대상이 없어 일찍 끝난 실행은 이미 자기 로그를
+     * 남겼으므로 건너뛴다.
+     *
+     * 루프가 끊긴 실행도 여기까지는 온다 — 그래서 요약 첫 줄에 완료/중단을 함께 적는다.
+     * "완료"로 못박으면 중단된 배치가 정상 종료로 읽힌다.
+     */
+    private fun record(tally: RunTally) {
+        if (tally.targetCount == 0) {
+            return
+        }
+        // 결과 종류가 늘어도 집계가 어긋나지 않도록 enum을 그대로 훑는다.
+        AutoCardOutcome.entries.forEach { outcome ->
+            tally.counts[outcome]?.let { outcomeCounters.getValue(outcome).increment(it.toDouble()) }
+        }
+        log.info(
+            "자동 카드 생성 배치 {}: 대상={}, {}",
+            if (tally.completed) "완료" else "중단",
+            tally.targetCount,
+            AutoCardOutcome.entries.joinToString(", ") { "${it.label}=${tally.counts[it] ?: 0}" },
+        )
+        // 시도한 회원 수만 남기면 '알림을 끈 사람들' 과 '정상 발송' 이 구분되지 않는다.
+        // 04:30 리마인더와 같은 형식으로 실제 건수까지 남긴다.
+        log.info(
+            "카드 생성 알림: 대상={}명, 성공={}건, 실패={}건",
+            tally.notifiedMemberIds.size,
+            tally.notifiedSuccessCount,
+            tally.notifiedFailureCount,
+        )
+    }
+
+    /**
+     * 배치 1회분의 집계. 루프가 끊겨도 살아남아야 하는 값들이라 한 곳에 모은다 — 낱개 지역변수로
+     * 흩어 두면 다음에 누가 집계 한 줄을 추가할 때 try 안쪽에 두기 쉽다.
+     */
+    private class RunTally {
+        val counts = mutableMapOf<AutoCardOutcome, Int>()
+        val notifiedMemberIds = mutableSetOf<Long>()
+        var notifiedSuccessCount = 0
+        var notifiedFailureCount = 0
+        var targetCount = 0
+        var completed = false
     }
 
     /**

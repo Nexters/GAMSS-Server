@@ -33,6 +33,7 @@ class DailyAutoCardSchedulerTest {
     private val cardService = mockk<CardService>()
     private val cardCreatedNotifier = mockk<CardCreatedNotifier>(relaxed = true)
     private val window = AutoCardWindow(CardProperties(autoCardStartDate = START_DATE))
+    private val meterRegistry = SimpleMeterRegistry()
     private val scheduler =
         DailyAutoCardScheduler(
             conversationRepository,
@@ -40,7 +41,7 @@ class DailyAutoCardSchedulerTest {
             memberService,
             cardService,
             window,
-            SimpleMeterRegistry(),
+            meterRegistry,
             cardCreatedNotifier,
         )
 
@@ -101,6 +102,8 @@ class DailyAutoCardSchedulerTest {
 
         // 첫 카드에서 멈추므로 뒤쪽 방은 손대지 않는다.
         verify(exactly = 1) { cardService.createCard(any(), any(), any(), any()) }
+        // 멈추기 전에 만든 카드는 이미 커밋됐다. 지표가 0 이면 아무 일 없던 날과 구별되지 않는다.
+        assertEquals(1.0, outcomeCount(AutoCardOutcome.CREATED))
     }
 
     /** 카드를 못 만든 결과들이다. 이 사람들에게 "카드가 도착했어요"가 가면 안 된다. */
@@ -115,6 +118,13 @@ class DailyAutoCardSchedulerTest {
 
         verify(exactly = 0) { cardCreatedNotifier.notifyCardCreated(any()) }
     }
+
+    private fun outcomeCount(outcome: AutoCardOutcome): Double =
+        meterRegistry
+            .get("gamss.autocard.outcome")
+            .tag("outcome", outcome.name)
+            .counter()
+            .count()
 
     private fun conversation(
         memberId: Long = MEMBER_ID,
