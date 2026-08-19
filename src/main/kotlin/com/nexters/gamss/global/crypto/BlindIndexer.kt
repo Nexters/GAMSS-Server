@@ -44,19 +44,18 @@ class BlindIndexer(
      * 어절이 떨어진 검색어는 원문에서도 두 어절이 붙어 있어야 걸리는데, 지금 검색도 똑같이 동작한다.
      * 1글자 어절에서 토큰이 안 나오는 것도 ngram(토큰 크기 2)과 같다.
      */
-    fun tokenize(text: String): List<String> =
-        Normalizer
+    fun tokenize(text: String): List<String> {
+        // Mac 은 doFinal 뒤 초기화 상태로 돌아가므로 호출 하나 안에서는 재사용할 수 있다. bigram 마다
+        // 새로 만들면 500자 메시지 하나에 provider 조회가 499번 일어난다. 지역 변수라 스레드 안전은 그대로다.
+        val mac = Mac.getInstance(ALGORITHM).apply { init(key) }
+        return Normalizer
             .normalize(text, Normalizer.Form.NFKC)
             .lowercase()
             .split(WHITESPACE)
-            .flatMap { segment -> segment.windowed(BIGRAM_SIZE).map(::hash) }
-
-    private fun hash(bigram: String): String {
-        // Mac은 스레드 안전하지 않아 호출마다 새로 만든다(공유하면 동시 요청이 서로의 상태를 덮는다).
-        val mac = Mac.getInstance(ALGORITHM)
-        mac.init(key)
-        return HEX.formatHex(mac.doFinal(bigram.toByteArray()), 0, TOKEN_SIZE_BYTES)
+            .flatMap { segment -> segment.windowed(BIGRAM_SIZE).map { bigram -> mac.hash(bigram) } }
     }
+
+    private fun Mac.hash(bigram: String): String = HEX.formatHex(doFinal(bigram.toByteArray()), 0, TOKEN_SIZE_BYTES)
 
     companion object {
         private const val ALGORITHM = "HmacSHA256"
