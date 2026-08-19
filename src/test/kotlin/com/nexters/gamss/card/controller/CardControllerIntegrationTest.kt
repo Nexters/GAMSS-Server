@@ -37,6 +37,8 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.context.WebApplicationContext
 import tools.jackson.databind.ObjectMapper
+import java.time.Instant
+import java.time.LocalDateTime
 import java.time.ZoneId
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -724,6 +726,221 @@ class CardControllerIntegrationTest {
             }
     }
 
+    // ── 월별 감정별 카드 조회 ──
+
+    @Test
+    fun `월별 감정별 조회는 해당 월·감정 카드를 내용까지 돌려준다`() {
+        val member = memberRepository.save(Member("month-emotion@test.com"))
+        val target = createCardVia(member, "3월의 분노", EmotionType.ANGER)
+        val otherEmotion = createCardVia(member, "3월의 기쁨", EmotionType.JOY)
+        val otherMonth = createCardVia(member, "4월의 분노", EmotionType.ANGER)
+        moveCardTo(target, kst("2026-03-15T10:00"))
+        moveCardTo(otherEmotion, kst("2026-03-15T10:00"))
+        moveCardTo(otherMonth, kst("2026-04-02T10:00"))
+
+        mockMvc
+            .get("/api/cards/monthly/emotions/ANGER") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                param("yearMonth", "2026-03")
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.length()") { value(1) }
+                jsonPath("$.data[0].id") { value(target.id) }
+                jsonPath("$.data[0].emotion") { value("ANGER") }
+                // 캘린더 조회와 달리 카드 내용까지 실려야 이 API 를 만든 이유가 성립한다.
+                jsonPath("$.data[0].summary") { value(target.summary) }
+                jsonPath("$.data[0].date") { value("2026-03-15") }
+            }
+    }
+
+    @Test
+    fun `월별 감정별 조회는 날짜별 조회와 같은 카드 표현을 돌려준다`() {
+        val member = memberRepository.save(Member("month-emotion-shape@test.com"))
+        val card = createCardVia(member, "같은 표현", EmotionType.ANGER)
+        moveCardTo(card, kst("2026-03-15T10:00"))
+
+        // 두 엔드포인트가 같은 카드를 같은 형태로 돌려주는지가 이 API 의 계약이다 — 필드를 하나씩
+        // 확인하면 나중에 CardResponse 가 갈라져도 알 수 없어서 응답 자체를 비교한다.
+        val fromDateQuery =
+            mockMvc
+                .get("/api/cards") {
+                    header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                    param("date", "2026-03-15")
+                }.andExpect { status { isOk() } }
+                .andReturn()
+                .response
+                .contentAsString
+                .let { objectMapper.readTree(it).path("data").single() }
+
+        val fromEmotionQuery =
+            mockMvc
+                .get("/api/cards/monthly/emotions/ANGER") {
+                    header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                    param("yearMonth", "2026-03")
+                }.andExpect { status { isOk() } }
+                .andReturn()
+                .response
+                .contentAsString
+                .let { objectMapper.readTree(it).path("data").single() }
+
+        assertEquals(fromDateQuery, fromEmotionQuery, "날짜별 조회와 감정별 조회의 카드 표현이 같아야 한다")
+    }
+
+    @Test
+    fun `월별 감정별 조회는 최신순으로 돌려준다`() {
+        val member = memberRepository.save(Member("month-emotion-order@test.com"))
+        val oldest = createCardVia(member, "1일", EmotionType.ANGER)
+        val middle = createCardVia(member, "15일", EmotionType.ANGER)
+        val newest = createCardVia(member, "말일", EmotionType.ANGER)
+        moveCardTo(oldest, kst("2026-03-01T09:00"))
+        moveCardTo(middle, kst("2026-03-15T09:00"))
+        moveCardTo(newest, kst("2026-03-31T09:00"))
+
+        mockMvc
+            .get("/api/cards/monthly/emotions/ANGER") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                param("yearMonth", "2026-03")
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.length()") { value(3) }
+                jsonPath("$.data[0].id") { value(newest.id) }
+                jsonPath("$.data[1].id") { value(middle.id) }
+                jsonPath("$.data[2].id") { value(oldest.id) }
+            }
+    }
+
+    @Test
+    fun `월별 감정별 조회의 월 경계는 KST 기준이다`() {
+        val member = memberRepository.save(Member("month-emotion-kst@test.com"))
+        val firstDayEarly = createCardVia(member, "3월 1일 새벽", EmotionType.ANGER)
+        val lastDayLate = createCardVia(member, "3월 말일 밤", EmotionType.ANGER)
+        val nextMonthEarly = createCardVia(member, "4월 1일 새벽", EmotionType.ANGER)
+        // UTC 로 끊으면 3/1 00:30 KST(= 2/28 15:30 UTC)가 빠지고 4/1 00:30 KST(= 3/31 15:30 UTC)가 딸려온다.
+        moveCardTo(firstDayEarly, kst("2026-03-01T00:30"))
+        moveCardTo(lastDayLate, kst("2026-03-31T23:00"))
+        moveCardTo(nextMonthEarly, kst("2026-04-01T00:30"))
+
+        mockMvc
+            .get("/api/cards/monthly/emotions/ANGER") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                param("yearMonth", "2026-03")
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.length()") { value(2) }
+                jsonPath("$.data[0].id") { value(lastDayLate.id) }
+                jsonPath("$.data[1].id") { value(firstDayEarly.id) }
+            }
+    }
+
+    @Test
+    fun `월별 감정별 조회에서 지운 카드와 삭제된 채팅방의 카드가 빠진다`() {
+        val member = memberRepository.save(Member("month-emotion-visible@test.com"))
+        val visible = createCardVia(member, "남아 있는 분노", EmotionType.ANGER)
+        val deletedCard = createCardVia(member, "지운 분노", EmotionType.ANGER)
+        val deletedConversation = createCardVia(member, "방부터 지운 분노", EmotionType.ANGER)
+        moveCardTo(visible, kst("2026-03-10T10:00"))
+        moveCardTo(deletedCard, kst("2026-03-11T10:00"))
+        moveCardTo(deletedConversation, kst("2026-03-12T10:00"))
+
+        mockMvc
+            .delete("/api/cards/${deletedCard.id}") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect { status { isOk() } }
+        mockMvc
+            .delete("/api/conversations/${deletedConversation.conversationId}") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect { status { isOk() } }
+        entityManager.flush()
+        entityManager.clear()
+
+        // 캘린더·날짜별 조회와 가시성 규칙이 갈리면 캘린더에 없는 카드가 감정 탭에만 나타난다.
+        mockMvc
+            .get("/api/cards/monthly/emotions/ANGER") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                param("yearMonth", "2026-03")
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.length()") { value(1) }
+                jsonPath("$.data[0].id") { value(visible.id) }
+            }
+    }
+
+    @Test
+    fun `월별 감정별 조회에 남의 카드는 섞이지 않는다`() {
+        val me = memberRepository.save(Member("month-emotion-mine@test.com"))
+        val other = memberRepository.save(Member("month-emotion-other@test.com"))
+        val mine = createCardVia(me, "내 분노", EmotionType.ANGER)
+        val othersCard = createCardVia(other, "남의 분노", EmotionType.ANGER)
+        moveCardTo(mine, kst("2026-03-10T10:00"))
+        moveCardTo(othersCard, kst("2026-03-10T10:00"))
+
+        mockMvc
+            .get("/api/cards/monthly/emotions/ANGER") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(me))
+                param("yearMonth", "2026-03")
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.length()") { value(1) }
+                jsonPath("$.data[0].id") { value(mine.id) }
+            }
+    }
+
+    @Test
+    fun `해당 월·감정 카드가 없으면 빈 배열로 성공한다`() {
+        val member = memberRepository.save(Member("month-emotion-empty@test.com"))
+        val joy = createCardVia(member, "기쁨만 있음", EmotionType.JOY)
+        moveCardTo(joy, kst("2026-03-10T10:00"))
+
+        mockMvc
+            .get("/api/cards/monthly/emotions/ANGER") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                param("yearMonth", "2026-03")
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.success") { value(true) }
+                jsonPath("$.data.length()") { value(0) }
+            }
+    }
+
+    @Test
+    fun `지원하지 않는 감정으로 월별 조회하면 400을 반환한다`() {
+        val member = memberRepository.save(Member("month-emotion-invalid@test.com"))
+
+        mockMvc
+            .get("/api/cards/monthly/emotions/NOT_AN_EMOTION") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                param("yearMonth", "2026-03")
+            }.andExpect {
+                status { isBadRequest() }
+                jsonPath("$.error.code") { value("INVALID_INPUT") }
+            }
+    }
+
+    @Test
+    fun `yearMonth 형식이 틀리면 월별 감정별 조회는 400을 반환한다`() {
+        val member = memberRepository.save(Member("month-emotion-badmonth@test.com"))
+
+        mockMvc
+            .get("/api/cards/monthly/emotions/ANGER") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                param("yearMonth", "2026-3-15")
+            }.andExpect {
+                status { isBadRequest() }
+                jsonPath("$.error.code") { value("INVALID_INPUT") }
+            }
+    }
+
+    @Test
+    fun `인증 없이 월별 감정별 조회하면 401을 반환한다`() {
+        mockMvc
+            .get("/api/cards/monthly/emotions/ANGER") {
+                param("yearMonth", "2026-03")
+            }.andExpect {
+                status { isUnauthorized() }
+                jsonPath("$.error.code") { value("UNAUTHORIZED") }
+            }
+    }
+
     // ── 카드 단건 조회 ──
 
     @Test
@@ -929,6 +1146,29 @@ class CardControllerIntegrationTest {
         entityManager.clear()
         return cardRepository.findAll().single { it.conversationId == conversation.id }
     }
+
+    /**
+     * 카드가 속한 시각을 옮긴다. 월 경계를 검증하려면 카드를 원하는 달에 심어야 하는데, 생성 API 로
+     * 만들면 항상 '지금'이 박히기 때문이다.
+     *
+     * raw JDBC 가 아니라 JPQL 로 쓴다 — Hibernate 는 Instant 를 UTC 로 변환해 저장하므로 JDBC 로 직접
+     * 심으면 읽을 때 9시간 어긋난다.
+     */
+    private fun moveCardTo(
+        card: Card,
+        at: Instant,
+    ) {
+        entityManager
+            .createQuery("update Card c set c.conversationCreatedAt = :at where c.id = :id")
+            .setParameter("at", at)
+            .setParameter("id", card.id)
+            .executeUpdate()
+        entityManager.flush()
+        entityManager.clear()
+    }
+
+    /** KST 기준 시각(`2026-03-31T23:00`). 월 경계 검증이 목적이라 UTC 로 적으면 의미가 사라진다. */
+    private fun kst(dateTime: String): Instant = LocalDateTime.parse(dateTime).atZone(KST).toInstant()
 
     private fun bearerFor(member: Member): String = "Bearer ${jwtIssuer.issueAccessToken(member.id)}"
 

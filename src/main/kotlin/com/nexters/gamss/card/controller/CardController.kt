@@ -113,6 +113,38 @@ class CardController(
     }
 
     @Operation(
+        summary = "월별 감정별 카드 조회",
+        description =
+            "해당 월(대화 생성일 기준, KST)의 카드 중 지정한 감정인 것만 **내용까지 담아** 최신순으로 " +
+                "반환합니다. 감정 탭에서 한 달치를 몰아 볼 때 씁니다 — 월별 캘린더 조회로 날짜만 받아 " +
+                "날짜별 조회를 날짜마다 다시 부를 필요가 없습니다.\n\n" +
+                "- 응답 형태는 날짜별 조회와 같습니다.\n" +
+                "- 날짜별·월별 조회와 **같은 카드만 보입니다** — 삭제한 카드와 삭제된 채팅방의 카드는 " +
+                "제외됩니다.\n" +
+                "- 정렬은 **최신순**입니다(같은 시각이면 id 내림차순). 날짜별·월별 조회와 순서가 반대입니다.\n" +
+                "- 대상이 0장이면 빈 배열로 **성공**합니다.\n" +
+                "- 페이지네이션이 없습니다. 한 달·한 감정 분량을 한 번에 돌려줍니다.\n\n" +
+                "**실패 응답**\n\n" +
+                "| error.code | HTTP | 설명 |\n" +
+                "|---|---|---|\n" +
+                "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·무효) |\n" +
+                "| EXPIRED_TOKEN | 401 | accessToken 만료 — 재발급 후 재시도 |\n" +
+                "| INVALID_INPUT | 400 | yearMonth 누락·형식 오류(yyyy-MM) 또는 지원하지 않는 감정 값 |",
+    )
+    @GetMapping("/monthly/emotions/{emotion}")
+    fun getByMonthAndEmotion(
+        @Parameter(hidden = true) @AuthenticationPrincipal principal: AuthPrincipal,
+        @Parameter(description = "조회할 카드의 감정", example = "ANGER")
+        @PathVariable emotion: EmotionType,
+        @Parameter(description = "조회할 월 (yyyy-MM)", example = "2026-07")
+        @RequestParam
+        @DateTimeFormat(pattern = "yyyy-MM") yearMonth: YearMonth,
+    ): ApiResponse<List<CardResponse>> {
+        val cards = cardService.getCardsByMonthAndEmotion(principal.memberId, yearMonth, emotion)
+        return ApiResponse.success(cards.map { CardResponse.from(it) })
+    }
+
+    @Operation(
         summary = "카드 단건 조회",
         description =
             "id 로 본인 카드 한 장을 조회합니다. 날짜를 몰라도 카드 상세를 열 수 있습니다.\n\n" +
