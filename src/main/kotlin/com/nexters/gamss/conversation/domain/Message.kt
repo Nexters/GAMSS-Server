@@ -1,6 +1,7 @@
 package com.nexters.gamss.conversation.domain
 
 import com.nexters.gamss.emotion.domain.EmotionType
+import com.nexters.gamss.global.crypto.BlindIndexer
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.EntityListeners
@@ -23,7 +24,7 @@ import java.time.Instant
  */
 @Entity
 @Table(name = "messages")
-@EntityListeners(AuditingEntityListener::class)
+@EntityListeners(AuditingEntityListener::class, MessageSearchIndexListener::class)
 class Message(
     @Column(name = "conversation_id", nullable = false)
     val conversationId: Long,
@@ -59,4 +60,18 @@ class Message(
     @Column(name = "created_at", nullable = false, updatable = false)
     var createdAt: Instant = Instant.now()
         protected set
+
+    /**
+     * 검색용 블라인드 인덱스. [content]가 암호문으로 저장돼 그대로는 검색할 수 없으므로,
+     * 평문을 토큰열로 바꿔 여기에 담고 검색은 이 컬럼에 건다
+     * ([com.nexters.gamss.global.crypto.BlindIndexer]).
+     */
+    @Column(name = "content_index", columnDefinition = "TEXT")
+    var contentIndex: String? = null
+        protected set
+
+    /** 저장 직전에 [MessageSearchIndexListener]가 호출한다. 직접 부를 일은 없다. */
+    fun applySearchIndex(indexer: BlindIndexer) {
+        contentIndex = indexer.toIndexValue(content)
+    }
 }

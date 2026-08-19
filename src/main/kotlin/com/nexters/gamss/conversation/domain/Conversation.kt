@@ -1,6 +1,7 @@
 package com.nexters.gamss.conversation.domain
 
 import com.nexters.gamss.emotion.domain.EmotionType
+import com.nexters.gamss.global.crypto.BlindIndexer
 import com.nexters.gamss.global.crypto.EncryptedStringConverter
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
@@ -26,7 +27,7 @@ import java.time.Instant
  */
 @Entity
 @Table(name = "conversations")
-@EntityListeners(AuditingEntityListener::class)
+@EntityListeners(AuditingEntityListener::class, ConversationSearchIndexListener::class)
 class Conversation(
     @Column(name = "member_id", nullable = false)
     val memberId: Long,
@@ -38,6 +39,14 @@ class Conversation(
 
     @Embedded
     var title: ConversationTitle? = null
+        protected set
+
+    /**
+     * 제목의 검색용 블라인드 인덱스. 제목도 암호문으로 저장되므로 검색은 이 컬럼에 건다
+     * ([com.nexters.gamss.global.crypto.BlindIndexer]). 제목이 없으면 null 이다.
+     */
+    @Column(name = "title_index", columnDefinition = "TEXT")
+    var titleIndex: String? = null
         protected set
 
     /**
@@ -123,6 +132,11 @@ class Conversation(
     fun rename(title: ConversationTitle) {
         ensureNotDeleted()
         this.title = title
+    }
+
+    /** 저장 직전에 [ConversationSearchIndexListener]가 호출한다. 직접 부를 일은 없다. */
+    fun applySearchIndex(indexer: BlindIndexer) {
+        titleIndex = title?.value?.let(indexer::toIndexValue)
     }
 
     /** 종료된 채팅방에는 사용자 메시지를 추가할 수 없다. */
