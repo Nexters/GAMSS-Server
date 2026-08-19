@@ -3,6 +3,7 @@ package com.nexters.gamss.global.crypto
 import com.nexters.gamss.card.domain.Card
 import com.nexters.gamss.card.repository.CardRepository
 import com.nexters.gamss.conversation.domain.Conversation
+import com.nexters.gamss.conversation.domain.ConversationTitle
 import com.nexters.gamss.conversation.domain.SenderType
 import com.nexters.gamss.conversation.repository.ConversationRepository
 import com.nexters.gamss.conversation.repository.MessageRepository
@@ -104,6 +105,28 @@ class EncryptedColumnIntegrationTest : RepositoryTest() {
         val index = jdbcTemplate.queryForObject("select content_index from messages where id = ?", String::class.java, message.id)
 
         assertTrue(index!!.split(" ").all { it.matches(Regex("[0-9a-f]{16}")) }, "hex 토큰열이어야 한다")
+    }
+
+    @Test
+    fun `대화방 제목은 암호문으로 저장되고 엔티티로 읽으면 평문이다`() {
+        // 제목은 @Embeddable 안의 필드라 컨버터가 임베더블 경계에서도 걸리는지 따로 봐야 한다.
+        val title = "비 오는 날의 기록"
+        val conversation = conversationRepository.save(Conversation(memberId = 1L))
+        conversation.rename(ConversationTitle(title))
+        flushAndClear()
+
+        val stored =
+            jdbcTemplate.queryForObject("select title from conversations where id = ?", String::class.java, conversation.id)
+
+        assertTrue(stored!!.startsWith("enc:"), "DB에는 암호문이 있어야 한다")
+        assertEquals(
+            title,
+            conversationRepository
+                .findById(conversation.id)
+                .get()
+                .title
+                ?.value,
+        )
     }
 
     @Test
