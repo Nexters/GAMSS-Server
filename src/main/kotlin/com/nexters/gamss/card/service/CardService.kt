@@ -241,6 +241,9 @@ class CardService(
      * 카드 경로의 생성 로그 한 줄. 감정 분류·한 줄 생성이 [type]만 다르고 나머지가 같아 한 곳에 모은다.
      * 성공·실패 모두 [tokens]에 **그때까지 누적된 합계**를 싣는다 — 파싱에 실패한 시도도 호출은 됐으니
      * 과금되기 때문에, 마지막 한 시도만 기록하면 비용이 과소 집계된다.
+     *
+     * [error]는 [Throwable]로 받는다. 재시도 대상인 [CardGenerationFailedException]뿐 아니라 재시도
+     * 대상이 아닌 예외로 중단될 때도 같은 자리에 원인을 남겨야 실패 집계가 새지 않기 때문이다.
      */
     private fun recordCard(
         type: GenerationType,
@@ -250,7 +253,7 @@ class CardService(
         memberId: Long,
         conversationId: Long,
         tokens: TokenUsageAccumulator,
-        error: CardGenerationFailedException? = null,
+        error: Throwable? = null,
     ) {
         generationLogRecorder.record(
             type = type,
