@@ -52,7 +52,19 @@ class BlindIndexer(
             .normalize(text, Normalizer.Form.NFKC)
             .lowercase()
             .split(WHITESPACE)
-            .flatMap { segment -> segment.windowed(BIGRAM_SIZE).map { bigram -> mac.hash(bigram) } }
+            .flatMap { segment -> segment.bigrams().map { bigram -> mac.hash(bigram) } }
+    }
+
+    /**
+     * 코드 포인트 단위로 자른다. `String.windowed` 는 UTF-16 코드 유닛 기준이라 이모지처럼 보조 평면에
+     * 있는 글자의 서로게이트 쌍이 두 조각으로 쪼개진다 — 눈에는 한 글자인데 토큰은 반쪽이 되고,
+     * 앞 글자가 같은 이모지끼리 같은 조각을 공유한다. MySQL ngram 파서도 코드 포인트를 센다.
+     */
+    private fun String.bigrams(): List<String> {
+        val points = codePoints().toArray()
+        return (0..points.size - BIGRAM_SIZE).map { start ->
+            buildString { repeat(BIGRAM_SIZE) { appendCodePoint(points[start + it]) } }
+        }
     }
 
     private fun Mac.hash(bigram: String): String = HEX.formatHex(doFinal(bigram.toByteArray()), 0, TOKEN_SIZE_BYTES)

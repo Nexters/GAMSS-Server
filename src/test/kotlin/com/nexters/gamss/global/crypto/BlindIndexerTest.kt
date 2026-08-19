@@ -66,4 +66,23 @@ class BlindIndexerTest {
         // 기본 파서 FULLTEXT가 공백으로만 자르므로, 토큰에 구분자가 될 문자가 섞이면 안 된다.
         assertTrue(indexer.tokenize("힘들었다").all { it.matches(Regex("[0-9a-f]{16}")) })
     }
+
+    @Test
+    fun `이모지는 한 글자로 센다`() {
+        // 코드 유닛으로 자르면 서로게이트 쌍이 쪼개져, 눈에는 한 글자인데 토큰이 반쪽으로 나온다.
+        val grin = "\uD83D\uDE00"
+        val beam = "\uD83D\uDE01"
+
+        assertTrue(indexer.tokenize(grin).isEmpty(), "이모지 하나는 1글자라 bigram 이 안 나온다")
+        assertEquals(1, indexer.tokenize(grin + beam).size, "이모지 둘이면 bigram 하나다")
+        assertNotEquals(indexer.tokenize(grin + beam), indexer.tokenize(beam + grin), "순서가 다르면 토큰도 달라야 한다")
+    }
+
+    @Test
+    fun `토큰열은 토큰을 공백으로 이어 붙인 값이다`() {
+        // FULLTEXT 기본 파서가 공백으로만 자르므로 이 구분자가 곧 검색의 전제다.
+        val tokens = indexer.tokenize("힘들었다")
+
+        assertEquals(tokens.joinToString(" "), indexer.toIndexValue("힘들었다"))
+    }
 }

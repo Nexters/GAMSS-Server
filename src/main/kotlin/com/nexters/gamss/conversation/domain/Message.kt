@@ -55,7 +55,11 @@ class Message(
         }
         // 컬럼이 암호문 크기에 맞춰 넓어지면서 평문 상한이 사라졌다. 원래 VARCHAR(500)이 하던
         // 안전망을 여기서 대신 지킨다 — 없으면 LLM 이 비정상적으로 긴 댓글을 뱉었을 때 그대로 들어간다.
-        require(content.length <= MAX_CONTENT_LENGTH) { "메시지는 ${MAX_CONTENT_LENGTH}자 이하여야 합니다." }
+        // 코드 포인트로 센다. length 는 UTF-16 코드 유닛이라 이모지 하나를 두 글자로 세어,
+        // 이모지가 섞인 일기에서 상한이 사람이 보는 글자 수보다 일찍 걸린다.
+        require(content.codePointCount(0, content.length) <= MAX_CONTENT_LENGTH) {
+            "메시지는 ${MAX_CONTENT_LENGTH}자 이하여야 합니다."
+        }
     }
 
     @Id
@@ -87,7 +91,8 @@ class Message(
 
         /**
          * 암호문을 담기 위한 컬럼 폭. 한글 [MAX_CONTENT_LENGTH]자는 UTF-8 1,500바이트이고 IV·인증 태그가
-         * 붙어 Base64 로 감싸면 약 2,050자가 된다. 여유를 둔 값이라 평문 상한과 혼동하지 말 것.
+         * 붙어 Base64 로 감싸면 약 2,050자가 된다. 상한을 코드 포인트로 세므로 최악은 이모지 500개
+         * (2,000바이트)이고 그때가 약 2,710자다. 여유를 둔 값이라 평문 상한과 혼동하지 말 것.
          */
         const val ENCRYPTED_CONTENT_LENGTH = 3000
     }

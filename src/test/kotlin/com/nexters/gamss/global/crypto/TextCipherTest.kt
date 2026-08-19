@@ -69,4 +69,11 @@ class TextCipherTest {
         // 형식 오류와 인증 실패는 원인만 다를 뿐 둘 다 복구 불가라 같은 예외로 묶는다.
         assertFailsWith<IllegalStateException> { cipher.decrypt("enc:v1:이건 Base64가 아니다") }
     }
+
+    @Test
+    fun `이모지와 개행이 섞여도 왕복한다`() {
+        val plaintext = "오늘은 \uD83D\uDE00 이런 날\n내일은 \uD83D\uDE22 이런 날"
+
+        assertEquals(plaintext, cipher.decrypt(cipher.encrypt(plaintext)))
+    }
 }
