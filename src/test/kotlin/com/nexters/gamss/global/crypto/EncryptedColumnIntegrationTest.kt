@@ -3,7 +3,9 @@ package com.nexters.gamss.global.crypto
 import com.nexters.gamss.card.domain.Card
 import com.nexters.gamss.card.repository.CardRepository
 import com.nexters.gamss.conversation.domain.Conversation
+import com.nexters.gamss.conversation.domain.SenderType
 import com.nexters.gamss.conversation.repository.ConversationRepository
+import com.nexters.gamss.conversation.repository.MessageRepository
 import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.support.RepositoryTest
 import jakarta.persistence.EntityManager
@@ -28,6 +30,9 @@ class EncryptedColumnIntegrationTest : RepositoryTest() {
 
     @Autowired
     private lateinit var conversationRepository: ConversationRepository
+
+    @Autowired
+    private lateinit var messageRepository: MessageRepository
 
     @Autowired
     private lateinit var jdbcTemplate: JdbcTemplate
@@ -75,6 +80,30 @@ class EncryptedColumnIntegrationTest : RepositoryTest() {
 
         // IV가 매번 달라서다. 같으면 덤프에서 "두 컬럼이 같은 값"이라는 정보가 새어 나간다.
         assertTrue(row["summary"] != row["message"], "IV가 값마다 달라야 한다")
+    }
+
+    @Test
+    fun `메시지 본문은 암호문으로 저장되고 엔티티로 읽으면 평문이다`() {
+        val content = "오늘은 상사한테 깨져서 하루 종일 기분이 안 좋았다"
+        val conversation = conversationRepository.save(Conversation(memberId = 1L))
+        val message = messageRepository.save(conversation.createMessage(SenderType.USER, null, content, null))
+        flushAndClear()
+
+        val stored = jdbcTemplate.queryForObject("select content from messages where id = ?", String::class.java, message.id)
+        assertTrue(stored!!.startsWith("enc:"), "DB에는 암호문이 있어야 한다")
+        assertEquals(content, messageRepository.findById(message.id).get().content, "엔티티로는 평문이 나와야 한다")
+    }
+
+    @Test
+    fun `메시지를 저장하면 검색 인덱스가 함께 채워진다`() {
+        // 리스너가 안 걸리면 저장은 되는데 검색만 안 되는 메시지가 조용히 생긴다.
+        val conversation = conversationRepository.save(Conversation(memberId = 1L))
+        val message = messageRepository.save(conversation.createMessage(SenderType.USER, null, "회사에서 힘들었다", null))
+        flushAndClear()
+
+        val index = jdbcTemplate.queryForObject("select content_index from messages where id = ?", String::class.java, message.id)
+
+        assertTrue(index!!.split(" ").all { it.matches(Regex("[0-9a-f]{16}")) }, "hex 토큰열이어야 한다")
     }
 
     @Test

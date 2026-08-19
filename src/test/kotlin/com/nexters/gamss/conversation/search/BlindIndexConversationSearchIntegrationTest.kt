@@ -17,14 +17,15 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * MySQL 풀텍스트(ngram) 검색 통합 테스트.
+ * 블라인드 인덱스 검색 통합 테스트. 본문·제목이 암호문이 된 뒤에도 검색 계약이 그대로인지 고정한다
+ * — 여기 있는 기대값은 ngram 풀텍스트를 쓰던 시절과 같다.
  *
  * InnoDB 풀텍스트 인덱스는 커밋 시점에 갱신되므로, [com.nexters.gamss.support.RepositoryTest]의
  * @Transactional 롤백을 쓰지 않고 실제로 커밋한 뒤 검색한다(수동 정리).
  */
 @SpringBootTest
 @Import(TestcontainersConfig::class)
-class MysqlConversationSearchIntegrationTest {
+class BlindIndexConversationSearchIntegrationTest {
     @Autowired
     private lateinit var searchPort: ConversationSearchPort
 

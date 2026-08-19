@@ -22,9 +22,6 @@ import kotlin.test.assertTrue
  * 조각이 흩어져 있는 글까지 걸리는데, 토큰열을 원문 순서대로 이어 붙이고 구문 검색을 하면 인접·순서가
  * 강제돼 그 오탐이 사라진다. 여기서 어긋나면 별도 토큰 테이블 방식으로 되돌려야 한다.
  *
- * 본문이 아직 평문이고 옛 ngram 인덱스도 살아 있는 **지금만** 두 방식을 같은 데이터로 나란히 비교할
- * 수 있다. 다음 마이그레이션에서 옛 인덱스를 지우므로, 동치성 확인은 이 시점에 해 둔다.
- *
  * InnoDB 풀텍스트 인덱스는 커밋 시점에 갱신되므로 [com.nexters.gamss.support.RepositoryTest]의
  * @Transactional 롤백을 쓰지 않고 실제로 커밋한 뒤 검색한다(수동 정리).
  */
@@ -90,16 +87,21 @@ class BlindIndexPhraseSearchIntegrationTest {
     }
 
     @Test
-    fun `ngram 검색과 결과가 같다`() {
-        saveMessage("오늘은 회사에서 정말 힘들었다")
-        saveMessage("퇴근길에 비를 맞아서 기분이 가라앉았다")
-        saveMessage("회사 동료와 점심을 먹으며 이야기했다")
+    fun `ngram 파서와 같은 규칙으로 걸린다`() {
+        // 아래 기대값은 옛 ngram 인덱스가 아직 살아 있던 시점에 두 방식의 결과가 같음을 확인하고
+        // 그대로 옮겨 적은 것이다(V33 에서 옛 인덱스를 지워 이제 나란히 비교할 수 없다).
+        val hard = saveMessage("오늘은 회사에서 정말 힘들었다")
+        val rain = saveMessage("퇴근길에 비를 맞아서 기분이 가라앉았다")
+        val lunch = saveMessage("회사 동료와 점심을 먹으며 이야기했다")
         saveMessage("나다가나")
 
-        listOf("회사", "회사에서", "가나다", "기분", "비를 맞아서", "점심", "없는말")
-            .forEach { keyword ->
-                assertEquals(searchByNgram(keyword), searchByBlindIndex(keyword), "'$keyword' 검색 결과가 달라졌다")
-            }
+        assertEquals(setOf(hard, lunch), searchByBlindIndex("회사"))
+        assertEquals(setOf(hard), searchByBlindIndex("회사에서"))
+        assertEquals(setOf(rain), searchByBlindIndex("기분"))
+        assertEquals(setOf(rain), searchByBlindIndex("비를 맞아서"))
+        assertEquals(setOf(lunch), searchByBlindIndex("점심"))
+        assertTrue(searchByBlindIndex("가나다").isEmpty(), "조각이 흩어진 글은 안 걸린다")
+        assertTrue(searchByBlindIndex("없는말").isEmpty())
     }
 
     private fun saveMessage(content: String): Long {
@@ -107,16 +109,6 @@ class BlindIndexPhraseSearchIntegrationTest {
         val message = messageRepository.save(conversation.createMessage(SenderType.USER, null, content, null))
         return message.id
     }
-
-    /** 옛 경로. 평문 컬럼에 걸린 ngram 풀텍스트를 구문 검색한다. */
-    private fun searchByNgram(keyword: String): Set<Long> =
-        jdbcTemplate
-            .queryForList(
-                "select id from messages where match(content) against(? in boolean mode)",
-                Long::class.java,
-                "\"$keyword\"",
-            ).filterNotNull()
-            .toSet()
 
     /** 새 경로. 검색어를 같은 규칙으로 토큰열로 바꿔 구문 검색한다. */
     private fun searchByBlindIndex(keyword: String): Set<Long> {
