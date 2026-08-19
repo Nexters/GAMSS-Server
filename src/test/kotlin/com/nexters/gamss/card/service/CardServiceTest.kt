@@ -466,6 +466,31 @@ class CardServiceTest {
         }
     }
 
+    /**
+     * 저장 실패도 CAS 선점 이후다. PENDING 으로 남기면 사용자의 재시도가 재시도 가능한 503 이 아니라
+     * 409(생성 중)로 막힌다 — 정리 스케줄러가 타임아웃시킬 때까지다.
+     */
+    @Test
+    fun `저장이 유니크 위반도 상태 충돌도 아닌 이유로 실패해도 FAILED로 전이한다`() {
+        every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
+        stubClaimSuccess()
+        every { cardMessageGenerator.generate(any(), any()) } returns CardMessageOutput("대사", 10, 0)
+        val saveFailure = QueryTimeoutException("저장 타임아웃")
+        every { cardPersistenceService.save(any(), any(), any()) } throws saveFailure
+        stubMarkStatus(CardGenerationStatus.FAILED)
+
+        // 업무 오류로 위장하지 않고 원래 예외를 그대로 올린다.
+        val exception =
+            assertFailsWith<QueryTimeoutException> {
+                service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약")
+            }
+
+        assertEquals(saveFailure, exception)
+        verify(exactly = 1) {
+            conversationRepository.updateCardGenerationStatus(CONVERSATION_ID, CardGenerationStatus.FAILED, any(), any())
+        }
+    }
+
     @Test
     fun `저장 시점 상태 전이가 채팅방 삭제로 실패하면 CONVERSATION_ALREADY_DELETED로 변환된다`() {
         val activeConversation = endedConversation()

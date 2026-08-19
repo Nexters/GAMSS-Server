@@ -88,7 +88,12 @@ class CardService(
         return persistCard(card, conversationId, summary)
     }
 
-    /** 카드를 저장하고, 저장 시점에 드러난 CAS 경합을 원인에 맞는 [BusinessException]으로 변환한다. */
+    /**
+     * 카드를 저장하고, 저장 시점에 드러난 CAS 경합을 원인에 맞는 [BusinessException]으로 변환한다.
+     *
+     * 저장이 어떤 이유로 실패하든 상태는 되돌린다 — 이 자리는 CAS 선점 **이후**라 PENDING 으로
+     * 두면 재시도가 재시도 가능한 503 이 아니라 409(생성 중)로 막힌다([loadUserMessages]와 같은 계약).
+     */
     private fun persistCard(
         card: Card,
         conversationId: Long,
@@ -114,6 +119,11 @@ class CardService(
                 throw BusinessException(ErrorCode.CONVERSATION_ALREADY_DELETED).apply { initCause(e) }
             }
             throw BusinessException(ErrorCode.CARD_GENERATION_FAILED, e.message).apply { initCause(e) }
+        } catch (e: Exception) {
+            // 커넥션 끊김·쿼리 타임아웃처럼 위 둘이 아닌 실패다. 상태만 되돌리고 예외는 변환하지 않고
+            // 그대로 올린다 — 예상 밖 결함을 업무 오류로 위장하지 않는다([failureHandler]와 같은 계약).
+            markCardGenerationStatus(conversationId, CardGenerationStatus.FAILED)
+            throw e
         }
 
     /** 소유권·종료 상태·토큰 상한을 확인한 뒤 [CardGenerationStatus]를 CAS로 선점한다. */
