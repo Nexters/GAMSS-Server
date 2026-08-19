@@ -57,4 +57,12 @@ class EncryptionPropertiesTest {
 
         assertFalse(properties.decodedDataKey.all { it == 0.toByte() }, "복사본을 줘야 원본이 안 망가진다")
     }
+
+    @Test
+    fun `키 버전이 너무 길면 거부한다`() {
+        // 프리픽스가 길어지면 암호문이 컬럼 폭을 넘겨 제목 저장이 조용히 실패한다.
+        assertFailsWith<IllegalArgumentException> {
+            EncryptionProperties(dataKey = DATA_KEY, indexKey = INDEX_KEY, keyVersion = "v".repeat(17))
+        }
+    }
 }

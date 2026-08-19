@@ -29,6 +29,10 @@ data class EncryptionProperties(
         require(!decodedData.contentEquals(decodedIndex)) { "encryption.data-key와 encryption.index-key는 서로 달라야 합니다." }
         // 프리픽스 구분자가 ':' 라, 버전 문자열에 ':' 가 들어가면 암호문 파싱이 어긋난다.
         require(keyVersion.isNotBlank() && ':' !in keyVersion) { "encryption.key-version은 비어 있을 수 없고 ':'를 포함할 수 없습니다." }
+        // 버전은 암호문 앞에 `enc:{버전}:` 으로 붙어 컬럼 폭을 갉아먹는다. 제일 빠듯한 게 제목으로,
+        // 한글 100자를 암호화하면 약 440자라 VARCHAR(600) 에서 남는 여유가 150자 남짓이다.
+        // 여기서 막지 않으면 긴 버전을 넣은 순간 제목 저장이 조용히 실패한다.
+        require(keyVersion.length <= MAX_KEY_VERSION_LENGTH) { "encryption.key-version은 ${MAX_KEY_VERSION_LENGTH}자 이하여야 합니다." }
     }
 
     /**
@@ -49,6 +53,9 @@ data class EncryptionProperties(
 
     companion object {
         private const val KEY_SIZE_BYTES = 32
+
+        /** 암호문 프리픽스에 실리는 길이라 컬럼 폭과 맞물린다. `v1`·`2026-08` 같은 표기에 충분한 값이다. */
+        private const val MAX_KEY_VERSION_LENGTH = 16
 
         private fun decode(
             value: String,
