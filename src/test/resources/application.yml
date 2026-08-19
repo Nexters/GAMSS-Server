@@ -39,3 +39,8 @@ gemini:
   pricing:
     models:
       "[gemini-3.1-flash-lite]": { input-per1m: 0.25, cached-input-per1m: 0.025, output-per1m: 1.50 }
+
+encryption:
+  # 테스트 전용 더미 키(Base64 32바이트). 실제 키가 아니며 서로 달라야 한다.
+  data-key: Z2Ftc3MtdGVzdC1kYXRhLWVuY3J5cHRpb24ta2V5ISE=
+  index-key: Z2Ftc3MtdGVzdC1zZWFyY2gtaW5kZXgta2V5ISEhISE=
