@@ -173,14 +173,11 @@ services:
     image: mysql:8.0
     restart: unless-stopped
     logging: *default-logging
-    # ngram-token-size: 대화방 검색이 bigram 을 전제로 한다(V18 의 WITH PARSER ngram, 최소 2자 검증).
-    # 기본값도 2 지만 기동 파라미터라 환경에 좌우되고, 바뀌면 풀텍스트 인덱스를 재생성해야 해서 고정한다.
     # (command 는 YAML folded scalar 라 블록 안에 주석을 넣으면 인자로 섞여 들어간다)
     command: >
       --character-set-server=utf8mb4
       --collation-server=utf8mb4_unicode_ci
       --innodb-buffer-pool-size=2G
-      --ngram-token-size=2
     environment:
       MYSQL_DATABASE: gamss
       MYSQL_USER: gamss
