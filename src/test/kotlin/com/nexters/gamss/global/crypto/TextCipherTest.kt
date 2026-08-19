@@ -61,6 +61,12 @@ class TextCipherTest {
     fun `모르는 키 버전이면 복호화하지 않고 실패한다`() {
         val encrypted = TextCipher(testProperties(keyVersion = "v2")).encrypt("나중 버전으로 쓴 값")
 
-        assertFailsWith<IllegalArgumentException> { cipher.decrypt(encrypted) }
+        assertFailsWith<IllegalStateException> { cipher.decrypt(encrypted) }
+    }
+
+    @Test
+    fun `프리픽스는 있는데 Base64가 아니면 복호화에 실패한다`() {
+        // 형식 오류와 인증 실패는 원인만 다를 뿐 둘 다 복구 불가라 같은 예외로 묶는다.
+        assertFailsWith<IllegalStateException> { cipher.decrypt("enc:v1:이건 Base64가 아니다") }
     }
 }

@@ -18,7 +18,9 @@ import javax.crypto.spec.SecretKeySpec
  * 나중에 평문을 아예 금지하려면 그때 백필과 함께 이 분기를 없애야 한다.
  *
  * 반대로 **프리픽스가 있는데 복호화에 실패하면 예외를 던진다.** 여기서 평문처럼 흘려보내면 키를 잘못
- * 주입한 배포가 조용히 암호문을 화면에 뿌린다 — 침묵보다 즉시 실패가 낫다.
+ * 주입한 배포가 조용히 암호문을 화면에 뿌린다 — 침묵보다 즉시 실패가 낫다. 실패 원인이 형식 오류든
+ * 키 불일치든 전부 `IllegalStateException` 하나로 던진다 — 호출부가 구분해서 처리할 방법이 없고,
+ * 어느 쪽이든 사람이 봐야 하는 상황이기 때문이다.
  */
 @Component
 class TextCipher(
@@ -42,10 +44,17 @@ class TextCipher(
             return stored
         }
         val version = stored.removePrefix(MARKER).substringBefore(':')
-        require(stored.startsWith(prefix)) { "알 수 없는 암호화 키 버전입니다: $version(현재 $keyVersion)" }
+        check(stored.startsWith(prefix)) { "알 수 없는 암호화 키 버전입니다: $version(현재 $keyVersion)" }
 
-        val decoded = Base64.getDecoder().decode(stored.removePrefix(prefix))
-        require(decoded.size > IV_SIZE_BYTES) { "암호문 길이가 IV보다 짧습니다." }
+        // Base64 파싱 실패도 "이 값은 복호화할 수 없다"는 같은 뜻이다. 아래 인증 실패와 예외 타입이
+        // 갈리면 호출부가 두 가지를 따로 잡아야 하므로 여기서 묶는다.
+        val decoded =
+            try {
+                Base64.getDecoder().decode(stored.removePrefix(prefix))
+            } catch (e: IllegalArgumentException) {
+                throw IllegalStateException("암호문이 Base64 형식이 아닙니다(데이터 훼손).", e)
+            }
+        check(decoded.size > IV_SIZE_BYTES) { "암호문 길이가 IV보다 짧습니다(데이터 훼손)." }
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(TAG_SIZE_BITS, decoded, 0, IV_SIZE_BYTES))
         return try {
