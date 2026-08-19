@@ -1,9 +1,11 @@
 package com.nexters.gamss.conversation.domain
 
 import com.nexters.gamss.emotion.domain.EmotionType
+import com.nexters.gamss.global.crypto.EncryptedStringConverter
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import jakarta.persistence.Column
+import jakarta.persistence.Convert
 import jakarta.persistence.Embedded
 import jakarta.persistence.Entity
 import jakarta.persistence.EntityListeners
@@ -60,7 +62,11 @@ class Conversation(
      * ([com.nexters.gamss.conversation.repository.ConversationRepository.updateSummary] — 엔티티를
      * 로드하지 않는 경로라 벌크 쿼리를 쓴다). 종료된 방의 요약은 다른 대화방 댓글 생성 시 과거
      * 맥락으로 참고하고, 자동 종료 배치는 카드 요약으로 쓴다.
+     *
+     * DB에는 암호문으로 저장된다([com.nexters.gamss.global.crypto.EncryptedStringConverter]) —
+     * 대화를 통째로 압축한 값이라 이것만 새도 그날 무슨 이야기를 했는지가 드러난다.
      */
+    @Convert(converter = EncryptedStringConverter::class)
     @Column(name = "summary", columnDefinition = "TEXT")
     var summary: String? = null
         protected set

@@ -1,9 +1,11 @@
 package com.nexters.gamss.card.domain
 
 import com.nexters.gamss.emotion.domain.EmotionType
+import com.nexters.gamss.global.crypto.EncryptedStringConverter
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import jakarta.persistence.Column
+import jakarta.persistence.Convert
 import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
 import jakarta.persistence.Enumerated
@@ -26,6 +28,9 @@ import java.time.Instant
  * 조회는 그대로 되고, 길이·개행은 응답을 만들 때 흡수한다
  * ([com.nexters.gamss.card.controller.dto.CardResponse]).
  *
+ * [summary]·[message]는 DB에 암호문으로 저장된다([com.nexters.gamss.global.crypto.EncryptedStringConverter]).
+ * 날짜가 박힌 한 줄 일지라 이 컬럼만 긁어도 대화 주제가 날짜별로 재구성되기 때문이다.
+ *
  * 카드가 속한 캘린더 날짜는 그 대화의 생성시간 기준이라 [conversationCreatedAt]에 비정규화해 둔다
  * — 종료 후 대화 시작 시각은 바뀌지 않으므로 날짜·월별 조회를 단일 테이블로 처리할 수 있다.
  */
@@ -39,8 +44,10 @@ class Card(
     @Enumerated(EnumType.STRING)
     @Column(name = "emotion", length = 20, nullable = false)
     val emotion: EmotionType,
+    @Convert(converter = EncryptedStringConverter::class)
     @Column(name = "summary", columnDefinition = "TEXT", nullable = false)
     val summary: String,
+    @Convert(converter = EncryptedStringConverter::class)
     @Column(name = "message", columnDefinition = "TEXT", nullable = false)
     val message: String,
     @Column(name = "conversation_created_at", nullable = false)
