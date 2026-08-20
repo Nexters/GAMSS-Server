@@ -88,7 +88,12 @@ class CardService(
         return persistCard(card, conversationId, summary)
     }
 
-    /** 카드를 저장하고, 저장 시점에 드러난 CAS 경합을 원인에 맞는 [BusinessException]으로 변환한다. */
+    /**
+     * 카드를 저장하고, 저장 시점에 드러난 CAS 경합을 원인에 맞는 [BusinessException]으로 변환한다.
+     *
+     * 저장이 어떤 이유로 실패하든 상태는 되돌린다 — 이 자리는 CAS 선점 **이후**라 PENDING 으로
+     * 두면 재시도가 재시도 가능한 503 이 아니라 409(생성 중)로 막힌다([loadUserMessages]와 같은 계약).
+     */
     private fun persistCard(
         card: Card,
         conversationId: Long,
@@ -114,6 +119,11 @@ class CardService(
                 throw BusinessException(ErrorCode.CONVERSATION_ALREADY_DELETED).apply { initCause(e) }
             }
             throw BusinessException(ErrorCode.CARD_GENERATION_FAILED, e.message).apply { initCause(e) }
+        } catch (e: Exception) {
+            // 커넥션 끊김·쿼리 타임아웃처럼 위 둘이 아닌 실패다. 상태만 되돌리고 예외는 변환하지 않고
+            // 그대로 올린다 — 예상 밖 결함을 업무 오류로 위장하지 않는다([failureHandler]와 같은 계약).
+            markCardGenerationStatus(conversationId, CardGenerationStatus.FAILED)
+            throw e
         }
 
     /** 소유권·종료 상태·토큰 상한을 확인한 뒤 [CardGenerationStatus]를 CAS로 선점한다. */
@@ -155,6 +165,10 @@ class CardService(
      * 유저가 보낸 메시지들만 보고 LLM으로 대표 감정을 분류하고 생성 로그를 남긴다.
      * 실패 시 상태를 FAILED로 되돌린 뒤 예외로 변환한다([generateMessage]와 같은 계약) —
      * 클라이언트는 분류·한 줄 생성 어느 쪽이 실패했든 CARD_GENERATION_FAILED 하나로 재시도한다.
+     *
+     * 재시도 대상이 아닌 예외도 **상태 복구까지는 똑같이** 받는다([failureHandler]). 예외 자체는
+     * 변환하지 않고 그대로 올린다 — 예상 밖 결함을 업무 오류로 위장하지 않으려는 것이고,
+     * [com.nexters.gamss.conversation.service.CommentGenerationService]도 같은 계약이다.
      */
     private fun extractEmotion(
         memberId: Long,
@@ -164,16 +178,15 @@ class CardService(
         val input = loadUserMessages(conversationId, summary)
         val startedAt = System.currentTimeMillis()
         val tokens = TokenUsageAccumulator()
+        val handleFailure = failureHandler(GenerationType.CARD_EMOTION, startedAt, memberId, conversationId, tokens)
         val output =
             try {
                 llmRetryExecutor.execute(
                     retryOn = CardGenerationFailedException::class,
                     maxAttempts = CARD_MAX_ATTEMPTS,
                     onAttemptFailure = { _, e -> tokens.addFailed(e) },
-                    onExhausted = { attempt, e ->
-                        recordCard(GenerationType.CARD_EMOTION, false, attempt, startedAt, memberId, conversationId, tokens, e)
-                        markCardGenerationStatus(conversationId, CardGenerationStatus.FAILED)
-                    },
+                    onNonRetryable = handleFailure,
+                    onExhausted = handleFailure,
                 ) { attempt ->
                     emotionExtractor.extract(input).also {
                         tokens.add(it)
@@ -208,7 +221,10 @@ class CardService(
         return userMessages.ifEmpty { listOf(summary) }
     }
 
-    /** LLM으로 카드 한 줄을 생성하고 생성 로그를 남긴다. 실패 시 상태를 FAILED로 되돌린 뒤 예외로 변환한다. */
+    /**
+     * LLM으로 카드 한 줄을 생성하고 생성 로그를 남긴다. 실패 시 상태를 FAILED로 되돌린 뒤 예외로
+     * 변환한다. 재시도 대상이 아닌 예외의 취급은 [extractEmotion]과 같다.
+     */
     private fun generateMessage(
         emotion: EmotionType,
         summary: String,
@@ -217,15 +233,14 @@ class CardService(
     ): CardMessageOutput {
         val startedAt = System.currentTimeMillis()
         val tokens = TokenUsageAccumulator()
+        val handleFailure = failureHandler(GenerationType.CARD, startedAt, memberId, conversationId, tokens)
         return try {
             llmRetryExecutor.execute(
                 retryOn = CardGenerationFailedException::class,
                 maxAttempts = CARD_MAX_ATTEMPTS,
                 onAttemptFailure = { _, e -> tokens.addFailed(e) },
-                onExhausted = { attempt, e ->
-                    recordCard(GenerationType.CARD, false, attempt, startedAt, memberId, conversationId, tokens, e)
-                    markCardGenerationStatus(conversationId, CardGenerationStatus.FAILED)
-                },
+                onNonRetryable = handleFailure,
+                onExhausted = handleFailure,
             ) { attempt ->
                 cardMessageGenerator.generate(emotion, summary).also {
                     tokens.add(it)
@@ -238,9 +253,35 @@ class CardService(
     }
 
     /**
+     * 생성이 실패로 끝날 때 할 일을 한 덩어리로 묶는다 — **실패 로그 한 줄과 FAILED 로의 상태 복구**다.
+     * `record` 가 아니라 `handle` 인 것은 기록만 하지 않기 때문이다 —
+     * [com.nexters.gamss.conversation.service.CommentGenerationService] 의 같은 자리는 로그만 남기고
+     * 상태 복구는 바깥 catch 가 맡는다.
+     *
+     * 재시도를 모두 소진했을 때(`onExhausted`)와 재시도 대상이 아닌 예외로 중단할 때
+     * (`onNonRetryable`)에 남길 것이 같아 한 자리에서 만든다. 두 콜백 중 하나만 넘기면 나머지 경로가
+     * 조용히 빠지는데, 그러면 **실패가 집계되지 않고 상태가 PENDING으로 남아** 사용자의 재시도가
+     * 재시도 가능한 503이 아니라 409(생성 중)로 막힌다 — 정리 스케줄러가 타임아웃시킬 때까지다.
+     */
+    private fun failureHandler(
+        type: GenerationType,
+        startedAt: Long,
+        memberId: Long,
+        conversationId: Long,
+        tokens: TokenUsageAccumulator,
+    ): (Int, Throwable) -> Unit =
+        { attempt, error ->
+            recordCard(type, false, attempt, startedAt, memberId, conversationId, tokens, error)
+            markCardGenerationStatus(conversationId, CardGenerationStatus.FAILED)
+        }
+
+    /**
      * 카드 경로의 생성 로그 한 줄. 감정 분류·한 줄 생성이 [type]만 다르고 나머지가 같아 한 곳에 모은다.
      * 성공·실패 모두 [tokens]에 **그때까지 누적된 합계**를 싣는다 — 파싱에 실패한 시도도 호출은 됐으니
      * 과금되기 때문에, 마지막 한 시도만 기록하면 비용이 과소 집계된다.
+     *
+     * [error]는 [Throwable]로 받는다. 재시도 대상인 [CardGenerationFailedException]뿐 아니라 재시도
+     * 대상이 아닌 예외로 중단될 때도 같은 자리에 원인을 남겨야 실패 집계가 새지 않기 때문이다.
      */
     private fun recordCard(
         type: GenerationType,
@@ -250,7 +291,7 @@ class CardService(
         memberId: Long,
         conversationId: Long,
         tokens: TokenUsageAccumulator,
-        error: CardGenerationFailedException? = null,
+        error: Throwable? = null,
     ) {
         generationLogRecorder.record(
             type = type,

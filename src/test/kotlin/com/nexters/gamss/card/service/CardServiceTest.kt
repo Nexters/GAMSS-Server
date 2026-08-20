@@ -346,6 +346,86 @@ class CardServiceTest {
         }
     }
 
+    /**
+     * 재시도 대상이 아닌 예외(SDK 결함 등)로 중단돼도 상태는 되돌아가야 한다. PENDING으로 남으면
+     * 사용자의 재시도가 재시도 가능한 503이 아니라 409(생성 중)로 막힌다 — 정리 스케줄러가
+     * 타임아웃시킬 때까지다. 실패 로그가 빠지면 실패율·비용 집계도 함께 샌다.
+     */
+    @Test
+    fun `감정 분류가 재시도 대상이 아닌 예외로 끊겨도 FAILED로 전이하고 실패 로그를 남긴다`() {
+        every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
+        stubClaimSuccess()
+        every {
+            messageRepository.findAllByConversationIdAndSenderTypeOrderByIdAsc(CONVERSATION_ID, SenderType.USER)
+        } returns listOf(userMessage("오늘 일기"))
+        val sdkFailure = IllegalStateException("SDK 응답에 후보가 없다")
+        every { emotionExtractor.extract(any()) } throws sdkFailure
+        stubMarkStatus(CardGenerationStatus.FAILED)
+
+        // 업무 오류로 위장하지 않고 원래 예외를 그대로 올린다.
+        val thrown = assertFailsWith<IllegalStateException> { service.createCard(MEMBER_ID, CONVERSATION_ID, null, "요약") }
+
+        assertEquals(sdkFailure, thrown)
+        // 재시도 대상이 아니므로 다시 부르지 않는다.
+        verify(exactly = 1) { emotionExtractor.extract(any()) }
+        verify(exactly = 0) { cardMessageGenerator.generate(any(), any()) }
+        verify(exactly = 1) {
+            conversationRepository.updateCardGenerationStatus(CONVERSATION_ID, CardGenerationStatus.FAILED, any(), any())
+        }
+        verify(exactly = 1) {
+            generationLogRecorder.record(
+                type = GenerationType.CARD_EMOTION,
+                success = false,
+                attemptCount = 1,
+                latencyMs = any(),
+                memberId = MEMBER_ID,
+                conversationId = CONVERSATION_ID,
+                usedTokens = any(),
+                cachedTokens = any(),
+                inputTokens = any(),
+                outputTokens = any(),
+                failureReason = "IllegalStateException",
+            )
+        }
+    }
+
+    /** [감정 분류가 재시도 대상이 아닌 예외로 끊겨도 FAILED로 전이하고 실패 로그를 남긴다]와 같은 계약. */
+    @Test
+    fun `대사 생성이 재시도 대상이 아닌 예외로 끊겨도 FAILED로 전이하고 실패 로그를 남긴다`() {
+        every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
+        stubClaimSuccess()
+        val sdkFailure = IllegalStateException("SDK 응답에 후보가 없다")
+        every { cardMessageGenerator.generate(any(), any()) } throws sdkFailure
+        stubMarkStatus(CardGenerationStatus.FAILED)
+
+        val thrown =
+            assertFailsWith<IllegalStateException> {
+                service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약")
+            }
+
+        assertEquals(sdkFailure, thrown)
+        verify(exactly = 1) { cardMessageGenerator.generate(any(), any()) }
+        verify(exactly = 0) { cardPersistenceService.save(any(), any(), any()) }
+        verify(exactly = 1) {
+            conversationRepository.updateCardGenerationStatus(CONVERSATION_ID, CardGenerationStatus.FAILED, any(), any())
+        }
+        verify(exactly = 1) {
+            generationLogRecorder.record(
+                type = GenerationType.CARD,
+                success = false,
+                attemptCount = 1,
+                latencyMs = any(),
+                memberId = MEMBER_ID,
+                conversationId = CONVERSATION_ID,
+                usedTokens = any(),
+                cachedTokens = any(),
+                inputTokens = any(),
+                outputTokens = any(),
+                failureReason = "IllegalStateException",
+            )
+        }
+    }
+
     @Test
     fun `선점 이후에도 저장 시점에 유니크 위반이 나면 DONE으로 맞추고 CARD_ALREADY_EXISTS로 변환된다`() {
         every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
@@ -377,6 +457,31 @@ class CardServiceTest {
 
         val exception =
             assertFailsWith<DataIntegrityViolationException> {
+                service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약")
+            }
+
+        assertEquals(saveFailure, exception)
+        verify(exactly = 1) {
+            conversationRepository.updateCardGenerationStatus(CONVERSATION_ID, CardGenerationStatus.FAILED, any(), any())
+        }
+    }
+
+    /**
+     * 저장 실패도 CAS 선점 이후다. PENDING 으로 남기면 사용자의 재시도가 재시도 가능한 503 이 아니라
+     * 409(생성 중)로 막힌다 — 정리 스케줄러가 타임아웃시킬 때까지다.
+     */
+    @Test
+    fun `저장이 유니크 위반도 상태 충돌도 아닌 이유로 실패해도 FAILED로 전이한다`() {
+        every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
+        stubClaimSuccess()
+        every { cardMessageGenerator.generate(any(), any()) } returns CardMessageOutput("대사", 10, 0)
+        val saveFailure = QueryTimeoutException("저장 타임아웃")
+        every { cardPersistenceService.save(any(), any(), any()) } throws saveFailure
+        stubMarkStatus(CardGenerationStatus.FAILED)
+
+        // 업무 오류로 위장하지 않고 원래 예외를 그대로 올린다.
+        val exception =
+            assertFailsWith<QueryTimeoutException> {
                 service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약")
             }
 
