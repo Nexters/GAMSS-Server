@@ -10,12 +10,15 @@ import { SITE_URL } from "./site";
  *
  * `lastModified` 는 빌드 시각이 아니라 고정값을 쓴다 — 배포할 때마다 날짜가 바뀌면
  * 내용이 그대로인데도 크롤러에 "변경됨"으로 보고하는 셈이 된다.
+ *
+ * 대신 **실제로 내용을 고친 날**을 적는다. 앞선 날짜를 쓰면 크롤러가 미래의 수정일을
+ * 받게 되어 값 자체를 믿지 않는다.
  */
 export default function sitemap(): MetadataRoute.Sitemap {
   return [
     {
       url: SITE_URL,
-      lastModified: new Date("2026-08-21"),
+      lastModified: new Date("2026-08-20"),
       changeFrequency: "monthly",
       priority: 1,
     },

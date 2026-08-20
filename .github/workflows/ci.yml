@@ -28,6 +28,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          # 체크아웃은 GITHUB_TOKEN 을 로컬 git 설정에 남긴다. 빌드 도중 실행되는 남의 코드가
+          # (npm 은 의존성의 lifecycle script 를 돌린다) 그것을 읽을 수 있다.
+          # 어느 잡도 이후 git 인증을 쓰지 않으니 아예 남기지 않는다.
+          persist-credentials: false
 
       - name: Set up JDK 21
         uses: actions/setup-java@v5
@@ -76,6 +81,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          # 체크아웃은 GITHUB_TOKEN 을 로컬 git 설정에 남긴다. 빌드 도중 실행되는 남의 코드가
+          # (npm 은 의존성의 lifecycle script 를 돌린다) 그것을 읽을 수 있다.
+          # 어느 잡도 이후 git 인증을 쓰지 않으니 아예 남기지 않는다.
+          persist-credentials: false
 
       - name: Set up Node 22
         uses: actions/setup-node@v5
@@ -107,6 +117,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          # 체크아웃은 GITHUB_TOKEN 을 로컬 git 설정에 남긴다. 빌드 도중 실행되는 남의 코드가
+          # (npm 은 의존성의 lifecycle script 를 돌린다) 그것을 읽을 수 있다.
+          # 어느 잡도 이후 git 인증을 쓰지 않으니 아예 남기지 않는다.
+          persist-credentials: false
 
       - name: Set up Node 22
         uses: actions/setup-node@v5
