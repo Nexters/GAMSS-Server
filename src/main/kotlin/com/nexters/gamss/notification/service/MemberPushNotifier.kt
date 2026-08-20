@@ -43,8 +43,10 @@ class MemberPushNotifier(
         memberIds: Collection<Long>,
         message: PushMessage,
     ): PushSendResult {
-        check(!TransactionSynchronizationManager.isActualTransactionActive()) {
-            "푸시 발송은 트랜잭션 안에서 부를 수 없다 — 외부 호출이 끝날 때까지 DB 커넥션을 쥐게 된다."
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw PushInTransactionException(
+                "푸시 발송은 트랜잭션 안에서 부를 수 없다 — 외부 호출이 끝날 때까지 DB 커넥션을 쥐게 된다.",
+            )
         }
         val tokens = tokensOf(memberIds)
         if (tokens.isEmpty()) {

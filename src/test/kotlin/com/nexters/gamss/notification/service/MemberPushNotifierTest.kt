@@ -199,7 +199,7 @@ class MemberPushNotifierTest {
     fun `트랜잭션 안에서 부르면 거부한다`() {
         val member = register("me@a.com", "token-one")
 
-        assertFailsWith<IllegalStateException> {
+        assertFailsWith<PushInTransactionException> {
             transactionTemplate.execute { notifier.send(listOf(member), MESSAGE) }
         }
 

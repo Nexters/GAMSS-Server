@@ -39,8 +39,14 @@ class UnfinishedConversationReminder(
 
     /**
      * [createdAfter] 와 [createdBefore] 사이에 만들어진 방 중 아직 미종료인 것들의 주인에게 알린다.
-     * 스케줄 진입점과 분리해 둔 것은 테스트가 기준 시각을 직접 주기 위해서다([com.nexters.gamss.card.service.DailyAutoCardScheduler]
-     * 와 같은 이유).
+     *
+     * 발송 실패를 삼키지 않는다 — [CardCreatedNotifier] 와 다른 점이다. 그쪽은 배치 루프 한가운데서
+     * 불려서 예외가 올라가면 멀쩡히 만들어진 카드가 실패로 집계되지만, 여기는 이 실행의 꼭대기라
+     * 예외가 나가도 그 회차가 끝날 뿐이다. 감싸면 오히려 [MemberPushNotifier] 의 트랜잭션 가드까지
+     * 삼켜 실수가 묻힌다.
+     *
+     * 스케줄 진입점과 분리해 둔 것은 테스트가 기준 시각을 직접 주기 위해서다
+     * ([com.nexters.gamss.card.service.DailyAutoCardScheduler] 와 같은 이유).
      */
     fun runFor(
         createdAfter: Instant,

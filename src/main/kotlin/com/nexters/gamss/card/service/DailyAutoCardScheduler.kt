@@ -6,6 +6,7 @@ import com.nexters.gamss.conversation.service.ConversationService
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.member.service.MemberService
+import com.nexters.gamss.notification.service.CardCreatedNotifier
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
@@ -41,6 +42,7 @@ class DailyAutoCardScheduler(
     private val cardService: CardService,
     private val window: AutoCardWindow,
     private val meterRegistry: MeterRegistry,
+    private val cardCreatedNotifier: CardCreatedNotifier,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -48,6 +50,10 @@ class DailyAutoCardScheduler(
      * 배치 1회의 소요 시간. 이 배치는 새벽 5시에 하루 치 방을 한꺼번에 돌며 방마다 LLM 을 호출하므로,
      * 대상이 늘면 소요 시간이 선형으로 늘어난다 — 다음 스케줄까지 안 끝나는 상황을 미리 보기 위한 값이다.
      * 로그에도 결과가 남지만 로그는 임계치 알림을 걸 수 없다.
+     *
+     * **카드 생성 알림(FCM 왕복)도 이 시간에 포함된다.** 루프 안에서 보내기 때문이다 — 배치가 실제로
+     * 붙잡고 있는 시간이라는 뜻에서는 맞지만, 이 값이 늘었을 때 LLM 때문인지 발송 때문인지는 이
+     * 지표만으로 갈리지 않는다(대시보드 "5 · LLM 생성"이 이 값을 쓴다).
      */
     private val batchTimer =
         Timer
@@ -88,50 +94,114 @@ class DailyAutoCardScheduler(
         // 대상이 없어 일찍 끝나는 실행도 시간에 포함한다 — '배치가 아예 안 돌았다'와
         // '돌았는데 대상이 없었다'는 다른 상황이고, 타이머 count 가 그 둘을 갈라준다.
         val started = Timer.start(meterRegistry)
+        // 집계는 try 밖에 둔다. 루프가 중간에 끊겨도(알림의 트랜잭션 가드) 그때까지 처리한 방들은
+        // 이미 커밋돼 있어, 한 일이 지표에도 로그에도 안 남으면 아무 일 없던 날과 구별되지 않는다.
+        val tally = RunTally()
         try {
             val targetIds = conversationRepository.findAutoCardTargetIds(createdAfter, createdBefore)
             if (targetIds.isEmpty()) {
                 log.info("자동 카드 생성 배치: 대상 없음 (기준={}~{})", createdAfter, createdBefore)
                 return
             }
-            val counts = mutableMapOf<AutoCardOutcome, Int>()
-            targetIds.forEach { conversationId ->
-                val outcome = process(conversationId)
-                counts.merge(outcome, 1, Int::plus)
-            }
-            // 결과 종류가 늘어도 집계가 어긋나지 않도록 enum을 그대로 훑는다.
-            AutoCardOutcome.entries.forEach { outcome ->
-                counts[outcome]?.let { outcomeCounters.getValue(outcome).increment(it.toDouble()) }
-            }
-            log.info(
-                "자동 카드 생성 배치 완료: 대상={}, {}",
-                targetIds.size,
-                AutoCardOutcome.entries.joinToString(", ") { "${it.label}=${counts[it] ?: 0}" },
-            )
+            tally.targetCount = targetIds.size
+            targetIds.forEach { processAndNotify(it, tally) }
+            tally.completed = true
         } finally {
             started.stop(batchTimer)
+            record(tally)
         }
     }
 
-    private fun process(conversationId: Long): AutoCardOutcome =
+    /** 방 하나를 처리하고, 카드가 새로 생긴 회원이면 그 자리에서 알린다. 결과는 [tally] 에 쌓는다. */
+    private fun processAndNotify(
+        conversationId: Long,
+        tally: RunTally,
+    ) {
+        val result = process(conversationId)
+        tally.counts.merge(result.outcome, 1, Int::plus)
+        val cardCreatedMemberId = result.cardCreatedMemberId ?: return
+        // 한 사람이 방을 여러 개 만들면 카드도 여러 장 나온다. 그대로 두면 새벽에 푸시가 연달아
+        // 가므로, 이번 실행에서 이미 알린 회원은 건너뛴다(add 가 false 를 돌려준다).
+        if (!tally.notifiedMemberIds.add(cardCreatedMemberId)) {
+            return
+        }
+        val sent = cardCreatedNotifier.notifyCardCreated(cardCreatedMemberId)
+        tally.notifiedSuccessCount += sent.successCount
+        tally.notifiedFailureCount += sent.failureCount
+    }
+
+    /**
+     * 이번 실행의 결과를 지표와 로그에 남긴다. 대상이 없어 일찍 끝난 실행은 이미 자기 로그를
+     * 남겼으므로 건너뛴다.
+     *
+     * 루프가 끊긴 실행도 여기까지는 온다 — 그래서 요약 첫 줄에 완료/중단을 함께 적는다.
+     * "완료"로 못박으면 중단된 배치가 정상 종료로 읽힌다.
+     */
+    private fun record(tally: RunTally) {
+        if (tally.targetCount == 0) {
+            return
+        }
+        // 결과 종류가 늘어도 집계가 어긋나지 않도록 enum을 그대로 훑는다.
+        AutoCardOutcome.entries.forEach { outcome ->
+            tally.counts[outcome]?.let { outcomeCounters.getValue(outcome).increment(it.toDouble()) }
+        }
+        log.info(
+            "자동 카드 생성 배치 {}: 대상={}, {}",
+            if (tally.completed) "완료" else "중단",
+            tally.targetCount,
+            AutoCardOutcome.entries.joinToString(", ") { "${it.label}=${tally.counts[it] ?: 0}" },
+        )
+        // 시도한 회원 수만 남기면 '알림을 끈 사람들' 과 '정상 발송' 이 구분되지 않는다.
+        // 04:30 리마인더와 같은 형식으로 실제 건수까지 남긴다.
+        log.info(
+            "카드 생성 알림: 대상={}명, 성공={}건, 실패={}건",
+            tally.notifiedMemberIds.size,
+            tally.notifiedSuccessCount,
+            tally.notifiedFailureCount,
+        )
+    }
+
+    /**
+     * 배치 1회분의 집계. 루프가 끊겨도 살아남아야 하는 값들이라 한 곳에 모은다 — 낱개 지역변수로
+     * 흩어 두면 다음에 누가 집계 한 줄을 추가할 때 try 안쪽에 두기 쉽다.
+     */
+    private class RunTally {
+        val counts = mutableMapOf<AutoCardOutcome, Int>()
+        val notifiedMemberIds = mutableSetOf<Long>()
+        var notifiedSuccessCount = 0
+        var notifiedFailureCount = 0
+        var targetCount = 0
+        var completed = false
+    }
+
+    /**
+     * 방 하나를 처리한 결과. 카드를 실제로 만든 경우에만 [cardCreatedMemberId] 가 채워진다 —
+     * 그 자리에서 알림을 보낼 대상이다.
+     */
+    private data class ProcessResult(
+        val outcome: AutoCardOutcome,
+        val cardCreatedMemberId: Long? = null,
+    )
+
+    private fun process(conversationId: Long): ProcessResult =
         try {
             createCardForEndedConversation(conversationId)
         } catch (e: BusinessException) {
-            classify(e, conversationId)
+            ProcessResult(classify(e, conversationId))
         } catch (e: Exception) {
             // 방 하나의 예상 못 한 실패가 남은 방들을 막지 않게 한다. 카드 생성 상태는 실패 경로에서
             // 이미 FAILED로 되돌아가 있어 다음 실행이 다시 시도한다.
             log.error("자동 카드 생성 실패: conversationId={}", conversationId, e)
-            AutoCardOutcome.FAILED
+            ProcessResult(AutoCardOutcome.FAILED)
         }
 
-    private fun createCardForEndedConversation(conversationId: Long): AutoCardOutcome {
+    private fun createCardForEndedConversation(conversationId: Long): ProcessResult {
         val conversation =
-            conversationService.endForAutoBatch(conversationId) ?: return AutoCardOutcome.SKIPPED_DELETED
+            conversationService.endForAutoBatch(conversationId) ?: return ProcessResult(AutoCardOutcome.SKIPPED_DELETED)
         // 탈퇴는 회원 행만 익명화하고 대화방은 남긴다. 종료까지는 상태 정리라 무해하지만, 카드는
         // 탈퇴한 사람의 대화로 만드는 새 개인 데이터라 여기서 멈춘다.
         if (memberService.getById(conversation.memberId).isWithdrawn()) {
-            return AutoCardOutcome.WITHDRAWN_MEMBER
+            return ProcessResult(AutoCardOutcome.WITHDRAWN_MEMBER)
         }
         val summary = conversation.summary
         if (summary.isNullOrBlank()) {
@@ -139,10 +209,10 @@ class DailyAutoCardScheduler(
             // 대상에서 빠지게 한다. 그러지 않으면 결론이 같은 방을 매일 밤 다시 집는다.
             markCardGenerationSkipped(conversationId)
             log.info("요약이 없어 카드 생성을 건너뛴다(종료는 완료): conversationId={}", conversationId)
-            return AutoCardOutcome.NO_SUMMARY
+            return ProcessResult(AutoCardOutcome.NO_SUMMARY)
         }
         cardService.createCard(conversation.memberId, conversationId, emotion = null, summary = summary)
-        return AutoCardOutcome.CREATED
+        return ProcessResult(AutoCardOutcome.CREATED, cardCreatedMemberId = conversation.memberId)
     }
 
     /**
