@@ -137,6 +137,32 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Set up Node 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: landing/package-lock.json
+
+      - name: Build landing
+        # 랜딩은 정적 익스포트라 서버에서 돌 것이 없다. 여기서 out/ 을 만들어 nginx 가
+        # 그대로 내려줄 디렉터리에 합친다.
+        working-directory: landing
+        run: |
+          npm ci
+          npm run build
+
+      - name: Stage landing into nginx www
+        run: |
+          set -e
+          # out/ 을 www 에 덮어쓴다. 검증 파일은 out/ 에 없으므로 그대로 남는다.
+          cp -a landing/out/. deploy/nginx/www/
+          # 딥링크 검증 파일이 살아 있는지 확인한다. 여기서 안 잡으면 배포는 초록불로 끝나고
+          # 링크만 조용히 죽는다 — 한 번 실패한 검증은 OS 가 한동안 다시 물어보지 않는다.
+          test -f deploy/nginx/www/.well-known/assetlinks.json
+          test -f deploy/nginx/www/.well-known/apple-app-site-association
+          test -f deploy/nginx/www/index.html
+
       - name: Create .env
         # compose가 참조하는 시크릿만 채운다. IMAGE_TAG는 서버의 기존 값(롤백 기준)을
         # 보존해야 하므로 여기서 넣지 않고 배포 스크립트가 갱신한다.
