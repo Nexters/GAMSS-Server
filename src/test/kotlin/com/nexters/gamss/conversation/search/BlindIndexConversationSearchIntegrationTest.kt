@@ -70,6 +70,28 @@ class BlindIndexConversationSearchIntegrationTest {
     }
 
     @Test
+    fun `저장한 뒤 제목을 바꾸면 새 제목으로 검색되고 옛 제목으로는 검색되지 않는다`() {
+        // 제목은 [Conversation.rename] 으로 여러 번 바뀌므로 인덱스도 함께 갱신돼야 한다
+        // ([com.nexters.gamss.conversation.domain.ConversationSearchIndexListener] 의 @PreUpdate).
+        // 갱신이 빠지면 제목만 바뀌고 인덱스는 옛 제목으로 남아, 저장은 됐는데 검색만 조용히 어긋난다.
+        val conversation =
+            conversationRepository.save(
+                Conversation(memberId = 1L).apply { rename(ConversationTitle("행복한 하루")) },
+            )
+
+        val saved = conversationRepository.findById(conversation.id).orElseThrow()
+        saved.rename(ConversationTitle("우울한 저녁"))
+        conversationRepository.saveAndFlush(saved)
+
+        val byNewTitle = searchPort.search(memberId = 1L, keyword = "우울", pageable = PageRequest.of(0, 20))
+        assertEquals(1, byNewTitle.totalElements.toInt())
+        assertEquals("우울한 저녁", byNewTitle.content.first().title)
+
+        val byOldTitle = searchPort.search(memberId = 1L, keyword = "행복", pageable = PageRequest.of(0, 20))
+        assertEquals(0, byOldTitle.totalElements.toInt())
+    }
+
+    @Test
     fun `삭제된 대화방은 제목이 맞아도 검색되지 않는다`() {
         conversationRepository.save(
             Conversation(memberId = 1L).apply {
