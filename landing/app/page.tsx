@@ -243,12 +243,12 @@ export default function Home() {
           }
           body={
             <>
-              간직할 것과 버릴 것은 직접 고릅니다.
-              <br className="hidden sm:block" /> 파쇄기에 넣으면 그날의 기록이 정말로 사라집니다.
+              따로 지우지 않아도 됩니다.
+              <br className="hidden sm:block" /> 정해진 시간이 되면 그날의 기록이 알아서 파쇄됩니다.
             </>
           }
           screen="/screens/shred.webp"
-          screenAlt="기록을 파쇄해 비우는 화면"
+          screenAlt="정해진 시간에 기록이 파쇄되는 화면"
         />
 
         {/* ─────────────────── 마지막 CTA ─────────────────── */}
