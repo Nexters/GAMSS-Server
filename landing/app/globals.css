@@ -1,0 +1,117 @@
+@import "tailwindcss";
+
+/* Pretendard 를 self-host 한다. 인앱 브라우저에서 열리는 페이지라 외부 요청을 두지 않는다.
+   dynamic subset 이라 브라우저가 실제로 쓰인 글자 조각만 내려받는다.
+   woff2 는 public/fonts 에 있고, 이 파일은 그 경로를 가리키는 @font-face 선언 묶음이다. */
+@import "./fonts.css";
+
+@theme {
+  /* 먹색 계열(Light/Gray). 로고 잉크가 gray-950 과 같은 값이다. */
+  --color-ink: #1e1f22;
+  --color-ink-soft: #303136;
+  --color-muted: #5a5d68;
+  --color-line: #dce0e6;
+
+  /* 앱 화면에서 뽑은 종이색. 순백이 아니라 살짝 식은 회백색이다. */
+  --color-paper: #f4f5f8;
+  --color-paper-deep: #eceef3;
+
+  /* 감정 6색. 캐릭터·카드·테이프에만 쓴다 — 글자에는 쓰지 않는다(대비 부족). */
+  --color-joy: #f1b235;
+  --color-sadness: #376ce8;
+  --color-anger: #e34225;
+  --color-anxiety: #36af48;
+  --color-grumpy: #a425e3;
+  --color-quirky: #36b8bd;
+
+  --font-sans:
+    "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+    system-ui, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  word-break: keep-all; /* 한글이 어절 중간에서 끊기지 않게 한다 */
+}
+
+
+/**
+ * 손으로 그린 종이. 테두리와 **바탕을 함께** 흔든다.
+ *
+ * 테두리만 흔들면 바탕은 직각 사각형으로 남아, 흔들린 선 밖으로 모서리가 삐져나온다.
+ * 그래서 이 한 겹이 배경과 테두리를 함께 갖고 통째로 변위된다.
+ * 글자는 이 위에 필터 없이 얹는다(글자까지 흔들면 읽기 어려워진다).
+ *
+ * 필터를 못 받는 환경에서는 그냥 곧은 테두리가 보인다. 깨지지 않는다.
+ */
+.sketch {
+  position: absolute;
+  inset: 0;
+  border: 2.5px solid var(--color-ink);
+  border-radius: 14px;
+  background-color: var(--sketch-fill, #ffffff);
+  filter: url("#wobble");
+  pointer-events: none;
+}
+
+/** 마스킹테이프. 반투명한 색지를 비스듬히 붙인 모양이라 가장자리를 살짝 흐린다. */
+.tape {
+  position: absolute;
+  width: 74px;
+  height: 26px;
+  opacity: 0.55;
+  mix-blend-mode: multiply;
+  filter: url("#wobble-soft");
+}
+
+/** 형광펜 자국. 앱이 사용자 이름을 강조할 때 쓰는 장치를 헤드라인에 가져온다. */
+.marker {
+  background: linear-gradient(
+    to bottom,
+    transparent 56%,
+    color-mix(in srgb, var(--color-joy) 55%, transparent) 56%,
+    color-mix(in srgb, var(--color-joy) 55%, transparent) 94%,
+    transparent 94%
+  );
+  padding: 0 0.1em;
+}
+
+/**
+ * 로고를 원하는 색으로 칠한다. SVG 에 잉크색이 박혀 있어 `img` 로는 색을 바꿀 수 없으므로
+ * 마스크로 모양만 가져오고 색은 `currentColor` 로 준다 — 카드마다 로고가 감정 색이 된다.
+ */
+.logo-mask {
+  background-color: currentColor;
+  mask-image: url("/logo/logo.svg");
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: contain;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/* 헤더가 화면에 붙어 있으므로 앵커로 이동할 때 그 높이만큼 미리 띄운다. */
+[id] {
+  scroll-margin-top: 76px;
+}
+
+/* 키보드로 다니는 사람에게 지금 어디에 있는지 보여준다. 마우스 클릭에는 나타나지 않는다. */
+:focus-visible {
+  outline: 3px solid var(--color-joy);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-joy) 45%, transparent);
+}

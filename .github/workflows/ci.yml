@@ -93,3 +93,30 @@ jobs:
 
       - name: Typecheck & Build
         run: npm run build
+
+  # 랜딩(landing) 타입체크·빌드. admin-web 과 같은 이유로 항상 돌린다 —
+  # 여기서 안 걸리면 타입 에러가 배포 단계에서야 드러나고, 그때는 다른 사람의 변경까지 함께 막힌다.
+  #
+  # 산출물(out/)은 여기서 만들지 않는다. 배포 잡이 서버에서 다시 빌드하는 것이 아니라,
+  # image.yml 이 같은 커맨드로 만들어 nginx 디렉토리에 넣는다.
+  landing:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: landing
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: landing/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck & Build
+        run: npm run build
