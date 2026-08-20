@@ -16,6 +16,8 @@ import com.nexters.gamss.llm.error.CardGenerationFailedException
 import com.nexters.gamss.llm.generation.CardMessageGenerator
 import com.nexters.gamss.llm.generation.CardMessageOutput
 import com.nexters.gamss.llm.generation.EmotionExtractor
+import com.nexters.gamss.llm.generation.LlmRetryExecutor
+import com.nexters.gamss.llm.generation.TokenUsageAccumulator
 import com.nexters.gamss.monitoring.domain.GenerationType
 import com.nexters.gamss.monitoring.service.GenerationLogRecorder
 import com.nexters.gamss.tokenlimit.service.DailyTokenLimitService
@@ -43,6 +45,7 @@ class CardService(
     private val generationLogRecorder: GenerationLogRecorder,
     private val dailyTokenLimitService: DailyTokenLimitService,
     private val cardPersistenceService: CardPersistenceService,
+    private val llmRetryExecutor: LlmRetryExecutor = LlmRetryExecutor(),
 ) {
     /**
      * 종료된 대화에 대해 그날 있었던 일 한 줄을 생성해 카드를 저장한다. 외부 LLM 호출이 DB
@@ -85,7 +88,12 @@ class CardService(
         return persistCard(card, conversationId, summary)
     }
 
-    /** 카드를 저장하고, 저장 시점에 드러난 CAS 경합을 원인에 맞는 [BusinessException]으로 변환한다. */
+    /**
+     * 카드를 저장하고, 저장 시점에 드러난 CAS 경합을 원인에 맞는 [BusinessException]으로 변환한다.
+     *
+     * 저장이 어떤 이유로 실패하든 상태는 되돌린다 — 이 자리는 CAS 선점 **이후**라 PENDING 으로
+     * 두면 재시도가 재시도 가능한 503 이 아니라 409(생성 중)로 막힌다([loadUserMessages]와 같은 계약).
+     */
     private fun persistCard(
         card: Card,
         conversationId: Long,
@@ -111,6 +119,11 @@ class CardService(
                 throw BusinessException(ErrorCode.CONVERSATION_ALREADY_DELETED).apply { initCause(e) }
             }
             throw BusinessException(ErrorCode.CARD_GENERATION_FAILED, e.message).apply { initCause(e) }
+        } catch (e: Exception) {
+            // 커넥션 끊김·쿼리 타임아웃처럼 위 둘이 아닌 실패다. 상태만 되돌리고 예외는 변환하지 않고
+            // 그대로 올린다 — 예상 밖 결함을 업무 오류로 위장하지 않는다([failureHandler]와 같은 계약).
+            markCardGenerationStatus(conversationId, CardGenerationStatus.FAILED)
+            throw e
         }
 
     /** 소유권·종료 상태·토큰 상한을 확인한 뒤 [CardGenerationStatus]를 CAS로 선점한다. */
@@ -152,6 +165,10 @@ class CardService(
      * 유저가 보낸 메시지들만 보고 LLM으로 대표 감정을 분류하고 생성 로그를 남긴다.
      * 실패 시 상태를 FAILED로 되돌린 뒤 예외로 변환한다([generateMessage]와 같은 계약) —
      * 클라이언트는 분류·한 줄 생성 어느 쪽이 실패했든 CARD_GENERATION_FAILED 하나로 재시도한다.
+     *
+     * 재시도 대상이 아닌 예외도 **상태 복구까지는 똑같이** 받는다([failureHandler]). 예외 자체는
+     * 변환하지 않고 그대로 올린다 — 예상 밖 결함을 업무 오류로 위장하지 않으려는 것이고,
+     * [com.nexters.gamss.conversation.service.CommentGenerationService]도 같은 계약이다.
      */
     private fun extractEmotion(
         memberId: Long,
@@ -160,38 +177,25 @@ class CardService(
     ): EmotionType {
         val input = loadUserMessages(conversationId, summary)
         val startedAt = System.currentTimeMillis()
+        val tokens = TokenUsageAccumulator()
+        val handleFailure = failureHandler(GenerationType.CARD_EMOTION, startedAt, memberId, conversationId, tokens)
         val output =
             try {
-                emotionExtractor.extract(input)
+                llmRetryExecutor.execute(
+                    retryOn = CardGenerationFailedException::class,
+                    maxAttempts = CARD_MAX_ATTEMPTS,
+                    onAttemptFailure = { _, e -> tokens.addFailed(e) },
+                    onNonRetryable = handleFailure,
+                    onExhausted = handleFailure,
+                ) { attempt ->
+                    emotionExtractor.extract(input).also {
+                        tokens.add(it)
+                        recordCard(GenerationType.CARD_EMOTION, true, attempt, startedAt, memberId, conversationId, tokens)
+                    }
+                }
             } catch (e: CardGenerationFailedException) {
-                generationLogRecorder.record(
-                    type = GenerationType.CARD_EMOTION,
-                    success = false,
-                    attemptCount = 1,
-                    latencyMs = System.currentTimeMillis() - startedAt,
-                    memberId = memberId,
-                    conversationId = conversationId,
-                    usedTokens = e.usedTokens,
-                    cachedTokens = e.cachedTokens,
-                    inputTokens = e.inputTokens,
-                    outputTokens = e.outputTokens,
-                    failureReason = (e.cause ?: e).javaClass.simpleName,
-                )
-                markCardGenerationStatus(conversationId, CardGenerationStatus.FAILED)
                 throw BusinessException(ErrorCode.CARD_GENERATION_FAILED, e.message).apply { initCause(e) }
             }
-        generationLogRecorder.record(
-            type = GenerationType.CARD_EMOTION,
-            success = true,
-            attemptCount = 1,
-            latencyMs = System.currentTimeMillis() - startedAt,
-            memberId = memberId,
-            conversationId = conversationId,
-            usedTokens = output.usedTokens,
-            cachedTokens = output.cachedTokens,
-            inputTokens = output.inputTokens,
-            outputTokens = output.outputTokens,
-        )
         return output.emotion
     }
 
@@ -217,7 +221,10 @@ class CardService(
         return userMessages.ifEmpty { listOf(summary) }
     }
 
-    /** LLM으로 카드 한 줄을 생성하고 생성 로그를 남긴다. 실패 시 상태를 FAILED로 되돌린 뒤 예외로 변환한다. */
+    /**
+     * LLM으로 카드 한 줄을 생성하고 생성 로그를 남긴다. 실패 시 상태를 FAILED로 되돌린 뒤 예외로
+     * 변환한다. 재시도 대상이 아닌 예외의 취급은 [extractEmotion]과 같다.
+     */
     private fun generateMessage(
         emotion: EmotionType,
         summary: String,
@@ -225,39 +232,80 @@ class CardService(
         conversationId: Long,
     ): CardMessageOutput {
         val startedAt = System.currentTimeMillis()
-        val output =
-            try {
-                cardMessageGenerator.generate(emotion, summary)
-            } catch (e: CardGenerationFailedException) {
-                generationLogRecorder.record(
-                    type = GenerationType.CARD,
-                    success = false,
-                    attemptCount = 1,
-                    latencyMs = System.currentTimeMillis() - startedAt,
-                    memberId = memberId,
-                    conversationId = conversationId,
-                    usedTokens = e.usedTokens,
-                    cachedTokens = e.cachedTokens,
-                    inputTokens = e.inputTokens,
-                    outputTokens = e.outputTokens,
-                    failureReason = (e.cause ?: e).javaClass.simpleName,
-                )
-                markCardGenerationStatus(conversationId, CardGenerationStatus.FAILED)
-                throw BusinessException(ErrorCode.CARD_GENERATION_FAILED, e.message).apply { initCause(e) }
+        val tokens = TokenUsageAccumulator()
+        val handleFailure = failureHandler(GenerationType.CARD, startedAt, memberId, conversationId, tokens)
+        return try {
+            llmRetryExecutor.execute(
+                retryOn = CardGenerationFailedException::class,
+                maxAttempts = CARD_MAX_ATTEMPTS,
+                onAttemptFailure = { _, e -> tokens.addFailed(e) },
+                onNonRetryable = handleFailure,
+                onExhausted = handleFailure,
+            ) { attempt ->
+                cardMessageGenerator.generate(emotion, summary).also {
+                    tokens.add(it)
+                    recordCard(GenerationType.CARD, true, attempt, startedAt, memberId, conversationId, tokens)
+                }
             }
+        } catch (e: CardGenerationFailedException) {
+            throw BusinessException(ErrorCode.CARD_GENERATION_FAILED, e.message).apply { initCause(e) }
+        }
+    }
+
+    /**
+     * 생성이 실패로 끝날 때 할 일을 한 덩어리로 묶는다 — **실패 로그 한 줄과 FAILED 로의 상태 복구**다.
+     * `record` 가 아니라 `handle` 인 것은 기록만 하지 않기 때문이다 —
+     * [com.nexters.gamss.conversation.service.CommentGenerationService] 의 같은 자리는 로그만 남기고
+     * 상태 복구는 바깥 catch 가 맡는다.
+     *
+     * 재시도를 모두 소진했을 때(`onExhausted`)와 재시도 대상이 아닌 예외로 중단할 때
+     * (`onNonRetryable`)에 남길 것이 같아 한 자리에서 만든다. 두 콜백 중 하나만 넘기면 나머지 경로가
+     * 조용히 빠지는데, 그러면 **실패가 집계되지 않고 상태가 PENDING으로 남아** 사용자의 재시도가
+     * 재시도 가능한 503이 아니라 409(생성 중)로 막힌다 — 정리 스케줄러가 타임아웃시킬 때까지다.
+     */
+    private fun failureHandler(
+        type: GenerationType,
+        startedAt: Long,
+        memberId: Long,
+        conversationId: Long,
+        tokens: TokenUsageAccumulator,
+    ): (Int, Throwable) -> Unit =
+        { attempt, error ->
+            recordCard(type, false, attempt, startedAt, memberId, conversationId, tokens, error)
+            markCardGenerationStatus(conversationId, CardGenerationStatus.FAILED)
+        }
+
+    /**
+     * 카드 경로의 생성 로그 한 줄. 감정 분류·한 줄 생성이 [type]만 다르고 나머지가 같아 한 곳에 모은다.
+     * 성공·실패 모두 [tokens]에 **그때까지 누적된 합계**를 싣는다 — 파싱에 실패한 시도도 호출은 됐으니
+     * 과금되기 때문에, 마지막 한 시도만 기록하면 비용이 과소 집계된다.
+     *
+     * [error]는 [Throwable]로 받는다. 재시도 대상인 [CardGenerationFailedException]뿐 아니라 재시도
+     * 대상이 아닌 예외로 중단될 때도 같은 자리에 원인을 남겨야 실패 집계가 새지 않기 때문이다.
+     */
+    private fun recordCard(
+        type: GenerationType,
+        success: Boolean,
+        attempt: Int,
+        startedAt: Long,
+        memberId: Long,
+        conversationId: Long,
+        tokens: TokenUsageAccumulator,
+        error: Throwable? = null,
+    ) {
         generationLogRecorder.record(
-            type = GenerationType.CARD,
-            success = true,
-            attemptCount = 1,
+            type = type,
+            success = success,
+            attemptCount = attempt,
             latencyMs = System.currentTimeMillis() - startedAt,
             memberId = memberId,
             conversationId = conversationId,
-            usedTokens = output.usedTokens,
-            cachedTokens = output.cachedTokens,
-            inputTokens = output.inputTokens,
-            outputTokens = output.outputTokens,
+            usedTokens = tokens.used,
+            cachedTokens = tokens.cached,
+            inputTokens = tokens.input,
+            outputTokens = tokens.output,
+            failureReason = error?.let { (it.cause ?: it).javaClass.simpleName },
         )
-        return output
     }
 
     private fun markCardGenerationStatus(
@@ -316,11 +364,39 @@ class CardService(
         memberId: Long,
         yearMonth: YearMonth,
     ): List<Card> {
+        val (start, end) = monthRange(yearMonth)
+        return cardRepository.findAllByMemberIdAndConversationCreatedAtInRange(memberId, start, end)
+    }
+
+    /**
+     * 월(KST) 전체에서 [emotion] 카드만 최신순으로 조회한다(감정 탭에서 한 달치 몰아보기).
+     *
+     * 캘린더 조회([getCardsByMonth])와 같은 월 경계를 쓰되 카드 내용까지 돌려준다 — 캘린더로 날짜만
+     * 받아 [getCardsByDate] 를 날짜마다 다시 부르는 N+1 호출을 없애려고 만든 조회다.
+     *
+     * 페이지네이션이 없다. 한 달·한 감정이면 사용자가 그 달에 만든 채팅방 수를 넘지 못해 페이징의
+     * 이득보다 복잡도가 크다 — 한 사람이 한 달에 만드는 카드 수가 크게 늘면 이 전제가 깨진다.
+     */
+    @Transactional(readOnly = true)
+    fun getCardsByMonthAndEmotion(
+        memberId: Long,
+        yearMonth: YearMonth,
+        emotion: EmotionType,
+    ): List<Card> {
+        val (start, end) = monthRange(yearMonth)
+        return cardRepository.findAllByMemberIdAndEmotionAndConversationCreatedAtInRange(memberId, emotion, start, end)
+    }
+
+    /**
+     * 월의 KST 자정~자정 경계 `[start, end)`.
+     *
+     * 월별 조회 둘이 같은 경계를 보도록 한 곳에 둔다 — 각자 계산하면 한쪽만 고쳤을 때 캘린더에는
+     * 있는 카드가 감정 탭에서는 빠지는 식으로 갈라진다.
+     */
+    private fun monthRange(yearMonth: YearMonth): Pair<Instant, Instant> {
         val firstDay = yearMonth.atDay(1)
         val nextMonthFirstDay = yearMonth.plusMonths(1).atDay(1)
-        val start = firstDay.atStartOfDay(ZONE).toInstant()
-        val end = nextMonthFirstDay.atStartOfDay(ZONE).toInstant()
-        return cardRepository.findAllByMemberIdAndConversationCreatedAtInRange(memberId, start, end)
+        return firstDay.atStartOfDay(ZONE).toInstant() to nextMonthFirstDay.atStartOfDay(ZONE).toInstant()
     }
 
     /**
@@ -428,6 +504,11 @@ class CardService(
     }
 
     companion object {
+        /**
+         * 카드 경로는 아직 재시도하지 않는다. 한 요청이 감정 분류·한 줄 생성으로 LLM을 두 번 순차
+         * 호출하는 구간이라, 시도 횟수를 늘리려면 nginx `proxy_read_timeout`까지 다시 계산해야 한다(#162).
+         */
+        private const val CARD_MAX_ATTEMPTS = 1
         private val ZONE = ZoneId.of("Asia/Seoul")
         private val log = LoggerFactory.getLogger(CardService::class.java)
     }

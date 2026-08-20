@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.gamss.android",
+      "sha256_cert_fingerprints": [
+        "05:6E:C9:BC:A7:EC:4F:82:12:76:2E:DE:06:47:69:00:AB:8D:8B:F2:40:9D:D1:39:C9:11:6D:FC:AC:49:EF:3E"
+      ]
+    }
+  }
+]

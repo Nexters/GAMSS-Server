@@ -10,6 +10,8 @@ import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.member.domain.Member
 import com.nexters.gamss.member.service.MemberService
+import com.nexters.gamss.notification.service.CardCreatedNotifier
+import com.nexters.gamss.notification.service.PushInTransactionException
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.mockk.every
 import io.mockk.mockk
@@ -21,6 +23,7 @@ import java.time.ZoneId
 import java.time.ZonedDateTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class DailyAutoCardSchedulerTest {
@@ -28,19 +31,100 @@ class DailyAutoCardSchedulerTest {
     private val conversationService = mockk<ConversationService>()
     private val memberService = mockk<MemberService> { every { getById(any()) } returns Member() }
     private val cardService = mockk<CardService>()
-    private val properties = CardProperties(autoCardStartDate = START_DATE)
+    private val cardCreatedNotifier = mockk<CardCreatedNotifier>(relaxed = true)
+    private val window = AutoCardWindow(CardProperties(autoCardStartDate = START_DATE))
+    private val meterRegistry = SimpleMeterRegistry()
     private val scheduler =
         DailyAutoCardScheduler(
             conversationRepository,
             conversationService,
             memberService,
             cardService,
-            properties,
-            SimpleMeterRegistry(),
+            window,
+            meterRegistry,
+            cardCreatedNotifier,
         )
 
     private val createdAfter: Instant = Instant.parse("2026-08-19T15:00:00Z")
     private val createdBefore: Instant = Instant.parse("2026-08-25T15:00:00Z")
+
+    @Test
+    fun `카드를 만든 회원에게 알림을 보낸다`() {
+        stubTargets(10L)
+        every { conversationService.endForAutoBatch(10L) } returns conversation()
+        every { cardService.createCard(any(), any(), any(), any()) } returns mockk<Card>()
+
+        scheduler.runFor(createdAfter, createdBefore)
+
+        verify(exactly = 1) { cardCreatedNotifier.notifyCardCreated(MEMBER_ID) }
+    }
+
+    /**
+     * 한 사람이 방을 여러 개 만들면 카드도 여러 장 나온다. 그대로 두면 새벽에 푸시가 연달아 간다.
+     */
+    @Test
+    fun `한 회원이 카드를 여러 장 받아도 알림은 한 번만 간다`() {
+        stubTargets(10L, 20L, 30L)
+        every { conversationService.endForAutoBatch(any()) } returns conversation()
+        every { cardService.createCard(any(), any(), any(), any()) } returns mockk<Card>()
+
+        scheduler.runFor(createdAfter, createdBefore)
+
+        verify(exactly = 1) { cardCreatedNotifier.notifyCardCreated(MEMBER_ID) }
+    }
+
+    @Test
+    fun `회원이 다르면 각각 알린다`() {
+        stubTargets(10L, 20L)
+        every { conversationService.endForAutoBatch(10L) } returns conversation(memberId = MEMBER_ID)
+        every { conversationService.endForAutoBatch(20L) } returns conversation(memberId = OTHER_MEMBER_ID)
+        every { cardService.createCard(any(), any(), any(), any()) } returns mockk<Card>()
+
+        scheduler.runFor(createdAfter, createdBefore)
+
+        verify(exactly = 1) { cardCreatedNotifier.notifyCardCreated(MEMBER_ID) }
+        verify(exactly = 1) { cardCreatedNotifier.notifyCardCreated(OTHER_MEMBER_ID) }
+    }
+
+    /**
+     * 가드 예외는 삼키지 않고 배치를 중단시킨다 — 그 상태로 계속 돌면 DB 커넥션을 붙잡은 채 LLM 을
+     * 수백 번 부르기 때문이다. 루프의 다른 줄은 전부 예외를 삼키고 있어서, 나중에 여기도 감싸는 것이
+     * 개선처럼 보일 수 있다. 그러면 이 대가가 조용히 사라진다.
+     */
+    @Test
+    fun `알림이 트랜잭션 가드에 걸리면 배치를 중단한다`() {
+        stubTargets(10L, 20L, 30L)
+        every { conversationService.endForAutoBatch(any()) } returns conversation()
+        every { cardService.createCard(any(), any(), any(), any()) } returns mockk<Card>()
+        every { cardCreatedNotifier.notifyCardCreated(any()) } throws PushInTransactionException("트랜잭션 안")
+
+        assertFailsWith<PushInTransactionException> { scheduler.runFor(createdAfter, createdBefore) }
+
+        // 첫 카드에서 멈추므로 뒤쪽 방은 손대지 않는다.
+        verify(exactly = 1) { cardService.createCard(any(), any(), any(), any()) }
+        // 멈추기 전에 만든 카드는 이미 커밋됐다. 지표가 0 이면 아무 일 없던 날과 구별되지 않는다.
+        assertEquals(1.0, outcomeCount(AutoCardOutcome.CREATED))
+    }
+
+    /** 카드를 못 만든 결과들이다. 이 사람들에게 "카드가 도착했어요"가 가면 안 된다. */
+    @Test
+    fun `카드를 만들지 못하면 알림을 보내지 않는다`() {
+        stubTargets(10L, 20L)
+        stubMarkSkipped()
+        every { conversationService.endForAutoBatch(10L) } returns conversation(summary = null)
+        every { conversationService.endForAutoBatch(20L) } returns null
+
+        scheduler.runFor(createdAfter, createdBefore)
+
+        verify(exactly = 0) { cardCreatedNotifier.notifyCardCreated(any()) }
+    }
+
+    private fun outcomeCount(outcome: AutoCardOutcome): Double =
+        meterRegistry
+            .get("gamss.autocard.outcome")
+            .tag("outcome", outcome.name)
+            .counter()
+            .count()
 
     private fun conversation(
         memberId: Long = MEMBER_ID,
@@ -140,6 +224,10 @@ class DailyAutoCardSchedulerTest {
         // 탈퇴 후에는 그 사람의 대화로 새 카드를 만들지 않는다.
         verify(exactly = 0) { cardService.createCard(MEMBER_ID, any(), any(), any()) }
         verify(exactly = 1) { cardService.createCard(OTHER_MEMBER_ID, 20L, any(), any()) }
+        // 카드가 없으니 "카드가 도착했어요" 도 가면 안 된다. 탈퇴하면 기기 토큰도 지워지지만
+        // (DeviceTokenCleaner) 방어선이 그것 하나뿐인 상태로 두지 않는다.
+        verify(exactly = 0) { cardCreatedNotifier.notifyCardCreated(MEMBER_ID) }
+        verify(exactly = 1) { cardCreatedNotifier.notifyCardCreated(OTHER_MEMBER_ID) }
     }
 
     @Test

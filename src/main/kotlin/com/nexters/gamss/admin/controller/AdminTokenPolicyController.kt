@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController
     name = "백오피스 토큰 상한",
     description =
         "유저별 일일 토큰 상한 정책 조회·수정 (ROLE_ADMIN 필요). 값·리셋 시각은 여기서 조절하며 다음 생성부터 반영된다. " +
-            "상한의 실제 적용은 prod 환경에서만 이뤄지고(dev는 미적용), 초과 시 메시지 저장은 유지된 채 생성만 차단된다.",
+            "상한의 실제 적용은 배포 환경(dev/prod)에서만 이뤄지고(local은 미적용), 초과 시 메시지 저장은 유지된 채 생성만 차단된다.",
 )
 @RestController
 @RequestMapping("/api/admin/token-policy")

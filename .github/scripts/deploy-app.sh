@@ -85,6 +85,19 @@ restart_promtail() {
 }
 
 reload_nginx() {
+  # 컨테이너가 살아 있는지 먼저 본다. compose 파일이 바뀌면(볼륨·포트 추가 등) up -d 는 nginx 를
+  # 재생성하는데, 그때 conf 가 잘못돼 기동에 실패하면 아래 nginx -t 도 함께 실패한다. 그 실패를
+  # 문법 오류로 뭉뚱그리면 "이전 설정 유지"라는 사실이 아닌 로그가 남는다 - 유지될 이전 설정이
+  # 없고 nginx 는 떠 있지도 않다.
+  #
+  # 그대로 두면 443 이 통째로 내려간 채 배포가 초록불로 끝난다. 헬스체크는 앱(127.0.0.1:8080)만
+  # 보고, 롤백은 IMAGE_TAG 만 되돌려 conf 를 고치지도 못한다. 그래서 여기서 실패로 끝낸다.
+  if [[ -z "$(docker compose ps --status running -q nginx)" ]]; then
+    log "nginx 가 실행 중이 아니다 - 443(api·admin 포함)이 내려가 있다. 즉시 확인 필요"
+    docker compose logs --tail=30 nginx || true
+    exit 1
+  fi
+
   # conf는 볼륨 마운트라 up -d 만으로는 갱신이 반영되지 않는다.
   # 문법 검사를 통과할 때만 무중단 reload 한다.
   if ! docker compose exec -T nginx nginx -t >/dev/null 2>&1; then

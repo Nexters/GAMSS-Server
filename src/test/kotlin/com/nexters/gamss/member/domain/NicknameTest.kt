@@ -63,8 +63,9 @@ class NicknameTest {
 
     @Test
     fun `조합 이모지 최대 길이도 허용한다 - 컬럼 방어는 코드 포인트 기준`() {
-        // 👨‍👩‍👧‍👦 1자 = 코드 포인트 7개·UTF-16 유닛 11개. 20자면 코드 포인트 140개로 varchar(200)에
-        // 들어가야 한다. UTF-16 유닛(220개)으로 방어하면 이 정상 입력이 거부된다.
+        // 👨‍👩‍👧‍👦 1자 = 코드 포인트 7개·UTF-16 유닛 11개. 10자면 코드 포인트 70개로 varchar(200)에
+        // 들어가야 한다. UTF-16 유닛(110개)으로 방어해도 지금은 통과하지만, 코드 포인트가 컬럼이
+        // 세는 단위라는 점은 그대로다.
         val family = "👨‍👩‍👧‍👦".repeat(Nickname.MAX_LENGTH)
 
         assertEquals(family, Nickname(family).value)
@@ -110,6 +111,13 @@ class NicknameTest {
     fun `tryCreate는 규칙에 어긋나면 null을 돌려준다`() {
         assertNull(Nickname.tryCreate("가"))
         assertNull(Nickname.tryCreate("시발이"))
+    }
+
+    @Test
+    fun `tryCreate는 최대 길이를 넘는 소셜 이름을 미설정으로 둔다`() {
+        // 소셜 계정 이름이 상한을 넘으면 잘라 쓰지 않고 닉네임을 비워 둔다 - 사용자가 고르지 않은
+        // 이름이 생기지 않게. 상한이 10자로 내려가면서(#174) 이 경로를 타는 이름이 늘어난다.
+        assertNull(Nickname.tryCreate("가".repeat(Nickname.MAX_LENGTH + 1)))
     }
 
     @Test

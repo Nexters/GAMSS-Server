@@ -48,14 +48,15 @@ class MemberController(
     @Operation(
         summary = "닉네임 수정",
         description =
-            "닉네임을 변경합니다. 앞뒤 공백은 제거되며 2~20자·금칙어 규칙을 따릅니다.\n\n" +
+            "닉네임을 변경합니다. 앞뒤 공백은 제거되며 ${Nickname.MIN_LENGTH}~${Nickname.MAX_LENGTH}자·" +
+                "금칙어 규칙을 따릅니다.\n\n" +
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +
                 "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·무효) |\n" +
                 "| EXPIRED_TOKEN | 401 | accessToken 만료 — 재발급 후 재시도 |\n" +
                 "| INVALID_INPUT | 400 | nickname 누락 |\n" +
-                "| INVALID_NICKNAME | 400 | 길이(2~20자) 위반 또는 금칙어 포함 |",
+                "| INVALID_NICKNAME | 400 | 길이(${Nickname.MIN_LENGTH}~${Nickname.MAX_LENGTH}자) 위반 또는 금칙어 포함 |",
     )
     @PatchMapping("/me/nickname")
     fun updateNickname(
@@ -93,7 +94,7 @@ class MemberController(
         summary = "내 오늘 토큰 사용량 조회",
         description =
             "로그인한 회원 본인의 오늘(KST, 정책 리셋 시각 기준) 토큰 사용량과 일일 상한을 반환합니다. " +
-                "상한이 적용되지 않는 환경(dev 등)에서는 dailyLimit이 null(무제한)로 내려갑니다.\n\n" +
+                "상한이 적용되지 않는 환경(local 등)에서는 dailyLimit이 null(무제한)로 내려갑니다.\n\n" +
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +

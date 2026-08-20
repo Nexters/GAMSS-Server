@@ -75,11 +75,14 @@ class Nickname(
 
     companion object {
         const val MIN_LENGTH = 2
-        const val MAX_LENGTH = 20
+        const val MAX_LENGTH = 10
 
         /**
          * DB 컬럼 크기(코드 포인트 기준). 길이 검증은 그래핌 기준 [MAX_LENGTH]지만 varchar는
-         * 코드 포인트를 세므로, 그래핌당 여유(약 10 코드 포인트)를 둔 크기로 컬럼을 잡는다(V25).
+         * 코드 포인트를 세므로, 그래핌당 여유를 둔 크기로 컬럼을 잡는다(V25).
+         *
+         * [MAX_LENGTH]가 20에서 10으로 줄면서 여유는 그래핌당 20 코드 포인트가 됐다. 컬럼을
+         * 절반으로 줄이는 마이그레이션은 얻는 것이 없어 V25 크기를 그대로 둔다.
          */
         const val COLUMN_LENGTH = 200
 

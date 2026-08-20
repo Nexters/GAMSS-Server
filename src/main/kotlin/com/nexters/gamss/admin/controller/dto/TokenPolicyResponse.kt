@@ -4,7 +4,7 @@ import com.nexters.gamss.tokenlimit.domain.TokenPolicy
 import io.swagger.v3.oas.annotations.media.Schema
 import java.time.Instant
 
-/** 유저별 일일 토큰 상한 정책 응답. prod에서만 실제 적용되며, 값·리셋 시각은 백오피스에서 조절한다. */
+/** 유저별 일일 토큰 상한 정책 응답. 배포 환경(dev/prod)에서만 실제 적용되며, 값·리셋 시각은 백오피스에서 조절한다. */
 data class TokenPolicyResponse(
     @field:Schema(description = "유저 1명이 하루에 소비할 수 있는 총 토큰(used_tokens 합)", example = "100000")
     val dailyTokenLimit: Long,
