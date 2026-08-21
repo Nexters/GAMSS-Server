@@ -7,21 +7,30 @@ import type { Emotion } from "./emotions";
 const FRAME = {
   w: 900,
   h: 1840,
-  // 실측한 화면 구멍: x 48~851, y 59~1780
+  /*
+   * 실측한 화면 구멍: x 48~851, y 46~1793.
+   *
+   * 구멍이 둥근 사각형이라 **가장 넓은 지점에서 재야 한다** — 위아래는 모서리를 피해 x=300 에서,
+   * 좌우는 세로 한가운데에서 잰다. 모서리 근처에서 재면 실제보다 작게 나와 화면이 구멍을 못 덮고
+   * 위아래로 틈이 생긴다(한 번 그렇게 재서 13px 씩 모자랐다).
+   */
   left: 5.3333,
-  top: 3.2065,
+  top: 2.5,
   width: 89.3333,
-  height: 93.587,
+  height: 95.0,
 } as const;
 
 /**
- * 화면을 구멍보다 12px(프레임 원본 기준)만큼 크게 깔아 사방으로 조금씩 흘려보낸다.
+ * 화면을 구멍보다 8px(프레임 원본 기준)만큼 크게 깔아 사방으로 조금씩 흘려보낸다.
  *
- * 스크린샷마다 가장자리 색이 달라(밝은 앱 배경 · 어두운 모달) 구멍에 정확히 맞추면 반올림 오차만큼
- * 틈이 비쳐 위아래로 흰 줄이 생긴다. 넘친 부분은 프레임의 불투명한 베젤이 덮으므로 잘려 보이지 않는다.
+ * 구멍에 딱 맞추면 반올림 오차와 둥근 모서리 때문에 실낱같은 틈이 남는다. 밝은 화면에서는
+ * 배경색과 섞여 안 보이지만 **어두운 화면(카드 모달 등)에서는 흰 줄로 드러난다.**
+ *
+ * **키울 수 있는 여유는 베젤 두께까지다.** 실측 결과 좌우 베젤이 29px 뿐이라, 그보다 크게 주면
+ * 둥근 모서리 쪽부터 화면이 프레임 밖으로 삐져나온다. 남은 틈은 아래 검은 바탕이 메운다.
  */
-const BLEED_X = (12 / 900) * 100;
-const BLEED_Y = (12 / 1840) * 100;
+const BLEED_X = (8 / 900) * 100;
+const BLEED_Y = (8 / 1840) * 100;
 
 const SCREEN = {
   left: FRAME.left - BLEED_X,
@@ -159,7 +168,7 @@ export function SectionTitle({
 }) {
   return (
     <h2
-      className={`text-[26px] leading-[1.42] font-bold tracking-[-0.03em] sm:text-[36px] ${className}`}
+      className={`text-[26px] leading-[1.42] font-bold tracking-[-0.03em] text-balance sm:text-[36px] ${className}`}
     >
       {children}
     </h2>
@@ -215,14 +224,14 @@ export function CharacterCard({
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={`/characters/${emotion.key}.svg`}
-        alt={`${emotion.label} 캐릭터`}
+        alt={`${emotion.displayName} 캐릭터`}
         className="h-auto w-[86%]"
       />
       <p
         className="mt-3 text-[14px] font-bold sm:text-[15px]"
         style={{ color: emotion.color }}
       >
-        {emotion.label}이
+        {emotion.displayName}
       </p>
       <p className="mt-1.5 text-center text-[12px] leading-[1.6] whitespace-nowrap text-muted">
         {emotion.trait}
@@ -260,7 +269,8 @@ export function PhoneMockup({
         `object-cover` 가 한쪽으로 넘치는데, 자를 것이 없으면 그대로 프레임 밖으로 삐져나온다.
       */}
       <span
-        className="absolute overflow-hidden"
+        // 틈이 남더라도 베젤과 같은 검정이라 눈에 띄지 않는다.
+        className="absolute overflow-hidden bg-black"
         style={{
           left: `${SCREEN.left}%`,
           top: `${SCREEN.top}%`,
@@ -336,7 +346,7 @@ export function Scene({
             <TapeLabel text={label} color={labelColor} />
             <SectionTitle className="mt-5">{title}</SectionTitle>
             {body && (
-              <p className="mt-5 text-[15px] leading-[1.85] text-muted sm:text-[17px]">
+              <p className="mt-5 text-[15px] leading-[1.85] text-pretty text-muted sm:text-[17px]">
                 {body}
               </p>
             )}
@@ -390,7 +400,7 @@ export function EmotionCard({
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={`/characters/${emotion.key}.svg`}
-        alt={`${emotion.label} 캐릭터`}
+        alt={`${emotion.displayName} 캐릭터`}
         className={`w-auto ${compact ? "my-2 h-[46px]" : "my-4 h-[82px]"}`}
       />
 
@@ -404,8 +414,8 @@ export function EmotionCard({
         {emotion.phrase}
       </p>
       <p
-        className={`leading-[1.65] text-muted ${
-          compact ? "mt-1 min-h-[38px] text-[9px]" : "mt-2 min-h-[44px] text-[13px]"
+        className={`leading-[1.7] whitespace-pre-line text-muted ${
+          compact ? "mt-1.5 min-h-[34px] text-[9px]" : "mt-2 min-h-[46px] text-[13px]"
         }`}
       >
         {emotion.summary}
