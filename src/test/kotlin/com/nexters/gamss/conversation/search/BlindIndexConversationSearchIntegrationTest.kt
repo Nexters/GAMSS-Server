@@ -17,14 +17,15 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * MySQL 풀텍스트(ngram) 검색 통합 테스트.
+ * 블라인드 인덱스 검색 통합 테스트. 본문·제목이 암호문이 된 뒤에도 검색 계약이 그대로인지 고정한다
+ * — 여기 있는 기대값은 ngram 풀텍스트를 쓰던 시절과 같다.
  *
  * InnoDB 풀텍스트 인덱스는 커밋 시점에 갱신되므로, [com.nexters.gamss.support.RepositoryTest]의
  * @Transactional 롤백을 쓰지 않고 실제로 커밋한 뒤 검색한다(수동 정리).
  */
 @SpringBootTest
 @Import(TestcontainersConfig::class)
-class MysqlConversationSearchIntegrationTest {
+class BlindIndexConversationSearchIntegrationTest {
     @Autowired
     private lateinit var searchPort: ConversationSearchPort
 
@@ -66,6 +67,28 @@ class MysqlConversationSearchIntegrationTest {
         val row = result.content.first()
         assertEquals(conversation.id, row.conversationId)
         assertEquals("행복한 하루", row.title)
+    }
+
+    @Test
+    fun `저장한 뒤 제목을 바꾸면 새 제목으로 검색되고 옛 제목으로는 검색되지 않는다`() {
+        // 제목은 [Conversation.rename] 으로 여러 번 바뀌므로 인덱스도 함께 갱신돼야 한다
+        // ([com.nexters.gamss.conversation.domain.ConversationSearchIndexListener] 의 @PreUpdate).
+        // 갱신이 빠지면 제목만 바뀌고 인덱스는 옛 제목으로 남아, 저장은 됐는데 검색만 조용히 어긋난다.
+        val conversation =
+            conversationRepository.save(
+                Conversation(memberId = 1L).apply { rename(ConversationTitle("행복한 하루")) },
+            )
+
+        val saved = conversationRepository.findById(conversation.id).orElseThrow()
+        saved.rename(ConversationTitle("우울한 저녁"))
+        conversationRepository.saveAndFlush(saved)
+
+        val byNewTitle = searchPort.search(memberId = 1L, keyword = "우울", pageable = PageRequest.of(0, 20))
+        assertEquals(1, byNewTitle.totalElements.toInt())
+        assertEquals("우울한 저녁", byNewTitle.content.first().title)
+
+        val byOldTitle = searchPort.search(memberId = 1L, keyword = "행복", pageable = PageRequest.of(0, 20))
+        assertEquals(0, byOldTitle.totalElements.toInt())
     }
 
     @Test

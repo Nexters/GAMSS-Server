@@ -1,9 +1,12 @@
 package com.nexters.gamss.conversation.domain
 
 import com.nexters.gamss.emotion.domain.EmotionType
+import com.nexters.gamss.global.crypto.BlindIndexer
+import com.nexters.gamss.global.crypto.EncryptedStringConverter
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import jakarta.persistence.Column
+import jakarta.persistence.Convert
 import jakarta.persistence.Embedded
 import jakarta.persistence.Entity
 import jakarta.persistence.EntityListeners
@@ -24,7 +27,7 @@ import java.time.Instant
  */
 @Entity
 @Table(name = "conversations")
-@EntityListeners(AuditingEntityListener::class)
+@EntityListeners(AuditingEntityListener::class, ConversationSearchIndexListener::class)
 class Conversation(
     @Column(name = "member_id", nullable = false)
     val memberId: Long,
@@ -36,6 +39,14 @@ class Conversation(
 
     @Embedded
     var title: ConversationTitle? = null
+        protected set
+
+    /**
+     * 제목의 검색용 블라인드 인덱스. 제목도 암호문으로 저장되므로 검색은 이 컬럼에 건다
+     * ([com.nexters.gamss.global.crypto.BlindIndexer]). 제목이 없으면 null 이다.
+     */
+    @Column(name = "title_index", columnDefinition = "TEXT")
+    var titleIndex: String? = null
         protected set
 
     /**
@@ -60,7 +71,11 @@ class Conversation(
      * ([com.nexters.gamss.conversation.repository.ConversationRepository.updateSummary] — 엔티티를
      * 로드하지 않는 경로라 벌크 쿼리를 쓴다). 종료된 방의 요약은 다른 대화방 댓글 생성 시 과거
      * 맥락으로 참고하고, 자동 종료 배치는 카드 요약으로 쓴다.
+     *
+     * DB에는 암호문으로 저장된다([com.nexters.gamss.global.crypto.EncryptedStringConverter]) —
+     * 대화를 통째로 압축한 값이라 이것만 새도 그날 무슨 이야기를 했는지가 드러난다.
      */
+    @Convert(converter = EncryptedStringConverter::class)
     @Column(name = "summary", columnDefinition = "TEXT")
     var summary: String? = null
         protected set
@@ -117,6 +132,11 @@ class Conversation(
     fun rename(title: ConversationTitle) {
         ensureNotDeleted()
         this.title = title
+    }
+
+    /** 저장 직전에 [ConversationSearchIndexListener]가 호출한다. 직접 부를 일은 없다. */
+    fun applySearchIndex(indexer: BlindIndexer) {
+        titleIndex = title?.value?.let(indexer::toIndexValue)
     }
 
     /** 종료된 채팅방에는 사용자 메시지를 추가할 수 없다. */

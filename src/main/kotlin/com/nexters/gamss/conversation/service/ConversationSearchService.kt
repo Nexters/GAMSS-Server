@@ -33,7 +33,8 @@ class ConversationSearchService(
     }
 
     companion object {
-        // ngram 파서 기본 토큰 크기(2)보다 짧으면 검색이 무의미하므로 최소 2자를 요구한다.
+        // 검색어를 bigram 으로 쪼개 맞추므로([com.nexters.gamss.global.crypto.BlindIndexer]) 1자로는
+        // 토큰이 하나도 안 나온다. 옛 ngram 풀텍스트도 토큰 크기가 2였어서 이 값은 그대로다.
         private const val MIN_KEYWORD_LENGTH = 2
     }
 }

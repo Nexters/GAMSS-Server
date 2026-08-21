@@ -1,8 +1,10 @@
 package com.nexters.gamss.conversation.domain
 
+import com.nexters.gamss.global.crypto.EncryptedStringConverter
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import jakarta.persistence.Column
+import jakarta.persistence.Convert
 import jakarta.persistence.Embeddable
 
 /**
@@ -13,7 +15,8 @@ import jakarta.persistence.Embeddable
 class ConversationTitle(
     value: String,
 ) {
-    @Column(name = "title", length = MAX_LENGTH)
+    @Convert(converter = EncryptedStringConverter::class)
+    @Column(name = "title", length = ENCRYPTED_LENGTH)
     val value: String = value.trim()
 
     init {
@@ -44,6 +47,13 @@ class ConversationTitle(
     override fun toString(): String = value
 
     companion object {
+        /** 평문 상한. 사용자에게 보이는 제약이라 검증 메시지도 이 값을 쓴다. */
         const val MAX_LENGTH = 100
+
+        /**
+         * 암호문을 담기 위한 컬럼 폭. 한글 [MAX_LENGTH]자를 암호화해 Base64 로 감싸면 약 450자가 된다.
+         * 여유를 둔 값이라 평문 상한과 혼동하지 말 것.
+         */
+        const val ENCRYPTED_LENGTH = 600
     }
 }

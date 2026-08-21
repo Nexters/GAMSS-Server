@@ -1,6 +1,6 @@
 # GAMSS dev 서버용 (app + MySQL, 한 서버)
 # 필요한 환경변수는 같은 디렉토리 .env 에 정의한다(CD가 GitHub Secrets로 생성):
-#   DB_PASSWORD, DB_ROOT_PASSWORD, JWT_SECRET, IMAGE_TAG
+#   DB_PASSWORD, DB_ROOT_PASSWORD, JWT_SECRET, DATA_ENCRYPTION_KEY, SEARCH_INDEX_KEY, IMAGE_TAG
 #
 # 튜닝은 8GB 서버(가비아 Standard 2vCore/8GB) 기준으로 배분했다:
 #   app 힙 3G + 비힙 약 0.8G / MySQL 약 2.5G / OS·Docker 약 0.5G → 여유 약 1.2G
@@ -31,6 +31,11 @@ services:
       DB_USERNAME: gamss
       DB_PASSWORD: ${DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
+      # 대화 텍스트 암호화 키와 검색 인덱스 키(각각 Base64 32바이트, 서로 다른 값).
+      # 둘 중 하나라도 없으면 앱이 뜨지 않는다 — 평문 저장으로 조용히 넘어가지 않기 위해서다.
+      # 잃어버리면 이 환경의 대화 데이터를 영구히 읽을 수 없으니 별도 보관할 것.
+      DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY}
+      SEARCH_INDEX_KEY: ${SEARCH_INDEX_KEY}
       # 감정 캐릭터 댓글·카드 생성용 Gemini API 키.
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       # 푸시 알림 발송용 Firebase 서비스 계정 키(JSON 을 base64 로 한 줄). 비어 있으면
@@ -168,14 +173,11 @@ services:
     image: mysql:8.0
     restart: unless-stopped
     logging: *default-logging
-    # ngram-token-size: 대화방 검색이 bigram 을 전제로 한다(V18 의 WITH PARSER ngram, 최소 2자 검증).
-    # 기본값도 2 지만 기동 파라미터라 환경에 좌우되고, 바뀌면 풀텍스트 인덱스를 재생성해야 해서 고정한다.
     # (command 는 YAML folded scalar 라 블록 안에 주석을 넣으면 인자로 섞여 들어간다)
     command: >
       --character-set-server=utf8mb4
       --collation-server=utf8mb4_unicode_ci
       --innodb-buffer-pool-size=2G
-      --ngram-token-size=2
     environment:
       MYSQL_DATABASE: gamss
       MYSQL_USER: gamss
