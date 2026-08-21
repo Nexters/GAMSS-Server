@@ -19,7 +19,6 @@ import com.nexters.gamss.llm.generation.EmotionExtractionOutput
 import com.nexters.gamss.llm.generation.EmotionExtractor
 import com.nexters.gamss.monitoring.domain.GenerationType
 import com.nexters.gamss.monitoring.service.GenerationLogRecorder
-import com.nexters.gamss.tokenlimit.service.DailyTokenLimitService
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -43,7 +42,6 @@ class CardServiceTest {
     private val cardMessageGenerator = mockk<CardMessageGenerator>()
     private val emotionExtractor = mockk<EmotionExtractor>()
     private val generationLogRecorder = mockk<GenerationLogRecorder>(relaxed = true)
-    private val dailyTokenLimitService = mockk<DailyTokenLimitService> { every { isWithinLimit(any()) } returns true }
     private val cardPersistenceService = mockk<CardPersistenceService>()
     private val service =
         CardService(
@@ -53,7 +51,6 @@ class CardServiceTest {
             cardMessageGenerator,
             emotionExtractor,
             generationLogRecorder,
-            dailyTokenLimitService,
             cardPersistenceService,
         )
 
@@ -121,19 +118,13 @@ class CardServiceTest {
         assertEquals(saved.captured.summary, saved.captured.message)
     }
 
-    @Test
-    fun `일일 토큰 상한을 넘으면 선점 없이 카드 생성을 막고 DAILY_TOKEN_LIMIT_EXCEEDED`() {
-        every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
-        every { dailyTokenLimitService.isWithinLimit(MEMBER_ID) } returns false
-
-        val exception = assertFailsWith<BusinessException> { service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약") }
-
-        assertEquals(ErrorCode.DAILY_TOKEN_LIMIT_EXCEEDED, exception.errorCode)
-        verify(exactly = 0) { cardMessageGenerator.generate(any(), any()) }
-        verify(
-            exactly = 0,
-        ) { conversationRepository.updateCardGenerationStatus(CONVERSATION_ID, CardGenerationStatus.PENDING, any(), any()) }
-    }
+    /*
+     * "일일 토큰을 다 쓴 회원도 카드를 만들 수 있다" 는 여기 없다.
+     * CardService 가 DailyTokenLimitService 를 받지 않아 한도 소진 상태를 주입할 곳이 없어,
+     * 이름만 그럴싸하고 아무것도 세팅하지 않는 테스트가 된다.
+     * 실제 검증은 generation_log 를 상한까지 채워서 하는 쪽에 있다 —
+     * com.nexters.gamss.card.controller.CardTokenLimitIntegrationTest
+     */
 
     @Test
     fun `존재하지 않는 대화면 CONVERSATION_NOT_FOUND`() {

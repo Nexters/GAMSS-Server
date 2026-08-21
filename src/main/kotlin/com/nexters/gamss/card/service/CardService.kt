@@ -20,7 +20,6 @@ import com.nexters.gamss.llm.generation.LlmRetryExecutor
 import com.nexters.gamss.llm.generation.TokenUsageAccumulator
 import com.nexters.gamss.monitoring.domain.GenerationType
 import com.nexters.gamss.monitoring.service.GenerationLogRecorder
-import com.nexters.gamss.tokenlimit.service.DailyTokenLimitService
 import org.slf4j.LoggerFactory
 import org.springframework.dao.DataAccessException
 import org.springframework.dao.DataIntegrityViolationException
@@ -43,7 +42,6 @@ class CardService(
     private val cardMessageGenerator: CardMessageGenerator,
     private val emotionExtractor: EmotionExtractor,
     private val generationLogRecorder: GenerationLogRecorder,
-    private val dailyTokenLimitService: DailyTokenLimitService,
     private val cardPersistenceService: CardPersistenceService,
     private val llmRetryExecutor: LlmRetryExecutor = LlmRetryExecutor(),
 ) {
@@ -126,7 +124,13 @@ class CardService(
             throw e
         }
 
-    /** 소유권·종료 상태·토큰 상한을 확인한 뒤 [CardGenerationStatus]를 CAS로 선점한다. */
+    /**
+     * 소유권·종료 상태를 확인한 뒤 [CardGenerationStatus]를 CAS로 선점한다.
+     *
+     * **일일 토큰 상한을 보지 않는다.** 카드는 대화 1개당 1장이라 반복 소비가 불가능하고,
+     * 여기서 막으면 대화는 이미 종료(커밋)된 뒤라 "종료됐는데 카드 없는" 방이 남는다 — 그 방은
+     * 미완성 목록에서도 카드 캘린더에서도 빠져 사용자가 재시도할 방법조차 없다.
+     */
     private fun claimForGeneration(
         conversationId: Long,
         memberId: Long,
@@ -138,10 +142,6 @@ class CardService(
         if (conversation.status != ConversationStatus.ENDED) {
             throw BusinessException(ErrorCode.CONVERSATION_NOT_ENDED)
         }
-        if (!dailyTokenLimitService.isWithinLimit(memberId)) {
-            throw BusinessException(ErrorCode.DAILY_TOKEN_LIMIT_EXCEEDED)
-        }
-
         val claimed =
             conversationRepository.updateCardGenerationStatus(
                 conversationId,

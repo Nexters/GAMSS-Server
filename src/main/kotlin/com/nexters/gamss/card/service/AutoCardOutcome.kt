@@ -24,6 +24,5 @@ internal enum class AutoCardOutcome(
     /** 카드 한 줄을 만들 근거가 없어 종료만 했다. 프론트가 요약을 한 번도 보내지 않은 방이다. */
     NO_SUMMARY("요약 없음"),
 
-    TOKEN_LIMIT("토큰 상한"),
     FAILED("실패"),
 }

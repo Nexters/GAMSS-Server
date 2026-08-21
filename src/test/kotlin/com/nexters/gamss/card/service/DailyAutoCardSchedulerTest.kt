@@ -248,20 +248,6 @@ class DailyAutoCardSchedulerTest {
     }
 
     @Test
-    fun `토큰 상한에 걸린 대화방은 건너뛰고 나머지를 처리한다`() {
-        stubTargets(10L, 20L)
-        every { conversationService.endForAutoBatch(any()) } returns conversation()
-        every {
-            cardService.createCard(any(), 10L, any(), any())
-        } throws BusinessException(ErrorCode.DAILY_TOKEN_LIMIT_EXCEEDED)
-        every { cardService.createCard(any(), 20L, any(), any()) } returns mockk<Card>()
-
-        scheduler.runFor(createdAfter, createdBefore)
-
-        verify(exactly = 1) { cardService.createCard(any(), 20L, any(), any()) }
-    }
-
-    @Test
     fun `대상이 없으면 아무것도 하지 않는다`() {
         stubTargets()
 
