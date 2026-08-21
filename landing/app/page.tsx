@@ -74,15 +74,15 @@ export default function Home() {
           <div className="flex flex-col items-center gap-16 lg:flex-row lg:gap-10">
             {/* 글 */}
             <div className="relative z-10 text-center lg:flex-1 lg:text-left">
-              <h1 className="text-[34px] leading-[1.3] font-bold tracking-[-0.035em] sm:text-[46px] lg:text-[52px]">
+              <h1 className="text-[34px] leading-[1.3] font-bold tracking-[-0.035em] text-balance sm:text-[46px] lg:text-[52px]">
                 <span className="marker">속닥속닥,</span>
                 <br />
                 너만 알고 있어
               </h1>
 
-              <p className="mt-6 text-[15px] leading-[1.85] text-muted sm:text-[18px]">
+              <p className="mt-6 text-[15px] leading-[1.85] text-pretty text-muted sm:text-[18px]">
                 누구한테 말 못 할 말이 있다면 감쓰에 버려보세요.
-                <br className="hidden sm:block" /> 여섯 감정 친구들이 대신 반응해줍니다.
+                <br /> 여섯 감정 친구들이 대신 반응해줍니다.
               </p>
 
               <div className="mt-9 flex justify-center lg:justify-start">
@@ -122,13 +122,13 @@ export default function Home() {
           title={
             <>
               누구한테 말 못 할 말이 있다면
-              <br className="hidden sm:block" /> 이야기해보세요
+              <br /> 이야기해보세요
             </>
           }
           body={
             <>
               정리하지 않아도, 예쁘게 쓰지 않아도 됩니다.
-              <br className="hidden sm:block" /> 버리듯 던져두면 그걸로 끝입니다.
+              <br /> 버리듯 던져두면 그걸로 끝입니다.
             </>
           }
           screen="/screens/home.webp"
@@ -139,9 +139,9 @@ export default function Home() {
         <section className="mx-auto w-full max-w-[1060px] px-6 py-16 text-center sm:py-[104px]">
           <SectionTitle>
             6가지의 감정 친구들과
-            <br className="hidden sm:block" /> 이야기를 이어가보세요
+            <br /> 이야기를 이어가보세요
           </SectionTitle>
-          <p className="mt-5 text-[15px] leading-[1.85] text-muted sm:text-[17px]">
+          <p className="mt-5 text-[15px] leading-[1.85] text-pretty text-muted sm:text-[17px]">
             그날 대화의 분위기에 따라 다른 친구가 찾아옵니다.
           </p>
 
@@ -161,13 +161,13 @@ export default function Home() {
           title={
             <>
               혼잣말이 아니라
-              <br className="hidden sm:block" /> 대화가 됩니다
+              <br /> 대화가 됩니다
             </>
           }
           body={
             <>
               던져둔 말에 친구들이 저마다 다르게 반응합니다.
-              <br className="hidden sm:block" /> 답장을 달면 대화가 이어지고,
+              <br /> 답장을 달면 대화가 이어지고,
               친구들끼리 서로 받아치기도 합니다.
             </>
           }
@@ -183,13 +183,13 @@ export default function Home() {
           title={
             <>
               오늘의 감정을
-              <br className="hidden sm:block" /> 확인해 보세요
+              <br /> 확인해 보세요
             </>
           }
           body={
             <>
               대화를 마치면 그날의 감정이 한 장의 카드로 남습니다.
-              <br className="hidden sm:block" /> 감정마다 얼굴도 색도 말투도 다릅니다.
+              <br /> 감정마다 얼굴도 색도 말투도 다릅니다.
             </>
           }
           screen="/screens/card.webp"
@@ -218,13 +218,13 @@ export default function Home() {
           title={
             <>
               지금까지의 감정을
-              <br className="hidden sm:block" /> 확인해 보세요
+              <br /> 확인해 보세요
             </>
           }
           body={
             <>
               버린 이야기는 감정별 쓰레기통에 담깁니다.
-              <br className="hidden sm:block" /> 다시 보고 싶은 쓰레기통만 열어보면 됩니다.
+              <br /> 다시 보고 싶은 쓰레기통만 열어보면 됩니다.
             </>
           }
           screen="/screens/storage.webp"
@@ -238,13 +238,13 @@ export default function Home() {
           title={
             <>
               안좋았던 감정을
-              <br className="hidden sm:block" /> 비워보세요
+              <br /> 비워보세요
             </>
           }
           body={
             <>
               따로 지우지 않아도 됩니다.
-              <br className="hidden sm:block" /> 정해진 시간이 되면 그날의 기록이 알아서 파쇄됩니다.
+              <br /> 정해진 시간이 되면 그날의 기록이 알아서 파쇄됩니다.
             </>
           }
           screen="/screens/shred.webp"

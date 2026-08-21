@@ -159,7 +159,7 @@ export function SectionTitle({
 }) {
   return (
     <h2
-      className={`text-[26px] leading-[1.42] font-bold tracking-[-0.03em] sm:text-[36px] ${className}`}
+      className={`text-[26px] leading-[1.42] font-bold tracking-[-0.03em] text-balance sm:text-[36px] ${className}`}
     >
       {children}
     </h2>
@@ -336,7 +336,7 @@ export function Scene({
             <TapeLabel text={label} color={labelColor} />
             <SectionTitle className="mt-5">{title}</SectionTitle>
             {body && (
-              <p className="mt-5 text-[15px] leading-[1.85] text-muted sm:text-[17px]">
+              <p className="mt-5 text-[15px] leading-[1.85] text-pretty text-muted sm:text-[17px]">
                 {body}
               </p>
             )}
@@ -404,8 +404,8 @@ export function EmotionCard({
         {emotion.phrase}
       </p>
       <p
-        className={`leading-[1.65] text-muted ${
-          compact ? "mt-1 min-h-[38px] text-[9px]" : "mt-2 min-h-[44px] text-[13px]"
+        className={`leading-[1.7] whitespace-pre-line text-muted ${
+          compact ? "mt-1.5 min-h-[34px] text-[9px]" : "mt-2 min-h-[46px] text-[13px]"
         }`}
       >
         {emotion.summary}
