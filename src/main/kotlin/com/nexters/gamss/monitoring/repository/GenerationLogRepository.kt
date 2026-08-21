@@ -23,10 +23,20 @@ interface GenerationLogRepository : JpaRepository<GenerationLog, Long> {
     /**
      * [memberId]가 [since] 이후 소비한 총 토큰(used_tokens 합). 유저별 일일 상한 판정에 쓴다.
      * 성공·실패 무관하게 실제 과금된 토큰을 모두 세며(실패도 호출됐으면 과금됨), 값이 없는 행은 SUM에서 제외된다.
+     *
+     * **카드(CARD·CARD_EMOTION)는 세지 않는다.** 카드는 대화 1개당 1장이고 `cards.conversation_id`
+     * UNIQUE 로 묶여 있어 사용자가 반복해서 비용을 늘릴 수 없다 — 눌러서 계속 만들 수 있는 댓글·답글과
+     * 같은 통을 쓸 이유가 없다. 합산에서만 빼므로 `member_id` 는 그대로 기록되고, 백오피스의 대화방별
+     * 사용량·비용 집계에는 영향이 없다.
+     *
+     * PREVIEW 는 `member_id` 를 남기지 않아 애초에 이 조건에 걸리지 않는다.
      */
     @Query(
         "select coalesce(sum(g.usedTokens), 0) from GenerationLog g " +
-            "where g.memberId = :memberId and g.createdAt >= :since",
+            "where g.memberId = :memberId and g.createdAt >= :since " +
+            "and g.generationType not in (" +
+            "com.nexters.gamss.monitoring.domain.GenerationType.CARD, " +
+            "com.nexters.gamss.monitoring.domain.GenerationType.CARD_EMOTION)",
     )
     fun sumUsedTokensByMemberSince(
         @Param("memberId") memberId: Long,
