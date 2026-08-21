@@ -239,11 +239,6 @@ class DailyAutoCardScheduler(
                 AutoCardOutcome.ALREADY_HANDLED
             }
 
-            // 한도를 배치가 대신 소진시키지 않는다. 사용자가 직접 만들 여지를 남긴다.
-            ErrorCode.DAILY_TOKEN_LIMIT_EXCEEDED -> {
-                AutoCardOutcome.TOKEN_LIMIT
-            }
-
             else -> {
                 log.warn("자동 카드 생성 실패: conversationId={}, errorCode={}", conversationId, e.errorCode, e)
                 AutoCardOutcome.FAILED
