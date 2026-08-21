@@ -162,5 +162,15 @@ class CardShareControllerIntegrationTest {
             }
     }
 
+    /**
+     * 공개는 **GET 만**이다. 메서드를 지정하지 않으면 이 경로의 모든 메서드가 열려, 나중에 같은
+     * 경로에 쓰기 API 를 붙이는 순간 인증 없이 뚫린다. 지금은 핸들러가 없어 시큐리티가 먼저
+     * 401 로 끊는다.
+     */
+    @Test
+    fun `공유 경로의 GET 이 아닌 요청은 인증을 요구한다`() {
+        mockMvc.post("/api/cards/shared/Zm9vYmFyYmF6cXV4MTIzNA").andExpect { status { isUnauthorized() } }
+    }
+
     private fun bearerFor(member: Member): String = "Bearer ${jwtIssuer.issueAccessToken(member.id)}"
 }

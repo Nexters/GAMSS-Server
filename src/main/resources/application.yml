@@ -63,8 +63,13 @@ card:
 
   share:
     # 카드 공유 링크의 앞부분. 서버가 완성된 URL 을 내려주므로 앱이 도메인을 들고 있지 않아도 된다.
-    # gamss.kr 은 prod 만 가리키므로 dev 에서 발급한 링크도 prod 앱으로 열린다 — 링크는 어디서
-    # 발급했든 같은 곳을 봐야 공유가 성립한다.
+    #
+    # dev·prod 가 같은 값을 쓴다. 링크를 누르면 앱이 열리고, 앱은 **자기가 보는 서버**에 토큰을
+    # 물어보므로(GET /api/cards/shared/{token}) dev 빌드로 dev 에서 발급한 링크는 정상 동작한다.
+    #
+    # 다만 **앱이 없을 때의 웹 미리보기는 dev 에서 확인할 수 없다** — gamss.kr 은 prod 를 가리켜
+    # prod DB 에 없는 토큰이 되어 404 로 떨어진다. 그 화면은 prod 배포 후에 확인한다.
+    # dev 전용 호스트(dev.gamss.kr)를 두면 되지만 DNS·인증서·nginx 블록이 따로 필요해 미뤄둔다.
     base-url: https://gamss.kr/c
 
 fcm:
