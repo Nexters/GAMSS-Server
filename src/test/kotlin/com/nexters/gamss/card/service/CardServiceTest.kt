@@ -118,24 +118,13 @@ class CardServiceTest {
         assertEquals(saved.captured.summary, saved.captured.message)
     }
 
-    /**
-     * 카드 생성은 일일 토큰 한도를 보지 않는다. 여기서 막으면 대화는 이미 종료(커밋)된 뒤라
-     * "종료됐는데 카드 없는" 방이 남고, 그 방은 미완성 목록에서도 카드 캘린더에서도 빠져
-     * 사용자가 재시도할 방법조차 없다.
+    /*
+     * "일일 토큰을 다 쓴 회원도 카드를 만들 수 있다" 는 여기 없다.
+     * CardService 가 DailyTokenLimitService 를 받지 않아 한도 소진 상태를 주입할 곳이 없어,
+     * 이름만 그럴싸하고 아무것도 세팅하지 않는 테스트가 된다.
+     * 실제 검증은 generation_log 를 상한까지 채워서 하는 쪽에 있다 —
+     * com.nexters.gamss.card.controller.CardTokenLimitIntegrationTest
      */
-    @Test
-    fun `일일 토큰을 다 쓴 회원도 카드를 만들 수 있다`() {
-        val conversation = endedConversation()
-        every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(conversation)
-        stubClaimSuccess()
-        every { cardMessageGenerator.generate(any(), any()) } returns CardMessageOutput("대사", 10, 0)
-        every { cardPersistenceService.save(any(), any(), any()) } answers { firstArg() }
-
-        val card = service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약")
-
-        assertEquals(EmotionType.ANGER, card.emotion)
-        verify(exactly = 1) { cardMessageGenerator.generate(any(), any()) }
-    }
 
     @Test
     fun `존재하지 않는 대화면 CONVERSATION_NOT_FOUND`() {
