@@ -72,8 +72,8 @@ export default function Home() {
           </div>
 
           <div className="flex flex-col items-center gap-16 lg:flex-row lg:gap-10">
-            {/* 글 */}
-            <div className="relative z-10 text-center lg:flex-1 lg:text-left">
+            {/* 글 — 좁은 화면에서 폭을 채운다(장면과 같은 이유는 [Scene] 주석 참고). */}
+            <div className="relative z-10 w-full text-center lg:flex-1 lg:text-left">
               <h1 className="text-[34px] leading-[1.3] font-bold tracking-[-0.035em] text-balance sm:text-[46px] lg:text-[52px]">
                 <span className="marker">속닥속닥,</span>
                 <br />

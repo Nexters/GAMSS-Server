@@ -342,7 +342,15 @@ export function Scene({
             flip ? "lg:flex-row-reverse" : "lg:flex-row"
           }`}
         >
-          <div className="lg:flex-1">
+          {/*
+            좁은 화면에서 **폭을 반드시 채운다.** 세로로 쌓일 때 이 상자는 `items-center` 때문에
+            내용만큼만 넓어지는데, 그 폭은 섹션마다 가장 긴 줄의 길이라 장면마다 글이 시작하는
+            자리가 달라진다(390px 에서 24·37·52·67px 로 제각각이었다).
+
+            글도 가운데로 모은다 — 아래 폰이 가운데 놓이므로 글만 왼쪽에 붙으면 축이 어긋난다.
+            히어로가 쓰는 규칙과 같다(좁으면 가운데, `lg` 부터 좌우 배치라 왼쪽).
+          */}
+          <div className="w-full text-center lg:flex-1 lg:text-left">
             <TapeLabel text={label} color={labelColor} />
             <SectionTitle className="mt-5">{title}</SectionTitle>
             {body && (
