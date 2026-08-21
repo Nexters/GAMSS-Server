@@ -68,6 +68,11 @@ class SecurityConfig(
                 // 앞으로 추가되는 인증 API 도 기본은 '보호'가 되게 한다.
                 "/api/auth/login",
                 "/api/auth/reissue",
+                // 공유 링크로 열리는 카드 조회. 토큰(추측 불가능한 22자)을 아는 것이 곧 볼 권한이라
+                // 인증하지 않는다. 링크를 받은 사람은 앱도 계정도 없을 수 있다.
+                // 발급(POST /api/cards/{cardId}/share)은 본인 카드만 되어야 하므로 공개하지 않는다 —
+                // 그래서 /api/cards/** 로 뭉뚱그리지 않고 조회 경로만 정확히 연다.
+                "/api/cards/shared/*",
                 // 관리자 로그인만 공개. /api/admin/** 의 나머지는 ROLE_ADMIN 을 요구한다.
                 "/api/admin/auth/login",
                 "/actuator/health",

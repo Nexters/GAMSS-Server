@@ -53,6 +53,26 @@ interface CardRepository : JpaRepository<Card, Long> {
     ): Optional<Card>
 
     /**
+     * 공유 링크로 여는 카드 한 장. **인증 없이 도달하는 유일한 카드 조회**다.
+     *
+     * 가시성 조건은 [findVisibleById] 와 같다 — 지운 카드와 삭제된 채팅방의 카드는 제외한다.
+     * 링크는 한 번 나가면 회수할 수 없으므로, 이 조건이 갈라지면 사용자가 지운 카드가 링크로는
+     * 계속 열린다. **[findVisibleById] 와 항상 함께 바뀌어야 한다.**
+     *
+     * 소유자를 보지 않는다 — 토큰을 아는 것이 곧 볼 권한이다. 그래서 응답에 소유자를 알 수 있는
+     * 것을 담지 않는다([com.nexters.gamss.card.controller.dto.SharedCardResponse]).
+     */
+    @Query(
+        "select c from Card c, Conversation cv " +
+            "where cv.id = c.conversationId and c.shareToken.value = :shareToken " +
+            "and cv.status <> :excludedStatus and c.deletedAt is null",
+    )
+    fun findVisibleByShareToken(
+        @Param("shareToken") shareToken: String,
+        @Param("excludedStatus") excludedStatus: ConversationStatus = ConversationStatus.DELETED,
+    ): Optional<Card>
+
+    /**
      * 카드 재생성 차단용. **삭제된 카드도 '존재'로 센다** — 카드 삭제는 되돌릴 수 없고
      * (conversation_id UNIQUE), 같은 대화방에 카드를 다시 만들 수 없어야 하기 때문이다.
      */
