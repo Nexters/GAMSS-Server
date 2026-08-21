@@ -215,14 +215,14 @@ export function CharacterCard({
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={`/characters/${emotion.key}.svg`}
-        alt={`${emotion.label} 캐릭터`}
+        alt={`${emotion.displayName} 캐릭터`}
         className="h-auto w-[86%]"
       />
       <p
         className="mt-3 text-[14px] font-bold sm:text-[15px]"
         style={{ color: emotion.color }}
       >
-        {emotion.label}이
+        {emotion.displayName}
       </p>
       <p className="mt-1.5 text-center text-[12px] leading-[1.6] whitespace-nowrap text-muted">
         {emotion.trait}
@@ -390,7 +390,7 @@ export function EmotionCard({
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={`/characters/${emotion.key}.svg`}
-        alt={`${emotion.label} 캐릭터`}
+        alt={`${emotion.displayName} 캐릭터`}
         className={`w-auto ${compact ? "my-2 h-[46px]" : "my-4 h-[82px]"}`}
       />
 
