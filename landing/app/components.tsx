@@ -347,10 +347,10 @@ export function Scene({
             내용만큼만 넓어지는데, 그 폭은 섹션마다 가장 긴 줄의 길이라 장면마다 글이 시작하는
             자리가 달라진다(390px 에서 24·37·52·67px 로 제각각이었다).
 
-            글도 가운데로 모은다 — 아래 폰이 가운데 놓이므로 글만 왼쪽에 붙으면 축이 어긋난다.
-            히어로가 쓰는 규칙과 같다(좁으면 가운데, `lg` 부터 좌우 배치라 왼쪽).
+            폭을 채우면 정렬이 곧 시작점이 된다 — 왼쪽 정렬이라 모든 장면의 글이 같은 24px 에서
+            시작한다. 폰은 그대로 가운데 둔다.
           */}
-          <div className="w-full text-center lg:flex-1 lg:text-left">
+          <div className="w-full lg:flex-1">
             <TapeLabel text={label} color={labelColor} />
             <SectionTitle className="mt-5">{title}</SectionTitle>
             {body && (
