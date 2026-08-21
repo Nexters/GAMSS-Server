@@ -376,12 +376,18 @@ export function EmotionCard({
   date,
   tilt,
   compact = false,
+  summary = emotion.summary,
 }: {
   emotion: Emotion;
   date: string;
   tilt: string;
   /** 장면 안에 곁들일 때 쓰는 작은 크기. 폰 옆에서 주인공을 가리지 않는다. */
   compact?: boolean;
+  /**
+   * 카드에 적을 한 줄. 기본은 랜딩용 예시([Emotion.summary])이고, 공유 링크로 연 카드는
+   * 서버가 준 실제 요약을 넘긴다.
+   */
+  summary?: string;
 }) {
   return (
     <Paper
@@ -418,7 +424,7 @@ export function EmotionCard({
           compact ? "mt-1.5 min-h-[34px] text-[9px]" : "mt-2 min-h-[46px] text-[13px]"
         }`}
       >
-        {emotion.summary}
+        {summary}
       </p>
 
       <div className="w-full border-t-2 border-dashed border-ink/60" />
