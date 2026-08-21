@@ -16,6 +16,15 @@ spring:
 jwt:
   secret: local-development-secret-change-me-to-a-long-random-value-0123456789
 
+encryption:
+  # 로컬 개발용 더미 키(Base64 32바이트). 실제 배포는 DATA_ENCRYPTION_KEY·SEARCH_INDEX_KEY
+  # 환경변수로 주입한다(jwt.secret 과 같은 방식).
+  #
+  # 바꾸지 말 것 — 키가 바뀌면 로컬 DB에 이미 저장된 대화를 복호화할 수 없어 조회가 실패한다.
+  # 두 키는 서로 달라야 하며, 같으면 부팅 단계에서 걸린다.
+  data-key: Z2Ftc3MtbG9jYWwtZGV2ZWxvcG1lbnQtZGF0YS1rZXk=
+  index-key: Z2Ftc3MtbG9jYWwtZGV2LXNlYXJjaC1pbmRleC1rZXk=
+
 admin:
   # 로컬 개발용 관리자 허용목록. 실제 배포는 ADMIN_EMAILS 환경변수로 주입한다.
   emails: mj04300017@gmail.com

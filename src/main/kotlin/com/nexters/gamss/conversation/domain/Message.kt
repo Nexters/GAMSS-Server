@@ -1,7 +1,10 @@
 package com.nexters.gamss.conversation.domain
 
 import com.nexters.gamss.emotion.domain.EmotionType
+import com.nexters.gamss.global.crypto.BlindIndexer
+import com.nexters.gamss.global.crypto.EncryptedStringConverter
 import jakarta.persistence.Column
+import jakarta.persistence.Convert
 import jakarta.persistence.Entity
 import jakarta.persistence.EntityListeners
 import jakarta.persistence.EnumType
@@ -23,7 +26,7 @@ import java.time.Instant
  */
 @Entity
 @Table(name = "messages")
-@EntityListeners(AuditingEntityListener::class)
+@EntityListeners(AuditingEntityListener::class, MessageSearchIndexListener::class)
 class Message(
     @Column(name = "conversation_id", nullable = false)
     val conversationId: Long,
@@ -33,7 +36,8 @@ class Message(
     @Enumerated(EnumType.STRING)
     @Column(name = "emotion_type", length = 20)
     val emotionType: EmotionType? = null,
-    @Column(name = "content", length = 500, nullable = false)
+    @Convert(converter = EncryptedStringConverter::class)
+    @Column(name = "content", length = ENCRYPTED_CONTENT_LENGTH, nullable = false)
     val content: String,
     @Column(name = "replies_to_message_id")
     val repliesToMessageId: Long? = null,
@@ -49,6 +53,13 @@ class Message(
         require((senderType == SenderType.CHARACTER) == (emotionType != null)) {
             "감정 캐릭터 메시지에만 emotionType을 지정할 수 있습니다."
         }
+        // 컬럼이 암호문 크기에 맞춰 넓어지면서 평문 상한이 사라졌다. 원래 VARCHAR(500)이 하던
+        // 안전망을 여기서 대신 지킨다 — 없으면 LLM 이 비정상적으로 긴 댓글을 뱉었을 때 그대로 들어간다.
+        // 코드 포인트로 센다. length 는 UTF-16 코드 유닛이라 이모지 하나를 두 글자로 세어,
+        // 이모지가 섞인 일기에서 상한이 사람이 보는 글자 수보다 일찍 걸린다.
+        require(content.codePointCount(0, content.length) <= MAX_CONTENT_LENGTH) {
+            "메시지는 ${MAX_CONTENT_LENGTH}자 이하여야 합니다."
+        }
     }
 
     @Id
@@ -59,4 +70,30 @@ class Message(
     @Column(name = "created_at", nullable = false, updatable = false)
     var createdAt: Instant = Instant.now()
         protected set
+
+    /**
+     * 검색용 블라인드 인덱스. [content]가 암호문으로 저장돼 그대로는 검색할 수 없으므로,
+     * 평문을 토큰열로 바꿔 여기에 담고 검색은 이 컬럼에 건다
+     * ([com.nexters.gamss.global.crypto.BlindIndexer]).
+     */
+    @Column(name = "content_index", columnDefinition = "TEXT")
+    var contentIndex: String? = null
+        protected set
+
+    /** 저장 직전에 [MessageSearchIndexListener]가 호출한다. 직접 부를 일은 없다. */
+    fun applySearchIndex(indexer: BlindIndexer) {
+        contentIndex = indexer.toIndexValue(content)
+    }
+
+    companion object {
+        /** 평문 상한. 사용자 메시지는 요청 단계에서 더 짧게(140자) 걸리고, 캐릭터 댓글이 이 값을 쓴다. */
+        const val MAX_CONTENT_LENGTH = 500
+
+        /**
+         * 암호문을 담기 위한 컬럼 폭. 한글 [MAX_CONTENT_LENGTH]자는 UTF-8 1,500바이트이고 IV·인증 태그가
+         * 붙어 Base64 로 감싸면 약 2,050자가 된다. 상한을 코드 포인트로 세므로 최악은 이모지 500개
+         * (2,000바이트)이고 그때가 약 2,710자다. 여유를 둔 값이라 평문 상한과 혼동하지 말 것.
+         */
+        const val ENCRYPTED_CONTENT_LENGTH = 3000
+    }
 }

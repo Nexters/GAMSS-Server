@@ -47,3 +47,6 @@ out/
 deploy/nginx/conf/.htpasswd
 # 모니터링 서버 .env(Grafana 비밀번호·Discord 웹훅). 서버에서 직접 채운다(.env.example 참고).
 deploy/monitor/.env
+
+### macOS ###
+.DS_Store

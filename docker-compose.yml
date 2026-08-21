@@ -3,8 +3,6 @@ services:
   mysql:
     image: mysql:8.0
     container_name: gamss-mysql
-    # 배포 환경과 같은 토큰 크기로 맞춘다 — 대화방 검색이 bigram 을 전제로 한다(V18).
-    command: --ngram-token-size=2
     ports:
       - "3306:3306"
     environment:

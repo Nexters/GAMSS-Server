@@ -239,8 +239,23 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
 
     /**
      * 같은 회원의 **종료된** 다른 채팅방 중 요약이 저장된 최근 [poolSize]개를 후보로 삼아, 그중 무작위로
-     * [pickCount]개를 골라 반환한다(댓글 생성 시 과거 맥락으로 참고 — 매번 언급하지 않도록 일부만 뽑음).
+     * [pickCount]개의 요약을 골라 반환한다(댓글 생성 시 과거 맥락으로 참고 — 매번 언급하지 않도록 일부만 뽑음).
      * 후보가 [pickCount]보다 적으면 있는 만큼만 반환한다. [excludeConversationId]는 현재 대화방(자기 자신) 제외용.
+     */
+    fun findRandomPastSummaries(
+        memberId: Long,
+        excludeConversationId: Long,
+        poolSize: Int,
+        pickCount: Int,
+    ): List<String> = findRandomPastConversations(memberId, excludeConversationId, poolSize, pickCount).mapNotNull { it.summary }
+
+    /**
+     * [findRandomPastSummaries]의 실제 조회. `rand()`와 중첩 서브쿼리는 JPQL로 옮길 수 없어 네이티브로 둔다.
+     *
+     * **요약 컬럼만 뽑지 않고 엔티티로 받는다.** 네이티브 쿼리로 스칼라를 뽑으면 [Conversation.summary]에
+     * 걸린 [com.nexters.gamss.global.crypto.EncryptedStringConverter]가 적용되지 않아 암호문이 그대로
+     * 나오고, 그게 LLM 프롬프트의 과거 맥락으로 실려 간다. 엔티티로 매핑하면 컨버터가 다시 걸리므로
+     * 복호화 지점이 컨버터 하나로 유지된다 — 새 조회를 추가할 때도 이 규칙을 지킬 것.
      *
      * 종료 여부를 status로 직접 거른다 — 요약이 카드 생성 시점에만 저장되던 때는 `summary is not null`이
      * 곧 "끝난 방"을 뜻했지만, 이제 진행 중에도 임시 요약이 저장되므로([Conversation.updateSummary])
@@ -248,15 +263,15 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
      */
     @Query(
         value =
-            "select recent.summary from (" +
-                "select summary from conversations " +
+            "select recent.* from (" +
+                "select * from conversations " +
                 "where member_id = :memberId and id <> :excludeConversationId " +
                 "and summary is not null and status = :endedStatus " +
                 "order by created_at desc, id desc limit :poolSize" +
                 ") recent order by rand() limit :pickCount",
         nativeQuery = true,
     )
-    fun findRandomPastSummaries(
+    fun findRandomPastConversations(
         @Param("memberId") memberId: Long,
         @Param("excludeConversationId") excludeConversationId: Long,
         @Param("poolSize") poolSize: Int,
@@ -265,5 +280,5 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
         // Hibernate가 문자열이 아닌 다른 방식으로 바인딩해 이 필터가 무력화된다(Testcontainers 테스트로 확인).
         // 그래서 String으로 받되 값의 출처는 ConversationStatus.ENDED로 고정한다.
         @Param("endedStatus") endedStatus: String = ConversationStatus.ENDED.name,
-    ): List<String>
+    ): List<Conversation>
 }
