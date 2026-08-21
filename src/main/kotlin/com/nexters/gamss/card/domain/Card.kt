@@ -6,6 +6,7 @@ import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import jakarta.persistence.Column
 import jakarta.persistence.Convert
+import jakarta.persistence.Embedded
 import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
 import jakarta.persistence.Enumerated
@@ -79,6 +80,14 @@ class Card(
     var deletedAt: Instant? = null
         protected set
 
+    /**
+     * 공유 링크(`gamss.kr/c/{토큰}`)가 가리키는 토큰. 공유 버튼을 누른 카드에만 붙으므로 기본은 null 이다
+     * — 모든 카드에 미리 발급하면 아직 아무에게도 주지 않은 링크가 쌓이고, 그중 하나만 새어도 열린다.
+     */
+    @Embedded
+    var shareToken: ShareToken? = null
+        protected set
+
     fun isOwnedBy(memberId: Long): Boolean = this.memberId == memberId
 
     fun isDeleted(): Boolean = deletedAt != null
@@ -92,5 +101,19 @@ class Card(
             throw BusinessException(ErrorCode.CARD_ALREADY_DELETED)
         }
         deletedAt = Instant.now()
+    }
+
+    /**
+     * 공유 토큰을 붙이고 그 토큰을 돌려준다. 이미 붙어 있으면 [token] 을 버리고 원래 것을 그대로 준다
+     * — 공유 버튼을 두 번 눌렀다고 링크가 바뀌면 먼저 보낸 링크가 죽는다.
+     *
+     * 삭제된 카드는 공유할 수 없다. 공유 조회는 삭제된 카드를 감추므로(열어도 404) 토큰만 발급되고
+     * 링크는 죽어 있는 상태가 된다.
+     */
+    fun share(token: ShareToken): ShareToken {
+        if (isDeleted()) {
+            throw BusinessException(ErrorCode.CARD_ALREADY_DELETED)
+        }
+        return shareToken ?: token.also { shareToken = it }
     }
 }

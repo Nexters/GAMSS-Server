@@ -4,7 +4,7 @@
     "details": [
       {
         "appID": "2KAH6SCW4S.com.nexters.gamss",
-        "paths": ["*"]
+        "paths": ["/c/*"]
       }
     ]
   }

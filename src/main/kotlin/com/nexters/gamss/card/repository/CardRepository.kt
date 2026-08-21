@@ -53,6 +53,46 @@ interface CardRepository : JpaRepository<Card, Long> {
     ): Optional<Card>
 
     /**
+     * 공유 링크로 여는 카드 한 장. **인증 없이 도달하는 유일한 카드 조회**다.
+     *
+     * 가시성 조건은 [findVisibleById] 와 같다 — 지운 카드와 삭제된 채팅방의 카드는 제외한다.
+     * 링크는 한 번 나가면 회수할 수 없으므로, 이 조건이 갈라지면 사용자가 지운 카드가 링크로는
+     * 계속 열린다. **[findVisibleById] 와 항상 함께 바뀌어야 한다.**
+     *
+     * 소유자를 보지 않는다 — 토큰을 아는 것이 곧 볼 권한이다. 그래서 응답에 소유자를 알 수 있는
+     * 것을 담지 않는다([com.nexters.gamss.card.controller.dto.SharedCardResponse]).
+     *
+     * 회원 상태도 보지 않는다. 탈퇴는 토큰 자체를 회수해서 끊는다([revokeShareTokensByMemberId]) —
+     * 여기에 회원을 조인해 가리면 링크는 죽었는데 토큰은 살아 있어, 재가입·상태 변경 같은 다른
+     * 변화가 죽은 링크를 되살릴 수 있다.
+     */
+    @Query(
+        "select c from Card c, Conversation cv " +
+            "where cv.id = c.conversationId and c.shareToken.value = :shareToken " +
+            "and cv.status <> :excludedStatus and c.deletedAt is null",
+    )
+    fun findVisibleByShareToken(
+        @Param("shareToken") shareToken: String,
+        @Param("excludedStatus") excludedStatus: ConversationStatus = ConversationStatus.DELETED,
+    ): Optional<Card>
+
+    /**
+     * 회원의 카드에 붙은 공유 토큰을 모두 회수하고 회수한 건수를 돌려준다(탈퇴 정리).
+     *
+     * 카드 자체는 남긴다 — 지우는 것은 탈퇴가 하던 일이 아니고, 여기서 끊어야 하는 것은
+     * **인증 없이 열리는 경로**뿐이다. 토큰이 NULL 이 되면 그 링크는 조회에서 곧바로 404 가 된다.
+     *
+     * 이미 회수된 행은 `share_token is not null` 조건이 건너뛴다. NULL 은 유니크 제약에서
+     * 서로 다른 값으로 취급되므로 몇 건을 되돌려도 `uk_cards_share_token` 에 걸리지 않는다.
+     */
+    @Transactional
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update Card c set c.shareToken.value = null where c.memberId = :memberId and c.shareToken.value is not null")
+    fun revokeShareTokensByMemberId(
+        @Param("memberId") memberId: Long,
+    ): Int
+
+    /**
      * 카드 재생성 차단용. **삭제된 카드도 '존재'로 센다** — 카드 삭제는 되돌릴 수 없고
      * (conversation_id UNIQUE), 같은 대화방에 카드를 다시 만들 수 없어야 하기 때문이다.
      */

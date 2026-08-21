@@ -1,4 +1,6 @@
 import type { Emotion } from "./emotions";
+// 스토어 주소는 site.ts 한 곳에만 둔다 — 여기에 복사해 두면 앱 ID 가 바뀔 때 한쪽만 고치게 된다.
+import { APP_STORE_URL, PLAY_STORE_URL } from "./site";
 
 /**
  * 기기 프레임(`public/phone-frame.webp`)에서 실측한 화면 구멍의 위치·크기.
@@ -38,10 +40,6 @@ const SCREEN = {
   width: FRAME.width + BLEED_X * 2,
   height: FRAME.height + BLEED_Y * 2,
 } as const;
-
-const APP_STORE = "https://apps.apple.com/app/id6799644564";
-const PLAY_STORE =
-  "https://play.google.com/store/apps/details?id=com.gamss.android";
 
 /**
  * 손그림 테두리·테이프가 쓰는 SVG 난수 필터. 페이지에 한 번만 심는다.
@@ -139,7 +137,7 @@ export function StoreButtons({ center = false }: { center?: boolean }) {
   return (
     <div className={`flex flex-wrap gap-5 ${center ? "justify-center" : ""}`}>
       <a
-        href={APP_STORE}
+        href={APP_STORE_URL}
         className="relative px-8 py-4 text-[15px] font-bold text-white transition-transform hover:-translate-y-1"
         style={{ "--sketch-fill": "#1e1f22" } as React.CSSProperties}
       >
@@ -148,7 +146,7 @@ export function StoreButtons({ center = false }: { center?: boolean }) {
         <span className="relative">App Store</span>
       </a>
       <a
-        href={PLAY_STORE}
+        href={PLAY_STORE_URL}
         className="relative px-8 py-4 text-[15px] font-bold transition-transform hover:-translate-y-1"
       >
         <span className="sketch" />
@@ -376,12 +374,18 @@ export function EmotionCard({
   date,
   tilt,
   compact = false,
+  summary = emotion.summary,
 }: {
   emotion: Emotion;
   date: string;
   tilt: string;
   /** 장면 안에 곁들일 때 쓰는 작은 크기. 폰 옆에서 주인공을 가리지 않는다. */
   compact?: boolean;
+  /**
+   * 카드에 적을 한 줄. 기본은 랜딩용 예시([Emotion.summary])이고, 공유 링크로 연 카드는
+   * 서버가 준 실제 요약을 넘긴다.
+   */
+  summary?: string;
 }) {
   return (
     <Paper
@@ -418,7 +422,7 @@ export function EmotionCard({
           compact ? "mt-1.5 min-h-[34px] text-[9px]" : "mt-2 min-h-[46px] text-[13px]"
         }`}
       >
-        {emotion.summary}
+        {summary}
       </p>
 
       <div className="w-full border-t-2 border-dashed border-ink/60" />
