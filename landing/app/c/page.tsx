@@ -3,28 +3,36 @@
 import { useEffect, useState } from "react";
 import { EmotionCard, SketchFilters, StoreButtons } from "../components";
 import { EMOTIONS, type Emotion } from "../emotions";
+import { APP_STORE_URL, PLAY_STORE_URL } from "../site";
 
 /**
  * 공유 링크(`gamss.kr/c/{토큰}`)로 도착하는 페이지.
  *
- * 앱이 깔려 있으면 OS 가 검증 파일을 보고 링크를 앱으로 넘기고, 앱은 토큰을 쓰지 않고 메인
- * 화면을 연다(`deploy/nginx/conf/gamss.conf` 의 AASA·assetlinks 참고). 즉 **공유된 카드를
- * 실제로 보여주는 곳은 지금 이 페이지뿐이다.**
+ * **카드를 보여주는 곳이 아니다.** 공유는 인스타 스토리에 카드 *이미지* 와 이 링크를 함께 올리는
+ * 방식이라, 링크를 누른 사람은 이미 카드를 봤다. 그래서 이 링크가 할 일은 하나뿐이다 —
+ * **앱으로 데려가는 것.**
  *
- * **다만 '앱이 없는 사람만' 이라고 가정하면 안 된다** — 인스타·카톡 인앱 브라우저는 딥링크를
- * 그냥 무시하고 URL 을 여는 일이 잦다. 우리 공유는 인스타 스토리가 주 통로라, 앱이 있는 사람도
- * 이 페이지에 도착한다. 그래서 스토어로 자동으로 튕기지 않고 카드를 먼저 보여준다.
+ * 앱이 깔려 있으면 여기까지 오지 않는다. OS 가 검증 파일을 보고 링크를 앱으로 넘겨 메인 화면을
+ * 연다(`deploy/nginx/conf/gamss.conf` 의 AASA·assetlinks 참고). 그러니 이 페이지는 사실상
+ * **앱이 없는 사람이 도착하는 곳**이고, 곧바로 스토어로 보낸다.
  *
- * 정적 익스포트라 경로에 토큰을 박은 페이지를 미리 만들 수 없다. 그래서 이 한 장을 `/c/` 아래
- * 모든 경로에 내려주고(nginx `try_files ... /c/index.html`), 토큰은 주소에서 직접 읽어
- * 브라우저가 카드를 받아온다.
+ * 다만 PC 는 스토어로 보내봐야 설치할 수 없다. 그쪽에만 카드를 보여주고 스토어 버튼을 남긴다 —
+ * 인스타·카톡 인앱 브라우저가 딥링크를 무시하고 URL 을 여는 경우의 안전망이기도 하다.
  *
- * 카드 내용만 앱을 거치고 껍데기는 정적이다 — 앱이 죽어도 페이지와 설치 안내는 그대로 뜬다.
+ * 정적 익스포트라 토큰마다 페이지를 만들 수 없다. 그래서 이 한 장을 `/c/` 아래 모든 경로에
+ * 내려주고(nginx `try_files ... /c.html`), 토큰은 주소에서 직접 읽는다.
  */
 export default function SharedCardPage() {
   const [state, setState] = useState<State>({ status: "loading" });
 
   useEffect(() => {
+    const store = storeUrlFor(navigator.userAgent);
+    if (store) {
+      // replace 로 보낸다. push 면 뒤로가기가 이 페이지로 돌아와 다시 스토어로 튕긴다.
+      window.location.replace(store);
+      return;
+    }
+
     const token = window.location.pathname.split("/").filter(Boolean).pop() ?? "";
     if (!token) {
       setState({ status: "gone" });
@@ -54,9 +62,26 @@ export default function SharedCardPage() {
   );
 }
 
+/**
+ * 이 기기가 갈 스토어. 스토어가 없는 기기(PC)면 null.
+ *
+ * UA 로 고르는 것은 정확하지 않지만, 틀려도 손해가 작다 — 잘못 고르면 설치할 수 없는 스토어
+ * 페이지가 뜰 뿐이고, 아예 못 고르면 카드와 두 버튼이 있는 페이지가 남는다.
+ */
+function storeUrlFor(userAgent: string): string | null {
+  if (/android/i.test(userAgent)) return PLAY_STORE_URL;
+  // iPadOS 13+ 는 UA 에 스스로를 Mac 이라고 적는다. 터치 지원 여부로 갈라낸다.
+  const isIOS =
+    /iphone|ipad|ipod/i.test(userAgent) ||
+    (/macintosh/i.test(userAgent) && navigator.maxTouchPoints > 1);
+  if (isIOS) return APP_STORE_URL;
+  return null;
+}
+
 function Body({ state }: { state: State }) {
   if (state.status === "loading") {
     // 자리를 미리 잡아둬야 카드가 도착할 때 화면이 튀지 않는다.
+    // 스토어로 보내는 기기에서는 이 상태 그대로 페이지를 떠난다.
     return <div className="h-[360px]" aria-live="polite" aria-busy="true" />;
   }
 
