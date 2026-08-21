@@ -1,6 +1,7 @@
 package com.nexters.gamss.card.repository
 
 import com.nexters.gamss.card.domain.Card
+import com.nexters.gamss.card.domain.ShareToken
 import com.nexters.gamss.conversation.domain.Conversation
 import com.nexters.gamss.conversation.repository.ConversationRepository
 import com.nexters.gamss.emotion.domain.EmotionType
@@ -9,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class CardRepositoryTest : RepositoryTest() {
     @Autowired
@@ -158,8 +160,66 @@ class CardRepositoryTest : RepositoryTest() {
         assertEquals(mine.id, found.first().conversationId)
     }
 
+    @Test
+    fun `공유 토큰으로 카드를 연다`() {
+        val conversation = conversationRepository.save(Conversation(MEMBER_ID).apply { end() })
+        val saved = cardRepository.save(card(conversation.id, CREATED_AT).apply { share(ShareToken(TOKEN)) })
+
+        val found = cardRepository.findVisibleByShareToken(TOKEN)
+
+        assertEquals(saved.id, found.get().id)
+    }
+
+    /**
+     * 링크는 한 번 나가면 회수할 수 없다. 가시성 조건이 [CardRepository.findVisibleById] 와
+     * 갈리면 사용자가 지운 카드가 링크로는 계속 열린다.
+     */
+    @Test
+    fun `지운 카드는 공유 토큰으로도 열리지 않는다`() {
+        val conversation = conversationRepository.save(Conversation(MEMBER_ID).apply { end() })
+        cardRepository.save(
+            card(conversation.id, CREATED_AT).apply {
+                share(ShareToken(TOKEN))
+                delete()
+            },
+        )
+
+        assertTrue(cardRepository.findVisibleByShareToken(TOKEN).isEmpty)
+    }
+
+    @Test
+    fun `삭제된 채팅방의 카드는 공유 토큰으로도 열리지 않는다`() {
+        val conversation = conversationRepository.save(Conversation(MEMBER_ID).apply { delete() })
+        cardRepository.save(card(conversation.id, CREATED_AT).apply { share(ShareToken(TOKEN)) })
+
+        assertTrue(cardRepository.findVisibleByShareToken(TOKEN).isEmpty)
+    }
+
+    /**
+     * share_token 은 utf8mb4_bin 이라 대소문자를 구분한다(V35). 서버 기본 collation 을 따르면
+     * 아래 두 토큰이 **같은 유니크 키**가 되어 둘째 저장이 제약에 걸리고, 걸리지 않더라도 조회가
+     * 남의 카드를 맞다고 돌려준다.
+     */
+    @Test
+    fun `대소문자만 다른 공유 토큰은 서로 다른 카드다`() {
+        val lower = conversationRepository.save(Conversation(MEMBER_ID).apply { end() })
+        val upper = conversationRepository.save(Conversation(MEMBER_ID).apply { end() })
+        val lowerCard = cardRepository.save(card(lower.id, CREATED_AT).apply { share(ShareToken(MIXED_CASE_TOKEN)) })
+        val upperCard =
+            cardRepository.save(card(upper.id, CREATED_AT).apply { share(ShareToken(MIXED_CASE_TOKEN.swapCase())) })
+        cardRepository.flush()
+
+        assertEquals(lowerCard.id, cardRepository.findVisibleByShareToken(MIXED_CASE_TOKEN).get().id)
+        assertEquals(upperCard.id, cardRepository.findVisibleByShareToken(MIXED_CASE_TOKEN.swapCase()).get().id)
+    }
+
+    private fun String.swapCase(): String = map { if (it.isUpperCase()) it.lowercaseChar() else it.uppercaseChar() }.joinToString("")
+
     private companion object {
         const val MEMBER_ID = 1L
         const val OTHER_MEMBER_ID = 2L
+        val CREATED_AT: Instant = Instant.parse("2026-07-20T00:00:00Z")
+        const val TOKEN = "Zm9vYmFyYmF6cXV4MTIzNA"
+        const val MIXED_CASE_TOKEN = "aBcDeFgHiJkLmNoPqRsTuV"
     }
 }

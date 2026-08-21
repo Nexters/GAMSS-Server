@@ -4,6 +4,7 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.env.Environment
 import org.springframework.core.env.Profiles
+import org.springframework.http.HttpMethod
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
 import org.springframework.security.config.http.SessionCreationPolicy
@@ -43,6 +44,16 @@ class SecurityConfig(
                 headers.contentTypeOptions { it.disable() }
             }.authorizeHttpRequests {
                 it.requestMatchers(*publicPaths()).permitAll()
+                // 공유 링크로 열리는 카드 조회. 토큰(추측 불가능한 22자)을 아는 것이 곧 볼 권한이라
+                // 인증하지 않는다 — 링크를 받은 사람은 앱도 계정도 없을 수 있다.
+                //
+                // **메서드를 GET 으로 못 박는다.** 메서드를 지정하지 않으면 이 경로의 모든 메서드가
+                // 열려, 나중에 같은 경로에 쓰기 API(신고·반응 등)를 붙이는 순간 인증 없이 뚫린다.
+                // 지금은 GET 하나뿐이라 뚫린 곳이 없지만, 붙이는 사람이 여기를 다시 볼 거라고
+                // 기대하지 않는 편이 안전하다.
+                //
+                // 발급(POST /api/cards/{cardId}/share)은 본인 카드만 되어야 하므로 공개하지 않는다.
+                it.requestMatchers(HttpMethod.GET, "/api/cards/shared/*").permitAll()
                 // 백오피스 API는 관리자 토큰(ROLE_ADMIN)만 접근할 수 있다. 로그인만 공개다.
                 it.requestMatchers("/api/admin/**").hasRole("ADMIN")
                 it.anyRequest().authenticated()
