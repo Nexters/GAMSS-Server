@@ -70,7 +70,11 @@ class Conversation(
      * 갱신되고([updateSummary]), 카드 생성 시점에 그때의 확정 요약으로 덮인다
      * ([com.nexters.gamss.conversation.repository.ConversationRepository.updateSummary] — 엔티티를
      * 로드하지 않는 경로라 벌크 쿼리를 쓴다). 종료된 방의 요약은 다른 대화방 댓글 생성 시 과거
-     * 맥락으로 참고하고, 자동 종료 배치는 카드 요약으로 쓴다.
+     * 맥락으로 참고하고, 자동 종료 배치도 값이 있으면 카드 요약으로 쓴다.
+     *
+     * 비어 있으면 배치가 유저 메시지 원문으로 카드를 만들지만 **그 값은 여기 남기지 않는다**
+     * ([com.nexters.gamss.card.service.CardService.createCard]) — 압축되지 않은 원문이 과거 맥락
+     * 풀에 섞여 정보량이 많은 요약을 밀어내지 않게 하려는 것이다.
      *
      * DB에는 암호문으로 저장된다([com.nexters.gamss.global.crypto.EncryptedStringConverter]) —
      * 대화를 통째로 압축한 값이라 이것만 새도 그날 무슨 이야기를 했는지가 드러난다.

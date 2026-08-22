@@ -55,15 +55,16 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
      * 다음 실행에서 이어서 처리된다. DONE 필터는 불필요한 일감을 줄이는 용도일 뿐이고, 중복 카드
      * 생성을 실제로 막는 것은 카드 생성 경로의 CAS 선점과 `cards.conversation_id` 유니크 제약이다.
      *
-     * [createdAfter] 하한은 요약 저장([Conversation.updateSummary])이 배포되기 전에 만들어진 방을
-     * 걸러낸다. 그 방들은 요약이 없어 카드를 만들 수 없으므로, 하한이 없으면 첫 실행이 기존
-     * 사용자들의 진행 중인 방을 전부 카드 없이 종료해버린다
+     * [createdAfter] 하한은 자동 종료가 배포되기 전에 만들어져 아직 열려 있는 방을 걸러낸다. 요약이
+     * 없어도 카드를 만들 수 있게 된 뒤로는(#204) 그 방들에도 재료는 있지만, 한참 지나 잊힌 대화를
+     * 새삼 종료하고 카드로 되살릴 이유가 없다
      * ([com.nexters.gamss.card.config.CardProperties.autoCardStartDate]).
      *
      * **하한은 고정이고 상한만 매일 밀리므로, 끝나지 않는 방은 대상에 계속 쌓인다.** 그래서 결론이
      * 바뀔 수 없는 방과 바뀔 수 있는 방을 다르게 다룬다:
-     * - 요약이 없어 포기한 방([CardGenerationStatus.SKIPPED])은 종료된 방이라 요약이 채워질 길이
-     *   없다 — DONE과 함께 아예 제외한다.
+     * - 자동 생성을 포기했던 방([CardGenerationStatus.SKIPPED])은 **제외하지 않는다.** 요약이 없어도
+     *   카드를 만들 수 있게 되면서(#204) 결론이 바뀔 수 있는 방이 됐다 — 그 상태로 굳어 있는 기존
+     *   행들이 마이그레이션 없이 다음 실행에서 카드를 받고 DONE으로 옮겨간다.
      * - 실패한 방([CardGenerationStatus.FAILED])은 재시도가 살아 있어야 하므로 상태로 뺄 수 없다.
      *   대신 마지막 시도가 이번 하루 안이면 건너뛰어 **하루 한 번**으로 제한한다. 배치 카드는
      *   감정 분류·한 줄 생성 2회를 부르므로, 영구적으로 실패하는 방이 생겨도 태우는 양이 예측
@@ -82,7 +83,7 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
         @Param("createdBefore") createdBefore: Instant,
         @Param("deletedStatus") deletedStatus: ConversationStatus = ConversationStatus.DELETED,
         @Param("finishedStatuses") finishedStatuses: List<CardGenerationStatus> =
-            listOf(CardGenerationStatus.DONE, CardGenerationStatus.SKIPPED),
+            listOf(CardGenerationStatus.DONE),
         @Param("failedStatus") failedStatus: CardGenerationStatus = CardGenerationStatus.FAILED,
     ): List<Long>
 

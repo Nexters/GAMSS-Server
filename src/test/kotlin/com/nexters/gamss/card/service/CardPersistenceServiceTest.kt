@@ -15,6 +15,7 @@ import org.springframework.context.annotation.Import
 import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 
 /**
  * 서비스 트랜잭션이 실제로 롤백되는지 직접 확인해야 해서 클래스 레벨 트랜잭션을 쓰지 않는다
@@ -82,6 +83,34 @@ class CardPersistenceServiceTest {
         val updatedConversation = conversationRepository.findById(conversation.id).get()
         assertEquals(CardGenerationStatus.DONE, updatedConversation.cardGenerationStatus)
         assertEquals("요약", updatedConversation.summary)
+    }
+
+    @Test
+    fun `요약이 null이면 대화방 요약은 그대로 두고 상태만 옮긴다`() {
+        // 자동 생성 배치가 유저 메시지 원문으로 만든 카드다(#204). 그 원문은 다른 채팅방 댓글의
+        // '과거 맥락'으로 읽히는 자리라 남기지 않는다.
+        val conversation = conversationRepository.save(Conversation(memberId = 1L))
+        conversationRepository.updateCardGenerationStatus(
+            conversation.id,
+            CardGenerationStatus.PENDING,
+            listOf(CardGenerationStatus.NONE),
+            Instant.now(),
+        )
+        val card =
+            Card(
+                memberId = 1L,
+                conversationId = conversation.id,
+                emotion = EmotionType.ANGER,
+                summary = "요약",
+                message = "대사",
+                conversationCreatedAt = Instant.now(),
+            )
+
+        cardPersistenceService.save(card, conversation.id, null)
+
+        val updatedConversation = conversationRepository.findById(conversation.id).get()
+        assertEquals(CardGenerationStatus.DONE, updatedConversation.cardGenerationStatus)
+        assertNull(updatedConversation.summary)
     }
 
     private companion object {

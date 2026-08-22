@@ -235,6 +235,87 @@ class CardServiceTest {
     }
 
     @Test
+    fun `요약이 없으면 유저 메시지 원문을 카드 한 줄의 입력으로 쓴다`() {
+        // 요약을 만들 수 있는 건 클라이언트뿐이라 배치는 그 값을 못 받는다. 재료인 메시지는 이미 있다(#204).
+        every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
+        stubClaimSuccess()
+        every {
+            messageRepository.findAllByConversationIdAndSenderTypeOrderByIdAsc(CONVERSATION_ID, SenderType.USER)
+        } returns listOf(userMessage("오늘 억울한 일이 있었어"), userMessage("그래서 화가 났어"))
+        every {
+            emotionExtractor.extract(listOf("오늘 억울한 일이 있었어", "그래서 화가 났어"))
+        } returns EmotionExtractionOutput(EmotionType.ANGER, usedTokens = 5, cachedTokens = 0)
+        val promptInput = slot<String>()
+        every { cardMessageGenerator.generate(EmotionType.ANGER, capture(promptInput)) } returns CardMessageOutput("대사", 10, 0)
+        every { cardPersistenceService.save(any(), CONVERSATION_ID, null) } answers { firstArg() }
+
+        service.createCard(MEMBER_ID, CONVERSATION_ID, null, null)
+
+        assertEquals("오늘 억울한 일이 있었어 / 그래서 화가 났어", promptInput.captured)
+    }
+
+    @Test
+    fun `요약이 없으면 대화방 요약을 덮어쓰지 않는다`() {
+        // conversations.summary는 다른 채팅방 댓글의 '과거 맥락'으로 읽히는 자리다. 압축되지 않은
+        // 원문을 남기면 정보량이 많은 요약을 최근 5개 풀 밖으로 밀어낸다.
+        every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
+        stubClaimSuccess()
+        every {
+            messageRepository.findAllByConversationIdAndSenderTypeOrderByIdAsc(CONVERSATION_ID, SenderType.USER)
+        } returns listOf(userMessage("오늘 억울한 일이 있었어"))
+        every {
+            emotionExtractor.extract(listOf("오늘 억울한 일이 있었어"))
+        } returns EmotionExtractionOutput(EmotionType.ANGER, usedTokens = 5, cachedTokens = 0)
+        every { cardMessageGenerator.generate(EmotionType.ANGER, any()) } returns CardMessageOutput("대사", 10, 0)
+        every { cardPersistenceService.save(any(), CONVERSATION_ID, null) } answers { firstArg() }
+
+        service.createCard(MEMBER_ID, CONVERSATION_ID, null, null)
+
+        verify(exactly = 1) { cardPersistenceService.save(any(), CONVERSATION_ID, null) }
+    }
+
+    @Test
+    fun `공백뿐인 요약도 없는 것과 같이 다뤄 대화방에 남기지 않는다`() {
+        // LLM 입력에서만 걸러내고 저장하면, 그 방이 과거 맥락 풀(summary is not null)에 들어가
+        // 내용 없이 자리만 차지한다 — 프롬프트 단계에서 공백이 걸러지기 때문이다.
+        every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
+        stubClaimSuccess()
+        every {
+            messageRepository.findAllByConversationIdAndSenderTypeOrderByIdAsc(CONVERSATION_ID, SenderType.USER)
+        } returns listOf(userMessage("오늘 억울한 일이 있었어"))
+        every {
+            emotionExtractor.extract(listOf("오늘 억울한 일이 있었어"))
+        } returns EmotionExtractionOutput(EmotionType.ANGER, usedTokens = 5, cachedTokens = 0)
+        every { cardMessageGenerator.generate(EmotionType.ANGER, "오늘 억울한 일이 있었어") } returns CardMessageOutput("대사", 10, 0)
+        every { cardPersistenceService.save(any(), CONVERSATION_ID, null) } answers { firstArg() }
+
+        service.createCard(MEMBER_ID, CONVERSATION_ID, null, "   ")
+
+        verify(exactly = 1) { cardPersistenceService.save(any(), CONVERSATION_ID, null) }
+    }
+
+    @Test
+    fun `요약도 유저 메시지도 없으면 FAILED로 되돌리고 LLM을 부르지 않는다`() {
+        // 메시지 없는 대화방은 만들어질 수 없지만, 그래도 비면 만들 재료가 없다. PENDING으로 두면
+        // 재시도가 재시도 가능한 503이 아니라 409(생성 중)로 막힌다.
+        every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
+        stubClaimSuccess()
+        every {
+            messageRepository.findAllByConversationIdAndSenderTypeOrderByIdAsc(CONVERSATION_ID, SenderType.USER)
+        } returns emptyList()
+        stubMarkStatus(CardGenerationStatus.FAILED)
+
+        val exception = assertFailsWith<BusinessException> { service.createCard(MEMBER_ID, CONVERSATION_ID, null, null) }
+
+        assertEquals(ErrorCode.CARD_GENERATION_FAILED, exception.errorCode)
+        verify(exactly = 0) { emotionExtractor.extract(any()) }
+        verify(exactly = 0) { cardMessageGenerator.generate(any(), any()) }
+        verify(exactly = 1) {
+            conversationRepository.updateCardGenerationStatus(CONVERSATION_ID, CardGenerationStatus.FAILED, any(), any())
+        }
+    }
+
+    @Test
     fun `emotion이 있으면 감정 분류를 호출하지 않는다`() {
         every { conversationRepository.findById(CONVERSATION_ID) } returns Optional.of(endedConversation())
         stubClaimSuccess()

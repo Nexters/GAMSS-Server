@@ -21,15 +21,18 @@ class CardPersistenceService(
     /**
      * 카드 저장 · 대화 요약 저장 · 카드 생성 상태 DONE 마킹을 하나의 트랜잭션으로 묶는다. 저장 시점의
      * 유니크 제약 위반은 이 트랜잭션이 롤백된 뒤 [CardService]가 별도로 처리한다.
+     *
+     * [summary]가 null이면 대화방 요약은 건드리지 않는다 — 클라이언트 요약 없이 만들어진 카드라
+     * 남길 원본이 없는 경우다([CardService.createCard]).
      */
     @Transactional
     fun save(
         card: Card,
         conversationId: Long,
-        summary: String,
+        summary: String?,
     ): Card {
         val saved = cardRepository.saveAndFlush(card)
-        conversationRepository.updateSummary(conversationId, summary)
+        summary?.let { conversationRepository.updateSummary(conversationId, it) }
         val updated =
             conversationRepository.updateCardGenerationStatus(
                 conversationId,
