@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { EmotionCard, SketchFilters, StoreButtons } from "../components";
 import { EMOTIONS, type Emotion } from "../emotions";
-import { APP_STORE_URL, PLAY_STORE_URL } from "../site";
+import { APP_STORE_URL, IOS_PENDING_FORM_URL, PLAY_STORE_URL } from "../site";
 
 /**
  * 공유 링크(`gamss.kr/c/{토큰}`)로 도착하는 페이지.
@@ -16,8 +16,11 @@ import { APP_STORE_URL, PLAY_STORE_URL } from "../site";
  * 연다(`deploy/nginx/conf/gamss.conf` 의 AASA·assetlinks 참고). 그러니 이 페이지는 사실상
  * **앱이 없는 사람이 도착하는 곳**이고, 곧바로 스토어로 보낸다.
  *
- * 다만 PC 는 스토어로 보내봐야 설치할 수 없다. 그쪽에만 카드를 보여주고 스토어 버튼을 남긴다 —
+ * 다만 PC 는 스토어로 보내봐야 설치할 수 없다. 그쪽에는 카드를 보여주고 버튼을 남긴다 —
  * 인스타·카톡 인앱 브라우저가 딥링크를 무시하고 URL 을 여는 경우의 안전망이기도 하다.
+ *
+ * **iOS 심사 중에는 아이폰도 PC 와 같다**([IOS_PENDING_FORM_URL]). 보낼 스토어가 아직 없고,
+ * 그 자리의 사전 알림 폼으로 자동으로 보내면 카드를 보러 온 사람이 아무것도 못 보고 끌려간다.
  *
  * 정적 익스포트라 토큰마다 페이지를 만들 수 없다. 그래서 이 한 장을 `/c/` 아래 모든 경로에
  * 내려주고(nginx `try_files ... /c.html`), 토큰은 주소에서 직접 읽는다.
@@ -74,7 +77,9 @@ function storeUrlFor(userAgent: string): string | null {
   const isIOS =
     /iphone|ipad|ipod/i.test(userAgent) ||
     (/macintosh/i.test(userAgent) && navigator.maxTouchPoints > 1);
-  if (isIOS) return APP_STORE_URL;
+  // 심사 중에는 아이폰도 PC 처럼 둔다. 여기서 사전 알림 폼으로 보내면 카드를 보러 온 사람이
+  // 아무것도 못 보고 구글 폼으로 끌려간다 — 폼으로 갈지는 카드를 본 뒤 본인이 정한다.
+  if (isIOS) return IOS_PENDING_FORM_URL ? null : APP_STORE_URL;
   return null;
 }
 
