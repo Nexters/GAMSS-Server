@@ -3,6 +3,7 @@ import "./globals.css";
 import {
   APP_STORE_URL,
   DESCRIPTION,
+  IOS_PENDING_FORM_URL,
   PLAY_STORE_URL,
   SITE_NAME,
   SITE_URL,
@@ -79,7 +80,9 @@ const JSON_LD = {
   operatingSystem: "iOS, Android",
   inLanguage: "ko-KR",
   offers: { "@type": "Offer", price: "0", priceCurrency: "KRW" },
-  sameAs: [APP_STORE_URL, PLAY_STORE_URL],
+  // iOS 심사 중에는 앱스토어를 빼고 알린다 — `sameAs` 는 "이 앱이 있는 곳"이라, 아직 없는
+  // 페이지를 가리키면 검색엔진에 죽은 링크를 알리는 셈이 된다. 폼은 스토어가 아니므로 넣지 않는다.
+  sameAs: IOS_PENDING_FORM_URL ? [PLAY_STORE_URL] : [APP_STORE_URL, PLAY_STORE_URL],
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
