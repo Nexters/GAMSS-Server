@@ -1,6 +1,6 @@
 import type { Emotion } from "./emotions";
 // 스토어 주소는 site.ts 한 곳에만 둔다 — 여기에 복사해 두면 앱 ID 가 바뀔 때 한쪽만 고치게 된다.
-import { APP_STORE_URL, PLAY_STORE_URL } from "./site";
+import { APP_STORE_URL, IOS_PENDING_FORM_URL, PLAY_STORE_URL } from "./site";
 
 /**
  * 기기 프레임(`public/phone-frame.webp`)에서 실측한 화면 구멍의 위치·크기.
@@ -136,8 +136,12 @@ export function Paper({
 export function StoreButtons({ center = false }: { center?: boolean }) {
   return (
     <div className={`flex flex-wrap gap-5 ${center ? "justify-center" : ""}`}>
+      {/*
+        iOS 는 심사 중이라 앱스토어 대신 사전 알림 폼으로 보낸다([IOS_PENDING_FORM_URL]).
+        **보이는 것은 그대로 `App Store` 다** — 가는 곳만 잠시 바뀐다.
+      */}
       <a
-        href={APP_STORE_URL}
+        href={IOS_PENDING_FORM_URL ?? APP_STORE_URL}
         className="relative px-8 py-4 text-[15px] font-bold text-white transition-transform hover:-translate-y-1"
         style={{ "--sketch-fill": "#1e1f22" } as React.CSSProperties}
       >
