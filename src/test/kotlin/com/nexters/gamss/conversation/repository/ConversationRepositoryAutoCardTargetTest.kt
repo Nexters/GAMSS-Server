@@ -80,8 +80,9 @@ class ConversationRepositoryAutoCardTargetTest {
     }
 
     @Test
-    fun `자동 생성을 포기한(SKIPPED) 대화방은 대상에서 빠진다`() {
-        // 요약이 없어 포기한 방은 종료된 상태라 요약이 채워질 길이 없다 — 다시 집어도 결론이 같다.
+    fun `자동 생성을 포기했던(SKIPPED) 대화방도 다시 대상이 된다`() {
+        // 요약이 없어도 카드를 만들 수 있게 되면서 결론이 바뀔 수 있는 방이 됐다(#204). 그 상태로
+        // 굳어 있는 기존 행들이 마이그레이션 없이 다음 실행에서 카드를 받는다.
         val skipped = saveWithSummary(ended = true)
         conversationRepository.updateCardGenerationStatus(
             skipped,
@@ -91,7 +92,7 @@ class ConversationRepositoryAutoCardTargetTest {
         )
         val pending = saveWithSummary()
 
-        assertEquals(listOf(pending), findTargets())
+        assertEquals(listOf(skipped, pending), findTargets())
     }
 
     @Test
