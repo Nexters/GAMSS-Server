@@ -8,8 +8,11 @@ import java.time.Duration
 data class GeminiProperties(
     val apiKey: String,
     val model: String,
-    /** LLM 호출 1회당 타임아웃. 저장+생성을 한 요청으로 묶은 뒤 nginx proxy_read_timeout(120s)이
-     * 하드 리밋이 되므로, [LlmRetryPolicy]의 전체 재시도 시간을 그보다 짧게 제한한다. */
+    /**
+     * LLM 호출 **1회당** 타임아웃. "보통 얼마나 걸리나"가 아니라 "언제 포기하나"를 정하는 값이라,
+     * 관측된 지연(prod p99 약 2s, 최댓값 약 5s)보다 넉넉하되 매달린 호출이 요청 스레드를 오래 붙잡지
+     * 않을 만큼으로 잡는다. 재시도·호출 체인까지 곱한 최악 시간은 [LlmRetryPolicy]의 예산 안에 있어야 한다.
+     */
     val requestTimeout: Duration,
 ) {
     /**
@@ -26,12 +29,13 @@ data class GeminiProperties(
             }.toInt()
 
     init {
-        val totalTimeoutMillis = LlmRetryPolicy.totalTimeoutMillis(requestTimeoutMillis)
-        require(totalTimeoutMillis < LlmRetryPolicy.TOTAL_TIMEOUT_BUDGET_MILLIS) {
-            "gemini.request-timeout의 최대 재시도 시간이 " +
+        val worstCaseMillis = LlmRetryPolicy.worstCaseTotalMillis(requestTimeoutMillis)
+        require(worstCaseMillis < LlmRetryPolicy.TOTAL_TIMEOUT_BUDGET_MILLIS) {
+            "gemini.request-timeout의 최악 재시도 시간이 " +
                 "${LlmRetryPolicy.TOTAL_TIMEOUT_BUDGET_MILLIS}ms 미만이어야 합니다 " +
                 "(attempts=${LlmRetryPolicy.MAX_ATTEMPTS}, " +
-                "backoff=${LlmRetryPolicy.RETRY_BACKOFF_MILLIS}ms): $requestTimeout"
+                "chains=${LlmRetryPolicy.MAX_CALL_CHAINS_PER_REQUEST}, " +
+                "backoff=${LlmRetryPolicy.worstCaseBackoffMillis()}ms): $requestTimeout"
         }
     }
 }

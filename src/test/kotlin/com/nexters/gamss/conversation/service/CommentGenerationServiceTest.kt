@@ -298,7 +298,7 @@ class CommentGenerationServiceTest {
 
         assertEquals(CommentGenerationOutcome.FAILED, result.outcome)
         assertEquals(null, result.usedTokens)
-        verify(exactly = 2) { commentGenerator.generateComment(any()) }
+        verify(exactly = 3) { commentGenerator.generateComment(any()) }
         verify(exactly = 1) { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) }
     }
 
@@ -375,14 +375,16 @@ class CommentGenerationServiceTest {
     }
 
     @Test
-    fun `두 시도 모두 검증 실패하면 두 시도의 토큰을 합산해 실패 로그에 기록한다`() {
+    fun `모든 시도가 검증 실패하면 시도마다의 토큰을 합산해 실패 로그에 기록한다`() {
         val message = rootMessage()
         every { messageRepository.findById(1L) } returns Optional.of(message)
         every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
         stubClaimSuccess()
+        // 검증에 실패한 시도도 호출은 됐으니 과금된다 — 시도 수가 늘어도 전부 더해져야 한다.
         val attempt1 = CommentGenerationOutput(feed(), usedTokens = 100, cachedTokens = 10, inputTokens = 80, outputTokens = 20)
         val attempt2 = CommentGenerationOutput(feed(), usedTokens = 200, cachedTokens = 30, inputTokens = 150, outputTokens = 50)
-        every { commentGenerator.generateComment(any()) } returnsMany listOf(attempt1, attempt2)
+        val attempt3 = CommentGenerationOutput(feed(), usedTokens = 400, cachedTokens = 50, inputTokens = 300, outputTokens = 100)
+        every { commentGenerator.generateComment(any()) } returnsMany listOf(attempt1, attempt2, attempt3)
         every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } throws CommentGenerationFailedException("검증 실패")
         every { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) } returns 1
 
@@ -392,14 +394,14 @@ class CommentGenerationServiceTest {
             generationLogRecorder.record(
                 type = GenerationType.COMMENT,
                 success = false,
-                attemptCount = 2,
+                attemptCount = 3,
                 latencyMs = any(),
                 memberId = 1L,
                 conversationId = 10L,
-                usedTokens = 300,
-                cachedTokens = 40,
-                inputTokens = 230,
-                outputTokens = 70,
+                usedTokens = 700,
+                cachedTokens = 90,
+                inputTokens = 530,
+                outputTokens = 170,
                 failureReason = any(),
             )
         }
@@ -664,7 +666,7 @@ class CommentGenerationServiceTest {
         val result = service.generateReplyComment(memberId = 1L, messageId = 1L)
 
         assertEquals(CommentGenerationOutcome.FAILED, result.outcome)
-        verify(exactly = 2) { commentGenerator.generateReply(any(), any(), any(), any()) }
+        verify(exactly = 3) { commentGenerator.generateReply(any(), any(), any(), any()) }
         verify(exactly = 1) { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) }
     }
 
