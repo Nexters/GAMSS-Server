@@ -1,6 +1,5 @@
 package com.nexters.gamss.card.service
 
-import com.nexters.gamss.conversation.domain.CardGenerationStatus
 import com.nexters.gamss.conversation.repository.ConversationRepository
 import com.nexters.gamss.conversation.service.ConversationService
 import com.nexters.gamss.global.exception.BusinessException
@@ -26,13 +25,14 @@ import java.time.ZonedDateTime
  * 중복 실행·재시도에 대한 멱등성은 이 클래스가 아니라 카드 생성 경로가 보장한다 — CAS 선점과
  * `cards.conversation_id` 유니크 제약에 걸린 요청은 여기서 "이미 처리됨"으로 분류된다.
  *
- * 요약([com.nexters.gamss.conversation.domain.Conversation.summary])이 없는 방은 카드 한 줄을 만들
- * 근거가 없으므로 종료만 하고 카드는 건너뛴다 — 요약은 프론트가 메시지마다 보내주는 값이라
- * 한 번도 보내지 않은 방에서만 생기는 경우다.
+ * 요약([com.nexters.gamss.conversation.domain.Conversation.summary])이 없는 방도 카드를 만든다.
+ * 요약은 프론트가 메시지마다 보내주는 값이라 한 줄만 쓰고 나간 방에는 없는데, 그게 가장 흔한 이탈
+ * 패턴이라 그대로 두면 카드를 못 받는 방의 대부분이 그쪽이 된다(#204). 배치에는 클라이언트가
+ * 없으므로 유저가 보낸 메시지 원문을 요약 대신 넣는다([CardService.createCard]).
  *
- * 단, 요약 저장이 배포되기 **전에** 만들어진 방은 예외 없이 요약이 없어 전부 이 경우에 해당하므로,
- * 대상 자체를 [com.nexters.gamss.card.config.CardProperties.autoCardStartDate] 이후로 제한한다 — 그러지 않으면 첫 실행이 기존
- * 사용자들의 진행 중인 방을 전부 카드 없이 닫아버린다.
+ * 대상은 [com.nexters.gamss.card.config.CardProperties.autoCardStartDate] 이후에 만들어진 방으로
+ * 제한한다. 그 전 방들도 이제는 카드를 만들 재료가 있지만, 한참 지나 잊힌 대화를 새삼 종료하고
+ * 카드로 되살릴 이유가 없다.
  */
 @Component
 class DailyAutoCardScheduler(
@@ -203,29 +203,9 @@ class DailyAutoCardScheduler(
         if (memberService.getById(conversation.memberId).isWithdrawn()) {
             return ProcessResult(AutoCardOutcome.WITHDRAWN_MEMBER)
         }
-        val summary = conversation.summary
-        if (summary.isNullOrBlank()) {
-            // 종료된 방에는 메시지를 못 보내니 요약이 채워질 길이 없다 — 상태로 못 박아 다음 실행부터
-            // 대상에서 빠지게 한다. 그러지 않으면 결론이 같은 방을 매일 밤 다시 집는다.
-            markCardGenerationSkipped(conversationId)
-            log.info("요약이 없어 카드 생성을 건너뛴다(종료는 완료): conversationId={}", conversationId)
-            return ProcessResult(AutoCardOutcome.NO_SUMMARY)
-        }
-        cardService.createCard(conversation.memberId, conversationId, emotion = null, summary = summary)
+        // 요약이 null이어도 그대로 넘긴다 — 카드 생성 경로가 유저 메시지 원문으로 대신 만든다.
+        cardService.createCard(conversation.memberId, conversationId, emotion = null, summary = conversation.summary)
         return ProcessResult(AutoCardOutcome.CREATED, cardCreatedMemberId = conversation.memberId)
-    }
-
-    /**
-     * 자동 생성을 포기했다고 표시한다. 전이가 0건이면(그 사이 다른 요청이 선점·완료) 그 요청의
-     * 결과를 존중하고 넘어간다 — 어차피 그쪽이 DONE이나 PENDING으로 만들어 대상에서 빠진다.
-     */
-    private fun markCardGenerationSkipped(conversationId: Long) {
-        conversationRepository.updateCardGenerationStatus(
-            conversationId,
-            CardGenerationStatus.SKIPPED,
-            listOf(CardGenerationStatus.NONE, CardGenerationStatus.FAILED),
-            Instant.now(),
-        )
     }
 
     /** 배치 입장에서 정상인 실패와 진짜 실패를 가른다. */

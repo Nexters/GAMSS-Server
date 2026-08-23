@@ -166,38 +166,31 @@ class DailyAutoCardSchedulerTest {
     }
 
     @Test
-    fun `요약이 없으면 종료만 하고 카드는 만들지 않는다`() {
+    fun `요약이 없어도 카드는 만든다`() {
+        // 한 줄만 쓰고 나간 방에는 프론트가 보내주는 요약이 없다. 그 방이 가장 흔한 이탈 패턴이라
+        // 여기서 포기하면 자동 카드를 못 받는 방의 대부분이 그쪽이 된다(#204).
         stubTargets(10L, 20L)
         every { conversationService.endForAutoBatch(10L) } returns conversation(summary = null)
         every { conversationService.endForAutoBatch(20L) } returns conversation(summary = "   ")
         every { cardService.createCard(any(), any(), any(), any()) } returns mockk<Card>()
-        stubMarkSkipped()
 
         scheduler.runFor(createdAfter, createdBefore)
 
-        verify(exactly = 1) { conversationService.endForAutoBatch(10L) }
-        verify(exactly = 1) { conversationService.endForAutoBatch(20L) }
-        verify(exactly = 0) { cardService.createCard(any(), any(), any(), any()) }
+        // 요약을 판정하지 않고 그대로 넘긴다 — 원문으로 대체할지는 카드 생성 경로가 정한다.
+        verify(exactly = 1) { cardService.createCard(MEMBER_ID, 10L, null, null) }
+        verify(exactly = 1) { cardService.createCard(MEMBER_ID, 20L, null, "   ") }
     }
 
     @Test
-    fun `요약이 없는 방은 자동 생성을 포기했다고 표시해 다음 실행에서 다시 잡지 않는다`() {
-        // 종료된 방에는 메시지를 못 보내니 요약이 채워질 길이 없다 — 상태로 못 박지 않으면
-        // 결론이 같은 방을 매일 밤 다시 집는다.
+    fun `요약이 없다는 이유로 대화방 상태를 건드리지 않는다`() {
+        // SKIPPED로 못 박던 자리다. 다시 박으면 그 방이 다음 실행 대상에서 빠져 카드를 영영 못 받는다.
         stubTargets(10L)
         every { conversationService.endForAutoBatch(10L) } returns conversation(summary = null)
-        stubMarkSkipped()
+        every { cardService.createCard(any(), any(), any(), any()) } returns mockk<Card>()
 
         scheduler.runFor(createdAfter, createdBefore)
 
-        verify(exactly = 1) {
-            conversationRepository.updateCardGenerationStatus(
-                10L,
-                CardGenerationStatus.SKIPPED,
-                listOf(CardGenerationStatus.NONE, CardGenerationStatus.FAILED),
-                any(),
-            )
-        }
+        verify(exactly = 0) { conversationRepository.updateCardGenerationStatus(any(), any(), any(), any()) }
     }
 
     @Test

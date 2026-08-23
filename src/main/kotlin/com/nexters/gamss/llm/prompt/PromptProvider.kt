@@ -56,19 +56,11 @@ class PromptProvider {
         }
 
     /**
-     * 유저가 보낸 메시지들에서 대표 감정 하나를 분류하게 하는 유저 콘텐츠. 메시지가 많으면
-     * 최근 것부터 [MAX_CARD_EMOTION_INPUT_CHARS]까지만 담는다(시간순 유지) — 하루의 감정은
-     * 최근 발화에 더 잘 드러나고, 분류 입력을 무한정 키우면 비용만 는다.
+     * 유저가 보낸 메시지들에서 대표 감정 하나를 분류하게 하는 유저 콘텐츠. 담을 구간은
+     * [CardMessageWindow]가 정한다 — 카드 한 줄 생성과 **같은 구간**을 봐야 하기 때문이다.
      */
     fun buildCardEmotionUserContent(userMessages: List<String>): String {
-        val normalized = userMessages.map { it.normalizeForPrompt() }.filter { it.isNotBlank() }
-        val recent = ArrayDeque<String>()
-        var totalChars = 0
-        for (message in normalized.asReversed()) {
-            totalChars += message.length
-            if (recent.isNotEmpty() && totalChars > MAX_CARD_EMOTION_INPUT_CHARS) break
-            recent.addFirst(message)
-        }
+        val recent = CardMessageWindow.recent(userMessages)
         return buildString {
             appendLine("[유저가 보낸 메시지] (시간순)")
             recent.forEach { appendLine("- $it") }
@@ -82,6 +74,11 @@ class PromptProvider {
      * 감정을 캐릭터 id(`bunno`)가 아니라 한글 라벨(`분노`)로 넘긴다 — 캐릭터 id는 그 자체로 말투를
      * 연상시켜, 캐릭터 말투를 쓰지 말라는 시스템 프롬프트와 반대로 끌어당긴다. 카드 한 줄에서
      * 감정은 '누가 말하는지'가 아니라 '어떤 사건을 고를지'의 기준이므로 감정 이름이면 충분하다.
+     *
+     * [summary]는 [CardMessageWindow.MAX_CHARS]까지만 담는다. 클라이언트 요약은 요청 검증
+     * (`@Size(max = 2000)`)에 이미 걸려 여기 닿지 않고, 배치가 넣는 메시지 원문도
+     * [CardMessageWindow]가 이미 같은 크기로 잘라서 온다 — 그래도 프롬프트에 실리기 직전의
+     * 마지막 방어선이라 남겨 둔다.
      */
     fun buildCardUserContent(
         emotion: EmotionType,
@@ -90,11 +87,24 @@ class PromptProvider {
         buildString {
             appendLine("[대표 감정] ${emotion.label}")
             appendLine("[오늘 대화 요약]")
-            appendLine(summary.normalizeForPrompt())
+            appendLine(summary.normalizeForPrompt().truncateForPrompt(CardMessageWindow.MAX_CHARS))
             append("위 요약에서 오늘을 대표하는 사건 하나를 골라, 유저 시점의 카드 한 줄을 JSON으로 출력해.")
         }
 
     companion object {
-        private const val MAX_CARD_EMOTION_INPUT_CHARS = 4000
+        /**
+         * [limit]자를 넘으면 **최근 쪽** [limit]자만 남긴다. 앞에서부터 남기면
+         * [CardMessageWindow]가 최근을 남긴 것과 반대 방향이 되어, 같은 구간을 보게 한 의미가 없어진다.
+         *
+         * 첫 글자가 서로게이트 쌍의 뒷짝이면 함께 버린다 — 그대로 자르면 짝이 깨진 문자가 프롬프트에
+         * 실린다([com.nexters.gamss.card.domain.CardSummary]가 같은 이유로 그래핌 단위로 센다).
+         */
+        private fun String.truncateForPrompt(limit: Int): String {
+            if (length <= limit) {
+                return this
+            }
+            val start = length - limit
+            return substring(if (Character.isLowSurrogate(this[start])) start + 1 else start)
+        }
     }
 }

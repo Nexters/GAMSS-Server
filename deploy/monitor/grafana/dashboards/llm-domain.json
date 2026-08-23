@@ -957,7 +957,7 @@
       "type": "bargauge",
       "title": "최근 24시간 배치 결과",
       "id": 55,
-      "description": "CREATED 외의 값이 늘면 카드가 안 만들어지고 있다는 뜻이다. NO_SUMMARY 는 요약이 없어 포기한 방, FAILED 는 진짜 실패다.",
+      "description": "FAILED 만 이상 신호다 - 카드를 받았어야 할 방이 못 받은 것이다. 나머지는 카드를 만들 이유가 없어진 방이라 정상이다.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
