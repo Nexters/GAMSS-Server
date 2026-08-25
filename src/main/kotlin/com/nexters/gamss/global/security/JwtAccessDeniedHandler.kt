@@ -3,6 +3,7 @@ package com.nexters.gamss.global.security
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.global.response.ApiResponse
 import com.nexters.gamss.global.response.ErrorResponse
+import com.nexters.gamss.global.response.httpStatusOf
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.http.MediaType
@@ -28,7 +29,7 @@ class JwtAccessDeniedHandler(
             ApiResponse.error(
                 ErrorResponse(ErrorCode.ACCESS_DENIED.code, ErrorCode.ACCESS_DENIED.message),
             )
-        response.status = ErrorCode.ACCESS_DENIED.status.value()
+        response.status = httpStatusOf(ErrorCode.ACCESS_DENIED.kind).value()
         response.contentType = MediaType.APPLICATION_JSON_VALUE
         response.characterEncoding = Charsets.UTF_8.name()
         response.writer.write(objectMapper.writeValueAsString(body))
