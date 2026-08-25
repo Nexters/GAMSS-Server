@@ -1,5 +1,6 @@
 package com.nexters.gamss.admin.controller.dto
 
+import com.nexters.gamss.admin.service.UsageStats
 import io.swagger.v3.oas.annotations.media.Schema
 
 /** 대시보드 '사용량 / 도입' 섹션 응답. 오늘 KPI + 활동 회원 + 감정 분포 + 일별 추이. */
@@ -22,4 +23,19 @@ data class UsageStatsResponse(
     val emotionDistribution: List<EmotionCountResponse>,
     @field:Schema(description = "일별 활동 추이(오래된 날 → 오늘)")
     val dailyActivity: List<DailyActivityResponse>,
-)
+) {
+    companion object {
+        fun from(stats: UsageStats): UsageStatsResponse =
+            UsageStatsResponse(
+                todayConversations = stats.todayConversations,
+                todayUserMessages = stats.todayUserMessages,
+                avgMessagesPerUser = stats.avgMessagesPerUser,
+                todayCards = stats.todayCards,
+                todaySignups = stats.todaySignups,
+                dau = stats.dau,
+                wau = stats.wau,
+                emotionDistribution = stats.emotionDistribution.map(EmotionCountResponse::from),
+                dailyActivity = stats.dailyActivity.map(DailyActivityResponse::from),
+            )
+    }
+}

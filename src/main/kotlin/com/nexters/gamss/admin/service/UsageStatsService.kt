@@ -1,8 +1,5 @@
 package com.nexters.gamss.admin.service
 
-import com.nexters.gamss.admin.controller.dto.DailyActivityResponse
-import com.nexters.gamss.admin.controller.dto.EmotionCountResponse
-import com.nexters.gamss.admin.controller.dto.UsageStatsResponse
 import com.nexters.gamss.card.repository.CardRepository
 import com.nexters.gamss.conversation.domain.SenderType
 import com.nexters.gamss.conversation.repository.ConversationRepository
@@ -26,19 +23,20 @@ class UsageStatsService(
     private val memberRepository: MemberRepository,
 ) {
     @Transactional(readOnly = true)
-    fun getUsageStats(days: Int): UsageStatsResponse {
+    fun getUsageStats(days: Int): UsageStats {
         val today = KstDashboardDates.today()
         val todayStart = KstDashboardDates.startOfDay(today)
         val todayEnd = KstDashboardDates.startOfNextDay(today)
         val since = KstDashboardDates.daysAgoStart(today, days)
         val weekStart = KstDashboardDates.daysAgoStart(today, WEEK_DAYS)
 
-        val emotionDistribution = cardRepository.countByEmotionSince(since).map(EmotionCountResponse::from)
+        val emotionDistribution =
+            cardRepository.countByEmotionSince(since).map { EmotionCount(emotion = it.emotion, count = it.count) }
 
         val todayUserMessages = messageRepository.countBySenderTypeCreatedBetween(SenderType.USER, todayStart, todayEnd)
         val dau = messageRepository.countActiveMembersBetween(SenderType.USER, todayStart, todayEnd)
 
-        return UsageStatsResponse(
+        return UsageStats(
             todayConversations = conversationRepository.countCreatedBetween(todayStart, todayEnd),
             todayUserMessages = todayUserMessages,
             avgMessagesPerUser = averageOrNull(todayUserMessages, dau),
@@ -66,12 +64,12 @@ class UsageStatsService(
         today: LocalDate,
         days: Int,
         since: Instant,
-    ): List<DailyActivityResponse> {
+    ): List<DailyActivity> {
         val conversationsByDate = bucketByDate(conversationRepository.findCreatedAtsSince(since))
         val messagesByDate = bucketByDate(messageRepository.findCreatedAtsSince(since))
         val cardsByDate = bucketByDate(cardRepository.findCreatedAtsSince(since))
         return KstDashboardDates.dateAxis(today, days).map { date ->
-            DailyActivityResponse(
+            DailyActivity(
                 date = date,
                 conversations = conversationsByDate[date] ?: 0,
                 messages = messagesByDate[date] ?: 0,

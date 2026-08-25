@@ -30,7 +30,7 @@ class AdminDashboardController(
     @GetMapping("/usage")
     fun usage(
         @RequestParam(defaultValue = "14") @Min(1) @Max(MAX_DAYS) days: Int,
-    ): ApiResponse<UsageStatsResponse> = ApiResponse.success(usageStatsService.getUsageStats(days))
+    ): ApiResponse<UsageStatsResponse> = ApiResponse.success(UsageStatsResponse.from(usageStatsService.getUsageStats(days)))
 
     @Operation(
         summary = "LLM 품질·안정성 지표",
@@ -39,7 +39,7 @@ class AdminDashboardController(
     @GetMapping("/quality")
     fun quality(
         @RequestParam(defaultValue = "14") @Min(1) @Max(MAX_DAYS) days: Int,
-    ): ApiResponse<QualityStatsResponse> = ApiResponse.success(qualityStatsService.getQualityStats(days))
+    ): ApiResponse<QualityStatsResponse> = ApiResponse.success(QualityStatsResponse.from(qualityStatsService.getQualityStats(days)))
 
     companion object {
         private const val MAX_DAYS = 90L

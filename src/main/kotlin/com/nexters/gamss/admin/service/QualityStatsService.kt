@@ -1,7 +1,5 @@
 package com.nexters.gamss.admin.service
 
-import com.nexters.gamss.admin.controller.dto.DailyGenerationResponse
-import com.nexters.gamss.admin.controller.dto.QualityStatsResponse
 import com.nexters.gamss.conversation.config.ConversationProperties
 import com.nexters.gamss.conversation.domain.CommentStatus
 import com.nexters.gamss.conversation.repository.MessageRepository
@@ -27,7 +25,7 @@ class QualityStatsService(
     private val geminiPricing: GeminiPricing,
 ) {
     @Transactional(readOnly = true)
-    fun getQualityStats(days: Int): QualityStatsResponse {
+    fun getQualityStats(days: Int): QualityStats {
         val today = KstDashboardDates.today()
         val since = KstDashboardDates.daysAgoStart(today, days)
         val logs = generationLogRepository.findAllSince(since)
@@ -46,7 +44,7 @@ class QualityStatsService(
                 geminiPricing.costUsd(it.model, it.inputTokens ?: 0, it.cachedTokens ?: 0, it.outputTokens ?: 0)
             }
 
-        return QualityStatsResponse(
+        return QualityStats(
             totalGenerations = total,
             successGenerations = success,
             failedGenerations = total - success,
@@ -68,11 +66,11 @@ class QualityStatsService(
         today: LocalDate,
         days: Int,
         logs: List<GenerationLog>,
-    ): List<DailyGenerationResponse> {
+    ): List<DailyGeneration> {
         val logsByDate = logs.groupBy { KstDashboardDates.dateOf(it.createdAt) }
         return KstDashboardDates.dateAxis(today, days).map { date ->
             val dayLogs = logsByDate[date].orEmpty()
-            DailyGenerationResponse(
+            DailyGeneration(
                 date = date,
                 success = dayLogs.count { it.success }.toLong(),
                 failed = dayLogs.count { !it.success }.toLong(),
