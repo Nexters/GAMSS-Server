@@ -128,11 +128,19 @@ class LayerDependencyTest {
         assertTrue(violations.isEmpty(), "$rule\n" + violations.joinToString("\n") { "  - $it" })
     }
 
+    /**
+     * 검사 대상 소스. 하나도 못 찾으면 실패시킨다.
+     *
+     * [MAIN_SOURCE] 가 상대경로라 작업 디렉터리가 프로젝트 루트가 아니면 빈 리스트가 되는데, 그때
+     * 규칙들이 전부 "위반 0건"으로 통과해 버린다. 테스트가 깨지는 것보다 아무것도 검사하지 않으면서
+     * 초록불인 쪽이 나쁘다.
+     */
     private fun sources(): List<Path> =
         MAIN_SOURCE
             .walk()
             .filter { it.extension == "kt" }
             .toList()
+            .also { assertTrue(it.isNotEmpty(), "$MAIN_SOURCE 에서 소스를 찾지 못했다. 규칙이 검사되지 않는다") }
 
     /** `com/nexters/gamss/<module>/<layer>/...` 에서 모듈 이름. */
     private fun Path.moduleOf(): String =

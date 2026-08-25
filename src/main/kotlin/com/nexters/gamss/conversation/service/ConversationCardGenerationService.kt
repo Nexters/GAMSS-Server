@@ -5,8 +5,6 @@ import com.nexters.gamss.conversation.domain.Conversation
 import com.nexters.gamss.conversation.domain.SenderType
 import com.nexters.gamss.conversation.repository.ConversationRepository
 import com.nexters.gamss.conversation.repository.MessageRepository
-import com.nexters.gamss.global.exception.BusinessException
-import com.nexters.gamss.global.exception.ErrorCode
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant

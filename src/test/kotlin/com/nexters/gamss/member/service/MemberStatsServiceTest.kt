@@ -5,7 +5,6 @@ import com.nexters.gamss.member.repository.MemberRepository
 import io.mockk.every
 import io.mockk.mockk
 import java.time.Instant
-import java.util.Optional
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

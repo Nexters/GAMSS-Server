@@ -5,7 +5,7 @@ package com.nexters.gamss.global.exception
  *
  * HTTP 상태 코드를 들지 않는다. 이 enum 은 도메인이 그대로 참조하는데(닉네임·제목 검증 등),
  * 상태 코드를 들면 그 도메인 규칙들이 전부 스프링 웹 타입에 묶인다. 성격만 [ErrorKind]로 말하고
- * 상태 코드로의 번역은 웹 계층이 한다([com.nexters.gamss.global.response.httpStatusOf]).
+ * 상태 코드로의 번역은 웹 계층이 한다([com.nexters.gamss.global.web.httpStatusOf]).
  */
 enum class ErrorCode(
     val kind: ErrorKind,
