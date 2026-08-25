@@ -1,8 +1,9 @@
-package com.nexters.gamss.global.exception
+package com.nexters.gamss.global.web
 
+import com.nexters.gamss.global.exception.BusinessException
+import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.global.response.ApiResponse
 import com.nexters.gamss.global.response.ErrorResponse
-import com.nexters.gamss.global.response.httpStatusOf
 import jakarta.validation.ConstraintViolationException
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity

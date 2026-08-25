@@ -3,7 +3,7 @@ package com.nexters.gamss.global.security
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.global.response.ApiResponse
 import com.nexters.gamss.global.response.ErrorResponse
-import com.nexters.gamss.global.response.httpStatusOf
+import com.nexters.gamss.global.web.httpStatusOf
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.http.MediaType

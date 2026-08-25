@@ -1,4 +1,4 @@
-package com.nexters.gamss.global.response
+package com.nexters.gamss.global.web
 
 import com.nexters.gamss.global.exception.ErrorKind
 import org.springframework.http.HttpStatus
