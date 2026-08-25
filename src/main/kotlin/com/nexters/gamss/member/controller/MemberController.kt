@@ -6,7 +6,6 @@ import com.nexters.gamss.member.controller.dto.MemberResponse
 import com.nexters.gamss.member.controller.dto.TokenUsageResponse
 import com.nexters.gamss.member.controller.dto.UpdateNicknameRequest
 import com.nexters.gamss.member.domain.Nickname
-import com.nexters.gamss.member.service.MemberReadService
 import com.nexters.gamss.member.service.MemberService
 import com.nexters.gamss.tokenlimit.service.DailyTokenLimitService
 import io.swagger.v3.oas.annotations.Operation
@@ -26,7 +25,6 @@ import org.springframework.web.bind.annotation.RestController
 @RequestMapping("/api/members")
 class MemberController(
     private val memberService: MemberService,
-    private val memberReadService: MemberReadService,
     private val dailyTokenLimitService: DailyTokenLimitService,
 ) {
     @Operation(
@@ -43,7 +41,7 @@ class MemberController(
     fun me(
         @Parameter(hidden = true) @AuthenticationPrincipal principal: AuthPrincipal,
     ): ApiResponse<MemberResponse> {
-        val member = memberReadService.getById(principal.memberId)
+        val member = memberService.getById(principal.memberId)
         return ApiResponse.success(MemberResponse.from(member))
     }
 

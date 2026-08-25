@@ -4,7 +4,6 @@ import com.nexters.gamss.auth.domain.SocialAccount
 import com.nexters.gamss.auth.repository.SocialAccountRepository
 import com.nexters.gamss.auth.social.SocialProvider
 import com.nexters.gamss.member.domain.Member
-import com.nexters.gamss.member.service.MemberReadService
 import com.nexters.gamss.member.service.MemberService
 import io.mockk.every
 import io.mockk.mockk
@@ -19,15 +18,14 @@ import kotlin.test.assertTrue
 class SocialAccountServiceTest {
     private val socialAccountRepository = mockk<SocialAccountRepository>()
     private val memberService = mockk<MemberService>()
-    private val memberReadService = mockk<MemberReadService>()
-    private val socialAccountService = SocialAccountService(socialAccountRepository, memberService, memberReadService)
+    private val socialAccountService = SocialAccountService(socialAccountRepository, memberService)
 
     @Test
     fun `기존 소셜 계정이면 연결된 회원을 반환한다`() {
         val socialAccount = SocialAccount(memberId = 5L, provider = "GOOGLE", providerId = "sub-1")
         every { socialAccountRepository.findByProviderAndProviderId("GOOGLE", "sub-1") } returns socialAccount
         val member = mockk<Member>()
-        every { memberReadService.getById(5L) } returns member
+        every { memberService.getById(5L) } returns member
 
         val result = socialAccountService.resolveMember(SocialProvider.GOOGLE, "sub-1", "a@a.com", "홍길동")
 

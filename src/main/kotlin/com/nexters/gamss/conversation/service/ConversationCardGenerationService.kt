@@ -1,7 +1,10 @@
 package com.nexters.gamss.conversation.service
 
 import com.nexters.gamss.conversation.domain.CardGenerationStatus
+import com.nexters.gamss.conversation.domain.Conversation
+import com.nexters.gamss.conversation.domain.SenderType
 import com.nexters.gamss.conversation.repository.ConversationRepository
+import com.nexters.gamss.conversation.repository.MessageRepository
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import org.springframework.stereotype.Service
@@ -9,16 +12,42 @@ import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
 
 /**
- * 대화방에 붙어 있는 **카드 생성 상태**를 다룬다. 카드 모듈이 대화방 행을 직접 UPDATE 하지 않도록,
- * 상태 전이 규칙(어느 상태에서 어느 상태로 갈 수 있는가)을 대화 모듈 안에 둔다.
+ * **카드 생성이 대화방에 요구하는 것**을 모아 둔다. 상태 선점·전이, 요약 반영, 대상 조회, 그리고
+ * 카드를 만들기 위해 대화방에서 읽어야 하는 것들이다.
  *
- * 전이는 전부 CAS 다. 카드 생성은 사용자 요청과 새벽 배치가 같은 방을 동시에 노릴 수 있어서,
- * 읽고 나서 쓰는 방식이면 두 경로가 같은 방의 카드를 두 번 만든다.
+ * 카드 모듈이 대화방 행을 직접 건드리지 않게 하려고 둔다. 특히 상태 전이 규칙(어느 상태에서 어느
+ * 상태로 갈 수 있는가)은 대화 모듈 안에 있어야 한다. 전이는 전부 CAS 다. 카드 생성은 사용자 요청과
+ * 새벽 배치가 같은 방을 동시에 노릴 수 있어서, 읽고 나서 쓰는 방식이면 두 경로가 같은 방의 카드를
+ * 두 번 만든다.
  */
 @Service
-class ConversationCardStateService(
+class ConversationCardGenerationService(
     private val conversationRepository: ConversationRepository,
+    private val messageRepository: MessageRepository,
+    private val conversationService: ConversationService,
 ) {
+    /** 대화방 하나. 없으면 null. 전이 실패의 원인(삭제인지 아닌지)을 가릴 때 쓴다. */
+    @Transactional(readOnly = true)
+    fun findConversation(conversationId: Long): Conversation? = conversationRepository.findById(conversationId).orElse(null)
+
+    /**
+     * 이 회원 소유의 대화방. 없으면 CONVERSATION_NOT_FOUND, 남의 방이면 CONVERSATION_ACCESS_DENIED 다.
+     *
+     * 판정은 [ConversationService.getOwnedConversation] 하나뿐이다. 여기서 다시 쓰면 두 판정이 갈라진다.
+     */
+    @Transactional(readOnly = true)
+    fun getOwnedConversation(
+        conversationId: Long,
+        memberId: Long,
+    ): Conversation = conversationService.getOwnedConversation(conversationId, memberId)
+
+    /** 이 대화방에서 사용자가 보낸 메시지 본문을 시간순으로 읽는다. 감정 분류·요약 폴백의 재료다. */
+    @Transactional(readOnly = true)
+    fun findUserMessageContents(conversationId: Long): List<String> =
+        messageRepository
+            .findAllByConversationIdAndSenderTypeOrderByIdAsc(conversationId, SenderType.USER)
+            .map { it.content }
+
     /**
      * 카드 생성을 선점한다(PENDING 으로 전이). 선점에 성공했으면 true, 이미 다른 경로가 잡았거나
      * 방이 삭제됐으면 false.
@@ -69,37 +98,4 @@ class ConversationCardStateService(
         createdAfter: Instant,
         createdBefore: Instant,
     ): List<Long> = conversationRepository.findAutoCardTargetIds(createdAfter, createdBefore)
-
-    /**
-     * 카드와 함께 사라지는 대화방들을 일괄 소프트 삭제한다.
-     *
-     * [deletedAt] 을 받는 이유는 카드와 **같은 시각**을 찍기 위해서다. 한 번의 삭제로 사라진 짝이라
-     * 나중에 이력을 볼 때 두 UPDATE 사이의 미세한 시차로 다른 요청처럼 보이지 않아야 한다.
-     */
-    @Transactional
-    fun softDeleteAll(
-        conversationIds: List<Long>,
-        deletedAt: Instant,
-    ) {
-        conversationRepository.softDeleteByIds(conversationIds, deletedAt)
-    }
-
-    /**
-     * 카드가 지워질 때 그 카드가 나온 방도 함께 지운다(soft delete). 카드는 그 대화의 결과물이라,
-     * 카드만 지우고 대화를 남기면 사용자가 지웠다고 여긴 내용이 채팅방 목록·검색에 그대로 남는다.
-     *
-     * 이미 삭제된 방이면 넘어간다. 채팅방을 먼저 지운 뒤 카드를 지우는 순서에서도 카드 삭제는
-     * 성공해야 한다.
-     */
-    @Transactional
-    fun deleteForCardRemoval(conversationId: Long) {
-        val conversation =
-            conversationRepository
-                .findByIdForUpdate(conversationId)
-                .orElseThrow { BusinessException(ErrorCode.CONVERSATION_NOT_FOUND) }
-        if (conversation.isDeleted()) {
-            return
-        }
-        conversation.delete()
-    }
 }

@@ -8,8 +8,6 @@ import com.nexters.gamss.conversation.domain.ConversationStatus
 import com.nexters.gamss.conversation.domain.SenderType
 import com.nexters.gamss.conversation.repository.ConversationRepository
 import com.nexters.gamss.conversation.repository.MessageRepository
-import com.nexters.gamss.global.exception.BusinessException
-import com.nexters.gamss.global.exception.ErrorCode
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Service
@@ -17,50 +15,21 @@ import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
 
 /**
- * 대화·메시지를 **모듈 밖에서** 읽어가는 창구(백오피스 집계·모니터링 게이지·미종료 리마인더).
+ * 대화·메시지가 **얼마나 있는지** 센다. 백오피스 대시보드 집계와 모니터링 게이지가 쓴다.
  *
- * 이 창구를 두는 이유는 다른 모듈이 [ConversationRepository]·[MessageRepository] 를 직접 잡지 않게
- * 하기 위해서다. 리포지토리를 직접 열어주면 쿼리 하나를 고칠 때 어느 모듈이 깨지는지 알 수 없고,
- * 대화 모듈이 자기 저장 구조를 바꿀 자유를 잃는다.
+ * 사용자 유스케이스([ConversationService])와 갈라 둔 이유는 바뀌는 이유가 다르기 때문이다.
+ * 여기 있는 것들은 "무엇을 보고 싶은가"가 바뀔 때 함께 바뀌고, 대화 자체의 규칙과는 무관하다.
  *
- * **읽기만 둔다.** 상태를 바꾸는 일은 [ConversationService] 처럼 그 일을 책임지는 서비스가 맡는다.
- * 모듈 안에서 쓰는 조회까지 여기로 모으지 않는다. 여기 있는 것은 밖에서 요청한 것뿐이다.
+ * 다른 모듈이 [ConversationRepository]·[MessageRepository] 를 직접 잡지 않게 하는 역할도 겸한다.
+ * 리포지토리를 직접 열어주면 쿼리 하나를 고칠 때 어느 모듈이 깨지는지 알 수 없다.
  */
 @Service
 @Transactional(readOnly = true)
-class ConversationReadService(
+class ConversationStatsService(
     private val conversationRepository: ConversationRepository,
     private val messageRepository: MessageRepository,
     private val conversationProperties: ConversationProperties,
 ) {
-    /** 대화방 하나. 없으면 null. */
-    fun findConversation(conversationId: Long): Conversation? = conversationRepository.findById(conversationId).orElse(null)
-
-    /**
-     * 이 회원 소유의 대화방. 없으면 CONVERSATION_NOT_FOUND, 남의 방이면 CONVERSATION_ACCESS_DENIED 다.
-     *
-     * 소유 판정을 부르는 쪽마다 다시 쓰지 않도록 대화 모듈이 한 번만 정의한다.
-     */
-    fun getOwnedConversation(
-        conversationId: Long,
-        memberId: Long,
-    ): Conversation {
-        val conversation =
-            conversationRepository
-                .findById(conversationId)
-                .orElseThrow { BusinessException(ErrorCode.CONVERSATION_NOT_FOUND) }
-        if (!conversation.isOwnedBy(memberId)) {
-            throw BusinessException(ErrorCode.CONVERSATION_ACCESS_DENIED)
-        }
-        return conversation
-    }
-
-    /** 이 대화방에서 사용자가 보낸 메시지 본문을 시간순으로 읽는다. */
-    fun findUserMessageContents(conversationId: Long): List<String> =
-        messageRepository
-            .findAllByConversationIdAndSenderTypeOrderByIdAsc(conversationId, SenderType.USER)
-            .map { it.content }
-
     /** [from, to) 사이 생성된 대화방 수. */
     fun countConversationsCreatedBetween(
         from: Instant,
@@ -85,7 +54,7 @@ class ConversationReadService(
     /** [from] 이후 작성된 메시지의 작성시각. 일별 추이는 받는 쪽이 묶는다. */
     fun findMessageCreatedAtsSince(from: Instant): List<Instant> = messageRepository.findCreatedAtsSince(from)
 
-    /** 대화방을 [pageable] 대로 페이지네이션한다. */
+    /** 대화방을 [pageable] 대로 페이지네이션한다(백오피스 대화방별 사용량 목록). */
     fun findConversations(pageable: Pageable): Page<Conversation> = conversationRepository.findAll(pageable)
 
     /** [conversationIds] 각각의 발신 주체별 메시지 수. 대화방 수만큼 쿼리하지 않도록 한 번에 받는다. */
@@ -116,10 +85,4 @@ class ConversationReadService(
             CommentStatus.PENDING,
             Instant.now().minus(conversationProperties.pendingGenerationTimeout),
         )
-
-    /** [createdAfter, createdBefore) 사이에 만들어진 방 중 아직 미종료인 것들의 주인 회원 id(중복 제외). */
-    fun findMemberIdsWithUnfinishedConversations(
-        createdAfter: Instant,
-        createdBefore: Instant,
-    ): List<Long> = conversationRepository.findMemberIdsWithUnfinishedConversations(createdAfter, createdBefore)
 }

@@ -19,8 +19,7 @@ import kotlin.test.assertTrue
 class MemberServiceTest {
     private val memberRepository = mockk<MemberRepository>()
     private val cleaner = RecordingCleaner()
-    private val memberService =
-        MemberService(memberRepository, MemberReadService(memberRepository), WithdrawnMemberCleaners(listOf(cleaner)))
+    private val memberService = MemberService(memberRepository, WithdrawnMemberCleaners(listOf(cleaner)))
 
     @Test
     fun `회원을 생성하면 닉네임 초기값은 이름이다`() {
@@ -52,6 +51,23 @@ class MemberServiceTest {
 
         assertEquals("김", member.name)
         assertNull(member.nickname)
+    }
+
+    @Test
+    fun `getById로 회원을 조회한다`() {
+        val member = Member("b@example.com")
+        every { memberRepository.findById(10L) } returns Optional.of(member)
+
+        assertSame(member, memberService.getById(10L))
+    }
+
+    @Test
+    fun `없는 회원을 조회하면 MEMBER_NOT_FOUND`() {
+        every { memberRepository.findById(99L) } returns Optional.empty()
+
+        val exception = assertFailsWith<BusinessException> { memberService.getById(99L) }
+
+        assertEquals(ErrorCode.MEMBER_NOT_FOUND, exception.errorCode)
     }
 
     @Test

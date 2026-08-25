@@ -96,6 +96,19 @@ class LayerDependencyTest {
     }
 
     @Test
+    fun `서비스를 읽기·쓰기로 가르지 않는다`() {
+        assertNoViolation(
+            "ReadService·WriteService 라는 이름이 생겼다. 서비스는 '무엇을 위한 것인가'로 가른다",
+            sources().flatMap { file ->
+                file
+                    .readLines()
+                    .filter { TECHNICAL_SERVICE_NAME.containsMatchIn(it) }
+                    .map { "${file.display()}: ${it.trim()}" }
+            },
+        )
+    }
+
+    @Test
     fun `헥사고날 용어를 쓰지 않는다`() {
         assertNoViolation(
             "Port·Adapter 로 끝나는 이름이 생겼다. 이 레포는 그 어휘를 쓰지 않는다",
@@ -170,5 +183,14 @@ class LayerDependencyTest {
 
         /** 선언·주입 필드·타입 참조 어디에서든 잡히도록 이름만 본다. */
         val HEXAGONAL_NAME = Regex("""\b[A-Z]\w*(Port|Adapter)\b""")
+
+        /**
+         * 읽기·쓰기라는 **기술 축**으로 서비스를 가른 이름.
+         *
+         * 이 축을 쓰면 새 기능마다 "이건 읽기인가"를 물어야 하는데, 유스케이스 서비스에도 조회가
+         * 있어서 답이 갈린다. 대신 목적으로 가른다(예: ConversationStatsService 는 '얼마나 있는지
+         * 센다', ConversationCardGenerationService 는 '카드 생성이 대화방에 요구하는 것').
+         */
+        val TECHNICAL_SERVICE_NAME = Regex("""\b[A-Z]\w*(Read|Write)Service\b""")
     }
 }

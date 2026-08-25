@@ -5,8 +5,8 @@ import com.nexters.gamss.card.domain.CardSummary
 import com.nexters.gamss.card.repository.CardRepository
 import com.nexters.gamss.conversation.domain.CardGenerationStatus
 import com.nexters.gamss.conversation.domain.Conversation
-import com.nexters.gamss.conversation.service.ConversationCardStateService
-import com.nexters.gamss.conversation.service.ConversationReadService
+import com.nexters.gamss.conversation.service.ConversationCardGenerationService
+import com.nexters.gamss.conversation.service.ConversationService
 import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
@@ -34,8 +34,8 @@ import kotlin.test.assertTrue
 
 class CardServiceTest {
     private val cardRepository = mockk<CardRepository>()
-    private val conversationReadService = mockk<ConversationReadService>()
-    private val conversationCardStateService = mockk<ConversationCardStateService>()
+    private val conversationService = mockk<ConversationService>()
+    private val conversationCardGenerationService = mockk<ConversationCardGenerationService>()
     private val cardMessageGenerator = mockk<CardMessageGenerator>()
     private val emotionExtractor = mockk<EmotionExtractor>()
     private val generationLogRecorder = mockk<GenerationLogRecorder>(relaxed = true)
@@ -43,8 +43,8 @@ class CardServiceTest {
     private val service =
         CardService(
             cardRepository,
-            conversationReadService,
-            conversationCardStateService,
+            conversationCardGenerationService,
+            conversationService,
             cardMessageGenerator,
             emotionExtractor,
             generationLogRecorder,
@@ -57,19 +57,19 @@ class CardServiceTest {
 
     /** 소유·종료 검사를 통과해 이 대화방이 돌아오는 경로. */
     private fun stubOwnedConversation(conversation: Conversation) {
-        every { conversationReadService.getOwnedConversation(CONVERSATION_ID, MEMBER_ID) } returns conversation
+        every { conversationCardGenerationService.getOwnedConversation(CONVERSATION_ID, MEMBER_ID) } returns conversation
     }
 
     /** LLM 호출 전 CAS 선점이 성공하는 경로. */
     private fun stubClaimSuccess() {
-        every { conversationCardStateService.claimForCardGeneration(CONVERSATION_ID) } returns true
+        every { conversationCardGenerationService.claimForCardGeneration(CONVERSATION_ID) } returns true
     }
 
     private fun stubFinishStatus(
         to: CardGenerationStatus,
         returns: Boolean = true,
     ) {
-        every { conversationCardStateService.finishCardGeneration(CONVERSATION_ID, to) } returns returns
+        every { conversationCardGenerationService.finishCardGeneration(CONVERSATION_ID, to) } returns returns
     }
 
     @Test
@@ -120,7 +120,7 @@ class CardServiceTest {
     @Test
     fun `존재하지 않는 대화면 CONVERSATION_NOT_FOUND`() {
         every {
-            conversationReadService.getOwnedConversation(CONVERSATION_ID, MEMBER_ID)
+            conversationCardGenerationService.getOwnedConversation(CONVERSATION_ID, MEMBER_ID)
         } throws BusinessException(ErrorCode.CONVERSATION_NOT_FOUND)
 
         val exception = assertFailsWith<BusinessException> { service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약") }
@@ -131,7 +131,7 @@ class CardServiceTest {
     @Test
     fun `본인 대화가 아니면 CONVERSATION_ACCESS_DENIED`() {
         every {
-            conversationReadService.getOwnedConversation(CONVERSATION_ID, MEMBER_ID)
+            conversationCardGenerationService.getOwnedConversation(CONVERSATION_ID, MEMBER_ID)
         } throws BusinessException(ErrorCode.CONVERSATION_ACCESS_DENIED)
 
         val exception = assertFailsWith<BusinessException> { service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약") }
@@ -161,7 +161,7 @@ class CardServiceTest {
     @Test
     fun `선점에 실패했는데 이미 카드가 있으면 LLM 호출 없이 CARD_ALREADY_EXISTS`() {
         stubOwnedConversation(endedConversation())
-        every { conversationCardStateService.claimForCardGeneration(CONVERSATION_ID) } returns false
+        every { conversationCardGenerationService.claimForCardGeneration(CONVERSATION_ID) } returns false
         every { cardRepository.existsByConversationId(CONVERSATION_ID) } returns true
 
         val exception = assertFailsWith<BusinessException> { service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약") }
@@ -173,7 +173,7 @@ class CardServiceTest {
     @Test
     fun `선점에 실패했는데 카드가 아직 없으면(동시 생성 중) LLM 호출 없이 CARD_GENERATION_IN_PROGRESS`() {
         stubOwnedConversation(endedConversation())
-        every { conversationCardStateService.claimForCardGeneration(CONVERSATION_ID) } returns false
+        every { conversationCardGenerationService.claimForCardGeneration(CONVERSATION_ID) } returns false
         every { cardRepository.existsByConversationId(CONVERSATION_ID) } returns false
 
         val exception = assertFailsWith<BusinessException> { service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약") }
@@ -186,7 +186,7 @@ class CardServiceTest {
     fun `emotion이 없으면 유저 메시지만 보고 감정을 분류해 카드에 쓴다`() {
         stubOwnedConversation(endedConversation())
         stubClaimSuccess()
-        every { conversationReadService.findUserMessageContents(CONVERSATION_ID) } returns listOf("오늘 진짜 우울했다", "계속 눈물이 났다")
+        every { conversationCardGenerationService.findUserMessageContents(CONVERSATION_ID) } returns listOf("오늘 진짜 우울했다", "계속 눈물이 났다")
         every {
             emotionExtractor.extract(listOf("오늘 진짜 우울했다", "계속 눈물이 났다"))
         } returns EmotionExtractionOutput(EmotionType.SADNESS, usedTokens = 5, cachedTokens = 0)
@@ -218,7 +218,7 @@ class CardServiceTest {
         // 요약을 만들 수 있는 건 클라이언트뿐이라 배치는 그 값을 못 받는다. 재료인 메시지는 이미 있다(#204).
         stubOwnedConversation(endedConversation())
         stubClaimSuccess()
-        every { conversationReadService.findUserMessageContents(CONVERSATION_ID) } returns listOf("오늘 억울한 일이 있었어", "그래서 화가 났어")
+        every { conversationCardGenerationService.findUserMessageContents(CONVERSATION_ID) } returns listOf("오늘 억울한 일이 있었어", "그래서 화가 났어")
         every {
             emotionExtractor.extract(listOf("오늘 억울한 일이 있었어", "그래서 화가 났어"))
         } returns EmotionExtractionOutput(EmotionType.ANGER, usedTokens = 5, cachedTokens = 0)
@@ -237,7 +237,7 @@ class CardServiceTest {
         // 원문을 남기면 정보량이 많은 요약을 최근 5개 풀 밖으로 밀어낸다.
         stubOwnedConversation(endedConversation())
         stubClaimSuccess()
-        every { conversationReadService.findUserMessageContents(CONVERSATION_ID) } returns listOf("오늘 억울한 일이 있었어")
+        every { conversationCardGenerationService.findUserMessageContents(CONVERSATION_ID) } returns listOf("오늘 억울한 일이 있었어")
         every {
             emotionExtractor.extract(listOf("오늘 억울한 일이 있었어"))
         } returns EmotionExtractionOutput(EmotionType.ANGER, usedTokens = 5, cachedTokens = 0)
@@ -255,7 +255,7 @@ class CardServiceTest {
         // 내용 없이 자리만 차지한다 — 프롬프트 단계에서 공백이 걸러지기 때문이다.
         stubOwnedConversation(endedConversation())
         stubClaimSuccess()
-        every { conversationReadService.findUserMessageContents(CONVERSATION_ID) } returns listOf("오늘 억울한 일이 있었어")
+        every { conversationCardGenerationService.findUserMessageContents(CONVERSATION_ID) } returns listOf("오늘 억울한 일이 있었어")
         every {
             emotionExtractor.extract(listOf("오늘 억울한 일이 있었어"))
         } returns EmotionExtractionOutput(EmotionType.ANGER, usedTokens = 5, cachedTokens = 0)
@@ -273,7 +273,7 @@ class CardServiceTest {
         // 재시도가 재시도 가능한 503이 아니라 409(생성 중)로 막힌다.
         stubOwnedConversation(endedConversation())
         stubClaimSuccess()
-        every { conversationReadService.findUserMessageContents(CONVERSATION_ID) } returns emptyList()
+        every { conversationCardGenerationService.findUserMessageContents(CONVERSATION_ID) } returns emptyList()
         stubFinishStatus(CardGenerationStatus.FAILED)
 
         val exception = assertFailsWith<BusinessException> { service.createCard(MEMBER_ID, CONVERSATION_ID, null, null) }
@@ -282,7 +282,7 @@ class CardServiceTest {
         verify(exactly = 0) { emotionExtractor.extract(any()) }
         verify(exactly = 0) { cardMessageGenerator.generate(any(), any()) }
         verify(exactly = 1) {
-            conversationCardStateService.finishCardGeneration(CONVERSATION_ID, CardGenerationStatus.FAILED)
+            conversationCardGenerationService.finishCardGeneration(CONVERSATION_ID, CardGenerationStatus.FAILED)
         }
     }
 
@@ -302,7 +302,7 @@ class CardServiceTest {
     fun `유저 메시지가 하나도 없으면 클라이언트 요약으로 감정을 분류한다`() {
         stubOwnedConversation(endedConversation())
         stubClaimSuccess()
-        every { conversationReadService.findUserMessageContents(CONVERSATION_ID) } returns emptyList()
+        every { conversationCardGenerationService.findUserMessageContents(CONVERSATION_ID) } returns emptyList()
         every { emotionExtractor.extract(listOf("요약")) } returns EmotionExtractionOutput(EmotionType.JOY, usedTokens = 5, cachedTokens = 0)
         every { cardMessageGenerator.generate(EmotionType.JOY, "요약") } returns CardMessageOutput("대사", 10, 0)
         every { cardPersistenceService.save(any(), CONVERSATION_ID, "요약") } answers { firstArg() }
@@ -316,7 +316,7 @@ class CardServiceTest {
     fun `감정 분류에 실패하면 FAILED로 전이하고 CARD_GENERATION_FAILED - 대사 생성은 호출되지 않는다`() {
         stubOwnedConversation(endedConversation())
         stubClaimSuccess()
-        every { conversationReadService.findUserMessageContents(CONVERSATION_ID) } returns listOf("오늘 일기")
+        every { conversationCardGenerationService.findUserMessageContents(CONVERSATION_ID) } returns listOf("오늘 일기")
         val extractionFailure = CardGenerationFailedException("분류 실패")
         every { emotionExtractor.extract(any()) } throws extractionFailure
         stubFinishStatus(CardGenerationStatus.FAILED)
@@ -328,7 +328,7 @@ class CardServiceTest {
         verify(exactly = 0) { cardMessageGenerator.generate(any(), any()) }
         verify(exactly = 0) { cardPersistenceService.save(any(), any(), any()) }
         verify(exactly = 1) {
-            conversationCardStateService.finishCardGeneration(CONVERSATION_ID, CardGenerationStatus.FAILED)
+            conversationCardGenerationService.finishCardGeneration(CONVERSATION_ID, CardGenerationStatus.FAILED)
         }
         verify(exactly = 1) {
             generationLogRecorder.record(
@@ -352,7 +352,7 @@ class CardServiceTest {
         stubOwnedConversation(endedConversation())
         stubClaimSuccess()
         val readFailure = QueryTimeoutException("조회 타임아웃")
-        every { conversationReadService.findUserMessageContents(CONVERSATION_ID) } throws readFailure
+        every { conversationCardGenerationService.findUserMessageContents(CONVERSATION_ID) } throws readFailure
         stubFinishStatus(CardGenerationStatus.FAILED)
 
         val exception = assertFailsWith<BusinessException> { service.createCard(MEMBER_ID, CONVERSATION_ID, null, "요약") }
@@ -361,7 +361,7 @@ class CardServiceTest {
         assertEquals(readFailure, exception.cause)
         verify(exactly = 0) { emotionExtractor.extract(any()) }
         verify(exactly = 1) {
-            conversationCardStateService.finishCardGeneration(CONVERSATION_ID, CardGenerationStatus.FAILED)
+            conversationCardGenerationService.finishCardGeneration(CONVERSATION_ID, CardGenerationStatus.FAILED)
         }
     }
 
@@ -379,7 +379,7 @@ class CardServiceTest {
         assertEquals(generationFailure, exception.cause)
         verify(exactly = 0) { cardPersistenceService.save(any(), any(), any()) }
         verify(exactly = 1) {
-            conversationCardStateService.finishCardGeneration(CONVERSATION_ID, CardGenerationStatus.FAILED)
+            conversationCardGenerationService.finishCardGeneration(CONVERSATION_ID, CardGenerationStatus.FAILED)
         }
     }
 
@@ -392,7 +392,7 @@ class CardServiceTest {
     fun `감정 분류가 재시도 대상이 아닌 예외로 끊겨도 FAILED로 전이하고 실패 로그를 남긴다`() {
         stubOwnedConversation(endedConversation())
         stubClaimSuccess()
-        every { conversationReadService.findUserMessageContents(CONVERSATION_ID) } returns listOf("오늘 일기")
+        every { conversationCardGenerationService.findUserMessageContents(CONVERSATION_ID) } returns listOf("오늘 일기")
         val sdkFailure = IllegalStateException("SDK 응답에 후보가 없다")
         every { emotionExtractor.extract(any()) } throws sdkFailure
         stubFinishStatus(CardGenerationStatus.FAILED)
@@ -405,7 +405,7 @@ class CardServiceTest {
         verify(exactly = 1) { emotionExtractor.extract(any()) }
         verify(exactly = 0) { cardMessageGenerator.generate(any(), any()) }
         verify(exactly = 1) {
-            conversationCardStateService.finishCardGeneration(CONVERSATION_ID, CardGenerationStatus.FAILED)
+            conversationCardGenerationService.finishCardGeneration(CONVERSATION_ID, CardGenerationStatus.FAILED)
         }
         verify(exactly = 1) {
             generationLogRecorder.record(
@@ -442,7 +442,7 @@ class CardServiceTest {
         verify(exactly = 1) { cardMessageGenerator.generate(any(), any()) }
         verify(exactly = 0) { cardPersistenceService.save(any(), any(), any()) }
         verify(exactly = 1) {
-            conversationCardStateService.finishCardGeneration(CONVERSATION_ID, CardGenerationStatus.FAILED)
+            conversationCardGenerationService.finishCardGeneration(CONVERSATION_ID, CardGenerationStatus.FAILED)
         }
         verify(exactly = 1) {
             generationLogRecorder.record(
@@ -476,7 +476,7 @@ class CardServiceTest {
         assertEquals(ErrorCode.CARD_ALREADY_EXISTS, exception.errorCode)
         assertEquals(saveFailure, exception.cause)
         verify(exactly = 1) {
-            conversationCardStateService.finishCardGeneration(CONVERSATION_ID, CardGenerationStatus.DONE)
+            conversationCardGenerationService.finishCardGeneration(CONVERSATION_ID, CardGenerationStatus.DONE)
         }
     }
 
@@ -497,7 +497,7 @@ class CardServiceTest {
 
         assertEquals(saveFailure, exception)
         verify(exactly = 1) {
-            conversationCardStateService.finishCardGeneration(CONVERSATION_ID, CardGenerationStatus.FAILED)
+            conversationCardGenerationService.finishCardGeneration(CONVERSATION_ID, CardGenerationStatus.FAILED)
         }
     }
 
@@ -522,7 +522,7 @@ class CardServiceTest {
 
         assertEquals(saveFailure, exception)
         verify(exactly = 1) {
-            conversationCardStateService.finishCardGeneration(CONVERSATION_ID, CardGenerationStatus.FAILED)
+            conversationCardGenerationService.finishCardGeneration(CONVERSATION_ID, CardGenerationStatus.FAILED)
         }
     }
 
@@ -531,7 +531,7 @@ class CardServiceTest {
         val activeConversation = endedConversation()
         val deletedConversation = endedConversation().apply { delete() }
         stubOwnedConversation(activeConversation)
-        every { conversationReadService.findConversation(CONVERSATION_ID) } returns deletedConversation
+        every { conversationCardGenerationService.findConversation(CONVERSATION_ID) } returns deletedConversation
         stubClaimSuccess()
         every { cardMessageGenerator.generate(any(), any()) } returns CardMessageOutput("대사", 10, 0)
         every {
@@ -543,7 +543,7 @@ class CardServiceTest {
         assertEquals(ErrorCode.CONVERSATION_ALREADY_DELETED, exception.errorCode)
         // 이미 PENDING이 아니라는 뜻(삭제됨)이라 되돌릴 대상 자체가 없다 — 되돌리기를 시도하지 않는다.
         verify(exactly = 0) {
-            conversationCardStateService.finishCardGeneration(CONVERSATION_ID, CardGenerationStatus.FAILED)
+            conversationCardGenerationService.finishCardGeneration(CONVERSATION_ID, CardGenerationStatus.FAILED)
         }
     }
 
@@ -551,7 +551,7 @@ class CardServiceTest {
     fun `저장 시점 상태 전이가 삭제 아닌 이유로 실패하면(PENDING 타임아웃 리셋 등) CARD_GENERATION_FAILED로 변환된다`() {
         stubOwnedConversation(endedConversation())
         // 전이 실패 뒤 다시 읽었을 때 방이 살아 있다 = 삭제가 아닌 다른 이유로 PENDING 이 풀린 것이다.
-        every { conversationReadService.findConversation(CONVERSATION_ID) } returns endedConversation()
+        every { conversationCardGenerationService.findConversation(CONVERSATION_ID) } returns endedConversation()
         stubClaimSuccess()
         every { cardMessageGenerator.generate(any(), any()) } returns CardMessageOutput("대사", 10, 0)
         every {

@@ -3,18 +3,34 @@ package com.nexters.gamss.member.service
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.member.domain.Member
+import com.nexters.gamss.member.domain.MemberStatus
 import com.nexters.gamss.member.domain.Nickname
 import com.nexters.gamss.member.repository.MemberRepository
+import org.springframework.data.domain.Page
+import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
-/** 회원을 만들고 바꾸고 탈퇴시킨다. 읽기는 [MemberReadService] 가 맡는다. */
+/** 회원 유스케이스. 백오피스 집계는 [MemberStatsService] 가 맡는다. */
 @Service
 class MemberService(
     private val memberRepository: MemberRepository,
-    private val memberReadService: MemberReadService,
     private val withdrawnMemberCleaners: WithdrawnMemberCleaners,
 ) {
+    @Transactional(readOnly = true)
+    fun getById(id: Long): Member =
+        memberRepository
+            .findById(id)
+            .orElseThrow { BusinessException(ErrorCode.MEMBER_NOT_FOUND) }
+
+    /** 백오피스 회원 목록. 빈 검색어는 전체 조회로, [status] null 은 모든 상태로 취급한다. */
+    @Transactional(readOnly = true)
+    fun search(
+        keyword: String?,
+        status: MemberStatus?,
+        pageable: Pageable,
+    ): Page<Member> = memberRepository.search(keyword?.takeIf { it.isNotBlank() }, status, pageable)
+
     // 닉네임 초기값은 소셜 이름. 이름이 닉네임 규칙(길이·금칙어)에 어긋나면 미설정(null)으로 둔다.
     @Transactional
     fun create(
@@ -27,7 +43,7 @@ class MemberService(
         id: Long,
         nickname: Nickname,
     ): Member {
-        val member = memberReadService.getById(id)
+        val member = getById(id)
         member.updateNickname(nickname)
         return member
     }
@@ -42,7 +58,7 @@ class MemberService(
      */
     @Transactional
     fun withdraw(id: Long) {
-        val member = memberReadService.getById(id)
+        val member = getById(id)
         if (member.isWithdrawn()) {
             throw BusinessException(ErrorCode.ALREADY_WITHDRAWN)
         }

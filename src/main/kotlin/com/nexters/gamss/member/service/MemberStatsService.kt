@@ -1,12 +1,7 @@
 package com.nexters.gamss.member.service
 
-import com.nexters.gamss.global.exception.BusinessException
-import com.nexters.gamss.global.exception.ErrorCode
-import com.nexters.gamss.member.domain.Member
 import com.nexters.gamss.member.domain.MemberStatus
 import com.nexters.gamss.member.repository.MemberRepository
-import org.springframework.data.domain.Page
-import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
@@ -14,28 +9,16 @@ import java.time.LocalDate
 import java.time.ZoneId
 
 /**
- * 회원을 읽는 창구. 다른 모듈(인증·카드 배치·백오피스)이 [MemberRepository] 를 직접 잡지 않게 한다.
+ * 회원이 **얼마나 있는지** 센다. 백오피스 대시보드가 쓴다.
  *
- * 읽기만 둔다. 회원을 만들고 바꾸고 탈퇴시키는 일은 [MemberService] 가 맡는다
- * ([com.nexters.gamss.conversation.service.ConversationReadService] 와 같은 규약).
+ * 회원 유스케이스([MemberService])와 갈라 둔 이유는 바뀌는 이유가 다르기 때문이다. 여기 있는
+ * 것들은 "무엇을 보고 싶은가"가 바뀔 때 함께 바뀌고, 회원 자체의 규칙과는 무관하다.
  */
 @Service
 @Transactional(readOnly = true)
-class MemberReadService(
+class MemberStatsService(
     private val memberRepository: MemberRepository,
 ) {
-    fun getById(id: Long): Member =
-        memberRepository
-            .findById(id)
-            .orElseThrow { BusinessException(ErrorCode.MEMBER_NOT_FOUND) }
-
-    /** 백오피스 회원 목록. 빈 검색어는 전체 조회로, [status] null 은 모든 상태로 취급한다. */
-    fun search(
-        keyword: String?,
-        status: MemberStatus?,
-        pageable: Pageable,
-    ): Page<Member> = memberRepository.search(keyword?.takeIf { it.isNotBlank() }, status, pageable)
-
     /** [from, to) 사이 가입 수. 백오피스 대시보드의 '오늘 신규 가입' KPI. */
     fun countSignupsBetween(
         from: Instant,

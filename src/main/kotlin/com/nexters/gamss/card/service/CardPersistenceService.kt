@@ -3,7 +3,7 @@ package com.nexters.gamss.card.service
 import com.nexters.gamss.card.domain.Card
 import com.nexters.gamss.card.repository.CardRepository
 import com.nexters.gamss.conversation.domain.CardGenerationStatus
-import com.nexters.gamss.conversation.service.ConversationCardStateService
+import com.nexters.gamss.conversation.service.ConversationCardGenerationService
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -15,7 +15,7 @@ import org.springframework.transaction.annotation.Transactional
 @Service
 class CardPersistenceService(
     private val cardRepository: CardRepository,
-    private val conversationCardStateService: ConversationCardStateService,
+    private val conversationCardGenerationService: ConversationCardGenerationService,
 ) {
     /**
      * 카드 저장 · 대화 요약 저장 · 카드 생성 상태 DONE 마킹을 하나의 트랜잭션으로 묶는다. 저장 시점의
@@ -31,8 +31,8 @@ class CardPersistenceService(
         summary: String?,
     ): Card {
         val saved = cardRepository.saveAndFlush(card)
-        summary?.let { conversationCardStateService.updateSummary(conversationId, it) }
-        if (!conversationCardStateService.finishCardGeneration(conversationId, CardGenerationStatus.DONE)) {
+        summary?.let { conversationCardGenerationService.updateSummary(conversationId, it) }
+        if (!conversationCardGenerationService.finishCardGeneration(conversationId, CardGenerationStatus.DONE)) {
             throw CardGenerationStateConflictException(
                 "카드 생성 상태 전이가 실패했습니다. conversationId=$conversationId",
             )

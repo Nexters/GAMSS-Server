@@ -10,7 +10,7 @@ import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.global.security.JwtIssuer
 import com.nexters.gamss.global.security.Sha256TokenHasher
 import com.nexters.gamss.member.domain.Member
-import com.nexters.gamss.member.service.MemberReadService
+import com.nexters.gamss.member.service.MemberService
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -23,9 +23,9 @@ import kotlin.test.assertTrue
 class LoginServiceTest {
     private val socialTokenVerifier = mockk<SocialTokenVerifier>()
     private val socialAccountService = mockk<SocialAccountService>()
-    private val memberReadService = mockk<MemberReadService>()
     private val jwtIssuer = mockk<JwtIssuer>()
     private val refreshTokenRepository = mockk<RefreshTokenRepository>()
+    private val memberService = mockk<MemberService>()
 
     // 실제 해시로 저장·비교되는지 검증하기 위해 진짜 해셔를 쓴다.
     private val tokenHasher = Sha256TokenHasher()
@@ -33,7 +33,7 @@ class LoginServiceTest {
         LoginService(
             socialTokenVerifier,
             socialAccountService,
-            memberReadService,
+            memberService,
             jwtIssuer,
             refreshTokenRepository,
             tokenHasher,
@@ -111,7 +111,7 @@ class LoginServiceTest {
         val stored = mockk<RefreshToken>(relaxed = true)
         every { stored.matches(tokenHasher.hash("refresh")) } returns true
         every { refreshTokenRepository.findByMemberId(100L) } returns stored
-        every { memberReadService.getById(100L) } returns mockk { every { isWithdrawn() } returns false }
+        every { memberService.getById(100L) } returns mockk { every { isWithdrawn() } returns false }
         every { jwtIssuer.issueAccessToken(100L) } returns "na"
         every { jwtIssuer.issueRefreshToken(100L) } returns "nr"
 
@@ -128,7 +128,7 @@ class LoginServiceTest {
         val stored = mockk<RefreshToken>()
         every { stored.matches(tokenHasher.hash("refresh")) } returns true
         every { refreshTokenRepository.findByMemberId(100L) } returns stored
-        every { memberReadService.getById(100L) } returns mockk { every { isWithdrawn() } returns true }
+        every { memberService.getById(100L) } returns mockk { every { isWithdrawn() } returns true }
 
         val exception = assertFailsWith<BusinessException> { loginService.reissue("refresh") }
 

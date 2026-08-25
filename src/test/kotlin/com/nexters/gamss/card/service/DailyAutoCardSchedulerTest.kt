@@ -3,12 +3,12 @@ package com.nexters.gamss.card.service
 import com.nexters.gamss.card.config.CardProperties
 import com.nexters.gamss.card.domain.Card
 import com.nexters.gamss.conversation.domain.Conversation
-import com.nexters.gamss.conversation.service.ConversationCardStateService
+import com.nexters.gamss.conversation.service.ConversationCardGenerationService
 import com.nexters.gamss.conversation.service.ConversationService
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.member.domain.Member
-import com.nexters.gamss.member.service.MemberReadService
+import com.nexters.gamss.member.service.MemberService
 import com.nexters.gamss.notification.service.CardCreatedNotifier
 import com.nexters.gamss.notification.service.PushInTransactionException
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
@@ -26,18 +26,18 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class DailyAutoCardSchedulerTest {
-    private val conversationCardStateService = mockk<ConversationCardStateService>()
+    private val conversationCardGenerationService = mockk<ConversationCardGenerationService>()
     private val conversationService = mockk<ConversationService>()
-    private val memberReadService = mockk<MemberReadService> { every { getById(any()) } returns Member() }
+    private val memberService = mockk<MemberService> { every { getById(any()) } returns Member() }
     private val cardService = mockk<CardService>()
     private val cardCreatedNotifier = mockk<CardCreatedNotifier>(relaxed = true)
     private val window = AutoCardWindow(CardProperties(autoCardStartDate = START_DATE))
     private val meterRegistry = SimpleMeterRegistry()
     private val scheduler =
         DailyAutoCardScheduler(
-            conversationCardStateService,
+            conversationCardGenerationService,
             conversationService,
-            memberReadService,
+            memberService,
             cardService,
             window,
             meterRegistry,
@@ -130,7 +130,7 @@ class DailyAutoCardSchedulerTest {
     ): Conversation = Conversation(memberId).apply { summary?.let { updateSummary(it) } }
 
     private fun stubTargets(vararg ids: Long) {
-        every { conversationCardStateService.findAutoCardTargetIds(any(), any()) } returns ids.toList()
+        every { conversationCardGenerationService.findAutoCardTargetIds(any(), any()) } returns ids.toList()
     }
 
     @Test
@@ -184,7 +184,7 @@ class DailyAutoCardSchedulerTest {
 
         scheduler.runFor(createdAfter, createdBefore)
 
-        verify(exactly = 0) { conversationCardStateService.finishCardGeneration(any(), any()) }
+        verify(exactly = 0) { conversationCardGenerationService.finishCardGeneration(any(), any()) }
     }
 
     @Test
@@ -201,8 +201,8 @@ class DailyAutoCardSchedulerTest {
     fun `탈퇴한 회원의 대화방에는 카드를 만들지 않는다`() {
         stubTargets(10L, 20L)
         every { conversationService.endForAutoBatch(any()) } returns conversation()
-        every { memberReadService.getById(MEMBER_ID) } returns Member().apply { withdraw() }
-        every { memberReadService.getById(OTHER_MEMBER_ID) } returns Member()
+        every { memberService.getById(MEMBER_ID) } returns Member().apply { withdraw() }
+        every { memberService.getById(OTHER_MEMBER_ID) } returns Member()
         every { conversationService.endForAutoBatch(20L) } returns conversation(memberId = OTHER_MEMBER_ID)
         every { cardService.createCard(any(), any(), any(), any()) } returns mockk<Card>()
 
@@ -249,7 +249,7 @@ class DailyAutoCardSchedulerTest {
         val capturedAfter = slot<Instant>()
         val capturedBefore = slot<Instant>()
         every {
-            conversationCardStateService.findAutoCardTargetIds(capture(capturedAfter), capture(capturedBefore))
+            conversationCardGenerationService.findAutoCardTargetIds(capture(capturedAfter), capture(capturedBefore))
         } returns emptyList()
 
         // 호출을 시각 구간으로 감싼다 — 호출 도중 05시 경계가 지나가도(하루 한 순간) 검증이

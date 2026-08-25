@@ -3,7 +3,7 @@ package com.nexters.gamss.monitoring.metrics
 import com.nexters.gamss.conversation.domain.CardGenerationStatus
 import com.nexters.gamss.conversation.domain.CommentStatus
 import com.nexters.gamss.conversation.domain.ConversationStatus
-import com.nexters.gamss.conversation.service.ConversationReadService
+import com.nexters.gamss.conversation.service.ConversationStatsService
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
 import org.slf4j.LoggerFactory
@@ -29,7 +29,7 @@ import java.util.concurrent.atomic.AtomicLong
 @Component
 class DomainStateMetrics(
     registry: MeterRegistry,
-    private val conversationReadService: ConversationReadService,
+    private val conversationStatsService: ConversationStatsService,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -59,10 +59,10 @@ class DomainStateMetrics(
         runCatching {
             // 네 값을 먼저 다 읽고 나서 한꺼번에 반영한다. 중간에 실패하면 일부만 새 값이 되어
             // '앞의 지표는 방금 값, 뒤의 지표는 몇 시간 전 값'인 상태가 되는데, 그건 아무도 눈치채지 못한다.
-            val active = conversationReadService.countConversationsByStatus(ConversationStatus.ACTIVE)
-            val comments = conversationReadService.countMessagesByCommentStatus(CommentStatus.PENDING)
-            val cardPending = conversationReadService.countConversationsByCardGenerationStatus(CardGenerationStatus.PENDING)
-            val cardFailed = conversationReadService.countConversationsByCardGenerationStatus(CardGenerationStatus.FAILED)
+            val active = conversationStatsService.countConversationsByStatus(ConversationStatus.ACTIVE)
+            val comments = conversationStatsService.countMessagesByCommentStatus(CommentStatus.PENDING)
+            val cardPending = conversationStatsService.countConversationsByCardGenerationStatus(CardGenerationStatus.PENDING)
+            val cardFailed = conversationStatsService.countConversationsByCardGenerationStatus(CardGenerationStatus.FAILED)
 
             activeConversations.set(active)
             pendingComments.set(comments)

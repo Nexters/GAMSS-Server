@@ -2,7 +2,7 @@ package com.nexters.gamss.notification.service
 
 import com.nexters.gamss.card.config.CardProperties
 import com.nexters.gamss.card.service.AutoCardWindow
-import com.nexters.gamss.conversation.service.ConversationReadService
+import com.nexters.gamss.conversation.service.ConversationService
 import com.nexters.gamss.notification.push.PushMessage
 import com.nexters.gamss.notification.push.PushSendResult
 import io.mockk.every
@@ -17,14 +17,14 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class UnfinishedConversationReminderTest {
-    private val conversationReadService = mockk<ConversationReadService>()
+    private val conversationService = mockk<ConversationService>()
     private val notifier = mockk<MemberPushNotifier>()
     private val window = AutoCardWindow(CardProperties(autoCardStartDate = LocalDate.of(2026, 8, 15)))
-    private val reminder = UnfinishedConversationReminder(conversationReadService, window, notifier)
+    private val reminder = UnfinishedConversationReminder(conversationService, window, notifier)
 
     @Test
     fun `대상 회원들에게 한 번에 보낸다`() {
-        every { conversationReadService.findMemberIdsWithUnfinishedConversations(any(), any()) } returns listOf(1L, 2L)
+        every { conversationService.findMemberIdsWithUnfinishedConversations(any(), any()) } returns listOf(1L, 2L)
         val memberIds = slot<Collection<Long>>()
         every { notifier.send(capture(memberIds), any()) } returns PushSendResult.none()
 
@@ -36,7 +36,7 @@ class UnfinishedConversationReminderTest {
 
     @Test
     fun `대상이 없으면 발송을 부르지 않는다`() {
-        every { conversationReadService.findMemberIdsWithUnfinishedConversations(any(), any()) } returns emptyList()
+        every { conversationService.findMemberIdsWithUnfinishedConversations(any(), any()) } returns emptyList()
 
         reminder.runFor(CREATED_AFTER, CREATED_BEFORE)
 
@@ -49,7 +49,7 @@ class UnfinishedConversationReminderTest {
         val after = slot<Instant>()
         val before = slot<Instant>()
         every {
-            conversationReadService.findMemberIdsWithUnfinishedConversations(capture(after), capture(before))
+            conversationService.findMemberIdsWithUnfinishedConversations(capture(after), capture(before))
         } returns emptyList()
 
         reminder.runFor(CREATED_AFTER, CREATED_BEFORE)
@@ -64,7 +64,7 @@ class UnfinishedConversationReminderTest {
      */
     @Test
     fun `문구는 종료 예고까지만 하고 카드를 약속하지 않는다`() {
-        every { conversationReadService.findMemberIdsWithUnfinishedConversations(any(), any()) } returns listOf(1L)
+        every { conversationService.findMemberIdsWithUnfinishedConversations(any(), any()) } returns listOf(1L)
         val message = slot<PushMessage>()
         every { notifier.send(any(), capture(message)) } returns PushSendResult.none()
 

@@ -5,8 +5,8 @@ import com.nexters.gamss.global.response.ApiResponse
 import com.nexters.gamss.global.response.PageResponse
 import com.nexters.gamss.member.controller.dto.MemberResponse
 import com.nexters.gamss.member.domain.MemberStatus
-import com.nexters.gamss.member.service.MemberReadService
 import com.nexters.gamss.member.service.MemberService
+import com.nexters.gamss.member.service.MemberStatsService
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.constraints.Max
@@ -27,7 +27,7 @@ import org.springframework.web.bind.annotation.RestController
 @RequestMapping("/api/admin/members")
 class AdminMemberController(
     private val memberService: MemberService,
-    private val memberReadService: MemberReadService,
+    private val memberStatsService: MemberStatsService,
 ) {
     @Operation(
         summary = "회원 목록 조회",
@@ -41,7 +41,7 @@ class AdminMemberController(
         @RequestParam(required = false) status: MemberStatus?,
     ): ApiResponse<PageResponse<MemberResponse>> {
         val pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"))
-        val result = memberReadService.search(search, status, pageable)
+        val result = memberService.search(search, status, pageable)
         return ApiResponse.success(PageResponse.from(result, MemberResponse::from))
     }
 
@@ -52,13 +52,13 @@ class AdminMemberController(
     @GetMapping("/stats")
     fun stats(
         @RequestParam(defaultValue = "14") @Min(1) @Max(MAX_STATS_DAYS) days: Int,
-    ): ApiResponse<MemberStatsResponse> = ApiResponse.success(MemberStatsResponse.from(memberReadService.getStats(days)))
+    ): ApiResponse<MemberStatsResponse> = ApiResponse.success(MemberStatsResponse.from(memberStatsService.getStats(days)))
 
     @Operation(summary = "회원 상세 조회")
     @GetMapping("/{id}")
     fun get(
         @PathVariable id: Long,
-    ): ApiResponse<MemberResponse> = ApiResponse.success(MemberResponse.from(memberReadService.getById(id)))
+    ): ApiResponse<MemberResponse> = ApiResponse.success(MemberResponse.from(memberService.getById(id)))
 
     @Operation(
         summary = "회원 강제 탈퇴",
@@ -77,7 +77,7 @@ class AdminMemberController(
         @PathVariable id: Long,
     ): ApiResponse<MemberResponse> {
         memberService.withdraw(id)
-        return ApiResponse.success(MemberResponse.from(memberReadService.getById(id)))
+        return ApiResponse.success(MemberResponse.from(memberService.getById(id)))
     }
 
     companion object {

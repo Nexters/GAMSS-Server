@@ -6,8 +6,8 @@ import com.nexters.gamss.card.repository.CardRepository
 import com.nexters.gamss.conversation.domain.CardGenerationStatus
 import com.nexters.gamss.conversation.domain.Conversation
 import com.nexters.gamss.conversation.domain.ConversationStatus
-import com.nexters.gamss.conversation.service.ConversationCardStateService
-import com.nexters.gamss.conversation.service.ConversationReadService
+import com.nexters.gamss.conversation.service.ConversationCardGenerationService
+import com.nexters.gamss.conversation.service.ConversationService
 import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
@@ -37,8 +37,8 @@ import java.time.ZoneId
 @Service
 class CardService(
     private val cardRepository: CardRepository,
-    private val conversationReadService: ConversationReadService,
-    private val conversationCardStateService: ConversationCardStateService,
+    private val conversationCardGenerationService: ConversationCardGenerationService,
+    private val conversationService: ConversationService,
     private val cardMessageGenerator: CardMessageGenerator,
     private val emotionExtractor: EmotionExtractor,
     private val generationLogRecorder: GenerationLogRecorder,
@@ -126,7 +126,7 @@ class CardService(
             // updated == 0이 나온 시점엔 이미 PENDING이 아니라는 뜻이라 markCardGenerationStatus로
             // 되돌릴 대상 자체가 없다 — 채팅방 삭제(status <> DELETED 조건 탈락) 아니면 정리
             // 스케줄러가 이미 PENDING을 NONE으로 되돌린 상태다.
-            val conversation = conversationReadService.findConversation(conversationId)
+            val conversation = conversationCardGenerationService.findConversation(conversationId)
             if (conversation?.status == ConversationStatus.DELETED) {
                 throw BusinessException(ErrorCode.CONVERSATION_ALREADY_DELETED).apply { initCause(e) }
             }
@@ -149,7 +149,7 @@ class CardService(
         conversationId: Long,
         memberId: Long,
     ): Conversation {
-        val conversation = conversationReadService.getOwnedConversation(conversationId, memberId)
+        val conversation = conversationCardGenerationService.getOwnedConversation(conversationId, memberId)
         // 종료 후 삭제된 방은 status가 DELETED로 덮어써져 ENDED 여부가 사라지므로, 삭제 여부를 먼저
         // 확인해야 "종료되지 않았다"는 정반대 안내가 나가지 않는다.
         conversation.ensureNotDeleted()
@@ -157,7 +157,7 @@ class CardService(
             throw BusinessException(ErrorCode.CONVERSATION_NOT_ENDED)
         }
         // 어느 상태에서 PENDING 으로 갈 수 있는지는 대화 모듈이 정한다.
-        if (!conversationCardStateService.claimForCardGeneration(conversationId)) {
+        if (!conversationCardGenerationService.claimForCardGeneration(conversationId)) {
             if (cardRepository.existsByConversationId(conversationId)) {
                 throw BusinessException(ErrorCode.CARD_ALREADY_EXISTS)
             }
@@ -210,7 +210,7 @@ class CardService(
      */
     private fun loadUserMessages(conversationId: Long): List<String> =
         try {
-            conversationReadService.findUserMessageContents(conversationId)
+            conversationCardGenerationService.findUserMessageContents(conversationId)
         } catch (e: DataAccessException) {
             markCardGenerationStatus(conversationId, CardGenerationStatus.FAILED)
             throw BusinessException(ErrorCode.CARD_GENERATION_FAILED, e.message).apply { initCause(e) }
@@ -339,7 +339,7 @@ class CardService(
         conversationId: Long,
         status: CardGenerationStatus,
     ) {
-        if (!conversationCardStateService.finishCardGeneration(conversationId, status)) {
+        if (!conversationCardGenerationService.finishCardGeneration(conversationId, status)) {
             log.warn("카드 생성 상태 전이 실패: conversationId={}, to={} (이미 PENDING 상태가 아님)", conversationId, status)
         }
     }
@@ -444,9 +444,9 @@ class CardService(
         deleteConversationOf(card)
     }
 
-    /** 카드가 나온 채팅방을 함께 삭제한다. 규칙은 대화 모듈이 안다([ConversationCardStateService.deleteForCardRemoval]). */
+    /** 카드가 나온 채팅방을 함께 삭제한다. 규칙은 대화 모듈이 안다([ConversationService.deleteForCardRemoval]). */
     private fun deleteConversationOf(card: Card) {
-        conversationCardStateService.deleteForCardRemoval(card.conversationId)
+        conversationService.deleteForCardRemoval(card.conversationId)
     }
 
     /**
@@ -485,7 +485,7 @@ class CardService(
         // 두 UPDATE 사이의 미세한 시차로 다른 요청처럼 보이지 않아야 한다.
         val now = Instant.now()
         val deletedCards = cardRepository.softDeleteByConversationIds(conversationIds, now)
-        conversationCardStateService.softDeleteAll(conversationIds, now)
+        conversationService.deleteAllForCardRemoval(conversationIds, now)
         return deletedCards
     }
 

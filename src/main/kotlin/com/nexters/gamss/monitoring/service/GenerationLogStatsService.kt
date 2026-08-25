@@ -7,14 +7,16 @@ import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
 
 /**
- * 생성 로그를 **모듈 밖에서** 읽어가는 창구(백오피스 집계, 일일 토큰 상한 판정).
+ * 쌓인 생성 로그를 **집계해서 돌려준다.** 백오피스 대시보드와 일일 토큰 상한 판정이 쓴다.
  *
- * 다른 모듈이 [GenerationLogRepository] 를 직접 잡지 않게 하려고 둔다. 기록하는 쪽은
- * [GenerationLogRecorder] 가 맡는다. 읽기와 쓰기를 한 클래스에 섞지 않는다.
+ * 기록하는 쪽은 [GenerationLogRecorder] 다. 이 모듈에는 컨트롤러가 없어서 "기록한다"와 "집계한다"
+ * 둘로 갈리고, 그 둘은 바뀌는 이유가 다르다.
+ *
+ * 다른 모듈이 [GenerationLogRepository] 를 직접 잡지 않게 하는 역할도 겸한다.
  */
 @Service
 @Transactional(readOnly = true)
-class GenerationLogReadService(
+class GenerationLogStatsService(
     private val generationLogRepository: GenerationLogRepository,
 ) {
     /** [from] 이후의 생성 로그(미리보기 제외). 집계는 받는 쪽이 한다. */

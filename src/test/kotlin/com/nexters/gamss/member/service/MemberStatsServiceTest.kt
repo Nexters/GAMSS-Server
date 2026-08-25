@@ -1,8 +1,5 @@
 package com.nexters.gamss.member.service
 
-import com.nexters.gamss.global.exception.BusinessException
-import com.nexters.gamss.global.exception.ErrorCode
-import com.nexters.gamss.member.domain.Member
 import com.nexters.gamss.member.domain.MemberStatus
 import com.nexters.gamss.member.repository.MemberRepository
 import io.mockk.every
@@ -11,29 +8,10 @@ import java.time.Instant
 import java.util.Optional
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertSame
 
-class MemberReadServiceTest {
+class MemberStatsServiceTest {
     private val memberRepository = mockk<MemberRepository>()
-    private val memberReadService = MemberReadService(memberRepository)
-
-    @Test
-    fun `getById로 회원을 조회한다`() {
-        val member = Member("b@example.com")
-        every { memberRepository.findById(10L) } returns Optional.of(member)
-
-        assertSame(member, memberReadService.getById(10L))
-    }
-
-    @Test
-    fun `없는 회원을 조회하면 MEMBER_NOT_FOUND`() {
-        every { memberRepository.findById(99L) } returns Optional.empty()
-
-        val exception = assertFailsWith<BusinessException> { memberReadService.getById(99L) }
-
-        assertEquals(ErrorCode.MEMBER_NOT_FOUND, exception.errorCode)
-    }
+    private val memberStatsService = MemberStatsService(memberRepository)
 
     @Test
     fun `getStats는 상태별 수와 지정한 일수만큼 가입 추이를 채운다`() {
@@ -42,7 +20,7 @@ class MemberReadServiceTest {
         every { memberRepository.countByStatus(MemberStatus.WITHDRAWN) } returns 3L
         every { memberRepository.findCreatedAtsSince(any()) } returns listOf(Instant.now(), Instant.now())
 
-        val stats = memberReadService.getStats(14)
+        val stats = memberStatsService.getStats(14)
 
         assertEquals(10L, stats.total)
         assertEquals(7L, stats.active)

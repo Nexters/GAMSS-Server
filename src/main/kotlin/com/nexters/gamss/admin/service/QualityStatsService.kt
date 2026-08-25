@@ -1,9 +1,9 @@
 package com.nexters.gamss.admin.service
 
-import com.nexters.gamss.conversation.service.ConversationReadService
+import com.nexters.gamss.conversation.service.ConversationStatsService
 import com.nexters.gamss.llm.config.GeminiPricing
 import com.nexters.gamss.monitoring.domain.GenerationLog
-import com.nexters.gamss.monitoring.service.GenerationLogReadService
+import com.nexters.gamss.monitoring.service.GenerationLogStatsService
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDate
@@ -16,15 +16,15 @@ import kotlin.math.roundToLong
  */
 @Service
 class QualityStatsService(
-    private val generationLogReadService: GenerationLogReadService,
-    private val conversationReadService: ConversationReadService,
+    private val generationLogStatsService: GenerationLogStatsService,
+    private val conversationStatsService: ConversationStatsService,
     private val geminiPricing: GeminiPricing,
 ) {
     @Transactional(readOnly = true)
     fun getQualityStats(days: Int): QualityStats {
         val today = KstDashboardDates.today()
         val since = KstDashboardDates.daysAgoStart(today, days)
-        val logs = generationLogReadService.findAllSince(since)
+        val logs = generationLogStatsService.findAllSince(since)
 
         val total = logs.size.toLong()
         val success = logs.count { it.success }.toLong()
@@ -52,7 +52,7 @@ class QualityStatsService(
             cachedTokens = cachedTokens,
             cacheHitRate = percentageOrNull(cachedTokens, inputTokens),
             estimatedCostUsd = (estimatedCostUsd * 10000).roundToLong() / 10000.0,
-            stuckPending = conversationReadService.countStuckPendingComments(),
+            stuckPending = conversationStatsService.countStuckPendingComments(),
             dailyGeneration = buildDailyGeneration(today, days, logs),
         )
     }

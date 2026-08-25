@@ -1,8 +1,8 @@
 package com.nexters.gamss.admin.service
 
-import com.nexters.gamss.card.service.CardReadService
-import com.nexters.gamss.conversation.service.ConversationReadService
-import com.nexters.gamss.member.service.MemberReadService
+import com.nexters.gamss.card.service.CardStatsService
+import com.nexters.gamss.conversation.service.ConversationStatsService
+import com.nexters.gamss.member.service.MemberStatsService
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
@@ -15,9 +15,9 @@ import kotlin.math.roundToLong
  */
 @Service
 class UsageStatsService(
-    private val conversationReadService: ConversationReadService,
-    private val cardReadService: CardReadService,
-    private val memberReadService: MemberReadService,
+    private val conversationStatsService: ConversationStatsService,
+    private val cardStatsService: CardStatsService,
+    private val memberStatsService: MemberStatsService,
 ) {
     @Transactional(readOnly = true)
     fun getUsageStats(days: Int): UsageStats {
@@ -28,19 +28,19 @@ class UsageStatsService(
         val weekStart = KstDashboardDates.daysAgoStart(today, WEEK_DAYS)
 
         val emotionDistribution =
-            cardReadService.countByEmotionSince(since).map { (emotion, count) -> EmotionCount(emotion, count) }
+            cardStatsService.countByEmotionSince(since).map { (emotion, count) -> EmotionCount(emotion, count) }
 
-        val todayUserMessages = conversationReadService.countUserMessagesCreatedBetween(todayStart, todayEnd)
-        val dau = conversationReadService.countActiveMembersBetween(todayStart, todayEnd)
+        val todayUserMessages = conversationStatsService.countUserMessagesCreatedBetween(todayStart, todayEnd)
+        val dau = conversationStatsService.countActiveMembersBetween(todayStart, todayEnd)
 
         return UsageStats(
-            todayConversations = conversationReadService.countConversationsCreatedBetween(todayStart, todayEnd),
+            todayConversations = conversationStatsService.countConversationsCreatedBetween(todayStart, todayEnd),
             todayUserMessages = todayUserMessages,
             avgMessagesPerUser = averageOrNull(todayUserMessages, dau),
-            todayCards = cardReadService.countCreatedBetween(todayStart, todayEnd),
-            todaySignups = memberReadService.countSignupsBetween(todayStart, todayEnd),
+            todayCards = cardStatsService.countCreatedBetween(todayStart, todayEnd),
+            todaySignups = memberStatsService.countSignupsBetween(todayStart, todayEnd),
             dau = dau,
-            wau = conversationReadService.countActiveMembersBetween(weekStart, todayEnd),
+            wau = conversationStatsService.countActiveMembersBetween(weekStart, todayEnd),
             emotionDistribution = emotionDistribution,
             dailyActivity = buildDailyActivity(today, days, since),
         )
@@ -62,9 +62,9 @@ class UsageStatsService(
         days: Int,
         since: Instant,
     ): List<DailyActivity> {
-        val conversationsByDate = bucketByDate(conversationReadService.findConversationCreatedAtsSince(since))
-        val messagesByDate = bucketByDate(conversationReadService.findMessageCreatedAtsSince(since))
-        val cardsByDate = bucketByDate(cardReadService.findCreatedAtsSince(since))
+        val conversationsByDate = bucketByDate(conversationStatsService.findConversationCreatedAtsSince(since))
+        val messagesByDate = bucketByDate(conversationStatsService.findMessageCreatedAtsSince(since))
+        val cardsByDate = bucketByDate(cardStatsService.findCreatedAtsSince(since))
         return KstDashboardDates.dateAxis(today, days).map { date ->
             DailyActivity(
                 date = date,
