@@ -1,5 +1,6 @@
 package com.nexters.gamss.conversation.service
 
+import com.nexters.gamss.conversation.config.ConversationProperties
 import com.nexters.gamss.conversation.domain.CardGenerationStatus
 import com.nexters.gamss.conversation.domain.CommentStatus
 import com.nexters.gamss.conversation.domain.Conversation
@@ -30,6 +31,7 @@ import java.time.Instant
 class ConversationReadService(
     private val conversationRepository: ConversationRepository,
     private val messageRepository: MessageRepository,
+    private val conversationProperties: ConversationProperties,
 ) {
     /** 대화방 하나. 없으면 null. */
     fun findConversation(conversationId: Long): Conversation? = conversationRepository.findById(conversationId).orElse(null)
@@ -102,8 +104,18 @@ class ConversationReadService(
     /** [commentStatus] 상태의 메시지 수(모니터링 게이지). */
     fun countMessagesByCommentStatus(commentStatus: CommentStatus): Long = messageRepository.countByCommentStatus(commentStatus)
 
-    /** [before] 이전부터 PENDING 으로 멈춰 있는 댓글 생성 수. 즉시 대응이 필요한 적체 신호다. */
-    fun countCommentsStuckBefore(before: Instant): Long = messageRepository.countByCommentStatusOlderThan(CommentStatus.PENDING, before)
+    /**
+     * 고아로 볼 만큼 오래 PENDING 으로 멈춰 있는 댓글 생성 수. 즉시 대응이 필요한 적체 신호다.
+     *
+     * '얼마나 오래'의 기준([ConversationProperties.pendingGenerationTimeout])은 대화 모듈이 정한다.
+     * 부르는 쪽이 그 값을 읽어 시각을 계산해 넘기면, 정리 스케줄러([PendingCommentCleanupScheduler])가
+     * 쓰는 기준과 조용히 어긋날 수 있다.
+     */
+    fun countStuckPendingComments(): Long =
+        messageRepository.countByCommentStatusOlderThan(
+            CommentStatus.PENDING,
+            Instant.now().minus(conversationProperties.pendingGenerationTimeout),
+        )
 
     /** [createdAfter, createdBefore) 사이에 만들어진 방 중 아직 미종료인 것들의 주인 회원 id(중복 제외). */
     fun findMemberIdsWithUnfinishedConversations(

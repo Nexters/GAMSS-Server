@@ -21,7 +21,8 @@ import kotlin.test.assertTrue
 class MemberServiceTest {
     private val memberRepository = mockk<MemberRepository>()
     private val cleaner = RecordingCleaner()
-    private val memberService = MemberService(memberRepository, WithdrawnMemberCleaners(listOf(cleaner)))
+    private val memberService =
+        MemberService(memberRepository, MemberReadService(memberRepository), WithdrawnMemberCleaners(listOf(cleaner)))
 
     @Test
     fun `회원을 생성하면 닉네임 초기값은 이름이다`() {
@@ -53,23 +54,6 @@ class MemberServiceTest {
 
         assertEquals("김", member.name)
         assertNull(member.nickname)
-    }
-
-    @Test
-    fun `getById로 회원을 조회한다`() {
-        val member = Member("b@example.com")
-        every { memberRepository.findById(10L) } returns Optional.of(member)
-
-        assertSame(member, memberService.getById(10L))
-    }
-
-    @Test
-    fun `없는 회원을 조회하면 MEMBER_NOT_FOUND`() {
-        every { memberRepository.findById(99L) } returns Optional.empty()
-
-        val exception = assertFailsWith<BusinessException> { memberService.getById(99L) }
-
-        assertEquals(ErrorCode.MEMBER_NOT_FOUND, exception.errorCode)
     }
 
     @Test
@@ -112,23 +96,6 @@ class MemberServiceTest {
         val exception = assertFailsWith<BusinessException> { memberService.withdraw(10L) }
 
         assertEquals(ErrorCode.ALREADY_WITHDRAWN, exception.errorCode)
-    }
-
-    @Test
-    fun `getStats는 상태별 수와 지정한 일수만큼 가입 추이를 채운다`() {
-        every { memberRepository.count() } returns 10L
-        every { memberRepository.countByStatus(MemberStatus.ACTIVE) } returns 7L
-        every { memberRepository.countByStatus(MemberStatus.WITHDRAWN) } returns 3L
-        every { memberRepository.findCreatedAtsSince(any()) } returns listOf(Instant.now(), Instant.now())
-
-        val stats = memberService.getStats(14)
-
-        assertEquals(10L, stats.total)
-        assertEquals(7L, stats.active)
-        assertEquals(3L, stats.withdrawn)
-        assertEquals(14, stats.dailySignups.size)
-        // 자정 경계 플래키를 피하려고 특정 날짜가 아니라 기간 합계로 단언한다(오늘 가입 2명).
-        assertEquals(2L, stats.dailySignups.sumOf { it.count })
     }
 
     /** 정리 확장점이 어떤 memberId 로 불렸는지만 기록하는 페이크. */

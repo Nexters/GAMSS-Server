@@ -4,6 +4,7 @@ import com.nexters.gamss.auth.domain.SocialAccount
 import com.nexters.gamss.auth.repository.SocialAccountRepository
 import com.nexters.gamss.auth.social.SocialProvider
 import com.nexters.gamss.member.domain.Member
+import com.nexters.gamss.member.service.MemberReadService
 import com.nexters.gamss.member.service.MemberService
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
@@ -17,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional
 class SocialAccountService(
     private val socialAccountRepository: SocialAccountRepository,
     private val memberService: MemberService,
+    private val memberReadService: MemberReadService,
 ) {
     @Transactional
     fun resolveMember(
@@ -28,7 +30,7 @@ class SocialAccountService(
         val storedProvider = provider.name
         val socialAccount = socialAccountRepository.findByProviderAndProviderId(storedProvider, providerId)
         if (socialAccount != null) {
-            return ResolvedMember(memberService.getById(socialAccount.memberId), isNewMember = false)
+            return ResolvedMember(memberReadService.getById(socialAccount.memberId), isNewMember = false)
         }
         val member = memberService.create(email, name)
         // 동시 최초 로그인 시 (provider, providerId) 유니크 제약에 걸릴 수 있다.

@@ -4,7 +4,7 @@ import com.nexters.gamss.conversation.service.ConversationCardStateService
 import com.nexters.gamss.conversation.service.ConversationService
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
-import com.nexters.gamss.member.service.MemberService
+import com.nexters.gamss.member.service.MemberReadService
 import com.nexters.gamss.notification.service.CardCreatedNotifier
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
@@ -38,7 +38,7 @@ import java.time.ZonedDateTime
 class DailyAutoCardScheduler(
     private val conversationCardStateService: ConversationCardStateService,
     private val conversationService: ConversationService,
-    private val memberService: MemberService,
+    private val memberReadService: MemberReadService,
     private val cardService: CardService,
     private val window: AutoCardWindow,
     private val meterRegistry: MeterRegistry,
@@ -200,7 +200,7 @@ class DailyAutoCardScheduler(
             conversationService.endForAutoBatch(conversationId) ?: return ProcessResult(AutoCardOutcome.SKIPPED_DELETED)
         // 탈퇴는 회원 행만 익명화하고 대화방은 남긴다. 종료까지는 상태 정리라 무해하지만, 카드는
         // 탈퇴한 사람의 대화로 만드는 새 개인 데이터라 여기서 멈춘다.
-        if (memberService.getById(conversation.memberId).isWithdrawn()) {
+        if (memberReadService.getById(conversation.memberId).isWithdrawn()) {
             return ProcessResult(AutoCardOutcome.WITHDRAWN_MEMBER)
         }
         // 요약이 null이어도 그대로 넘긴다 — 카드 생성 경로가 유저 메시지 원문으로 대신 만든다.

@@ -2,7 +2,7 @@ package com.nexters.gamss.admin.service
 
 import com.nexters.gamss.card.service.CardReadService
 import com.nexters.gamss.conversation.service.ConversationReadService
-import com.nexters.gamss.member.service.MemberService
+import com.nexters.gamss.member.service.MemberReadService
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
@@ -17,7 +17,7 @@ import kotlin.math.roundToLong
 class UsageStatsService(
     private val conversationReadService: ConversationReadService,
     private val cardReadService: CardReadService,
-    private val memberService: MemberService,
+    private val memberReadService: MemberReadService,
 ) {
     @Transactional(readOnly = true)
     fun getUsageStats(days: Int): UsageStats {
@@ -38,7 +38,7 @@ class UsageStatsService(
             todayUserMessages = todayUserMessages,
             avgMessagesPerUser = averageOrNull(todayUserMessages, dau),
             todayCards = cardReadService.countCreatedBetween(todayStart, todayEnd),
-            todaySignups = memberService.countSignupsBetween(todayStart, todayEnd),
+            todaySignups = memberReadService.countSignupsBetween(todayStart, todayEnd),
             dau = dau,
             wau = conversationReadService.countActiveMembersBetween(weekStart, todayEnd),
             emotionDistribution = emotionDistribution,

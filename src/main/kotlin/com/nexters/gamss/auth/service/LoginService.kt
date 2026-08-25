@@ -7,7 +7,7 @@ import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.global.security.JwtIssuer
 import com.nexters.gamss.global.security.TokenHasher
-import com.nexters.gamss.member.service.MemberService
+import com.nexters.gamss.member.service.MemberReadService
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -22,7 +22,7 @@ import org.springframework.transaction.annotation.Transactional
 class LoginService(
     private val socialTokenVerifier: SocialTokenVerifier,
     private val socialAccountService: SocialAccountService,
-    private val memberService: MemberService,
+    private val memberReadService: MemberReadService,
     private val jwtIssuer: JwtIssuer,
     private val refreshTokenRepository: RefreshTokenRepository,
     private val tokenHasher: TokenHasher,
@@ -47,7 +47,7 @@ class LoginService(
         if (!stored.matches(tokenHasher.hash(refreshToken))) {
             throw BusinessException(ErrorCode.INVALID_TOKEN)
         }
-        if (memberService.getById(memberId).isWithdrawn()) {
+        if (memberReadService.getById(memberId).isWithdrawn()) {
             throw BusinessException(ErrorCode.WITHDRAWN_MEMBER)
         }
         return issueTokens(memberId)
