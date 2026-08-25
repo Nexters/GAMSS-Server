@@ -6,7 +6,6 @@ import com.nexters.gamss.card.repository.CardRepository
 import com.nexters.gamss.conversation.domain.CardGenerationStatus
 import com.nexters.gamss.conversation.domain.Conversation
 import com.nexters.gamss.conversation.domain.ConversationStatus
-import com.nexters.gamss.conversation.domain.SenderType
 import com.nexters.gamss.conversation.service.ConversationCardStateService
 import com.nexters.gamss.conversation.service.ConversationReadService
 import com.nexters.gamss.emotion.domain.EmotionType

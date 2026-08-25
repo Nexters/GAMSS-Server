@@ -6,7 +6,6 @@ import com.nexters.gamss.monitoring.domain.GenerationLog
 import com.nexters.gamss.monitoring.service.GenerationLogReadService
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import java.time.Instant
 import java.time.LocalDate
 import kotlin.math.ceil
 import kotlin.math.roundToLong

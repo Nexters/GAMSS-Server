@@ -3,13 +3,11 @@ package com.nexters.gamss.member.service
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.member.domain.Member
-import com.nexters.gamss.member.domain.MemberStatus
 import com.nexters.gamss.member.domain.Nickname
 import com.nexters.gamss.member.repository.MemberRepository
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import java.time.Instant
 import java.util.Optional
 import kotlin.test.Test
 import kotlin.test.assertEquals

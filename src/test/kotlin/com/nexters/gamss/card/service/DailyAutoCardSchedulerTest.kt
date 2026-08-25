@@ -2,7 +2,6 @@ package com.nexters.gamss.card.service
 
 import com.nexters.gamss.card.config.CardProperties
 import com.nexters.gamss.card.domain.Card
-import com.nexters.gamss.conversation.domain.CardGenerationStatus
 import com.nexters.gamss.conversation.domain.Conversation
 import com.nexters.gamss.conversation.service.ConversationCardStateService
 import com.nexters.gamss.conversation.service.ConversationService
