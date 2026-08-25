@@ -3,10 +3,9 @@ package com.nexters.gamss.card.service
 import com.nexters.gamss.card.domain.Card
 import com.nexters.gamss.card.repository.CardRepository
 import com.nexters.gamss.conversation.domain.CardGenerationStatus
-import com.nexters.gamss.conversation.repository.ConversationRepository
+import com.nexters.gamss.conversation.service.ConversationCardStateService
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import java.time.Instant
 
 /**
  * LLM 호출까지 끝난 카드를 실제로 저장한다. 별도 빈으로 분리한 이유는 [CardService]가 자기 자신을
@@ -16,7 +15,7 @@ import java.time.Instant
 @Service
 class CardPersistenceService(
     private val cardRepository: CardRepository,
-    private val conversationRepository: ConversationRepository,
+    private val conversationCardStateService: ConversationCardStateService,
 ) {
     /**
      * 카드 저장 · 대화 요약 저장 · 카드 생성 상태 DONE 마킹을 하나의 트랜잭션으로 묶는다. 저장 시점의
@@ -32,15 +31,8 @@ class CardPersistenceService(
         summary: String?,
     ): Card {
         val saved = cardRepository.saveAndFlush(card)
-        summary?.let { conversationRepository.updateSummary(conversationId, it) }
-        val updated =
-            conversationRepository.updateCardGenerationStatus(
-                conversationId,
-                CardGenerationStatus.DONE,
-                listOf(CardGenerationStatus.PENDING),
-                Instant.now(),
-            )
-        if (updated != 1) {
+        summary?.let { conversationCardStateService.updateSummary(conversationId, it) }
+        if (!conversationCardStateService.finishCardGeneration(conversationId, CardGenerationStatus.DONE)) {
             throw CardGenerationStateConflictException(
                 "카드 생성 상태 전이가 실패했습니다. conversationId=$conversationId",
             )

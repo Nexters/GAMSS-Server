@@ -10,6 +10,7 @@ import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -38,6 +39,13 @@ class MemberService(
         status: MemberStatus?,
         pageable: Pageable,
     ): Page<Member> = memberRepository.search(keyword?.takeIf { it.isNotBlank() }, status, pageable)
+
+    /** [from, to) 사이 가입 수. 백오피스 대시보드의 '오늘 신규 가입' KPI. */
+    @Transactional(readOnly = true)
+    fun countSignupsBetween(
+        from: Instant,
+        to: Instant,
+    ): Long = memberRepository.countCreatedBetween(from, to)
 
     // 백오피스 대시보드 통계. 가입 추이는 최근 days 일치를 KST 날짜 기준으로 집계하고 빈 날은 0으로 채운다.
     @Transactional(readOnly = true)

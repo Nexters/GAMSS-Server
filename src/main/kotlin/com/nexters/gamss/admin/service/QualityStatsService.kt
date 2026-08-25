@@ -1,11 +1,10 @@
 package com.nexters.gamss.admin.service
 
 import com.nexters.gamss.conversation.config.ConversationProperties
-import com.nexters.gamss.conversation.domain.CommentStatus
-import com.nexters.gamss.conversation.repository.MessageRepository
+import com.nexters.gamss.conversation.service.ConversationReadService
 import com.nexters.gamss.llm.config.GeminiPricing
 import com.nexters.gamss.monitoring.domain.GenerationLog
-import com.nexters.gamss.monitoring.repository.GenerationLogRepository
+import com.nexters.gamss.monitoring.service.GenerationLogReadService
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
@@ -19,8 +18,8 @@ import kotlin.math.roundToLong
  */
 @Service
 class QualityStatsService(
-    private val generationLogRepository: GenerationLogRepository,
-    private val messageRepository: MessageRepository,
+    private val generationLogReadService: GenerationLogReadService,
+    private val conversationReadService: ConversationReadService,
     private val conversationProperties: ConversationProperties,
     private val geminiPricing: GeminiPricing,
 ) {
@@ -28,7 +27,7 @@ class QualityStatsService(
     fun getQualityStats(days: Int): QualityStats {
         val today = KstDashboardDates.today()
         val since = KstDashboardDates.daysAgoStart(today, days)
-        val logs = generationLogRepository.findAllSince(since)
+        val logs = generationLogReadService.findAllSince(since)
 
         val total = logs.size.toLong()
         val success = logs.count { it.success }.toLong()
@@ -57,7 +56,7 @@ class QualityStatsService(
             cachedTokens = cachedTokens,
             cacheHitRate = percentageOrNull(cachedTokens, inputTokens),
             estimatedCostUsd = (estimatedCostUsd * 10000).roundToLong() / 10000.0,
-            stuckPending = messageRepository.countByCommentStatusOlderThan(CommentStatus.PENDING, stuckBefore),
+            stuckPending = conversationReadService.countCommentsStuckBefore(stuckBefore),
             dailyGeneration = buildDailyGeneration(today, days, logs),
         )
     }

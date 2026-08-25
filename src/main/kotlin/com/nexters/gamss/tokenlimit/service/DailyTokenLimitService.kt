@@ -1,6 +1,6 @@
 package com.nexters.gamss.tokenlimit.service
 
-import com.nexters.gamss.monitoring.repository.GenerationLogRepository
+import com.nexters.gamss.monitoring.service.GenerationLogReadService
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.time.Instant
@@ -19,7 +19,7 @@ import java.time.ZonedDateTime
 @Service
 class DailyTokenLimitService(
     private val tokenPolicyService: TokenPolicyService,
-    private val generationLogRepository: GenerationLogRepository,
+    private val generationLogReadService: GenerationLogReadService,
     @Value("\${gamss.token-limit.enabled:false}") private val enabled: Boolean,
 ) {
     /** 이 회원이 지금 생성해도 되는지(=상한 미도달). 상한이 꺼진 환경이면 항상 true. */
@@ -28,7 +28,7 @@ class DailyTokenLimitService(
             return true
         }
         val policy = tokenPolicyService.current()
-        val used = generationLogRepository.sumUsedTokensByMemberSince(memberId, windowStart(policy.resetHour))
+        val used = generationLogReadService.sumUsedTokensByMemberSince(memberId, windowStart(policy.resetHour))
         return used < policy.dailyTokenLimit
     }
 
@@ -38,7 +38,7 @@ class DailyTokenLimitService(
      */
     fun usageFor(memberId: Long): TokenUsage {
         val policy = tokenPolicyService.current()
-        val used = generationLogRepository.sumUsedTokensByMemberSince(memberId, windowStart(policy.resetHour))
+        val used = generationLogReadService.sumUsedTokensByMemberSince(memberId, windowStart(policy.resetHour))
         if (!enabled) {
             return TokenUsage(usedTokens = used, dailyLimit = null, exceeded = false)
         }
