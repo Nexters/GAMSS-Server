@@ -1,7 +1,7 @@
 package com.nexters.gamss.conversation.domain
 
 import com.nexters.gamss.emotion.domain.EmotionType
-import com.nexters.gamss.global.crypto.BlindIndexer
+import com.nexters.gamss.conversation.search.MessageSearchIndexListener
 import com.nexters.gamss.global.crypto.EncryptedStringConverter
 import jakarta.persistence.Column
 import jakarta.persistence.Convert
@@ -72,17 +72,19 @@ class Message(
         protected set
 
     /**
-     * 검색용 블라인드 인덱스. [content]가 암호문으로 저장돼 그대로는 검색할 수 없으므로,
-     * 평문을 토큰열로 바꿔 여기에 담고 검색은 이 컬럼에 건다
-     * ([com.nexters.gamss.global.crypto.BlindIndexer]).
+     * 검색용 인덱스 값. [content]가 암호문으로 저장돼 그대로는 검색할 수 없으므로, 검색은 이 컬럼에 건다.
+     *
+     * 이 값을 **어떻게 만드는지는 엔티티가 알지 않는다.** 만드는 쪽은
+     * [com.nexters.gamss.conversation.search.MessageSearchIndexListener] 이고, 여기는 완성된 값을 보관만
+     * 한다. 검색 방식이 바뀌어도 이 엔티티는 바뀌지 않아야 한다.
      */
     @Column(name = "content_index", columnDefinition = "TEXT")
     var contentIndex: String? = null
         protected set
 
-    /** 저장 직전에 [MessageSearchIndexListener]가 호출한다. 직접 부를 일은 없다. */
-    fun applySearchIndex(indexer: BlindIndexer) {
-        contentIndex = indexer.toIndexValue(content)
+    /** 저장 직전에 [MessageSearchIndexListener]가 완성된 인덱스 값을 넣어준다. 직접 부를 일은 없다. */
+    fun applySearchIndex(index: String?) {
+        contentIndex = index
     }
 
     companion object {
