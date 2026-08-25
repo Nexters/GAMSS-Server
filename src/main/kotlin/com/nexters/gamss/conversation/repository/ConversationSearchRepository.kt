@@ -15,7 +15,7 @@ import org.springframework.data.repository.query.Param
  * **검색 대상은 원문이 아니라 블라인드 인덱스 컬럼이다**(conversations.title_index,
  * messages.content_index). 원문은 암호문이라 매칭할 수 없다 — [searchTerm]도 원문이 아니라
  * [com.nexters.gamss.global.crypto.BlindIndexer]가 만든 토큰열 구문이어야 한다
- * ([com.nexters.gamss.conversation.search.BlindIndexConversationSearch]가 만들어 넘긴다).
+ * ([com.nexters.gamss.conversation.search.BlindIndexConversationSearcher]가 만들어 넘긴다).
  *
  * 삭제된 대화방은 제외한다 — 목록·캘린더 등 다른 조회와 같은 규약이다.
  */

@@ -9,7 +9,7 @@ import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Component
 
 /**
- * 블라인드 인덱스 기반 [ConversationSearchPort] 구현.
+ * 블라인드 인덱스 기반 [ConversationSearcher] 구현.
  *
  * 원문이 암호문으로 저장되면서 `MATCH(content) AGAINST(...)` 가 죽었기 때문에, 저장할 때 만들어 둔
  * 토큰열([com.nexters.gamss.global.crypto.BlindIndexer])을 대신 검색한다. 검색어도 같은 토크나이저를
@@ -23,11 +23,11 @@ import org.springframework.stereotype.Component
  * 네이티브 결과로는 읽을 수 없고, 엔티티로 로드해야 컨버터가 복호화한다.
  */
 @Component
-class BlindIndexConversationSearch(
+class BlindIndexConversationSearcher(
     private val conversationSearchRepository: ConversationSearchRepository,
     private val conversationRepository: ConversationRepository,
     private val indexer: BlindIndexer,
-) : ConversationSearchPort {
+) : ConversationSearcher {
     override fun search(
         memberId: Long,
         keyword: String,

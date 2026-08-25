@@ -1,7 +1,7 @@
 package com.nexters.gamss.conversation.domain
 
-import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.conversation.search.MessageSearchIndexListener
+import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.global.crypto.EncryptedStringConverter
 import jakarta.persistence.Column
 import jakarta.persistence.Convert

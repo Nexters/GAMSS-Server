@@ -1,7 +1,7 @@
 package com.nexters.gamss.conversation.domain
 
-import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.conversation.search.ConversationSearchIndexListener
+import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.global.crypto.EncryptedStringConverter
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode

@@ -1,6 +1,6 @@
 package com.nexters.gamss.conversation.service
 
-import com.nexters.gamss.conversation.search.ConversationSearchPort
+import com.nexters.gamss.conversation.search.ConversationSearcher
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import io.mockk.every
@@ -13,8 +13,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class ConversationSearchServiceTest {
-    private val searchPort = mockk<ConversationSearchPort>()
-    private val service = ConversationSearchService(searchPort)
+    private val searcher = mockk<ConversationSearcher>()
+    private val service = ConversationSearchService(searcher)
 
     @Test
     fun `검색어가 공백 제거 후 2자 미만이면 INVALID_INPUT 예외`() {
@@ -26,11 +26,11 @@ class ConversationSearchServiceTest {
     @Test
     fun `검색어 앞뒤 공백을 제거해 포트에 위임한다`() {
         val keywordSlot = slot<String>()
-        every { searchPort.search(1L, capture(keywordSlot), any()) } returns PageImpl(emptyList())
+        every { searcher.search(1L, capture(keywordSlot), any()) } returns PageImpl(emptyList())
 
         service.search(memberId = 1L, keyword = "  짜증  ", page = 0, size = 20)
 
         assertEquals("짜증", keywordSlot.captured)
-        verify(exactly = 1) { searchPort.search(1L, "짜증", any()) }
+        verify(exactly = 1) { searcher.search(1L, "짜증", any()) }
     }
 }
