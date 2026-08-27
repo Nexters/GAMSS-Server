@@ -92,10 +92,10 @@ export function UsageTable() {
               <TableHead className="min-w-40">제목</TableHead>
               <TableHead className="w-24">상태</TableHead>
               <TableHead className="w-20 text-right">유저</TableHead>
-              <TableHead className="w-20 text-right">캐릭터</TableHead>
+              <TableHead className="w-24 text-right">캐릭터</TableHead>
               <TableHead className="w-20 text-center">카드</TableHead>
-              <TableHead className="w-24 text-center">04:30 알림</TableHead>
-              <TableHead className="w-24 text-center">05:00 알림</TableHead>
+              <TableHead className="w-28 text-center">04:30 알림</TableHead>
+              <TableHead className="w-28 text-center">05:00 알림</TableHead>
               <TableHead className="w-28 text-right">총 토큰</TableHead>
               <TableHead className="w-28 text-right">캐시 토큰</TableHead>
               <TableHead className="w-32 text-right">비용</TableHead>
@@ -167,7 +167,7 @@ export function UsageTable() {
                         <span className="text-muted-foreground">—</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{formatDateTime(row.createdAt)}</TableCell>
+                    <TableCell className="whitespace-nowrap text-sm text-muted-foreground">{formatDateTime(row.createdAt)}</TableCell>
                   </TableRow>
                 )
               })
