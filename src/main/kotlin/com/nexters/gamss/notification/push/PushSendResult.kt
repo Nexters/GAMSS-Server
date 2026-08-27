@@ -16,6 +16,19 @@ data class PushSendResult(
     val invalidTokens: List<String>,
 ) {
     companion object {
+        /** 보낼 대상이 없었다. 알림을 끈 회원이라 **실패가 아니다.** */
         fun none(): PushSendResult = PushSendResult(successCount = 0, failureCount = 0, invalidTokens = emptyList())
+
+        /**
+         * 발송 시도가 실패했다.
+         *
+         * [none] 과 갈라 두는 이유는 둘을 뭉치면 "알림을 끈 회원"과 "보내려다 실패한 회원"이
+         * 구분되지 않기 때문이다([com.nexters.gamss.notification.domain.NotificationOutcome] 이
+         * 그 둘을 다른 값으로 남긴다).
+         *
+         * 실패한 토큰이 몇 개인지는 알 수 없다. 토큰을 읽기도 전에 끊겼을 수 있어서다. 회원 한 명에
+         * 대한 시도가 실패했다는 뜻으로 1을 센다.
+         */
+        fun failed(): PushSendResult = PushSendResult(successCount = 0, failureCount = 1, invalidTokens = emptyList())
     }
 }

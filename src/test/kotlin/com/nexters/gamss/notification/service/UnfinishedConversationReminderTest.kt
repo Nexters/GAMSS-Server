@@ -36,17 +36,16 @@ class UnfinishedConversationReminderTest {
         }
 
     @Test
-    fun `대상 회원들에게 한 번에 보낸다`() {
+    fun `대상 회원마다 따로 보낸다`() {
         every {
             conversationRepository.findUnfinishedConversations(any(), any(), any())
         } returns listOf(target(10L, 1L), target(20L, 2L))
-        val memberIds = slot<Collection<Long>>()
-        every { notifier.send(capture(memberIds), any()) } returns PushSendResult.none()
+        every { notifier.send(any(), any()) } returns PushSendResult.none()
 
         reminder.runFor(CREATED_AFTER, CREATED_BEFORE)
 
-        assertEquals(listOf(1L, 2L), memberIds.captured.toList())
-        verify(exactly = 1) { notifier.send(any(), any()) }
+        verify(exactly = 1) { notifier.send(listOf(1L), any()) }
+        verify(exactly = 1) { notifier.send(listOf(2L), any()) }
     }
 
     @Test
@@ -94,23 +93,44 @@ class UnfinishedConversationReminderTest {
      * "이 방 때문에 알림이 갔는가"를 답할 수 없다.
      */
     @Test
-    fun `한 회원의 방이 여러 개면 발송은 한 번이고 기록은 방마다 남는다`() {
+    fun `한 회원의 방이 여러 개면 그 회원에게 한 번 보내고 기록은 방마다 남는다`() {
         every {
             conversationRepository.findUnfinishedConversations(any(), any(), any())
         } returns listOf(target(10L, 1L), target(20L, 1L), target(30L, 2L))
-        val memberIds = slot<Collection<Long>>()
-        val sent = PushSendResult(successCount = 2, failureCount = 0, invalidTokens = emptyList())
-        every { notifier.send(capture(memberIds), any()) } returns sent
+        val sent = PushSendResult(successCount = 1, failureCount = 0, invalidTokens = emptyList())
+        every { notifier.send(any(), any()) } returns sent
 
         reminder.runFor(CREATED_AFTER, CREATED_BEFORE)
 
-        assertEquals(listOf(1L, 2L), memberIds.captured.toList())
-        verify(exactly = 1) { notifier.send(any(), any()) }
+        verify(exactly = 1) { notifier.send(listOf(1L), any()) }
         verify(exactly = 1) {
             notificationLogRecorder.record(1L, listOf(10L, 20L), NotificationType.UNFINISHED_REMINDER, sent)
         }
         verify(exactly = 1) {
             notificationLogRecorder.record(2L, listOf(30L), NotificationType.UNFINISHED_REMINDER, sent)
+        }
+    }
+
+    /**
+     * 한 번에 몰아 보내면 결과가 전원분 합계로만 돌아와, 누구는 받고 누구는 기기가 없어도 전부
+     * '발송'으로 기록된다. 대화방별 발송 결과라는 계약이 그 순간 깨진다.
+     */
+    @Test
+    fun `회원마다 자기 발송 결과로 기록된다`() {
+        every {
+            conversationRepository.findUnfinishedConversations(any(), any(), any())
+        } returns listOf(target(10L, 1L), target(20L, 2L))
+        val delivered = PushSendResult(successCount = 1, failureCount = 0, invalidTokens = emptyList())
+        every { notifier.send(listOf(1L), any()) } returns delivered
+        every { notifier.send(listOf(2L), any()) } returns PushSendResult.none()
+
+        reminder.runFor(CREATED_AFTER, CREATED_BEFORE)
+
+        verify(exactly = 1) {
+            notificationLogRecorder.record(1L, listOf(10L), NotificationType.UNFINISHED_REMINDER, delivered)
+        }
+        verify(exactly = 1) {
+            notificationLogRecorder.record(2L, listOf(20L), NotificationType.UNFINISHED_REMINDER, PushSendResult.none())
         }
     }
 

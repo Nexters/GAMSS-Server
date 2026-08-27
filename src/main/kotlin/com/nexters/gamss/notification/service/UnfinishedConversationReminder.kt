@@ -62,16 +62,23 @@ class UnfinishedConversationReminder(
         // 발송은 회원당 한 번이지만 기록은 방마다 남긴다. 백오피스가 "이 방 때문에 알림이 갔는가"를
         // 보여주려면 회원 단위 기록으로는 부족하다.
         val conversationIdsByMember = targets.groupBy({ it.memberId }, { it.conversationId })
-        val result = notifier.send(conversationIdsByMember.keys, MESSAGE)
+        // **회원마다 따로 보낸다.** 한 번에 몰아 보내면 결과가 전원분 합계로만 돌아와, 누구는 받고
+        // 누구는 기기가 없어도 전부 '발송'으로 기록된다. 대화방별 발송 결과라는 계약이 깨지므로
+        // FCM 왕복이 늘어나는 것을 감수한다(새벽 배치이고 대상은 수십 명 단위다).
+        var successCount = 0
+        var failureCount = 0
         conversationIdsByMember.forEach { (memberId, conversationIds) ->
+            val result = notifier.send(listOf(memberId), MESSAGE)
             notificationLogRecorder.record(memberId, conversationIds, NotificationType.UNFINISHED_REMINDER, result)
+            successCount += result.successCount
+            failureCount += result.failureCount
         }
         log.info(
             "미종료 대화방 리마인더 완료: 대상={}명, 대화방={}개, 성공={}건, 실패={}건",
             conversationIdsByMember.size,
             targets.size,
-            result.successCount,
-            result.failureCount,
+            successCount,
+            failureCount,
         )
     }
 
