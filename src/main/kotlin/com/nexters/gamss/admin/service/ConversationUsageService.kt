@@ -15,8 +15,8 @@ import org.springframework.transaction.annotation.Transactional
 import kotlin.math.roundToLong
 
 /**
- * 백오피스 '대화방별 사용량' 페이지 집계. prod·dev 구분 없이 모든 대화방을 최신순으로 페이지네이션하고,
- * 그 페이지에 올라온 대화방 id들에 대해서만 메시지 수·카드 여부·토큰 합을 배치로 채운다(N+1 회피).
+ * 백오피스 '대화방별 사용량' 페이지 집계. prod, dev 구분 없이 모든 대화방을 최신순으로 페이지네이션하고,
+ * 그 페이지에 올라온 대화방 id들에 대해서만 메시지 수, 카드 여부, 토큰 합을 배치로 채운다(N+1 회피).
  */
 @Service
 class ConversationUsageService(
@@ -44,7 +44,7 @@ class ConversationUsageService(
             }
         }
 
-        // 대시보드처럼 생성 로그 행을 받아 대화방별로 그룹핑한다. 토큰(총량·캐시)은 단순 합,
+        // 대시보드처럼 생성 로그 행을 받아 대화방별로 그룹핑한다. 토큰(총량과 캐시)은 단순 합,
         // 비용은 모델별 단가라 행마다 요금표로 계산해 더한다(QualityStatsService 와 동일한 costUsd).
         val logsByConversation = generationLogRepository.findByConversationIdIn(ids).groupBy { it.conversationId }
 

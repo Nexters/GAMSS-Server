@@ -28,7 +28,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * 대화방별 사용량 집계(메시지 수·카드 여부·토큰 합)를 실제 MySQL 로 검증한다.
+ * 대화방별 사용량 집계(메시지 수, 카드 여부, 토큰 합)를 실제 MySQL 로 검증한다.
  */
 class ConversationUsageIntegrationTest : RepositoryTest() {
     @Autowired private lateinit var conversationUsageService: ConversationUsageService
@@ -46,12 +46,12 @@ class ConversationUsageIntegrationTest : RepositoryTest() {
     @Autowired private lateinit var notificationLogRepository: NotificationLogRepository
 
     @Test
-    fun `대화방별 메시지 수·카드 여부·토큰 합·비용을 집계한다`() {
+    fun `대화방별 메시지 수, 카드 여부, 토큰 합, 비용을 집계한다`() {
         val member = memberRepository.save(Member())
         val withCard = conversationRepository.save(Conversation(memberId = member.id))
         val withoutCard = conversationRepository.save(Conversation(memberId = member.id))
 
-        // withCard: 유저 2, 캐릭터 3, 카드 O. 토큰·비용은 아래 두 로그 합.
+        // withCard: 유저 2, 캐릭터 3, 카드 O. 토큰과 비용은 아래 두 로그 합.
         messageRepository.save(Message(conversationId = withCard.id, senderType = SenderType.USER, content = "일기"))
         messageRepository.save(Message(conversationId = withCard.id, senderType = SenderType.USER, content = "답장"))
         repeat(3) {

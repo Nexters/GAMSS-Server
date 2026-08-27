@@ -128,7 +128,7 @@ class DailyAutoCardSchedulerTest {
     }
 
     /**
-     * 가드 예외는 삼키지 않고 배치를 중단시킨다 — 그 상태로 계속 돌면 DB 커넥션을 붙잡은 채 LLM 을
+     * 가드 예외는 삼키지 않고 배치를 중단시킨다. 그 상태로 계속 돌면 DB 커넥션을 붙잡은 채 LLM 을
      * 수백 번 부르기 때문이다. 루프의 다른 줄은 전부 예외를 삼키고 있어서, 나중에 여기도 감싸는 것이
      * 개선처럼 보일 수 있다. 그러면 이 대가가 조용히 사라진다.
      */
@@ -188,7 +188,7 @@ class DailyAutoCardSchedulerTest {
 
         scheduler.runFor(createdAfter, createdBefore)
 
-        // emotion을 null로 넘겨 서버가 유저 메시지로 분류하게 한다 — 배치엔 클라이언트가 없다.
+        // emotion을 null로 넘겨 서버가 유저 메시지로 분류하게 한다. 배치엔 클라이언트가 없다.
         verify(exactly = 1) { cardService.createCard(MEMBER_ID, 10L, null, "오늘 억울한 일이 있었다") }
     }
 
@@ -217,7 +217,7 @@ class DailyAutoCardSchedulerTest {
 
         scheduler.runFor(createdAfter, createdBefore)
 
-        // 요약을 판정하지 않고 그대로 넘긴다 — 원문으로 대체할지는 카드 생성 경로가 정한다.
+        // 요약을 판정하지 않고 그대로 넘긴다. 원문으로 대체할지는 카드 생성 경로가 정한다.
         verify(exactly = 1) { cardService.createCard(MEMBER_ID, 10L, null, null) }
         verify(exactly = 1) { cardService.createCard(MEMBER_ID, 20L, null, "   ") }
     }
@@ -299,7 +299,7 @@ class DailyAutoCardSchedulerTest {
             conversationRepository.findAutoCardTargetIds(capture(capturedAfter), capture(capturedBefore), any(), any())
         } returns emptyList()
 
-        // 호출을 시각 구간으로 감싼다 — 호출 도중 05시 경계가 지나가도(하루 한 순간) 검증이
+        // 호출을 시각 구간으로 감싼다. 호출 도중 05시 경계가 지나가도(하루 한 순간) 검증이
         // 흔들리지 않게, 단언은 이 구간에 대해 성립하는 성질만 본다.
         val zone = ZoneId.of("Asia/Seoul")
         val before = ZonedDateTime.now(zone)
@@ -310,7 +310,7 @@ class DailyAutoCardSchedulerTest {
         val startDayBegin = START_DATE.atTime(5, 0).atZone(zone)
         assertEquals(startDayBegin.toInstant(), capturedAfter.captured)
 
-        // 상한은 자정이 아니라 하루 경계여야 한다 — 자정을 쓰면 0~5시에 만든 방이 어제에 속하는데도
+        // 상한은 자정이 아니라 하루 경계여야 한다. 자정을 쓰면 0~5시에 만든 방이 어제에 속하는데도
         // "오늘 것"으로 분류돼 하루를 더 열린 채로 기다린다.
         val boundary = capturedBefore.captured.atZone(zone)
         assertEquals(5, boundary.hour)

@@ -4,7 +4,7 @@ import com.nexters.gamss.admin.service.ConversationUsage
 import io.swagger.v3.oas.annotations.media.Schema
 import java.time.Instant
 
-/** 백오피스 '대화방별 사용량' 한 행. 대화방별 메시지 수·카드 생성 여부·소비 토큰(총량·캐시)·예상 비용을 담는다. */
+/** 백오피스 '대화방별 사용량' 한 행. 대화방별 메시지 수, 카드 생성 여부, 소비 토큰(총량과 캐시), 예상 비용을 담는다. */
 data class ConversationUsageResponse(
     @field:Schema(description = "대화방 id", example = "1024")
     val conversationId: Long,
@@ -26,7 +26,7 @@ data class ConversationUsageResponse(
     val totalTokens: Long,
     @field:Schema(description = "그중 캐시로 처리돼 할인 과금된 토큰", example = "8100")
     val cachedTokens: Long,
-    @field:Schema(description = "이 대화방의 예상 비용(USD). 모델별 요금표로 입력·캐시입력·출력을 각각 계산한 합계", example = "0.0142")
+    @field:Schema(description = "이 대화방의 예상 비용(USD). 모델별 요금표로 입력, 캐시입력, 출력을 각각 계산한 합계", example = "0.0142")
     val estimatedCostUsd: Double,
     @field:Schema(
         description = "04:30 미종료 리마인더 결과. 이 방이 그 알림의 대상이 아니었으면 null",
