@@ -5,7 +5,10 @@ import com.nexters.gamss.conversation.service.ConversationService
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.member.service.MemberService
+import com.nexters.gamss.notification.domain.NotificationOutcome
+import com.nexters.gamss.notification.domain.NotificationType
 import com.nexters.gamss.notification.service.CardCreatedNotifier
+import com.nexters.gamss.notification.service.NotificationLogRecorder
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
@@ -43,6 +46,7 @@ class DailyAutoCardScheduler(
     private val window: AutoCardWindow,
     private val meterRegistry: MeterRegistry,
     private val cardCreatedNotifier: CardCreatedNotifier,
+    private val notificationLogRecorder: NotificationLogRecorder,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -123,9 +127,18 @@ class DailyAutoCardScheduler(
         // 한 사람이 방을 여러 개 만들면 카드도 여러 장 나온다. 그대로 두면 새벽에 푸시가 연달아
         // 가므로, 이번 실행에서 이미 알린 회원은 건너뛴다(add 가 false 를 돌려준다).
         if (!tally.notifiedMemberIds.add(cardCreatedMemberId)) {
+            // 건너뛴 것도 남긴다. 백오피스에서 "대상이었지만 다른 방으로 이미 나갔다"와 "애초에
+            // 대상이 아니었다"(기록 없음)가 구분돼야 한다.
+            notificationLogRecorder.record(
+                cardCreatedMemberId,
+                listOf(conversationId),
+                NotificationType.CARD_CREATED,
+                NotificationOutcome.SKIPPED,
+            )
             return
         }
         val sent = cardCreatedNotifier.notifyCardCreated(cardCreatedMemberId)
+        notificationLogRecorder.record(cardCreatedMemberId, listOf(conversationId), NotificationType.CARD_CREATED, sent)
         tally.notifiedSuccessCount += sent.successCount
         tally.notifiedFailureCount += sent.failureCount
     }

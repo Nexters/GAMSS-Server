@@ -13,6 +13,10 @@ import com.nexters.gamss.member.repository.MemberRepository
 import com.nexters.gamss.monitoring.domain.GenerationLog
 import com.nexters.gamss.monitoring.domain.GenerationType
 import com.nexters.gamss.monitoring.repository.GenerationLogRepository
+import com.nexters.gamss.notification.domain.NotificationLog
+import com.nexters.gamss.notification.domain.NotificationOutcome
+import com.nexters.gamss.notification.domain.NotificationType
+import com.nexters.gamss.notification.repository.NotificationLogRepository
 import com.nexters.gamss.support.RepositoryTest
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -20,6 +24,7 @@ import org.springframework.data.domain.PageRequest
 import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -37,6 +42,8 @@ class ConversationUsageIntegrationTest : RepositoryTest() {
     @Autowired private lateinit var cardRepository: CardRepository
 
     @Autowired private lateinit var generationLogRepository: GenerationLogRepository
+
+    @Autowired private lateinit var notificationLogRepository: NotificationLogRepository
 
     @Test
     fun `대화방별 메시지 수·카드 여부·토큰 합·비용을 집계한다`() {
@@ -119,5 +126,50 @@ class ConversationUsageIntegrationTest : RepositoryTest() {
                 createdAt = Instant.now(),
             ),
         )
+    }
+
+    /**
+     * 백오피스가 "이 방 때문에 알림이 갔는가"를 대화방별로 보여줄 수 있어야 한다.
+     *
+     * 기록이 없는 방은 그 회차에 대상이 아니었다는 뜻이라 null 이다. 발송 결과 네 가지를 그대로
+     * 실어 보내야 '기기 없음'과 '실패'가 표에서 구분된다.
+     */
+    @Test
+    fun `04시 30분 알림과 05시 알림 결과를 대화방별로 실어 보낸다`() {
+        val member = memberRepository.save(Member())
+        val notified = conversationRepository.save(Conversation(memberId = member.id))
+        val untouched = conversationRepository.save(Conversation(memberId = member.id))
+
+        notificationLogRepository.saveAll(
+            listOf(
+                NotificationLog(member.id, notified.id, NotificationType.UNFINISHED_REMINDER, NotificationOutcome.SENT),
+                NotificationLog(member.id, notified.id, NotificationType.CARD_CREATED, NotificationOutcome.NO_DEVICE),
+            ),
+        )
+
+        val rows = conversationUsageService.getUsage(PageRequest.of(0, 20)).content.associateBy { it.conversationId }
+
+        assertEquals(NotificationOutcome.SENT, rows.getValue(notified.id).reminderNotification)
+        assertEquals(NotificationOutcome.NO_DEVICE, rows.getValue(notified.id).cardNotification)
+        assertNull(rows.getValue(untouched.id).reminderNotification, "대상이 아니었던 방은 비어 있어야 한다")
+        assertNull(rows.getValue(untouched.id).cardNotification)
+    }
+
+    /** 재발송이 생기면 같은 (방, 종류)에 줄이 쌓인다. 표가 보여줄 것은 마지막 결과다. */
+    @Test
+    fun `같은 방에 기록이 여러 번 쌓이면 마지막 결과를 보여준다`() {
+        val member = memberRepository.save(Member())
+        val conversation = conversationRepository.save(Conversation(memberId = member.id))
+
+        notificationLogRepository.save(
+            NotificationLog(member.id, conversation.id, NotificationType.CARD_CREATED, NotificationOutcome.FAILED),
+        )
+        notificationLogRepository.save(
+            NotificationLog(member.id, conversation.id, NotificationType.CARD_CREATED, NotificationOutcome.SENT),
+        )
+
+        val row = conversationUsageService.getUsage(PageRequest.of(0, 20)).content.first { it.conversationId == conversation.id }
+
+        assertEquals(NotificationOutcome.SENT, row.cardNotification)
     }
 }

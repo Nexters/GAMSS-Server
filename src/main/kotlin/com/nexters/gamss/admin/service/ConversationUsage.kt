@@ -1,6 +1,7 @@
 package com.nexters.gamss.admin.service
 
 import com.nexters.gamss.conversation.domain.ConversationStatus
+import com.nexters.gamss.notification.domain.NotificationOutcome
 import java.time.Instant
 
 /**
@@ -20,4 +21,8 @@ data class ConversationUsage(
     val cachedTokens: Long,
     /** 이 대화방에서 소비된 토큰의 예상 비용(USD). 모델별 요금표로 계산. */
     val estimatedCostUsd: Double,
+    /** 04:30 미종료 리마인더 결과. 이 방이 그 알림의 대상이 아니었으면 null. */
+    val reminderNotification: NotificationOutcome?,
+    /** 05:00 카드 도착 알림 결과. 이 방이 그 알림의 대상이 아니었으면 null. */
+    val cardNotification: NotificationOutcome?,
 )

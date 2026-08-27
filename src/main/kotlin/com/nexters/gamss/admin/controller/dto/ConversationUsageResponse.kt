@@ -28,6 +28,20 @@ data class ConversationUsageResponse(
     val cachedTokens: Long,
     @field:Schema(description = "이 대화방의 예상 비용(USD). 모델별 요금표로 입력·캐시입력·출력을 각각 계산한 합계", example = "0.0142")
     val estimatedCostUsd: Double,
+    @field:Schema(
+        description = "04:30 미종료 리마인더 결과. 이 방이 그 알림의 대상이 아니었으면 null",
+        example = "SENT",
+        allowableValues = ["SENT", "NO_DEVICE", "FAILED", "SKIPPED"],
+        nullable = true,
+    )
+    val reminderNotification: String?,
+    @field:Schema(
+        description = "05:00 카드 도착 알림 결과. 이 방이 그 알림의 대상이 아니었으면 null",
+        example = "SENT",
+        allowableValues = ["SENT", "NO_DEVICE", "FAILED", "SKIPPED"],
+        nullable = true,
+    )
+    val cardNotification: String?,
 ) {
     companion object {
         fun from(usage: ConversationUsage): ConversationUsageResponse =
@@ -43,6 +57,8 @@ data class ConversationUsageResponse(
                 totalTokens = usage.totalTokens,
                 cachedTokens = usage.cachedTokens,
                 estimatedCostUsd = usage.estimatedCostUsd,
+                reminderNotification = usage.reminderNotification?.name,
+                cardNotification = usage.cardNotification?.name,
             )
     }
 }

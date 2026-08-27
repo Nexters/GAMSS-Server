@@ -2,6 +2,7 @@ package com.nexters.gamss.notification.service
 
 import com.nexters.gamss.card.service.AutoCardWindow
 import com.nexters.gamss.conversation.repository.ConversationRepository
+import com.nexters.gamss.notification.domain.NotificationType
 import com.nexters.gamss.notification.push.PushMessage
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
@@ -26,6 +27,7 @@ class UnfinishedConversationReminder(
     private val conversationRepository: ConversationRepository,
     private val window: AutoCardWindow,
     private val notifier: MemberPushNotifier,
+    private val notificationLogRecorder: NotificationLogRecorder,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -52,15 +54,22 @@ class UnfinishedConversationReminder(
         createdAfter: Instant,
         createdBefore: Instant,
     ) {
-        val memberIds = conversationRepository.findMemberIdsWithUnfinishedConversations(createdAfter, createdBefore)
-        if (memberIds.isEmpty()) {
+        val targets = conversationRepository.findUnfinishedConversations(createdAfter, createdBefore)
+        if (targets.isEmpty()) {
             log.info("미종료 대화방 리마인더: 대상 없음 (기준={}~{})", createdAfter, createdBefore)
             return
         }
-        val result = notifier.send(memberIds, MESSAGE)
+        // 발송은 회원당 한 번이지만 기록은 방마다 남긴다. 백오피스가 "이 방 때문에 알림이 갔는가"를
+        // 보여주려면 회원 단위 기록으로는 부족하다.
+        val conversationIdsByMember = targets.groupBy({ it.memberId }, { it.conversationId })
+        val result = notifier.send(conversationIdsByMember.keys, MESSAGE)
+        conversationIdsByMember.forEach { (memberId, conversationIds) ->
+            notificationLogRecorder.record(memberId, conversationIds, NotificationType.UNFINISHED_REMINDER, result)
+        }
         log.info(
-            "미종료 대화방 리마인더 완료: 대상={}명, 성공={}건, 실패={}건",
-            memberIds.size,
+            "미종료 대화방 리마인더 완료: 대상={}명, 대화방={}개, 성공={}건, 실패={}건",
+            conversationIdsByMember.size,
+            targets.size,
             result.successCount,
             result.failureCount,
         )

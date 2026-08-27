@@ -10,7 +10,11 @@ import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.member.domain.Member
 import com.nexters.gamss.member.service.MemberService
+import com.nexters.gamss.notification.domain.NotificationOutcome
+import com.nexters.gamss.notification.domain.NotificationType
+import com.nexters.gamss.notification.push.PushSendResult
 import com.nexters.gamss.notification.service.CardCreatedNotifier
+import com.nexters.gamss.notification.service.NotificationLogRecorder
 import com.nexters.gamss.notification.service.PushInTransactionException
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.mockk.every
@@ -32,6 +36,7 @@ class DailyAutoCardSchedulerTest {
     private val memberService = mockk<MemberService> { every { getById(any()) } returns Member() }
     private val cardService = mockk<CardService>()
     private val cardCreatedNotifier = mockk<CardCreatedNotifier>(relaxed = true)
+    private val notificationLogRecorder = mockk<NotificationLogRecorder>(relaxed = true)
     private val window = AutoCardWindow(CardProperties(autoCardStartDate = START_DATE))
     private val meterRegistry = SimpleMeterRegistry()
     private val scheduler =
@@ -43,6 +48,7 @@ class DailyAutoCardSchedulerTest {
             window,
             meterRegistry,
             cardCreatedNotifier,
+            notificationLogRecorder,
         )
 
     private val createdAfter: Instant = Instant.parse("2026-08-19T15:00:00Z")
@@ -71,6 +77,41 @@ class DailyAutoCardSchedulerTest {
         scheduler.runFor(createdAfter, createdBefore)
 
         verify(exactly = 1) { cardCreatedNotifier.notifyCardCreated(MEMBER_ID) }
+    }
+
+    /**
+     * 알림이 실제로 나갔는지를 백오피스가 대화방별로 보여준다. 발송은 회원당 한 번이라, 건너뛴 방을
+     * 기록하지 않으면 "대상이었지만 다른 방으로 이미 나갔다"와 "애초에 대상이 아니었다"가 표에서
+     * 똑같이 빈칸으로 보인다.
+     */
+    @Test
+    fun `건너뛴 방도 SKIPPED 로 기록한다`() {
+        stubTargets(10L, 20L)
+        every { conversationService.endForAutoBatch(any()) } returns conversation()
+        every { cardService.createCard(any(), any(), any(), any()) } returns mockk<Card>()
+        val sent = PushSendResult(successCount = 1, failureCount = 0, invalidTokens = emptyList())
+        every { cardCreatedNotifier.notifyCardCreated(MEMBER_ID) } returns sent
+
+        scheduler.runFor(createdAfter, createdBefore)
+
+        verify(exactly = 1) {
+            notificationLogRecorder.record(MEMBER_ID, listOf(10L), NotificationType.CARD_CREATED, sent)
+        }
+        verify(exactly = 1) {
+            notificationLogRecorder.record(MEMBER_ID, listOf(20L), NotificationType.CARD_CREATED, NotificationOutcome.SKIPPED)
+        }
+    }
+
+    /** 카드가 안 만들어진 방은 알림 대상이 아니므로 기록도 남지 않는다(표에서 빈칸). */
+    @Test
+    fun `카드를 못 만든 방은 기록하지 않는다`() {
+        stubTargets(10L)
+        every { conversationService.endForAutoBatch(10L) } returns null
+
+        scheduler.runFor(createdAfter, createdBefore)
+
+        verify(exactly = 0) { notificationLogRecorder.record(any(), any(), any(), any<NotificationOutcome>()) }
+        verify(exactly = 0) { notificationLogRecorder.record(any(), any(), any(), any<PushSendResult>()) }
     }
 
     @Test

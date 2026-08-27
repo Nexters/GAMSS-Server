@@ -97,19 +97,23 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
      * 기간은 5시 배치와 같은 창을 쓴다([com.nexters.gamss.card.service.AutoCardWindow]). 하한 밖의
      * 방은 배치가 손대지 않으므로, 알려봐야 닫히지도 않는다.
      *
-     * 회원당 한 번만 알리므로 방이 아니라 **회원 id** 를 중복 없이 돌려준다. 탈퇴 회원은 따로 거르지
-     * 않는다 — 탈퇴하면 기기 토큰이 함께 지워져(DeviceTokenCleaner) 보낼 대상이 애초에 없다.
+     * **방 단위로 돌려준다.** 알림은 회원당 한 번만 나가지만(부르는 쪽이 회원 id 를 추린다), 어떤 방
+     * 때문에 대상이 됐는지를 발송 이력에 남겨야 백오피스가 대화방별로 보여줄 수 있다
+     * ([com.nexters.gamss.notification.domain.NotificationLog]).
+     *
+     * 탈퇴 회원은 따로 거르지 않는다. 탈퇴하면 기기 토큰이 함께 지워져(DeviceTokenCleaner) 보낼
+     * 대상이 애초에 없다.
      */
     @Query(
-        "select distinct c.memberId from Conversation c " +
+        "select c.id as conversationId, c.memberId as memberId from Conversation c " +
             "where c.status = :activeStatus " +
             "and c.createdAt >= :createdAfter and c.createdAt < :createdBefore",
     )
-    fun findMemberIdsWithUnfinishedConversations(
+    fun findUnfinishedConversations(
         @Param("createdAfter") createdAfter: Instant,
         @Param("createdBefore") createdBefore: Instant,
         @Param("activeStatus") activeStatus: ConversationStatus = ConversationStatus.ACTIVE,
-    ): List<Long>
+    ): List<UnfinishedConversationProjection>
 
     /**
      * 상태를 바꾸는 요청(메시지 저장·종료·삭제)에서 사용한다. 행을 잠가 다른 상태 변경 요청이
