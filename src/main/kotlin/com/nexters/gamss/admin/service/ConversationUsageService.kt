@@ -6,8 +6,7 @@ import com.nexters.gamss.conversation.repository.ConversationRepository
 import com.nexters.gamss.conversation.repository.MessageRepository
 import com.nexters.gamss.llm.config.GeminiPricing
 import com.nexters.gamss.monitoring.repository.GenerationLogRepository
-import com.nexters.gamss.notification.domain.NotificationType
-import com.nexters.gamss.notification.repository.NotificationLogRepository
+import com.nexters.gamss.notification.service.NotificationLogStatsService
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.Pageable
@@ -25,7 +24,7 @@ class ConversationUsageService(
     private val messageRepository: MessageRepository,
     private val cardRepository: CardRepository,
     private val generationLogRepository: GenerationLogRepository,
-    private val notificationLogRepository: NotificationLogRepository,
+    private val notificationLogStatsService: NotificationLogStatsService,
     private val geminiPricing: GeminiPricing,
 ) {
     @Transactional(readOnly = true)
@@ -51,11 +50,8 @@ class ConversationUsageService(
 
         val cardConversationIds = cardRepository.findConversationIdsIn(ids).toSet()
 
-        // (대화방, 알림 종류) 짝마다 마지막 결과 하나. 기록이 없으면 그 회차에 대상이 아니었다는 뜻이다.
-        val notificationsByConversation =
-            notificationLogRepository
-                .findLatestByConversationIdIn(ids)
-                .associateBy { it.conversationId to it.type }
+        // 기록이 없는 방은 그 회차에 대상이 아니었다는 뜻이라 맵에 없다.
+        val notificationsByConversation = notificationLogStatsService.findOutcomesByConversation(ids)
 
         val rows =
             page.content.map { conversation ->
@@ -81,10 +77,8 @@ class ConversationUsageService(
                     totalTokens = logs.sumOf { (it.usedTokens ?: 0).toLong() },
                     cachedTokens = logs.sumOf { (it.cachedTokens ?: 0).toLong() },
                     estimatedCostUsd = (rawCost * 10000).roundToLong() / 10000.0,
-                    reminderNotification =
-                        notificationsByConversation[conversation.id to NotificationType.UNFINISHED_REMINDER]?.outcome,
-                    cardNotification =
-                        notificationsByConversation[conversation.id to NotificationType.CARD_CREATED]?.outcome,
+                    reminderNotification = notificationsByConversation[conversation.id]?.reminder,
+                    cardNotification = notificationsByConversation[conversation.id]?.cardCreated,
                 )
             }
         return PageImpl(rows, pageable, page.totalElements)

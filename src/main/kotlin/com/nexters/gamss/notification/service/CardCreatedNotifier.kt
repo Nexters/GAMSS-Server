@@ -47,7 +47,7 @@ class CardCreatedNotifier(
         } catch (e: Exception) {
             log.error("카드 생성 알림 실패: memberId={}", memberId, e)
             // none() 이 아니라 failed() 다. none() 은 '알림을 끈 회원'이라는 정상 상태인데, 여기로
-            // 오는 것은 토큰 조회·정리가 끊긴 경우라 발송 여부조차 알 수 없다. 둘을 같은 값으로
+            // 오는 것은 토큰 조회와 정리가 끊긴 경우라 발송 여부조차 알 수 없다. 둘을 같은 값으로
             // 돌려주면 백오피스에서 장애가 '기기 없음'으로 보인다.
             PushSendResult.failed()
         }

@@ -15,6 +15,7 @@ import java.time.Instant
 import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -132,6 +133,28 @@ class UnfinishedConversationReminderTest {
         verify(exactly = 1) {
             notificationLogRecorder.record(2L, listOf(20L), NotificationType.UNFINISHED_REMINDER, PushSendResult.none())
         }
+    }
+
+    /**
+     * 회원마다 따로 보내므로 중간에 터지면 부분 상태로 끝난다. 앞선 회원은 알림을 받고 기록도
+     * 남지만 뒤는 통째로 빠진다. 전원에게 한 번에 보내던 때는 예외가 곧 '아무도 못 받았다'였으므로,
+     * 그때의 전제로 읽지 않도록 여기서 고정한다.
+     */
+    @Test
+    fun `중간에 터지면 앞선 회원까지만 처리되고 뒤는 빠진다`() {
+        every {
+            conversationRepository.findUnfinishedConversations(any(), any(), any())
+        } returns listOf(target(10L, 1L), target(20L, 2L), target(30L, 3L))
+        every { notifier.send(listOf(1L), any()) } returns PushSendResult.none()
+        every { notifier.send(listOf(2L), any()) } throws RuntimeException("DB 끊김")
+
+        assertFailsWith<RuntimeException> { reminder.runFor(CREATED_AFTER, CREATED_BEFORE) }
+
+        verify(exactly = 1) {
+            notificationLogRecorder.record(1L, listOf(10L), NotificationType.UNFINISHED_REMINDER, any<PushSendResult>())
+        }
+        verify(exactly = 0) { notifier.send(listOf(3L), any()) }
+        verify(exactly = 0) { notificationLogRecorder.record(3L, any(), any(), any<PushSendResult>()) }
     }
 
     companion object {

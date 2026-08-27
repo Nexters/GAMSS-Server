@@ -133,7 +133,7 @@ export function UsageTable() {
                     <TableCell className="font-mono text-xs text-muted-foreground">{row.conversationId}</TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">{row.memberId}</TableCell>
                     <TableCell className="max-w-64 truncate">
-                      {row.title ?? <span className="text-muted-foreground">—</span>}
+                      {row.title ?? <span className="text-muted-foreground">-</span>}
                     </TableCell>
                     <TableCell>
                       <Badge variant={status.variant}>{status.label}</Badge>
@@ -144,7 +144,7 @@ export function UsageTable() {
                       {row.cardCreated ? (
                         <Badge variant="success">생성</Badge>
                       ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
+                        <span className="text-xs text-muted-foreground">-</span>
                       )}
                     </TableCell>
                     <TableCell className="text-center">
@@ -164,7 +164,7 @@ export function UsageTable() {
                           <span className="text-xs text-muted-foreground">{formatKrw(row.estimatedCostUsd)}</span>
                         </div>
                       ) : (
-                        <span className="text-muted-foreground">—</span>
+                        <span className="text-muted-foreground">-</span>
                       )}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-sm text-muted-foreground">{formatDateTime(row.createdAt)}</TableCell>
