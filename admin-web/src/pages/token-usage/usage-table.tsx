@@ -21,15 +21,43 @@ interface ConversationUsage {
   totalTokens: number
   cachedTokens: number
   estimatedCostUsd: number
+  reminderNotification: NotificationOutcome | null
+  cardNotification: NotificationOutcome | null
 }
 
+type NotificationOutcome = 'SENT' | 'NO_DEVICE' | 'FAILED' | 'SKIPPED'
+
 const PAGE_SIZE = 20
-const COLUMN_COUNT = 11
+const COLUMN_COUNT = 13
 
 const STATUS_META: Record<ConversationUsage['status'], { label: string; variant: 'secondary' | 'success' | 'muted' }> = {
   ACTIVE: { label: '진행중', variant: 'secondary' },
   ENDED: { label: '종료', variant: 'success' },
   DELETED: { label: '삭제됨', variant: 'muted' },
+}
+
+/**
+ * 알림 결과 네 가지를 다르게 보여준다.
+ * 기기 없음(알림 끔)과 건너뜀은 실패가 아니므로 실패와 같은 색으로 그리면 대응할 것이 묻힌다.
+ * 기록이 아예 없으면(null) 그 회차에 대상이 아니었다는 뜻이라 빈칸으로 둔다.
+ */
+const NOTIFICATION_META: Record<NotificationOutcome, { label: string; variant: 'success' | 'muted' | 'destructive'; title: string }> = {
+  SENT: { label: '발송', variant: 'success', title: 'FCM 이 성공을 돌려줬습니다' },
+  NO_DEVICE: { label: '기기 없음', variant: 'muted', title: '알림을 껐거나 앱을 지운 회원이라 보낼 기기가 없었습니다' },
+  FAILED: { label: '실패', variant: 'destructive', title: 'FCM 이 실패를 돌려줬습니다' },
+  SKIPPED: { label: '건너뜀', variant: 'muted', title: '같은 회원의 다른 방으로 이미 같은 알림이 나갔습니다' },
+}
+
+function NotificationCell({ outcome }: { outcome: NotificationOutcome | null }) {
+  if (outcome === null) {
+    return <span className="text-xs text-muted-foreground" title="이 회차에 알림 대상이 아니었습니다">-</span>
+  }
+  const meta = NOTIFICATION_META[outcome]
+  return (
+    <Badge variant={meta.variant} title={meta.title}>
+      {meta.label}
+    </Badge>
+  )
 }
 
 export function UsageTable() {
@@ -51,7 +79,7 @@ export function UsageTable() {
       <div className="border-b px-4 py-3">
         <p className="text-sm font-medium">대화방별 사용량</p>
         <p className="text-xs text-muted-foreground">
-          모든 대화방(prod·dev)의 메시지 수·카드 생성 여부·소비 토큰·예상 비용을 최신순으로 봅니다. 비용은 USD 기준이며 환율 {USD_TO_KRW_LABEL}원으로 원화를 함께 표기합니다. 대화방 귀속 정보가 없던 이전 기록의 토큰은 집계되지 않습니다.
+          모든 대화방(prod, dev)의 메시지 수, 카드 생성 여부, 소비 토큰, 예상 비용, 새벽 알림 발송 결과를 최신순으로 봅니다. 비용은 USD 기준이며 환율 {USD_TO_KRW_LABEL}원으로 원화를 함께 표기합니다. 대화방 귀속 정보가 없던 이전 기록의 토큰은 집계되지 않고, 알림 이력을 남기기 이전 회차는 알림 칸이 비어 있습니다.
         </p>
       </div>
 
@@ -64,8 +92,10 @@ export function UsageTable() {
               <TableHead className="min-w-40">제목</TableHead>
               <TableHead className="w-24">상태</TableHead>
               <TableHead className="w-20 text-right">유저</TableHead>
-              <TableHead className="w-20 text-right">캐릭터</TableHead>
+              <TableHead className="w-24 text-right">캐릭터</TableHead>
               <TableHead className="w-20 text-center">카드</TableHead>
+              <TableHead className="w-28 text-center">04:30 알림</TableHead>
+              <TableHead className="w-28 text-center">05:00 알림</TableHead>
               <TableHead className="w-28 text-right">총 토큰</TableHead>
               <TableHead className="w-28 text-right">캐시 토큰</TableHead>
               <TableHead className="w-32 text-right">비용</TableHead>
@@ -103,7 +133,7 @@ export function UsageTable() {
                     <TableCell className="font-mono text-xs text-muted-foreground">{row.conversationId}</TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">{row.memberId}</TableCell>
                     <TableCell className="max-w-64 truncate">
-                      {row.title ?? <span className="text-muted-foreground">—</span>}
+                      {row.title ?? <span className="text-muted-foreground">-</span>}
                     </TableCell>
                     <TableCell>
                       <Badge variant={status.variant}>{status.label}</Badge>
@@ -114,8 +144,14 @@ export function UsageTable() {
                       {row.cardCreated ? (
                         <Badge variant="success">생성</Badge>
                       ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
+                        <span className="text-xs text-muted-foreground">-</span>
                       )}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <NotificationCell outcome={row.reminderNotification} />
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <NotificationCell outcome={row.cardNotification} />
                     </TableCell>
                     <TableCell className="text-right font-medium tabular-nums">{row.totalTokens.toLocaleString()}</TableCell>
                     <TableCell className="text-right tabular-nums text-muted-foreground">
@@ -128,10 +164,10 @@ export function UsageTable() {
                           <span className="text-xs text-muted-foreground">{formatKrw(row.estimatedCostUsd)}</span>
                         </div>
                       ) : (
-                        <span className="text-muted-foreground">—</span>
+                        <span className="text-muted-foreground">-</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{formatDateTime(row.createdAt)}</TableCell>
+                    <TableCell className="whitespace-nowrap text-sm text-muted-foreground">{formatDateTime(row.createdAt)}</TableCell>
                   </TableRow>
                 )
               })

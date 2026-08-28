@@ -3,6 +3,8 @@ package com.nexters.gamss.notification.service
 import com.nexters.gamss.card.config.CardProperties
 import com.nexters.gamss.card.service.AutoCardWindow
 import com.nexters.gamss.conversation.service.ConversationService
+import com.nexters.gamss.conversation.service.UnfinishedConversation
+import com.nexters.gamss.notification.domain.NotificationType
 import com.nexters.gamss.notification.push.PushMessage
 import com.nexters.gamss.notification.push.PushSendResult
 import io.mockk.every
@@ -13,30 +15,38 @@ import java.time.Instant
 import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class UnfinishedConversationReminderTest {
     private val conversationService = mockk<ConversationService>()
     private val notifier = mockk<MemberPushNotifier>()
+    private val notificationLogRecorder = mockk<NotificationLogRecorder>(relaxed = true)
     private val window = AutoCardWindow(CardProperties(autoCardStartDate = LocalDate.of(2026, 8, 15)))
-    private val reminder = UnfinishedConversationReminder(conversationService, window, notifier)
+    private val reminder = UnfinishedConversationReminder(conversationService, window, notifier, notificationLogRecorder)
+
+    private fun target(
+        conversationId: Long,
+        memberId: Long,
+    ) = UnfinishedConversation(conversationId, memberId)
 
     @Test
-    fun `대상 회원들에게 한 번에 보낸다`() {
-        every { conversationService.findMemberIdsWithUnfinishedConversations(any(), any()) } returns listOf(1L, 2L)
-        val memberIds = slot<Collection<Long>>()
-        every { notifier.send(capture(memberIds), any()) } returns PushSendResult.none()
+    fun `대상 회원마다 따로 보낸다`() {
+        every {
+            conversationService.findUnfinishedConversations(any(), any())
+        } returns listOf(target(10L, 1L), target(20L, 2L))
+        every { notifier.send(any(), any()) } returns PushSendResult.none()
 
         reminder.runFor(CREATED_AFTER, CREATED_BEFORE)
 
-        assertEquals(listOf(1L, 2L), memberIds.captured.toList())
-        verify(exactly = 1) { notifier.send(any(), any()) }
+        verify(exactly = 1) { notifier.send(listOf(1L), any()) }
+        verify(exactly = 1) { notifier.send(listOf(2L), any()) }
     }
 
     @Test
     fun `대상이 없으면 발송을 부르지 않는다`() {
-        every { conversationService.findMemberIdsWithUnfinishedConversations(any(), any()) } returns emptyList()
+        every { conversationService.findUnfinishedConversations(any(), any()) } returns emptyList()
 
         reminder.runFor(CREATED_AFTER, CREATED_BEFORE)
 
@@ -49,7 +59,7 @@ class UnfinishedConversationReminderTest {
         val after = slot<Instant>()
         val before = slot<Instant>()
         every {
-            conversationService.findMemberIdsWithUnfinishedConversations(capture(after), capture(before))
+            conversationService.findUnfinishedConversations(capture(after), capture(before))
         } returns emptyList()
 
         reminder.runFor(CREATED_AFTER, CREATED_BEFORE)
@@ -64,7 +74,7 @@ class UnfinishedConversationReminderTest {
      */
     @Test
     fun `문구는 종료 예고까지만 하고 카드를 약속하지 않는다`() {
-        every { conversationService.findMemberIdsWithUnfinishedConversations(any(), any()) } returns listOf(1L)
+        every { conversationService.findUnfinishedConversations(any(), any()) } returns listOf(target(10L, 1L))
         val message = slot<PushMessage>()
         every { notifier.send(any(), capture(message)) } returns PushSendResult.none()
 
@@ -72,6 +82,74 @@ class UnfinishedConversationReminderTest {
 
         assertTrue(message.captured.title.contains("종료"))
         assertFalse(message.captured.body.contains("카드"))
+    }
+
+    /**
+     * 발송은 회원당 한 번인데 기록은 방마다 남아야 한다. 회원 단위로만 남기면 백오피스가
+     * "이 방 때문에 알림이 갔는가"를 답할 수 없다.
+     */
+    @Test
+    fun `한 회원의 방이 여러 개면 그 회원에게 한 번 보내고 기록은 방마다 남는다`() {
+        every {
+            conversationService.findUnfinishedConversations(any(), any())
+        } returns listOf(target(10L, 1L), target(20L, 1L), target(30L, 2L))
+        val sent = PushSendResult(successCount = 1, failureCount = 0, invalidTokens = emptyList())
+        every { notifier.send(any(), any()) } returns sent
+
+        reminder.runFor(CREATED_AFTER, CREATED_BEFORE)
+
+        verify(exactly = 1) { notifier.send(listOf(1L), any()) }
+        verify(exactly = 1) {
+            notificationLogRecorder.record(1L, listOf(10L, 20L), NotificationType.UNFINISHED_REMINDER, sent)
+        }
+        verify(exactly = 1) {
+            notificationLogRecorder.record(2L, listOf(30L), NotificationType.UNFINISHED_REMINDER, sent)
+        }
+    }
+
+    /**
+     * 한 번에 몰아 보내면 결과가 전원분 합계로만 돌아와, 누구는 받고 누구는 기기가 없어도 전부
+     * '발송'으로 기록된다. 대화방별 발송 결과라는 계약이 그 순간 깨진다.
+     */
+    @Test
+    fun `회원마다 자기 발송 결과로 기록된다`() {
+        every {
+            conversationService.findUnfinishedConversations(any(), any())
+        } returns listOf(target(10L, 1L), target(20L, 2L))
+        val delivered = PushSendResult(successCount = 1, failureCount = 0, invalidTokens = emptyList())
+        every { notifier.send(listOf(1L), any()) } returns delivered
+        every { notifier.send(listOf(2L), any()) } returns PushSendResult.none()
+
+        reminder.runFor(CREATED_AFTER, CREATED_BEFORE)
+
+        verify(exactly = 1) {
+            notificationLogRecorder.record(1L, listOf(10L), NotificationType.UNFINISHED_REMINDER, delivered)
+        }
+        verify(exactly = 1) {
+            notificationLogRecorder.record(2L, listOf(20L), NotificationType.UNFINISHED_REMINDER, PushSendResult.none())
+        }
+    }
+
+    /**
+     * 회원마다 따로 보내므로 중간에 터지면 부분 상태로 끝난다. 앞선 회원은 알림을 받고 기록도
+     * 남지만 뒤는 통째로 빠진다. 전원에게 한 번에 보내던 때는 예외가 곧 '아무도 못 받았다'였으므로,
+     * 그때의 전제로 읽지 않도록 여기서 고정한다.
+     */
+    @Test
+    fun `중간에 터지면 앞선 회원까지만 처리되고 뒤는 빠진다`() {
+        every {
+            conversationService.findUnfinishedConversations(any(), any())
+        } returns listOf(target(10L, 1L), target(20L, 2L), target(30L, 3L))
+        every { notifier.send(listOf(1L), any()) } returns PushSendResult.none()
+        every { notifier.send(listOf(2L), any()) } throws RuntimeException("DB 끊김")
+
+        assertFailsWith<RuntimeException> { reminder.runFor(CREATED_AFTER, CREATED_BEFORE) }
+
+        verify(exactly = 1) {
+            notificationLogRecorder.record(1L, listOf(10L), NotificationType.UNFINISHED_REMINDER, any<PushSendResult>())
+        }
+        verify(exactly = 0) { notifier.send(listOf(3L), any()) }
+        verify(exactly = 0) { notificationLogRecorder.record(3L, any(), any(), any<PushSendResult>()) }
     }
 
     companion object {

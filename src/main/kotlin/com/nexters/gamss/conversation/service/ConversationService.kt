@@ -187,14 +187,23 @@ class ConversationService(
     }
 
     /**
-     * [createdAfter, createdBefore) 사이에 만들어진 방 중 아직 미종료인 것들의 주인 회원 id(중복 제외).
+     * [createdAfter, createdBefore) 사이에 만들어진 방 중 아직 미종료인 것들을 **방 단위로** 돌려준다.
      * 자동 종료 전에 한 번 알리는 리마인더가 쓴다([com.nexters.gamss.notification.service.UnfinishedConversationReminder]).
+     *
+     * 회원당 한 번만 보내는 중복 제거는 보내는 쪽이 한다. 여기서 회원 id 만 추려 주면 어떤 방
+     * 때문에 대상이 됐는지를 발송 이력에 남길 수 없다.
+     *
+     * 인터페이스 프로젝션을 그대로 내보내지 않는다. 프로젝션은 쿼리 모양에 딸린 것이라 밖으로
+     * 새면 쿼리를 바꿀 때 다른 모듈이 깨진다.
      */
     @Transactional(readOnly = true)
-    fun findMemberIdsWithUnfinishedConversations(
+    fun findUnfinishedConversations(
         createdAfter: Instant,
         createdBefore: Instant,
-    ): List<Long> = conversationRepository.findMemberIdsWithUnfinishedConversations(createdAfter, createdBefore)
+    ): List<UnfinishedConversation> =
+        conversationRepository
+            .findUnfinishedConversations(createdAfter, createdBefore)
+            .map { UnfinishedConversation(conversationId = it.conversationId, memberId = it.memberId) }
 
     /**
      * 채팅방 제목을 지정·변경한다. 여러 번 호출할 수 있다. 삭제된 방은 변경할 수 없다.
