@@ -25,9 +25,9 @@ import kotlin.test.assertTrue
  */
 @SpringBootTest
 @Import(TestcontainersConfig::class)
-class BlindIndexConversationSearchIntegrationTest {
+class BlindIndexConversationSearcherIntegrationTest {
     @Autowired
-    private lateinit var searchPort: ConversationSearchPort
+    private lateinit var searcher: ConversationSearcher
 
     @Autowired
     private lateinit var conversationRepository: ConversationRepository
@@ -48,7 +48,7 @@ class BlindIndexConversationSearchIntegrationTest {
             Message(conversationId = conversation.id, senderType = SenderType.USER, content = "오늘 회사에서 너무 짜증났다"),
         )
 
-        val result = searchPort.search(memberId = 1L, keyword = "짜증", pageable = PageRequest.of(0, 20))
+        val result = searcher.search(memberId = 1L, keyword = "짜증", pageable = PageRequest.of(0, 20))
 
         assertEquals(1, result.totalElements.toInt())
         assertEquals(conversation.id, result.content.first().conversationId)
@@ -61,7 +61,7 @@ class BlindIndexConversationSearchIntegrationTest {
                 Conversation(memberId = 1L).apply { rename(ConversationTitle("행복한 하루")) },
             )
 
-        val result = searchPort.search(memberId = 1L, keyword = "행복", pageable = PageRequest.of(0, 20))
+        val result = searcher.search(memberId = 1L, keyword = "행복", pageable = PageRequest.of(0, 20))
 
         assertEquals(1, result.totalElements.toInt())
         val row = result.content.first()
@@ -72,7 +72,7 @@ class BlindIndexConversationSearchIntegrationTest {
     @Test
     fun `저장한 뒤 제목을 바꾸면 새 제목으로 검색되고 옛 제목으로는 검색되지 않는다`() {
         // 제목은 [Conversation.rename] 으로 여러 번 바뀌므로 인덱스도 함께 갱신돼야 한다
-        // ([com.nexters.gamss.conversation.domain.ConversationSearchIndexListener] 의 @PreUpdate).
+        // ([com.nexters.gamss.conversation.search.ConversationSearchIndexListener] 의 @PreUpdate).
         // 갱신이 빠지면 제목만 바뀌고 인덱스는 옛 제목으로 남아, 저장은 됐는데 검색만 조용히 어긋난다.
         val conversation =
             conversationRepository.save(
@@ -83,11 +83,11 @@ class BlindIndexConversationSearchIntegrationTest {
         saved.rename(ConversationTitle("우울한 저녁"))
         conversationRepository.saveAndFlush(saved)
 
-        val byNewTitle = searchPort.search(memberId = 1L, keyword = "우울", pageable = PageRequest.of(0, 20))
+        val byNewTitle = searcher.search(memberId = 1L, keyword = "우울", pageable = PageRequest.of(0, 20))
         assertEquals(1, byNewTitle.totalElements.toInt())
         assertEquals("우울한 저녁", byNewTitle.content.first().title)
 
-        val byOldTitle = searchPort.search(memberId = 1L, keyword = "행복", pageable = PageRequest.of(0, 20))
+        val byOldTitle = searcher.search(memberId = 1L, keyword = "행복", pageable = PageRequest.of(0, 20))
         assertEquals(0, byOldTitle.totalElements.toInt())
     }
 
@@ -100,7 +100,7 @@ class BlindIndexConversationSearchIntegrationTest {
             },
         )
 
-        val result = searchPort.search(memberId = 1L, keyword = "행복", pageable = PageRequest.of(0, 20))
+        val result = searcher.search(memberId = 1L, keyword = "행복", pageable = PageRequest.of(0, 20))
 
         assertEquals(0, result.totalElements.toInt())
     }
@@ -116,7 +116,7 @@ class BlindIndexConversationSearchIntegrationTest {
             Message(conversationId = alive.id, senderType = SenderType.USER, content = "살아있는 방의 짜증"),
         )
 
-        val result = searchPort.search(memberId = 1L, keyword = "짜증", pageable = PageRequest.of(0, 20))
+        val result = searcher.search(memberId = 1L, keyword = "짜증", pageable = PageRequest.of(0, 20))
 
         assertEquals(1, result.totalElements.toInt())
         assertEquals(alive.id, result.content.first().conversationId)
@@ -129,7 +129,7 @@ class BlindIndexConversationSearchIntegrationTest {
             Message(conversationId = conversation.id, senderType = SenderType.USER, content = "제목 없는 짜증"),
         )
 
-        val result = searchPort.search(memberId = 1L, keyword = "짜증", pageable = PageRequest.of(0, 20))
+        val result = searcher.search(memberId = 1L, keyword = "짜증", pageable = PageRequest.of(0, 20))
 
         assertEquals(null, result.content.first().title)
     }
@@ -141,7 +141,7 @@ class BlindIndexConversationSearchIntegrationTest {
         val others = conversationRepository.save(Conversation(memberId = 2L))
         messageRepository.save(Message(conversationId = others.id, senderType = SenderType.USER, content = "남의 짜증"))
 
-        val result = searchPort.search(memberId = 1L, keyword = "짜증", pageable = PageRequest.of(0, 20))
+        val result = searcher.search(memberId = 1L, keyword = "짜증", pageable = PageRequest.of(0, 20))
 
         assertEquals(1, result.totalElements.toInt())
         assertEquals(mine.id, result.content.first().conversationId)

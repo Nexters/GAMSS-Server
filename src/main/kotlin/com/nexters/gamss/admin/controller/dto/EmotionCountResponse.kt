@@ -1,6 +1,6 @@
 package com.nexters.gamss.admin.controller.dto
 
-import com.nexters.gamss.card.repository.EmotionCountProjection
+import com.nexters.gamss.admin.service.EmotionCount
 import io.swagger.v3.oas.annotations.media.Schema
 
 data class EmotionCountResponse(
@@ -12,11 +12,11 @@ data class EmotionCountResponse(
     val count: Long,
 ) {
     companion object {
-        fun from(projection: EmotionCountProjection): EmotionCountResponse =
+        fun from(count: EmotionCount): EmotionCountResponse =
             EmotionCountResponse(
-                emotion = projection.emotion.name,
-                label = projection.emotion.label,
-                count = projection.count,
+                emotion = count.emotion.name,
+                label = count.emotion.label,
+                count = count.count,
             )
     }
 }

@@ -1,16 +1,11 @@
 package com.nexters.gamss.admin.service
 
-import com.nexters.gamss.admin.controller.dto.DailyGenerationResponse
-import com.nexters.gamss.admin.controller.dto.QualityStatsResponse
-import com.nexters.gamss.conversation.config.ConversationProperties
-import com.nexters.gamss.conversation.domain.CommentStatus
-import com.nexters.gamss.conversation.repository.MessageRepository
+import com.nexters.gamss.conversation.service.ConversationStatsService
 import com.nexters.gamss.llm.config.GeminiPricing
 import com.nexters.gamss.monitoring.domain.GenerationLog
-import com.nexters.gamss.monitoring.repository.GenerationLogRepository
+import com.nexters.gamss.monitoring.service.GenerationLogStatsService
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import java.time.Instant
 import java.time.LocalDate
 import kotlin.math.ceil
 import kotlin.math.roundToLong
@@ -21,22 +16,20 @@ import kotlin.math.roundToLong
  */
 @Service
 class QualityStatsService(
-    private val generationLogRepository: GenerationLogRepository,
-    private val messageRepository: MessageRepository,
-    private val conversationProperties: ConversationProperties,
+    private val generationLogStatsService: GenerationLogStatsService,
+    private val conversationStatsService: ConversationStatsService,
     private val geminiPricing: GeminiPricing,
 ) {
     @Transactional(readOnly = true)
-    fun getQualityStats(days: Int): QualityStatsResponse {
+    fun getQualityStats(days: Int): QualityStats {
         val today = KstDashboardDates.today()
         val since = KstDashboardDates.daysAgoStart(today, days)
-        val logs = generationLogRepository.findAllSince(since)
+        val logs = generationLogStatsService.findAllSince(since)
 
         val total = logs.size.toLong()
         val success = logs.count { it.success }.toLong()
         val retried = logs.count { it.attemptCount > 1 }.toLong()
         val latencies = logs.map { it.latencyMs }.sorted()
-        val stuckBefore = Instant.now().minus(conversationProperties.pendingGenerationTimeout)
         val totalTokens = logs.sumOf { (it.usedTokens ?: 0).toLong() }
         val cachedTokens = logs.sumOf { (it.cachedTokens ?: 0).toLong() }
         // 캐시는 입력의 부분집합이라, 적중률은 입력 토큰 대비로 계산한다(출력은 캐시 대상이 아님).
@@ -46,7 +39,7 @@ class QualityStatsService(
                 geminiPricing.costUsd(it.model, it.inputTokens ?: 0, it.cachedTokens ?: 0, it.outputTokens ?: 0)
             }
 
-        return QualityStatsResponse(
+        return QualityStats(
             totalGenerations = total,
             successGenerations = success,
             failedGenerations = total - success,
@@ -59,7 +52,7 @@ class QualityStatsService(
             cachedTokens = cachedTokens,
             cacheHitRate = percentageOrNull(cachedTokens, inputTokens),
             estimatedCostUsd = (estimatedCostUsd * 10000).roundToLong() / 10000.0,
-            stuckPending = messageRepository.countByCommentStatusOlderThan(CommentStatus.PENDING, stuckBefore),
+            stuckPending = conversationStatsService.countStuckPendingComments(),
             dailyGeneration = buildDailyGeneration(today, days, logs),
         )
     }
@@ -68,11 +61,11 @@ class QualityStatsService(
         today: LocalDate,
         days: Int,
         logs: List<GenerationLog>,
-    ): List<DailyGenerationResponse> {
+    ): List<DailyGeneration> {
         val logsByDate = logs.groupBy { KstDashboardDates.dateOf(it.createdAt) }
         return KstDashboardDates.dateAxis(today, days).map { date ->
             val dayLogs = logsByDate[date].orEmpty()
-            DailyGenerationResponse(
+            DailyGeneration(
                 date = date,
                 success = dayLogs.count { it.success }.toLong(),
                 failed = dayLogs.count { !it.success }.toLong(),

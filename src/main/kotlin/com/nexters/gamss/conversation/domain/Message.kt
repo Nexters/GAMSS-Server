@@ -1,7 +1,7 @@
 package com.nexters.gamss.conversation.domain
 
+import com.nexters.gamss.conversation.search.MessageSearchIndexListener
 import com.nexters.gamss.emotion.domain.EmotionType
-import com.nexters.gamss.global.crypto.BlindIndexer
 import com.nexters.gamss.global.crypto.EncryptedStringConverter
 import jakarta.persistence.Column
 import jakarta.persistence.Convert
@@ -72,17 +72,26 @@ class Message(
         protected set
 
     /**
-     * 검색용 블라인드 인덱스. [content]가 암호문으로 저장돼 그대로는 검색할 수 없으므로,
-     * 평문을 토큰열로 바꿔 여기에 담고 검색은 이 컬럼에 건다
-     * ([com.nexters.gamss.global.crypto.BlindIndexer]).
+     * 검색용 인덱스 값. [content]가 암호문으로 저장돼 그대로는 검색할 수 없으므로, 검색은 이 컬럼에 건다.
+     *
+     * 이 값을 **어떻게 만드는지는 엔티티가 알지 않는다.** 만드는 쪽은
+     * [com.nexters.gamss.conversation.search.MessageSearchIndexListener] 이고, 여기는 완성된 값을 보관만
+     * 한다. 검색 방식이 바뀌어도 이 엔티티는 바뀌지 않아야 한다.
      */
     @Column(name = "content_index", columnDefinition = "TEXT")
     var contentIndex: String? = null
         protected set
 
-    /** 저장 직전에 [MessageSearchIndexListener]가 호출한다. 직접 부를 일은 없다. */
-    fun applySearchIndex(indexer: BlindIndexer) {
-        contentIndex = indexer.toIndexValue(content)
+    /**
+     * 저장 직전에 [MessageSearchIndexListener] 가 부른다. **무엇을 인덱싱할지는 여기서 정하고,
+     * 어떻게 만드는지는 [toIndex] 가 안다.**
+     *
+     * 완성된 값을 받지 않고 함수를 받는 이유는, 값을 받으면 부르는 쪽이 [content] 를 인덱싱한다는
+     * 사실까지 알아야 하기 때문이다. 그러면 인덱싱 대상이 바뀔 때 엔티티와 리스너를 같이 고쳐야
+     * 하고 한쪽만 고치면 조용히 어긋난다.
+     */
+    internal fun applySearchIndex(toIndex: (String) -> String?) {
+        contentIndex = toIndex(content)
     }
 
     companion object {

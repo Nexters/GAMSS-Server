@@ -3,6 +3,7 @@ package com.nexters.gamss.global.security
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.global.response.ApiResponse
 import com.nexters.gamss.global.response.ErrorResponse
+import com.nexters.gamss.global.web.httpStatusOf
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.http.MediaType
@@ -29,7 +30,7 @@ class JwtAuthenticationEntryPoint(
     ) {
         val errorCode = errorCodeOf(request)
         val body = ApiResponse.error(ErrorResponse(errorCode.code, errorCode.message))
-        response.status = errorCode.status.value()
+        response.status = httpStatusOf(errorCode.kind).value()
         response.contentType = MediaType.APPLICATION_JSON_VALUE
         response.characterEncoding = Charsets.UTF_8.name()
         response.writer.write(objectMapper.writeValueAsString(body))

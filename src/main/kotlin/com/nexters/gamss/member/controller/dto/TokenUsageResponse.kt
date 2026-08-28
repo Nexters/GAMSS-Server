@@ -1,6 +1,5 @@
 package com.nexters.gamss.member.controller.dto
 
-import com.nexters.gamss.tokenlimit.service.TokenUsage
 import io.swagger.v3.oas.annotations.media.Schema
 
 /** 본인의 오늘(KST) 토큰 사용량. [dailyLimit]이 null이면 상한 미적용(무제한) 환경이다. */
@@ -11,13 +10,4 @@ data class TokenUsageResponse(
     val dailyLimit: Long?,
     @field:Schema(description = "상한 초과 여부 (상한 미적용 환경이면 항상 false)", example = "false")
     val exceeded: Boolean,
-) {
-    companion object {
-        fun from(usage: TokenUsage): TokenUsageResponse =
-            TokenUsageResponse(
-                usedTokens = usage.usedTokens,
-                dailyLimit = usage.dailyLimit,
-                exceeded = usage.exceeded,
-            )
-    }
-}
+)

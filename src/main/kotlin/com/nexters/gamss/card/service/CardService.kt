@@ -6,9 +6,8 @@ import com.nexters.gamss.card.repository.CardRepository
 import com.nexters.gamss.conversation.domain.CardGenerationStatus
 import com.nexters.gamss.conversation.domain.Conversation
 import com.nexters.gamss.conversation.domain.ConversationStatus
-import com.nexters.gamss.conversation.domain.SenderType
-import com.nexters.gamss.conversation.repository.ConversationRepository
-import com.nexters.gamss.conversation.repository.MessageRepository
+import com.nexters.gamss.conversation.service.ConversationCardGenerationService
+import com.nexters.gamss.conversation.service.ConversationService
 import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
@@ -38,8 +37,8 @@ import java.time.ZoneId
 @Service
 class CardService(
     private val cardRepository: CardRepository,
-    private val conversationRepository: ConversationRepository,
-    private val messageRepository: MessageRepository,
+    private val conversationCardGenerationService: ConversationCardGenerationService,
+    private val conversationService: ConversationService,
     private val cardMessageGenerator: CardMessageGenerator,
     private val emotionExtractor: EmotionExtractor,
     private val generationLogRecorder: GenerationLogRecorder,
@@ -127,7 +126,7 @@ class CardService(
             // updated == 0이 나온 시점엔 이미 PENDING이 아니라는 뜻이라 markCardGenerationStatus로
             // 되돌릴 대상 자체가 없다 — 채팅방 삭제(status <> DELETED 조건 탈락) 아니면 정리
             // 스케줄러가 이미 PENDING을 NONE으로 되돌린 상태다.
-            val conversation = conversationRepository.findById(conversationId).orElse(null)
+            val conversation = conversationCardGenerationService.findConversation(conversationId)
             if (conversation?.status == ConversationStatus.DELETED) {
                 throw BusinessException(ErrorCode.CONVERSATION_ALREADY_DELETED).apply { initCause(e) }
             }
@@ -150,24 +149,15 @@ class CardService(
         conversationId: Long,
         memberId: Long,
     ): Conversation {
-        val conversation = getOwnedConversation(conversationId, memberId)
+        val conversation = conversationCardGenerationService.getOwnedConversation(conversationId, memberId)
         // 종료 후 삭제된 방은 status가 DELETED로 덮어써져 ENDED 여부가 사라지므로, 삭제 여부를 먼저
         // 확인해야 "종료되지 않았다"는 정반대 안내가 나가지 않는다.
         conversation.ensureNotDeleted()
         if (conversation.status != ConversationStatus.ENDED) {
             throw BusinessException(ErrorCode.CONVERSATION_NOT_ENDED)
         }
-        val claimed =
-            conversationRepository.updateCardGenerationStatus(
-                conversationId,
-                CardGenerationStatus.PENDING,
-                // SKIPPED는 더 이상 새로 저장되지 않지만(#204) 그 값으로 굳은 기존 행은 남아 있다.
-                // 빼면 그 방의 카드 생성 요청이 CAS 0건으로 떨어져 CARD_GENERATION_IN_PROGRESS라는
-                // 엉뚱한 에러가 나가고, 배치도 그 행을 선점하지 못해 영영 카드를 못 받는다.
-                listOf(CardGenerationStatus.NONE, CardGenerationStatus.FAILED, CardGenerationStatus.SKIPPED),
-                Instant.now(),
-            )
-        if (claimed == 0) {
+        // 어느 상태에서 PENDING 으로 갈 수 있는지는 대화 모듈이 정한다.
+        if (!conversationCardGenerationService.claimForCardGeneration(conversationId)) {
             if (cardRepository.existsByConversationId(conversationId)) {
                 throw BusinessException(ErrorCode.CARD_ALREADY_EXISTS)
             }
@@ -220,9 +210,7 @@ class CardService(
      */
     private fun loadUserMessages(conversationId: Long): List<String> =
         try {
-            messageRepository
-                .findAllByConversationIdAndSenderTypeOrderByIdAsc(conversationId, SenderType.USER)
-                .map { it.content }
+            conversationCardGenerationService.findUserMessageContents(conversationId)
         } catch (e: DataAccessException) {
             markCardGenerationStatus(conversationId, CardGenerationStatus.FAILED)
             throw BusinessException(ErrorCode.CARD_GENERATION_FAILED, e.message).apply { initCause(e) }
@@ -351,14 +339,7 @@ class CardService(
         conversationId: Long,
         status: CardGenerationStatus,
     ) {
-        val updated =
-            conversationRepository.updateCardGenerationStatus(
-                conversationId,
-                status,
-                listOf(CardGenerationStatus.PENDING),
-                Instant.now(),
-            )
-        if (updated == 0) {
+        if (!conversationCardGenerationService.finishCardGeneration(conversationId, status)) {
             log.warn("카드 생성 상태 전이 실패: conversationId={}, to={} (이미 PENDING 상태가 아님)", conversationId, status)
         }
     }
@@ -463,22 +444,9 @@ class CardService(
         deleteConversationOf(card)
     }
 
-    /**
-     * 카드가 나온 채팅방을 함께 삭제한다(soft delete). 카드는 그 대화의 결과물이라, 카드만 지우고
-     * 대화를 남기면 사용자가 지웠다고 여긴 내용이 채팅방 목록·검색에 그대로 남는다.
-     *
-     * 이미 삭제된 방이면 넘어간다 — 채팅방을 먼저 지운 뒤 카드를 지우는 순서에서도 카드 삭제는
-     * 성공해야 한다([Conversation.delete] 는 이미 삭제된 방에 예외를 던진다).
-     */
+    /** 카드가 나온 채팅방을 함께 삭제한다. 규칙은 대화 모듈이 안다([ConversationService.deleteForCardRemoval]). */
     private fun deleteConversationOf(card: Card) {
-        val conversation =
-            conversationRepository
-                .findByIdForUpdate(card.conversationId)
-                .orElseThrow { BusinessException(ErrorCode.CONVERSATION_NOT_FOUND) }
-        if (conversation.isDeleted()) {
-            return
-        }
-        conversation.delete()
+        conversationService.deleteForCardRemoval(card.conversationId)
     }
 
     /**
@@ -517,7 +485,7 @@ class CardService(
         // 두 UPDATE 사이의 미세한 시차로 다른 요청처럼 보이지 않아야 한다.
         val now = Instant.now()
         val deletedCards = cardRepository.softDeleteByConversationIds(conversationIds, now)
-        conversationRepository.softDeleteByIds(conversationIds, now)
+        conversationService.deleteAllForCardRemoval(conversationIds, now)
         return deletedCards
     }
 
@@ -527,20 +495,6 @@ class CardService(
      */
     @Transactional
     fun deleteAllCards(memberId: Long): Int = deleteCardsWithConversations(cardRepository.findDeletableConversationIds(memberId))
-
-    private fun getOwnedConversation(
-        conversationId: Long,
-        memberId: Long,
-    ): Conversation {
-        val conversation =
-            conversationRepository
-                .findById(conversationId)
-                .orElseThrow { BusinessException(ErrorCode.CONVERSATION_NOT_FOUND) }
-        if (!conversation.isOwnedBy(memberId)) {
-            throw BusinessException(ErrorCode.CONVERSATION_ACCESS_DENIED)
-        }
-        return conversation
-    }
 
     companion object {
         /**

@@ -106,6 +106,12 @@ class MemberController(
         @Parameter(hidden = true) @AuthenticationPrincipal principal: AuthPrincipal,
     ): ApiResponse<TokenUsageResponse> {
         val usage = dailyTokenLimitService.usageFor(principal.memberId)
-        return ApiResponse.success(TokenUsageResponse.from(usage))
+        return ApiResponse.success(
+            TokenUsageResponse(
+                usedTokens = usage.usedTokens,
+                dailyLimit = usage.dailyLimit,
+                exceeded = usage.exceeded,
+            ),
+        )
     }
 }

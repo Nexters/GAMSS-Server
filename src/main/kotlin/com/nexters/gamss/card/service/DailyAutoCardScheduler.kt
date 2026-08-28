@@ -1,6 +1,6 @@
 package com.nexters.gamss.card.service
 
-import com.nexters.gamss.conversation.repository.ConversationRepository
+import com.nexters.gamss.conversation.service.ConversationCardGenerationService
 import com.nexters.gamss.conversation.service.ConversationService
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
@@ -13,9 +13,6 @@ import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
-import java.time.ZonedDateTime
 
 /**
  * 사용자가 종료 버튼을 누르지 않아 아직 열려 있는 어제까지의 대화방을 매일 새벽 자동으로 종료하고
@@ -36,7 +33,7 @@ import java.time.ZonedDateTime
  */
 @Component
 class DailyAutoCardScheduler(
-    private val conversationRepository: ConversationRepository,
+    private val conversationCardGenerationService: ConversationCardGenerationService,
     private val conversationService: ConversationService,
     private val memberService: MemberService,
     private val cardService: CardService,
@@ -98,7 +95,7 @@ class DailyAutoCardScheduler(
         // 이미 커밋돼 있어, 한 일이 지표에도 로그에도 안 남으면 아무 일 없던 날과 구별되지 않는다.
         val tally = RunTally()
         try {
-            val targetIds = conversationRepository.findAutoCardTargetIds(createdAfter, createdBefore)
+            val targetIds = conversationCardGenerationService.findAutoCardTargetIds(createdAfter, createdBefore)
             if (targetIds.isEmpty()) {
                 log.info("자동 카드 생성 배치: 대상 없음 (기준={}~{})", createdAfter, createdBefore)
                 return

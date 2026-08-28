@@ -3,7 +3,6 @@ package com.nexters.gamss.auth.service
 import com.nexters.gamss.auth.domain.SocialAccount
 import com.nexters.gamss.auth.repository.SocialAccountRepository
 import com.nexters.gamss.auth.social.SocialProvider
-import com.nexters.gamss.member.domain.Member
 import com.nexters.gamss.member.service.MemberService
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service

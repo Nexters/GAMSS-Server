@@ -3,13 +3,11 @@ package com.nexters.gamss.member.service
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.member.domain.Member
-import com.nexters.gamss.member.domain.MemberStatus
 import com.nexters.gamss.member.domain.Nickname
 import com.nexters.gamss.member.repository.MemberRepository
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import java.time.Instant
 import java.util.Optional
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -112,23 +110,6 @@ class MemberServiceTest {
         val exception = assertFailsWith<BusinessException> { memberService.withdraw(10L) }
 
         assertEquals(ErrorCode.ALREADY_WITHDRAWN, exception.errorCode)
-    }
-
-    @Test
-    fun `getStats는 상태별 수와 지정한 일수만큼 가입 추이를 채운다`() {
-        every { memberRepository.count() } returns 10L
-        every { memberRepository.countByStatus(MemberStatus.ACTIVE) } returns 7L
-        every { memberRepository.countByStatus(MemberStatus.WITHDRAWN) } returns 3L
-        every { memberRepository.findCreatedAtsSince(any()) } returns listOf(Instant.now(), Instant.now())
-
-        val stats = memberService.getStats(14)
-
-        assertEquals(10L, stats.total)
-        assertEquals(7L, stats.active)
-        assertEquals(3L, stats.withdrawn)
-        assertEquals(14, stats.dailySignups.size)
-        // 자정 경계 플래키를 피하려고 특정 날짜가 아니라 기간 합계로 단언한다(오늘 가입 2명).
-        assertEquals(2L, stats.dailySignups.sumOf { it.count })
     }
 
     /** 정리 확장점이 어떤 memberId 로 불렸는지만 기록하는 페이크. */
