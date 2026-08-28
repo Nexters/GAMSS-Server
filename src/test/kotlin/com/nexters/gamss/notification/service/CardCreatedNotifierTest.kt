@@ -37,7 +37,7 @@ class CardCreatedNotifierTest {
     }
 
     /**
-     * 부르는 쪽은 카드 생성 배치다. 알림이 터졌다고 이미 만들어진 카드가 실패로 집계되면 안 된다 —
+     * 부르는 쪽은 카드 생성 배치다. 알림이 터졌다고 이미 만들어진 카드가 실패로 집계되면 안 된다.
      * 배치는 방 하나의 예외를 그 방의 실패로 처리한다.
      */
     @Test
@@ -72,19 +72,26 @@ class CardCreatedNotifierTest {
         assertEquals(1, result.failureCount)
     }
 
-    /** 발송이 터진 경우에도 결과 자리는 비워서 돌려준다 — 배치가 합산을 이어갈 수 있어야 한다. */
+    /**
+     * 발송이 터진 경우 **빈 결과가 아니라 실패**를 돌려준다.
+     *
+     * 빈 결과([PushSendResult.none])는 "알림을 끈 회원"이라는 정상 상태다. 예외를 그 값으로
+     * 돌려주면 발송 이력에 '기기 없음'으로 남아 백오피스에서 장애가 정상으로 보이고
+     * ([com.nexters.gamss.notification.domain.NotificationOutcome]), 배치 집계에서도 실패가
+     * 한 건도 세어지지 않는다.
+     */
     @Test
-    fun `발송이 실패하면 빈 결과를 돌려준다`() {
+    fun `발송이 실패하면 빈 결과가 아니라 실패를 돌려준다`() {
         every { notifier.send(any(), any()) } throws RuntimeException("DB 연결 끊김")
 
         val result = cardCreatedNotifier.notifyCardCreated(MEMBER_ID)
 
         assertEquals(0, result.successCount)
-        assertEquals(0, result.failureCount)
+        assertEquals(1, result.failureCount, "실패가 집계에 잡혀야 한다")
     }
 
     /**
-     * 카드 내용은 담지 않는다(잠금화면 노출). 장수도 담지 않는다 — 첫 카드 시점에는 그 사람이 최종
+     * 카드 내용은 담지 않는다(잠금화면 노출). 장수도 담지 않는다. 첫 카드 시점에는 그 사람이 최종
      * 몇 장을 받을지 알 수 없어서 "한 장"이라고 쓰면 틀린 말이 된다.
      */
     @Test

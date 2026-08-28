@@ -12,8 +12,12 @@ import kotlin.test.assertEquals
 /**
  * 리마인더 대상 조회. **아직 미종료인 방**만, 그리고 5시 배치와 같은 기간 안의 것만 잡아야 한다.
  * 여기가 어긋나면 이미 마무리한 사람에게 "마무리하세요"가 가거나, 닫히지도 않을 방을 두고 알린다.
+ *
+ * **방 단위로 돌려준다.** 회원당 한 번만 보내는 것은 부르는 쪽의 책임이고
+ * ([com.nexters.gamss.notification.service.UnfinishedConversationReminder]), 여기는 어떤 방이
+ * 대상인지까지 알려줘야 발송 이력을 방마다 남길 수 있다.
  */
-class UnfinishedConversationMemberQueryTest : RepositoryTest() {
+class UnfinishedConversationQueryTest : RepositoryTest() {
     @Autowired
     private lateinit var conversationRepository: ConversationRepository
 
@@ -21,24 +25,25 @@ class UnfinishedConversationMemberQueryTest : RepositoryTest() {
     private lateinit var entityManager: EntityManager
 
     @Test
-    fun `미종료 방의 주인만 돌려준다`() {
+    fun `미종료 방만 그 주인과 함께 돌려준다`() {
         val unfinished = save(memberId = 1L, createdAt = INSIDE)
         val ended = save(memberId = 2L, createdAt = INSIDE).also { it.end() }
         val deleted = save(memberId = 3L, createdAt = INSIDE).also { it.delete() }
         conversationRepository.saveAll(listOf(ended, deleted))
 
-        val memberIds = findTargets()
+        val targets = findTargets()
 
-        assertEquals(listOf(unfinished.memberId), memberIds)
+        assertEquals(listOf(unfinished.id to unfinished.memberId), targets)
     }
 
+    /** 회원당 한 번만 보내는 중복 제거는 발송하는 쪽이 한다. 조회는 방을 빠뜨리지 않는 것이 계약이다. */
     @Test
-    fun `방이 여러 개여도 회원은 한 번만 나온다`() {
-        save(memberId = 1L, createdAt = INSIDE)
-        save(memberId = 1L, createdAt = INSIDE)
-        save(memberId = 1L, createdAt = INSIDE)
+    fun `한 회원의 방이 여러 개면 방마다 돌려준다`() {
+        val first = save(memberId = 1L, createdAt = INSIDE)
+        val second = save(memberId = 1L, createdAt = INSIDE)
+        val third = save(memberId = 1L, createdAt = INSIDE)
 
-        assertEquals(listOf(1L), findTargets())
+        assertEquals(listOf(first.id, second.id, third.id).sorted(), findTargets().map { it.first }.sorted())
     }
 
     @Test
@@ -55,10 +60,14 @@ class UnfinishedConversationMemberQueryTest : RepositoryTest() {
         save(memberId = 1L, createdAt = CREATED_AFTER)
         save(memberId = 2L, createdAt = CREATED_BEFORE.minusSeconds(1))
 
-        assertEquals(listOf(1L, 2L), findTargets().sorted())
+        assertEquals(listOf(1L, 2L), findTargets().map { it.second }.sorted())
     }
 
-    private fun findTargets(): List<Long> = conversationRepository.findMemberIdsWithUnfinishedConversations(CREATED_AFTER, CREATED_BEFORE)
+    /** (대화방 id, 회원 id) 짝. 프로젝션을 그대로 비교하면 동등성이 없어 단언이 어렵다. */
+    private fun findTargets(): List<Pair<Long, Long>> =
+        conversationRepository
+            .findUnfinishedConversations(CREATED_AFTER, CREATED_BEFORE)
+            .map { it.conversationId to it.memberId }
 
     private fun save(
         memberId: Long,

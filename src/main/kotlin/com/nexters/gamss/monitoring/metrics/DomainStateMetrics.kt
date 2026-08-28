@@ -3,8 +3,7 @@ package com.nexters.gamss.monitoring.metrics
 import com.nexters.gamss.conversation.domain.CardGenerationStatus
 import com.nexters.gamss.conversation.domain.CommentStatus
 import com.nexters.gamss.conversation.domain.ConversationStatus
-import com.nexters.gamss.conversation.repository.ConversationRepository
-import com.nexters.gamss.conversation.repository.MessageRepository
+import com.nexters.gamss.conversation.service.ConversationStatsService
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
 import org.slf4j.LoggerFactory
@@ -30,8 +29,7 @@ import java.util.concurrent.atomic.AtomicLong
 @Component
 class DomainStateMetrics(
     registry: MeterRegistry,
-    private val conversationRepository: ConversationRepository,
-    private val messageRepository: MessageRepository,
+    private val conversationStatsService: ConversationStatsService,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -61,10 +59,10 @@ class DomainStateMetrics(
         runCatching {
             // 네 값을 먼저 다 읽고 나서 한꺼번에 반영한다. 중간에 실패하면 일부만 새 값이 되어
             // '앞의 지표는 방금 값, 뒤의 지표는 몇 시간 전 값'인 상태가 되는데, 그건 아무도 눈치채지 못한다.
-            val active = conversationRepository.countByStatus(ConversationStatus.ACTIVE)
-            val comments = messageRepository.countByCommentStatus(CommentStatus.PENDING)
-            val cardPending = conversationRepository.countByCardGenerationStatus(CardGenerationStatus.PENDING)
-            val cardFailed = conversationRepository.countByCardGenerationStatus(CardGenerationStatus.FAILED)
+            val active = conversationStatsService.countConversationsByStatus(ConversationStatus.ACTIVE)
+            val comments = conversationStatsService.countMessagesByCommentStatus(CommentStatus.PENDING)
+            val cardPending = conversationStatsService.countConversationsByCardGenerationStatus(CardGenerationStatus.PENDING)
+            val cardFailed = conversationStatsService.countConversationsByCardGenerationStatus(CardGenerationStatus.FAILED)
 
             activeConversations.set(active)
             pendingComments.set(comments)

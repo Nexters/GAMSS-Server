@@ -1,5 +1,6 @@
 package com.nexters.gamss.admin.controller.dto
 
+import com.nexters.gamss.admin.service.QualityStats
 import io.swagger.v3.oas.annotations.media.Schema
 
 /** 대시보드 'LLM 품질 / 안정성' 섹션 응답. 최근 기간의 생성 성공률·호출·재시도·지연·토큰 + 막힌 PENDING. */
@@ -32,4 +33,24 @@ data class QualityStatsResponse(
     val stuckPending: Long,
     @field:Schema(description = "일별 생성 성공/실패 추이(오래된 날 → 오늘)")
     val dailyGeneration: List<DailyGenerationResponse>,
-)
+) {
+    companion object {
+        fun from(stats: QualityStats): QualityStatsResponse =
+            QualityStatsResponse(
+                totalGenerations = stats.totalGenerations,
+                successGenerations = stats.successGenerations,
+                failedGenerations = stats.failedGenerations,
+                successRate = stats.successRate,
+                totalLlmCalls = stats.totalLlmCalls,
+                retryRate = stats.retryRate,
+                avgLatencyMs = stats.avgLatencyMs,
+                p95LatencyMs = stats.p95LatencyMs,
+                totalTokens = stats.totalTokens,
+                cachedTokens = stats.cachedTokens,
+                cacheHitRate = stats.cacheHitRate,
+                estimatedCostUsd = stats.estimatedCostUsd,
+                stuckPending = stats.stuckPending,
+                dailyGeneration = stats.dailyGeneration.map(DailyGenerationResponse::from),
+            )
+    }
+}

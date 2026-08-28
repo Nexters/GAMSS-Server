@@ -1,11 +1,14 @@
 package com.nexters.gamss.card.service
 
-import com.nexters.gamss.conversation.repository.ConversationRepository
+import com.nexters.gamss.conversation.service.ConversationCardGenerationService
 import com.nexters.gamss.conversation.service.ConversationService
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.member.service.MemberService
+import com.nexters.gamss.notification.domain.NotificationOutcome
+import com.nexters.gamss.notification.domain.NotificationType
 import com.nexters.gamss.notification.service.CardCreatedNotifier
+import com.nexters.gamss.notification.service.NotificationLogRecorder
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
@@ -13,16 +16,13 @@ import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
-import java.time.ZonedDateTime
 
 /**
  * 사용자가 종료 버튼을 누르지 않아 아직 열려 있는 어제까지의 대화방을 매일 새벽 자동으로 종료하고
  * 카드를 만든다. 종료 버튼을 안 눌렀다는 이유로 그날 기록이 카드로 남지 않는 것을 막는다.
  *
  * 대화방 하나의 실패가 나머지를 막지 않도록 방 단위로 예외를 삼키고, 처리 결과만 집계해 남긴다.
- * 중복 실행·재시도에 대한 멱등성은 이 클래스가 아니라 카드 생성 경로가 보장한다 — CAS 선점과
+ * 중복 실행과 재시도에 대한 멱등성은 이 클래스가 아니라 카드 생성 경로가 보장한다. CAS 선점과
  * `cards.conversation_id` 유니크 제약에 걸린 요청은 여기서 "이미 처리됨"으로 분류된다.
  *
  * 요약([com.nexters.gamss.conversation.domain.Conversation.summary])이 없는 방도 카드를 만든다.
@@ -36,22 +36,23 @@ import java.time.ZonedDateTime
  */
 @Component
 class DailyAutoCardScheduler(
-    private val conversationRepository: ConversationRepository,
+    private val conversationCardGenerationService: ConversationCardGenerationService,
     private val conversationService: ConversationService,
     private val memberService: MemberService,
     private val cardService: CardService,
     private val window: AutoCardWindow,
     private val meterRegistry: MeterRegistry,
     private val cardCreatedNotifier: CardCreatedNotifier,
+    private val notificationLogRecorder: NotificationLogRecorder,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
     /**
      * 배치 1회의 소요 시간. 이 배치는 새벽 5시에 하루 치 방을 한꺼번에 돌며 방마다 LLM 을 호출하므로,
-     * 대상이 늘면 소요 시간이 선형으로 늘어난다 — 다음 스케줄까지 안 끝나는 상황을 미리 보기 위한 값이다.
+     * 대상이 늘면 소요 시간이 선형으로 늘어난다. 다음 스케줄까지 안 끝나는 상황을 미리 보기 위한 값이다.
      * 로그에도 결과가 남지만 로그는 임계치 알림을 걸 수 없다.
      *
-     * **카드 생성 알림(FCM 왕복)도 이 시간에 포함된다.** 루프 안에서 보내기 때문이다 — 배치가 실제로
+     * **카드 생성 알림(FCM 왕복)도 이 시간에 포함된다.** 루프 안에서 보내기 때문이다. 배치가 실제로
      * 붙잡고 있는 시간이라는 뜻에서는 맞지만, 이 값이 늘었을 때 LLM 때문인지 발송 때문인지는 이
      * 지표만으로 갈리지 않는다(대시보드 "5 · LLM 생성"이 이 값을 쓴다).
      */
@@ -63,7 +64,7 @@ class DailyAutoCardScheduler(
 
     /**
      * 결과별 카운터를 미리 0 으로 등록해 둔다. 처음 발생할 때 만들면 그 시계열이 '없다가 생긴' 것이
-     * 되는데, increase() 는 구간의 첫 값을 기준으로 삼아 그 증가를 세지 않는다 — 즉 FAILED 가 처음
+     * 되는데, increase() 는 구간의 첫 값을 기준으로 삼아 그 증가를 세지 않는다. 즉 FAILED 가 처음
      * 난 날의 알림이 조용히 빠진다. 게이지를 init 에서 등록하는 것과 같은 이유다.
      */
     private val outcomeCounters: Map<AutoCardOutcome, Counter> =
@@ -91,14 +92,14 @@ class DailyAutoCardScheduler(
         createdAfter: Instant,
         createdBefore: Instant,
     ) {
-        // 대상이 없어 일찍 끝나는 실행도 시간에 포함한다 — '배치가 아예 안 돌았다'와
+        // 대상이 없어 일찍 끝나는 실행도 시간에 포함한다. '배치가 아예 안 돌았다'와
         // '돌았는데 대상이 없었다'는 다른 상황이고, 타이머 count 가 그 둘을 갈라준다.
         val started = Timer.start(meterRegistry)
         // 집계는 try 밖에 둔다. 루프가 중간에 끊겨도(알림의 트랜잭션 가드) 그때까지 처리한 방들은
         // 이미 커밋돼 있어, 한 일이 지표에도 로그에도 안 남으면 아무 일 없던 날과 구별되지 않는다.
         val tally = RunTally()
         try {
-            val targetIds = conversationRepository.findAutoCardTargetIds(createdAfter, createdBefore)
+            val targetIds = conversationCardGenerationService.findAutoCardTargetIds(createdAfter, createdBefore)
             if (targetIds.isEmpty()) {
                 log.info("자동 카드 생성 배치: 대상 없음 (기준={}~{})", createdAfter, createdBefore)
                 return
@@ -123,9 +124,18 @@ class DailyAutoCardScheduler(
         // 한 사람이 방을 여러 개 만들면 카드도 여러 장 나온다. 그대로 두면 새벽에 푸시가 연달아
         // 가므로, 이번 실행에서 이미 알린 회원은 건너뛴다(add 가 false 를 돌려준다).
         if (!tally.notifiedMemberIds.add(cardCreatedMemberId)) {
+            // 건너뛴 것도 남긴다. 백오피스에서 "대상이었지만 다른 방으로 이미 나갔다"와 "애초에
+            // 대상이 아니었다"(기록 없음)가 구분돼야 한다.
+            notificationLogRecorder.record(
+                cardCreatedMemberId,
+                listOf(conversationId),
+                NotificationType.CARD_CREATED,
+                NotificationOutcome.SKIPPED,
+            )
             return
         }
         val sent = cardCreatedNotifier.notifyCardCreated(cardCreatedMemberId)
+        notificationLogRecorder.record(cardCreatedMemberId, listOf(conversationId), NotificationType.CARD_CREATED, sent)
         tally.notifiedSuccessCount += sent.successCount
         tally.notifiedFailureCount += sent.failureCount
     }
@@ -134,7 +144,7 @@ class DailyAutoCardScheduler(
      * 이번 실행의 결과를 지표와 로그에 남긴다. 대상이 없어 일찍 끝난 실행은 이미 자기 로그를
      * 남겼으므로 건너뛴다.
      *
-     * 루프가 끊긴 실행도 여기까지는 온다 — 그래서 요약 첫 줄에 완료/중단을 함께 적는다.
+     * 루프가 끊긴 실행도 여기까지는 온다. 그래서 요약 첫 줄에 완료/중단을 함께 적는다.
      * "완료"로 못박으면 중단된 배치가 정상 종료로 읽힌다.
      */
     private fun record(tally: RunTally) {
@@ -162,7 +172,7 @@ class DailyAutoCardScheduler(
     }
 
     /**
-     * 배치 1회분의 집계. 루프가 끊겨도 살아남아야 하는 값들이라 한 곳에 모은다 — 낱개 지역변수로
+     * 배치 1회분의 집계. 루프가 끊겨도 살아남아야 하는 값들이라 한 곳에 모은다. 낱개 지역변수로
      * 흩어 두면 다음에 누가 집계 한 줄을 추가할 때 try 안쪽에 두기 쉽다.
      */
     private class RunTally {
@@ -175,7 +185,7 @@ class DailyAutoCardScheduler(
     }
 
     /**
-     * 방 하나를 처리한 결과. 카드를 실제로 만든 경우에만 [cardCreatedMemberId] 가 채워진다 —
+     * 방 하나를 처리한 결과. 카드를 실제로 만든 경우에만 [cardCreatedMemberId] 가 채워진다.
      * 그 자리에서 알림을 보낼 대상이다.
      */
     private data class ProcessResult(
@@ -203,7 +213,7 @@ class DailyAutoCardScheduler(
         if (memberService.getById(conversation.memberId).isWithdrawn()) {
             return ProcessResult(AutoCardOutcome.WITHDRAWN_MEMBER)
         }
-        // 요약이 null이어도 그대로 넘긴다 — 카드 생성 경로가 유저 메시지 원문으로 대신 만든다.
+        // 요약이 null이어도 그대로 넘긴다. 카드 생성 경로가 유저 메시지 원문으로 대신 만든다.
         cardService.createCard(conversation.memberId, conversationId, emotion = null, summary = conversation.summary)
         return ProcessResult(AutoCardOutcome.CREATED, cardCreatedMemberId = conversation.memberId)
     }
@@ -214,7 +224,7 @@ class DailyAutoCardScheduler(
         conversationId: Long,
     ): AutoCardOutcome =
         when (e.errorCode) {
-            // 다른 요청이 먼저 카드를 만들었거나 만드는 중 — 배치가 할 일이 없다.
+            // 다른 요청이 먼저 카드를 만들었거나 만드는 중이다. 배치가 할 일이 없다.
             ErrorCode.CARD_ALREADY_EXISTS, ErrorCode.CARD_GENERATION_IN_PROGRESS -> {
                 AutoCardOutcome.ALREADY_HANDLED
             }
@@ -227,15 +237,15 @@ class DailyAutoCardScheduler(
 
     companion object {
         /**
-         * 하루 경계([AutoCardWindow.DAY_BOUNDARY_HOUR])에 맞춰 돈다 — 하루가 끝나는 순간 그 하루를 정리한다.
+         * 하루 경계([AutoCardWindow.DAY_BOUNDARY_HOUR])에 맞춰 돈다. 하루가 끝나는 순간 그 하루를 정리한다.
          * 사용자 활동이 가장 적은 시간대라 LLM 호출이 몰려도 서비스 영향이 작다.
          *
          * 토큰 리셋도 같은 시각이라 배치가 쓰는 토큰은 **방금 리셋된 오늘 예산**에서 빠진다.
          * 리셋 직전(04시 등)으로 옮기면 곧 만료될 어제 예산에 잡혀 오늘 예산을 안 건드리지만,
-         * 어제 상한을 다 쓴 사용자는 스킵돼 카드를 아예 못 받는다. 카드 1장은 감정 분류·한 줄 생성
+         * 어제 상한을 다 쓴 사용자는 스킵돼 카드를 아예 못 받는다. 카드 1장은 감정 분류와 한 줄 생성
          * 2회로 하루 상한 대비 미미하므로 카드를 확실히 만드는 쪽을 택했다.
          *
-         * `reset_hour`는 백오피스에서 바꿀 수 있는 값이다 — 하루 경계를 옮기게 되면 이 상수와
+         * `reset_hour`는 백오피스에서 바꿀 수 있는 값이다. 하루 경계를 옮기게 되면 이 상수와
          * [AutoCardWindow.DAY_BOUNDARY_HOUR]도 함께 봐야 한다.
          */
         private const val CRON = "0 0 ${AutoCardWindow.DAY_BOUNDARY_HOUR} * * *"

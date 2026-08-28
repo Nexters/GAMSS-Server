@@ -29,10 +29,10 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
     ): List<Conversation>
 
     /**
-     * 회원의 대화방을 상태로 걸러 최신순으로 조회한다. **어떤 상태가 무슨 의미인지는 호출자가 정한다** —
+     * 회원의 대화방을 상태로 걸러 최신순으로 조회한다. **어떤 상태가 무슨 의미인지는 호출자가 정한다.**
      * 여기서는 걸러낸다는 사실만 안다.
      *
-     * `createdAt` 만으로 정렬하지 않는다 — `DATETIME(6)` 이라 한 요청 안에서 연달아 만든 방이 같은
+     * `createdAt` 만으로 정렬하지 않는다. `DATETIME(6)` 이라 한 요청 안에서 연달아 만든 방이 같은
      * 마이크로초를 가질 수 있고, 그러면 순서가 실행마다 흔들린다. id 로 타이브레이크한다.
      */
     @Query(
@@ -46,11 +46,11 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
     ): List<Conversation>
 
     /**
-     * 자동 종료·카드 생성 배치의 대상 id를 조회한다 — [createdAfter] 이후 [createdBefore](가장 최근에
+     * 자동 종료와 카드 생성 배치의 대상 id를 조회한다. [createdAfter] 이후 [createdBefore](가장 최근에
      * 지난 하루 경계, KST 05시) 전에 만들어졌고, 삭제되지 않았으며, 아직 카드가 없는
      * (`cardGenerationStatus <> DONE`) 방.
      *
-     * 상한을 "어제 하루"로 좁히지 않는다 — 배치가 하루 걸러 실패하면 그날 방들이 영영 카드 없이
+     * 상한을 "어제 하루"로 좁히지 않는다. 배치가 하루 걸러 실패하면 그날 방들이 영영 카드 없이
      * 남는다. 이미 종료된 방까지 포함하는 것도 같은 이유로, 종료까지만 되고 카드 생성에서 끊긴 방이
      * 다음 실행에서 이어서 처리된다. DONE 필터는 불필요한 일감을 줄이는 용도일 뿐이고, 중복 카드
      * 생성을 실제로 막는 것은 카드 생성 경로의 CAS 선점과 `cards.conversation_id` 유니크 제약이다.
@@ -63,11 +63,11 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
      * **하한은 고정이고 상한만 매일 밀리므로, 끝나지 않는 방은 대상에 계속 쌓인다.** 그래서 결론이
      * 바뀔 수 없는 방과 바뀔 수 있는 방을 다르게 다룬다:
      * - 자동 생성을 포기했던 방([CardGenerationStatus.SKIPPED])은 **제외하지 않는다.** 요약이 없어도
-     *   카드를 만들 수 있게 되면서(#204) 결론이 바뀔 수 있는 방이 됐다 — 그 상태로 굳어 있는 기존
+     *   카드를 만들 수 있게 되면서(#204) 결론이 바뀔 수 있는 방이 됐다. 그 상태로 굳어 있는 기존
      *   행들이 마이그레이션 없이 다음 실행에서 카드를 받고 DONE으로 옮겨간다.
      * - 실패한 방([CardGenerationStatus.FAILED])은 재시도가 살아 있어야 하므로 상태로 뺄 수 없다.
      *   대신 마지막 시도가 이번 하루 안이면 건너뛰어 **하루 한 번**으로 제한한다. 배치 카드는
-     *   감정 분류·한 줄 생성 2회를 부르므로, 영구적으로 실패하는 방이 생겨도 태우는 양이 예측
+     *   감정 분류와 한 줄 생성 2회를 부르므로, 영구적으로 실패하는 방이 생겨도 태우는 양이 예측
      *   가능한 선에서 묶인다.
      */
     @Query(
@@ -91,28 +91,32 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
      * 아직 **미종료** 상태인 방을 가진 회원들. 04:30 리마인더가 "곧 자동으로 닫힌다"고 알릴 대상이다.
      *
      * [findAutoCardTargetIds] 를 재사용하면 안 된다. 그 쿼리는 `cardGenerationStatus` 기준이라
-     * **이미 종료됐는데 카드만 없는 방**까지 포함한다 — 직접 마무리한 사람에게 "마무리하세요"가 간다.
+     * **이미 종료됐는데 카드만 없는 방**까지 포함한다. 직접 마무리한 사람에게 "마무리하세요"가 간다.
      * 여기서는 `status = ACTIVE` 인 방만 본다.
      *
      * 기간은 5시 배치와 같은 창을 쓴다([com.nexters.gamss.card.service.AutoCardWindow]). 하한 밖의
      * 방은 배치가 손대지 않으므로, 알려봐야 닫히지도 않는다.
      *
-     * 회원당 한 번만 알리므로 방이 아니라 **회원 id** 를 중복 없이 돌려준다. 탈퇴 회원은 따로 거르지
-     * 않는다 — 탈퇴하면 기기 토큰이 함께 지워져(DeviceTokenCleaner) 보낼 대상이 애초에 없다.
+     * **방 단위로 돌려준다.** 알림은 회원당 한 번만 나가지만(부르는 쪽이 회원 id 를 추린다), 어떤 방
+     * 때문에 대상이 됐는지를 발송 이력에 남겨야 백오피스가 대화방별로 보여줄 수 있다
+     * ([com.nexters.gamss.notification.domain.NotificationLog]).
+     *
+     * 탈퇴 회원은 따로 거르지 않는다. 탈퇴하면 기기 토큰이 함께 지워져(DeviceTokenCleaner) 보낼
+     * 대상이 애초에 없다.
      */
     @Query(
-        "select distinct c.memberId from Conversation c " +
+        "select c.id as conversationId, c.memberId as memberId from Conversation c " +
             "where c.status = :activeStatus " +
             "and c.createdAt >= :createdAfter and c.createdAt < :createdBefore",
     )
-    fun findMemberIdsWithUnfinishedConversations(
+    fun findUnfinishedConversations(
         @Param("createdAfter") createdAfter: Instant,
         @Param("createdBefore") createdBefore: Instant,
         @Param("activeStatus") activeStatus: ConversationStatus = ConversationStatus.ACTIVE,
-    ): List<Long>
+    ): List<UnfinishedConversationProjection>
 
     /**
-     * 상태를 바꾸는 요청(메시지 저장·종료·삭제)에서 사용한다. 행을 잠가 다른 상태 변경 요청이
+     * 상태를 바꾸는 요청(메시지 저장, 종료, 삭제)에서 사용한다. 행을 잠가 다른 상태 변경 요청이
      * 커밋될 때까지 대기하게 만들어, 삭제 이후 작업 차단 계약이 경합으로 깨지지 않도록 한다.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -125,7 +129,7 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
      * 주어진 id 중 **이 회원의, 아직 살아 있는** 채팅방 id만 추린다. 일괄 삭제가 실제로 지울 대상을
      * 정할 때 쓴다.
      *
-     * 남의 방·없는 방·이미 지운 방은 조용히 빠진다 — 단건 삭제처럼 403·404·409로 전체를 거절하면
+     * 남의 방, 없는 방, 이미 지운 방은 조용히 빠진다. 단건 삭제처럼 403, 404, 409로 전체를 거절하면
      * id 하나만 잘못 섞여도 나머지를 못 지우고, 남의 방이 존재하는지도 응답으로 드러난다.
      */
     @Query(
@@ -142,10 +146,10 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
      * 지정한 채팅방들을 한 번에 삭제한다(soft delete). 카드 일괄 삭제가 대화방까지 지울 때 쓴다
      * ([com.nexters.gamss.card.service.CardService.deleteCardsWithConversations]).
      *
-     * 이미 삭제된 방은 건너뛴다. 단건 삭제([Conversation.delete])와 달리 예외를 던지지 않는다 —
+     * 이미 삭제된 방은 건너뛴다. 단건 삭제([Conversation.delete])와 달리 예외를 던지지 않는다.
      * 일괄 삭제는 대상이 없어도 성공해야 하고, 여기서 막히면 나머지 방까지 못 지운다.
      *
-     * [Conversation.updatedAt] 을 직접 갱신한다 — 벌크 UPDATE 는 엔티티를 거치지 않아
+     * [Conversation.updatedAt] 을 직접 갱신한다. 벌크 UPDATE 는 엔티티를 거치지 않아
      * `@LastModifiedDate` 감사 리스너가 돌지 않는다. 넣지 않으면 같은 '채팅방 삭제'인데
      * 단건 경로만 변경 시각이 남아 두 경로가 서로 다른 데이터를 만든다.
      */
@@ -161,13 +165,13 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
         @Param("deletedStatus") deletedStatus: ConversationStatus = ConversationStatus.DELETED,
     ): Int
 
-    /** [status] 상태의 대화방 수. 모니터링 게이지(진행 중 대화 수)용 — 시점 스냅샷이라 인덱스만 탄다. */
+    /** [status] 상태의 대화방 수. 모니터링 게이지(진행 중 대화 수)용. 시점 스냅샷이라 인덱스만 탄다. */
     fun countByStatus(status: ConversationStatus): Long
 
     /**
-     * [cardGenerationStatus] 상태의 대화방 수. 모니터링 게이지(카드 생성 적체·실패 누적)용.
+     * [cardGenerationStatus] 상태의 대화방 수. 모니터링 게이지(카드 생성 적체와 실패 누적)용.
      *
-     * 삭제된 방은 뺀다 — 소프트 삭제는 status 만 DELETED 로 바꾸고 card_generation_status 는
+     * 삭제된 방은 뺀다. 소프트 삭제는 status 만 DELETED 로 바꾸고 card_generation_status 는
      * 그대로 두기 때문에, 세지 않으면 처리할 수 없는 적체가 게이지에 영원히 남는다.
      */
     @Query(
@@ -194,7 +198,7 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
 
     /**
      * 카드 생성 시점에 받은 대화 전체 요약을 [id]에 원자적으로 저장한다. 행 잠금 없이 단일 컬럼만
-     * 갱신해, 종료·삭제 같은 동시 상태 변경과 경합해도 엔티티 merge처럼 전체 행을 덮어쓰지 않는다.
+     * 갱신해, 종료나 삭제 같은 동시 상태 변경과 경합해도 엔티티 merge처럼 전체 행을 덮어쓰지 않는다.
      */
     @Transactional
     @Modifying(flushAutomatically = true, clearAutomatically = true)
@@ -223,7 +227,7 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
         @Param("excludedStatus") excludedStatus: ConversationStatus = ConversationStatus.DELETED,
     ): Int
 
-    /** 배포 중단·서버 크래시 등으로 [olderThan]보다 오래 PENDING에 머문 고아 카드 생성 상태를 NONE으로 되돌린다. */
+    /** 배포 중단, 서버 크래시 등으로 [olderThan]보다 오래 PENDING에 머문 고아 카드 생성 상태를 NONE으로 되돌린다. */
     @Transactional
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(
@@ -240,7 +244,7 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
 
     /**
      * 같은 회원의 **종료된** 다른 채팅방 중 요약이 저장된 최근 [poolSize]개를 후보로 삼아, 그중 무작위로
-     * [pickCount]개의 요약을 골라 반환한다(댓글 생성 시 과거 맥락으로 참고 — 매번 언급하지 않도록 일부만 뽑음).
+     * [pickCount]개의 요약을 골라 반환한다(댓글 생성 시 과거 맥락으로 참고하며, 매번 언급하지 않도록 일부만 뽑는다).
      * 후보가 [pickCount]보다 적으면 있는 만큼만 반환한다. [excludeConversationId]는 현재 대화방(자기 자신) 제외용.
      */
     fun findRandomPastSummaries(
@@ -256,9 +260,9 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
      * **요약 컬럼만 뽑지 않고 엔티티로 받는다.** 네이티브 쿼리로 스칼라를 뽑으면 [Conversation.summary]에
      * 걸린 [com.nexters.gamss.global.crypto.EncryptedStringConverter]가 적용되지 않아 암호문이 그대로
      * 나오고, 그게 LLM 프롬프트의 과거 맥락으로 실려 간다. 엔티티로 매핑하면 컨버터가 다시 걸리므로
-     * 복호화 지점이 컨버터 하나로 유지된다 — 새 조회를 추가할 때도 이 규칙을 지킬 것.
+     * 복호화 지점이 컨버터 하나로 유지된다. 새 조회를 추가할 때도 이 규칙을 지킬 것.
      *
-     * 종료 여부를 status로 직접 거른다 — 요약이 카드 생성 시점에만 저장되던 때는 `summary is not null`이
+     * 종료 여부를 status로 직접 거른다. 요약이 카드 생성 시점에만 저장되던 때는 `summary is not null`이
      * 곧 "끝난 방"을 뜻했지만, 이제 진행 중에도 임시 요약이 저장되므로([Conversation.updateSummary])
      * 그 조건만으로는 아직 쓰는 중인 오늘의 대화방까지 과거 맥락에 섞인다.
      */
@@ -277,7 +281,7 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
         @Param("excludeConversationId") excludeConversationId: Long,
         @Param("poolSize") poolSize: Int,
         @Param("pickCount") pickCount: Int,
-        // native query라 엔티티의 @Enumerated(STRING) 매핑이 적용되지 않는다 — enum을 그대로 바인딩하면
+        // native query라 엔티티의 @Enumerated(STRING) 매핑이 적용되지 않는다. enum을 그대로 바인딩하면
         // Hibernate가 문자열이 아닌 다른 방식으로 바인딩해 이 필터가 무력화된다(Testcontainers 테스트로 확인).
         // 그래서 String으로 받되 값의 출처는 ConversationStatus.ENDED로 고정한다.
         @Param("endedStatus") endedStatus: String = ConversationStatus.ENDED.name,

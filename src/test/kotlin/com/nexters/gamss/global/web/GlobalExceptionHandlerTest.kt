@@ -1,5 +1,7 @@
-package com.nexters.gamss.global.exception
+package com.nexters.gamss.global.web
 
+import com.nexters.gamss.global.exception.BusinessException
+import com.nexters.gamss.global.exception.ErrorCode
 import io.mockk.every
 import io.mockk.mockk
 import org.springframework.http.HttpStatus

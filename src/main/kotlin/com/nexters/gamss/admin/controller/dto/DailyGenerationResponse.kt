@@ -1,5 +1,6 @@
 package com.nexters.gamss.admin.controller.dto
 
+import com.nexters.gamss.admin.service.DailyGeneration
 import io.swagger.v3.oas.annotations.media.Schema
 import java.time.LocalDate
 
@@ -11,4 +12,13 @@ data class DailyGenerationResponse(
     val success: Long,
     @field:Schema(description = "그날 실패한 생성 수", example = "2")
     val failed: Long,
-)
+) {
+    companion object {
+        fun from(generation: DailyGeneration): DailyGenerationResponse =
+            DailyGenerationResponse(
+                date = generation.date,
+                success = generation.success,
+                failed = generation.failed,
+            )
+    }
+}

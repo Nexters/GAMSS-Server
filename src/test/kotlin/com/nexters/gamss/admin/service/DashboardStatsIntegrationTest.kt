@@ -73,7 +73,7 @@ class DashboardStatsIntegrationTest : RepositoryTest() {
         assertEquals(1, usage.todayCards)
         assertEquals(1, usage.todaySignups)
         assertEquals(1, usage.dau)
-        assertEquals(1, usage.emotionDistribution.first { it.emotion == "ANGER" }.count)
+        assertEquals(1, usage.emotionDistribution.first { it.emotion == EmotionType.ANGER }.count)
         val todayActivity = usage.dailyActivity.last()
         assertEquals(1, todayActivity.conversations)
         assertEquals(3, todayActivity.messages)
