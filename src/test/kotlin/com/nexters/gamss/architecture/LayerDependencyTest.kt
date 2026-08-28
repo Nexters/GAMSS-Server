@@ -179,7 +179,7 @@ class LayerDependencyTest {
      * 호출하는 것이 아니기 때문이다(근거는 [com.nexters.gamss.global.crypto.EncryptedStringConverter]
      * 의 KDoc). 걷어내야 하는 것은 행위 의존이고, 그건 인덱스 계산을 리스너로 옮기면서 사라졌다.
      */
-    private fun String.isJpaListener(): Boolean = substringAfterLast('.').endsWith("Listener")
+    private fun String.isJpaListener(): Boolean = substringAfterLast('.').let { it.endsWith("Listener") || it.endsWith("Converter") }
 
     private companion object {
         val MAIN_SOURCE: Path = Path("src/main/kotlin")
@@ -187,7 +187,7 @@ class LayerDependencyTest {
         val PACKAGE_ROOT: String = PACKAGE_PREFIX.replace('.', '/')
 
         /** 도메인 바깥 계층. 도메인이 이 중 하나를 import 하면 방향이 뒤집힌 것이다. */
-        val OUTER_LAYERS = setOf("service", "repository", "controller", "config", "search")
+        val OUTER_LAYERS = setOf("service", "repository", "controller", "config", "search", "crypto")
 
         /** 선언·주입 필드·타입 참조 어디에서든 잡히도록 이름만 본다. */
         val HEXAGONAL_NAME = Regex("""\b[A-Z]\w*(Port|Adapter)\b""")

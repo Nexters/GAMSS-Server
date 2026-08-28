@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component
 /**
  * 대화방을 저장하기 직전에 제목의 검색용 블라인드 인덱스를 계산해 채운다.
  *
- * 인덱스를 **어떻게** 만드는지는 여기까지만 안다. [Conversation]은 완성된 토큰열을 건네받아 보관만 한다.
+ * 인덱스를 **어떻게** 만드는지는 여기까지만 안다. 무엇을 인덱싱할지는 [Conversation] 이 정한다.
  *
  * 제목은 [Conversation.rename] 으로 여러 번 바뀌므로 `@PreUpdate` 도 함께 건다. 제목이 아닌 값만
  * 바뀐 갱신에서도 다시 계산되지만, 제목은 100자 이하라 비용이 무시할 수준이고 "언제 다시 계산해야
@@ -26,6 +26,6 @@ class ConversationSearchIndexListener(
     @PrePersist
     @PreUpdate
     fun fillSearchIndex(conversation: Conversation) {
-        conversation.applySearchIndex(conversation.title?.value?.let(indexer::toIndexValue))
+        conversation.applySearchIndex(indexer::toIndexValue)
     }
 }

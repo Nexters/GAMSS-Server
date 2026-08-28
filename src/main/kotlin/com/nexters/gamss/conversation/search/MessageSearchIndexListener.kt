@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component
 /**
  * 메시지를 저장하기 직전에 검색용 블라인드 인덱스를 계산해 채운다.
  *
- * 인덱스를 **어떻게** 만드는지는 여기까지만 안다. [Message]는 완성된 토큰열을 건네받아 보관만 하므로,
+ * 인덱스를 **어떻게** 만드는지는 여기까지만 안다. 무엇을 인덱싱할지는 [Message] 가 정하므로,
  * 토크나이저를 바꾸거나 인덱스를 다른 저장소로 옮겨도 엔티티는 그대로다.
  *
  * 서비스에서 채우지 않고 리스너로 둔 이유는 저장 경로가 여러 곳이기 때문이다
@@ -25,6 +25,6 @@ class MessageSearchIndexListener(
 ) {
     @PrePersist
     fun fillSearchIndex(message: Message) {
-        message.applySearchIndex(indexer.toIndexValue(message.content))
+        message.applySearchIndex(indexer::toIndexValue)
     }
 }

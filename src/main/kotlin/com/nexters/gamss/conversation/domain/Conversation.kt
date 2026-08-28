@@ -140,9 +140,14 @@ class Conversation(
         this.title = title
     }
 
-    /** 저장 직전에 [ConversationSearchIndexListener]가 완성된 인덱스 값을 넣어준다. 직접 부를 일은 없다. */
-    fun applySearchIndex(index: String?) {
-        titleIndex = index
+    /**
+     * 저장 직전에 [ConversationSearchIndexListener] 가 부른다. **무엇을 인덱싱할지는 여기서 정하고,
+     * 어떻게 만드는지는 [toIndex] 가 안다.** 제목이 없으면 인덱스도 없다.
+     *
+     * 완성된 값을 받지 않고 함수를 받는 이유는 [Message.applySearchIndex] 와 같다.
+     */
+    internal fun applySearchIndex(toIndex: (String) -> String?) {
+        titleIndex = title?.value?.let(toIndex)
     }
 
     /** 종료된 채팅방에는 사용자 메시지를 추가할 수 없다. */

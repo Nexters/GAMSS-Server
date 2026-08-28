@@ -82,9 +82,16 @@ class Message(
     var contentIndex: String? = null
         protected set
 
-    /** 저장 직전에 [MessageSearchIndexListener]가 완성된 인덱스 값을 넣어준다. 직접 부를 일은 없다. */
-    fun applySearchIndex(index: String?) {
-        contentIndex = index
+    /**
+     * 저장 직전에 [MessageSearchIndexListener] 가 부른다. **무엇을 인덱싱할지는 여기서 정하고,
+     * 어떻게 만드는지는 [toIndex] 가 안다.**
+     *
+     * 완성된 값을 받지 않고 함수를 받는 이유는, 값을 받으면 부르는 쪽이 [content] 를 인덱싱한다는
+     * 사실까지 알아야 하기 때문이다. 그러면 인덱싱 대상이 바뀔 때 엔티티와 리스너를 같이 고쳐야
+     * 하고 한쪽만 고치면 조용히 어긋난다.
+     */
+    internal fun applySearchIndex(toIndex: (String) -> String?) {
+        contentIndex = toIndex(content)
     }
 
     companion object {
