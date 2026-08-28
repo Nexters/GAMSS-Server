@@ -1,5 +1,7 @@
-package com.nexters.gamss.global.exception
+package com.nexters.gamss.global.web
 
+import com.nexters.gamss.global.exception.BusinessException
+import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.global.response.ApiResponse
 import com.nexters.gamss.global.response.ErrorResponse
 import jakarta.validation.ConstraintViolationException
@@ -20,7 +22,7 @@ class GlobalExceptionHandler {
     fun handleBusiness(e: BusinessException): ResponseEntity<ApiResponse<Nothing>> {
         val errorCode = e.errorCode
         return ResponseEntity
-            .status(errorCode.status)
+            .status(httpStatusOf(errorCode.kind))
             .body(ApiResponse.error(ErrorResponse(errorCode.code, e.message ?: errorCode.message)))
     }
 
@@ -32,7 +34,7 @@ class GlobalExceptionHandler {
                 .firstOrNull()
                 ?.defaultMessage ?: errorCode.message
         return ResponseEntity
-            .status(errorCode.status)
+            .status(httpStatusOf(errorCode.kind))
             .body(ApiResponse.error(ErrorResponse(errorCode.code, message)))
     }
 
@@ -41,7 +43,7 @@ class GlobalExceptionHandler {
         val errorCode = ErrorCode.INVALID_INPUT
         val message = e.constraintViolations.firstOrNull()?.message ?: errorCode.message
         return ResponseEntity
-            .status(errorCode.status)
+            .status(httpStatusOf(errorCode.kind))
             .body(ApiResponse.error(ErrorResponse(errorCode.code, message)))
     }
 
@@ -49,7 +51,7 @@ class GlobalExceptionHandler {
     fun handleMissingParameter(e: MissingServletRequestParameterException): ResponseEntity<ApiResponse<Nothing>> {
         val errorCode = ErrorCode.INVALID_INPUT
         return ResponseEntity
-            .status(errorCode.status)
+            .status(httpStatusOf(errorCode.kind))
             .body(ApiResponse.error(ErrorResponse(errorCode.code, "${e.parameterName}은(는) 필수입니다.")))
     }
 
@@ -57,7 +59,7 @@ class GlobalExceptionHandler {
     fun handleTypeMismatch(e: MethodArgumentTypeMismatchException): ResponseEntity<ApiResponse<Nothing>> {
         val errorCode = ErrorCode.INVALID_INPUT
         return ResponseEntity
-            .status(errorCode.status)
+            .status(httpStatusOf(errorCode.kind))
             .body(ApiResponse.error(ErrorResponse(errorCode.code, "${e.name}의 형식이 올바르지 않습니다.")))
     }
 
@@ -66,7 +68,7 @@ class GlobalExceptionHandler {
     fun handleNotReadable(e: HttpMessageNotReadableException): ResponseEntity<ApiResponse<Nothing>> {
         val errorCode = ErrorCode.INVALID_INPUT
         return ResponseEntity
-            .status(errorCode.status)
+            .status(httpStatusOf(errorCode.kind))
             .body(ApiResponse.error(ErrorResponse(errorCode.code, "요청 본문의 형식이 올바르지 않습니다.")))
     }
 
@@ -75,7 +77,7 @@ class GlobalExceptionHandler {
         log.error("처리되지 않은 예외", e)
         val errorCode = ErrorCode.INTERNAL_ERROR
         return ResponseEntity
-            .status(errorCode.status)
+            .status(httpStatusOf(errorCode.kind))
             .body(ApiResponse.error(ErrorResponse(errorCode.code, errorCode.message)))
     }
 }

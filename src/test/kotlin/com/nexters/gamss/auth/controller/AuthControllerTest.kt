@@ -3,7 +3,7 @@ package com.nexters.gamss.auth.controller
 import com.nexters.gamss.auth.service.AuthService
 import com.nexters.gamss.auth.service.LoginResult
 import com.nexters.gamss.auth.service.TokenResult
-import com.nexters.gamss.global.exception.GlobalExceptionHandler
+import com.nexters.gamss.global.web.GlobalExceptionHandler
 import io.mockk.every
 import io.mockk.mockk
 import org.springframework.http.MediaType

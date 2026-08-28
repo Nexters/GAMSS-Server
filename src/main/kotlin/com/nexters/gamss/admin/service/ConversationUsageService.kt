@@ -1,11 +1,10 @@
 package com.nexters.gamss.admin.service
 
-import com.nexters.gamss.card.repository.CardRepository
+import com.nexters.gamss.card.service.CardStatsService
 import com.nexters.gamss.conversation.domain.SenderType
-import com.nexters.gamss.conversation.repository.ConversationRepository
-import com.nexters.gamss.conversation.repository.MessageRepository
+import com.nexters.gamss.conversation.service.ConversationStatsService
 import com.nexters.gamss.llm.config.GeminiPricing
-import com.nexters.gamss.monitoring.repository.GenerationLogRepository
+import com.nexters.gamss.monitoring.service.GenerationLogStatsService
 import com.nexters.gamss.notification.service.NotificationLogStatsService
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageImpl
@@ -20,16 +19,15 @@ import kotlin.math.roundToLong
  */
 @Service
 class ConversationUsageService(
-    private val conversationRepository: ConversationRepository,
-    private val messageRepository: MessageRepository,
-    private val cardRepository: CardRepository,
-    private val generationLogRepository: GenerationLogRepository,
+    private val conversationStatsService: ConversationStatsService,
+    private val cardStatsService: CardStatsService,
+    private val generationLogStatsService: GenerationLogStatsService,
     private val notificationLogStatsService: NotificationLogStatsService,
     private val geminiPricing: GeminiPricing,
 ) {
     @Transactional(readOnly = true)
     fun getUsage(pageable: Pageable): Page<ConversationUsage> {
-        val page = conversationRepository.findAll(pageable)
+        val page = conversationStatsService.findConversations(pageable)
         val ids = page.content.map { it.id }
         if (ids.isEmpty()) {
             return PageImpl(emptyList(), pageable, page.totalElements)
@@ -37,7 +35,7 @@ class ConversationUsageService(
 
         val userCounts = mutableMapOf<Long, Long>()
         val characterCounts = mutableMapOf<Long, Long>()
-        messageRepository.countBySenderForConversations(ids).forEach {
+        conversationStatsService.countMessagesBySender(ids).forEach {
             when (it.senderType) {
                 SenderType.USER -> userCounts[it.conversationId] = it.count
                 SenderType.CHARACTER -> characterCounts[it.conversationId] = it.count
@@ -46,9 +44,9 @@ class ConversationUsageService(
 
         // 대시보드처럼 생성 로그 행을 받아 대화방별로 그룹핑한다. 토큰(총량과 캐시)은 단순 합,
         // 비용은 모델별 단가라 행마다 요금표로 계산해 더한다(QualityStatsService 와 동일한 costUsd).
-        val logsByConversation = generationLogRepository.findByConversationIdIn(ids).groupBy { it.conversationId }
+        val logsByConversation = generationLogStatsService.findByConversationIds(ids).groupBy { it.conversationId }
 
-        val cardConversationIds = cardRepository.findConversationIdsIn(ids).toSet()
+        val cardConversationIds = cardStatsService.findConversationIdsWithCard(ids).toSet()
 
         // 기록이 없는 방은 그 회차에 대상이 아니었다는 뜻이라 맵에 없다.
         val notificationsByConversation = notificationLogStatsService.findOutcomesByConversation(ids)

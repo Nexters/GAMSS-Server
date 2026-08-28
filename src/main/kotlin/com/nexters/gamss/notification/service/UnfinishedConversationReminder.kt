@@ -1,7 +1,7 @@
 package com.nexters.gamss.notification.service
 
 import com.nexters.gamss.card.service.AutoCardWindow
-import com.nexters.gamss.conversation.repository.ConversationRepository
+import com.nexters.gamss.conversation.service.ConversationService
 import com.nexters.gamss.notification.domain.NotificationType
 import com.nexters.gamss.notification.push.PushMessage
 import org.slf4j.LoggerFactory
@@ -24,7 +24,7 @@ import java.time.Instant
  */
 @Component
 class UnfinishedConversationReminder(
-    private val conversationRepository: ConversationRepository,
+    private val conversationService: ConversationService,
     private val window: AutoCardWindow,
     private val notifier: MemberPushNotifier,
     private val notificationLogRecorder: NotificationLogRecorder,
@@ -59,7 +59,7 @@ class UnfinishedConversationReminder(
         createdAfter: Instant,
         createdBefore: Instant,
     ) {
-        val targets = conversationRepository.findUnfinishedConversations(createdAfter, createdBefore)
+        val targets = conversationService.findUnfinishedConversations(createdAfter, createdBefore)
         if (targets.isEmpty()) {
             log.info("미종료 대화방 리마인더: 대상 없음 (기준={}~{})", createdAfter, createdBefore)
             return

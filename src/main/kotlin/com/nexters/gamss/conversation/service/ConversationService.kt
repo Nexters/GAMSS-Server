@@ -149,6 +149,63 @@ class ConversationService(
     }
 
     /**
+     * 카드가 지워질 때 그 카드가 나온 방도 함께 지운다. 카드는 그 대화의 결과물이라, 카드만 지우고
+     * 대화를 남기면 사용자가 지웠다고 여긴 내용이 채팅방 목록·검색에 그대로 남는다.
+     *
+     * 이미 삭제된 방이면 넘어간다. 채팅방을 먼저 지운 뒤 카드를 지우는 순서에서도 카드 삭제는
+     * 성공해야 한다.
+     *
+     * **소유 확인을 하지 않는다.** 부르는 쪽([com.nexters.gamss.card.service.CardService])이 카드
+     * 소유를 이미 확인한 뒤라, 여기서 다시 보면 같은 판정을 두 번 하게 된다.
+     */
+    @Transactional
+    fun deleteForCardRemoval(conversationId: Long) {
+        val conversation =
+            conversationRepository
+                .findByIdForUpdate(conversationId)
+                .orElseThrow { BusinessException(ErrorCode.CONVERSATION_NOT_FOUND) }
+        if (conversation.isDeleted()) {
+            return
+        }
+        conversation.delete()
+    }
+
+    /**
+     * 카드와 함께 사라지는 대화방들을 일괄 소프트 삭제한다.
+     *
+     * [deletedAt] 을 받는 이유는 카드와 **같은 시각**을 찍기 위해서다. 한 번의 삭제로 사라진 짝이라
+     * 나중에 이력을 볼 때 두 UPDATE 사이의 미세한 시차로 다른 요청처럼 보이지 않아야 한다.
+     *
+     * [deleteForCardRemoval] 과 마찬가지로 소유 확인은 부르는 쪽이 이미 했다.
+     */
+    @Transactional
+    fun deleteAllForCardRemoval(
+        conversationIds: List<Long>,
+        deletedAt: Instant,
+    ) {
+        conversationRepository.softDeleteByIds(conversationIds, deletedAt)
+    }
+
+    /**
+     * [createdAfter, createdBefore) 사이에 만들어진 방 중 아직 미종료인 것들을 **방 단위로** 돌려준다.
+     * 자동 종료 전에 한 번 알리는 리마인더가 쓴다([com.nexters.gamss.notification.service.UnfinishedConversationReminder]).
+     *
+     * 회원당 한 번만 보내는 중복 제거는 보내는 쪽이 한다. 여기서 회원 id 만 추려 주면 어떤 방
+     * 때문에 대상이 됐는지를 발송 이력에 남길 수 없다.
+     *
+     * 인터페이스 프로젝션을 그대로 내보내지 않는다. 프로젝션은 쿼리 모양에 딸린 것이라 밖으로
+     * 새면 쿼리를 바꿀 때 다른 모듈이 깨진다.
+     */
+    @Transactional(readOnly = true)
+    fun findUnfinishedConversations(
+        createdAfter: Instant,
+        createdBefore: Instant,
+    ): List<UnfinishedConversation> =
+        conversationRepository
+            .findUnfinishedConversations(createdAfter, createdBefore)
+            .map { UnfinishedConversation(conversationId = it.conversationId, memberId = it.memberId) }
+
+    /**
      * 채팅방 제목을 지정·변경한다. 여러 번 호출할 수 있다. 삭제된 방은 변경할 수 없다.
      * 제목도 상태를 바꾸는 요청이라 행 잠금([getOwnedConversationForUpdate])을 쓴다 — 잠금 없이
      * stale 상태로 읽으면 동시 삭제가 flush 로 되살아나거나(모든 컬럼 UPDATE) 삭제된 방의 제목이 바뀔 수 있다.
@@ -250,7 +307,14 @@ class ConversationService(
         conversationId: Long,
     ): List<Message> = getConversationDetail(memberId, conversationId).messages
 
-    private fun getOwnedConversation(
+    /**
+     * 이 회원 소유의 대화방. 없으면 CONVERSATION_NOT_FOUND, 남의 방이면 CONVERSATION_ACCESS_DENIED 다.
+     *
+     * 소유 판정은 대화 모듈이 한 번만 정의한다. 부르는 쪽마다 다시 쓰면 판정이 갈라진다
+     * (카드 생성도 이것을 쓴다 - [ConversationCardGenerationService.getOwnedConversation]).
+     */
+    @Transactional(readOnly = true)
+    fun getOwnedConversation(
         conversationId: Long,
         memberId: Long,
     ): Conversation {

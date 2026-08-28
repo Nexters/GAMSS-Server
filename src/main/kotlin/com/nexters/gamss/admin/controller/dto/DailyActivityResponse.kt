@@ -1,5 +1,6 @@
 package com.nexters.gamss.admin.controller.dto
 
+import com.nexters.gamss.admin.service.DailyActivity
 import io.swagger.v3.oas.annotations.media.Schema
 import java.time.LocalDate
 
@@ -13,4 +14,14 @@ data class DailyActivityResponse(
     val messages: Long,
     @field:Schema(description = "그날 생성된 카드 수", example = "5")
     val cards: Long,
-)
+) {
+    companion object {
+        fun from(activity: DailyActivity): DailyActivityResponse =
+            DailyActivityResponse(
+                date = activity.date,
+                conversations = activity.conversations,
+                messages = activity.messages,
+                cards = activity.cards,
+            )
+    }
+}

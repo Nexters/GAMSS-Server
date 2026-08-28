@@ -2,8 +2,8 @@ package com.nexters.gamss.notification.service
 
 import com.nexters.gamss.card.config.CardProperties
 import com.nexters.gamss.card.service.AutoCardWindow
-import com.nexters.gamss.conversation.repository.ConversationRepository
-import com.nexters.gamss.conversation.repository.UnfinishedConversationProjection
+import com.nexters.gamss.conversation.service.ConversationService
+import com.nexters.gamss.conversation.service.UnfinishedConversation
 import com.nexters.gamss.notification.domain.NotificationType
 import com.nexters.gamss.notification.push.PushMessage
 import com.nexters.gamss.notification.push.PushSendResult
@@ -20,26 +20,21 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class UnfinishedConversationReminderTest {
-    private val conversationRepository = mockk<ConversationRepository>()
+    private val conversationService = mockk<ConversationService>()
     private val notifier = mockk<MemberPushNotifier>()
     private val notificationLogRecorder = mockk<NotificationLogRecorder>(relaxed = true)
     private val window = AutoCardWindow(CardProperties(autoCardStartDate = LocalDate.of(2026, 8, 15)))
-    private val reminder = UnfinishedConversationReminder(conversationRepository, window, notifier, notificationLogRecorder)
+    private val reminder = UnfinishedConversationReminder(conversationService, window, notifier, notificationLogRecorder)
 
-    /** 조회 결과 한 줄. 인터페이스 프로젝션이라 테스트에서는 익명 구현으로 만든다. */
     private fun target(
         conversationId: Long,
         memberId: Long,
-    ): UnfinishedConversationProjection =
-        object : UnfinishedConversationProjection {
-            override val conversationId = conversationId
-            override val memberId = memberId
-        }
+    ) = UnfinishedConversation(conversationId, memberId)
 
     @Test
     fun `대상 회원마다 따로 보낸다`() {
         every {
-            conversationRepository.findUnfinishedConversations(any(), any(), any())
+            conversationService.findUnfinishedConversations(any(), any())
         } returns listOf(target(10L, 1L), target(20L, 2L))
         every { notifier.send(any(), any()) } returns PushSendResult.none()
 
@@ -51,7 +46,7 @@ class UnfinishedConversationReminderTest {
 
     @Test
     fun `대상이 없으면 발송을 부르지 않는다`() {
-        every { conversationRepository.findUnfinishedConversations(any(), any(), any()) } returns emptyList()
+        every { conversationService.findUnfinishedConversations(any(), any()) } returns emptyList()
 
         reminder.runFor(CREATED_AFTER, CREATED_BEFORE)
 
@@ -64,7 +59,7 @@ class UnfinishedConversationReminderTest {
         val after = slot<Instant>()
         val before = slot<Instant>()
         every {
-            conversationRepository.findUnfinishedConversations(capture(after), capture(before), any())
+            conversationService.findUnfinishedConversations(capture(after), capture(before))
         } returns emptyList()
 
         reminder.runFor(CREATED_AFTER, CREATED_BEFORE)
@@ -79,7 +74,7 @@ class UnfinishedConversationReminderTest {
      */
     @Test
     fun `문구는 종료 예고까지만 하고 카드를 약속하지 않는다`() {
-        every { conversationRepository.findUnfinishedConversations(any(), any(), any()) } returns listOf(target(10L, 1L))
+        every { conversationService.findUnfinishedConversations(any(), any()) } returns listOf(target(10L, 1L))
         val message = slot<PushMessage>()
         every { notifier.send(any(), capture(message)) } returns PushSendResult.none()
 
@@ -96,7 +91,7 @@ class UnfinishedConversationReminderTest {
     @Test
     fun `한 회원의 방이 여러 개면 그 회원에게 한 번 보내고 기록은 방마다 남는다`() {
         every {
-            conversationRepository.findUnfinishedConversations(any(), any(), any())
+            conversationService.findUnfinishedConversations(any(), any())
         } returns listOf(target(10L, 1L), target(20L, 1L), target(30L, 2L))
         val sent = PushSendResult(successCount = 1, failureCount = 0, invalidTokens = emptyList())
         every { notifier.send(any(), any()) } returns sent
@@ -119,7 +114,7 @@ class UnfinishedConversationReminderTest {
     @Test
     fun `회원마다 자기 발송 결과로 기록된다`() {
         every {
-            conversationRepository.findUnfinishedConversations(any(), any(), any())
+            conversationService.findUnfinishedConversations(any(), any())
         } returns listOf(target(10L, 1L), target(20L, 2L))
         val delivered = PushSendResult(successCount = 1, failureCount = 0, invalidTokens = emptyList())
         every { notifier.send(listOf(1L), any()) } returns delivered
@@ -143,7 +138,7 @@ class UnfinishedConversationReminderTest {
     @Test
     fun `중간에 터지면 앞선 회원까지만 처리되고 뒤는 빠진다`() {
         every {
-            conversationRepository.findUnfinishedConversations(any(), any(), any())
+            conversationService.findUnfinishedConversations(any(), any())
         } returns listOf(target(10L, 1L), target(20L, 2L), target(30L, 3L))
         every { notifier.send(listOf(1L), any()) } returns PushSendResult.none()
         every { notifier.send(listOf(2L), any()) } throws RuntimeException("DB 끊김")

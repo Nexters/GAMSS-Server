@@ -23,9 +23,9 @@ import kotlin.test.assertTrue
 class LoginServiceTest {
     private val socialTokenVerifier = mockk<SocialTokenVerifier>()
     private val socialAccountService = mockk<SocialAccountService>()
-    private val memberService = mockk<MemberService>()
     private val jwtIssuer = mockk<JwtIssuer>()
     private val refreshTokenRepository = mockk<RefreshTokenRepository>()
+    private val memberService = mockk<MemberService>()
 
     // 실제 해시로 저장·비교되는지 검증하기 위해 진짜 해셔를 쓴다.
     private val tokenHasher = Sha256TokenHasher()

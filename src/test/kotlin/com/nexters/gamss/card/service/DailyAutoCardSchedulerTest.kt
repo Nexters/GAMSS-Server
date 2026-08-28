@@ -2,9 +2,8 @@ package com.nexters.gamss.card.service
 
 import com.nexters.gamss.card.config.CardProperties
 import com.nexters.gamss.card.domain.Card
-import com.nexters.gamss.conversation.domain.CardGenerationStatus
 import com.nexters.gamss.conversation.domain.Conversation
-import com.nexters.gamss.conversation.repository.ConversationRepository
+import com.nexters.gamss.conversation.service.ConversationCardGenerationService
 import com.nexters.gamss.conversation.service.ConversationService
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
@@ -31,7 +30,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class DailyAutoCardSchedulerTest {
-    private val conversationRepository = mockk<ConversationRepository>()
+    private val conversationCardGenerationService = mockk<ConversationCardGenerationService>()
     private val conversationService = mockk<ConversationService>()
     private val memberService = mockk<MemberService> { every { getById(any()) } returns Member() }
     private val cardService = mockk<CardService>()
@@ -41,7 +40,7 @@ class DailyAutoCardSchedulerTest {
     private val meterRegistry = SimpleMeterRegistry()
     private val scheduler =
         DailyAutoCardScheduler(
-            conversationRepository,
+            conversationCardGenerationService,
             conversationService,
             memberService,
             cardService,
@@ -151,7 +150,6 @@ class DailyAutoCardSchedulerTest {
     @Test
     fun `카드를 만들지 못하면 알림을 보내지 않는다`() {
         stubTargets(10L, 20L)
-        stubMarkSkipped()
         every { conversationService.endForAutoBatch(10L) } returns conversation(summary = null)
         every { conversationService.endForAutoBatch(20L) } returns null
 
@@ -172,12 +170,8 @@ class DailyAutoCardSchedulerTest {
         summary: String? = "오늘 억울한 일이 있었다",
     ): Conversation = Conversation(memberId).apply { summary?.let { updateSummary(it) } }
 
-    private fun stubMarkSkipped() {
-        every { conversationRepository.updateCardGenerationStatus(any(), any(), any(), any()) } returns 1
-    }
-
     private fun stubTargets(vararg ids: Long) {
-        every { conversationRepository.findAutoCardTargetIds(any(), any(), any(), any()) } returns ids.toList()
+        every { conversationCardGenerationService.findAutoCardTargetIds(any(), any()) } returns ids.toList()
     }
 
     @Test
@@ -231,7 +225,7 @@ class DailyAutoCardSchedulerTest {
 
         scheduler.runFor(createdAfter, createdBefore)
 
-        verify(exactly = 0) { conversationRepository.updateCardGenerationStatus(any(), any(), any(), any()) }
+        verify(exactly = 0) { conversationCardGenerationService.finishCardGeneration(any(), any()) }
     }
 
     @Test
@@ -296,7 +290,7 @@ class DailyAutoCardSchedulerTest {
         val capturedAfter = slot<Instant>()
         val capturedBefore = slot<Instant>()
         every {
-            conversationRepository.findAutoCardTargetIds(capture(capturedAfter), capture(capturedBefore), any(), any())
+            conversationCardGenerationService.findAutoCardTargetIds(capture(capturedAfter), capture(capturedBefore))
         } returns emptyList()
 
         // 호출을 시각 구간으로 감싼다. 호출 도중 05시 경계가 지나가도(하루 한 순간) 검증이
