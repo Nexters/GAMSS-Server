@@ -113,31 +113,56 @@ class DailyAutoCardScheduler(
         }
     }
 
-    /** 방 하나를 처리하고, 카드가 새로 생긴 회원이면 그 자리에서 알린다. 결과는 [tally] 에 쌓는다. */
+    /** 방 하나를 처리하고, 결과에 따라 알리거나 기록만 남긴다. 집계는 [tally] 에 쌓는다. */
     private fun processAndNotify(
         conversationId: Long,
         tally: RunTally,
     ) {
         val result = process(conversationId)
         tally.counts.merge(result.outcome, 1, Int::plus)
-        val cardCreatedMemberId = result.cardCreatedMemberId ?: return
-        // 한 사람이 방을 여러 개 만들면 카드도 여러 장 나온다. 그대로 두면 새벽에 푸시가 연달아
-        // 가므로, 이번 실행에서 이미 알린 회원은 건너뛴다(add 가 false 를 돌려준다).
-        if (!tally.notifiedMemberIds.add(cardCreatedMemberId)) {
+        when (result.outcome) {
+            AutoCardOutcome.CREATED -> notifyCreated(conversationId, checkNotNull(result.memberId), tally)
+
+            AutoCardOutcome.ALREADY_HANDLED -> recordAlreadyHandled(conversationId, checkNotNull(result.memberId))
+
+            // SKIPPED_DELETED · WITHDRAWN_MEMBER · FAILED 는 기록하지 않는다. 삭제된 방은 백오피스가
+            // 상태(DELETED)만으로 이미 구분하고, 탈퇴·실패는 이 배치가 아니라 다음 실행이 다시 본다.
+            else -> Unit
+        }
+    }
+
+    /**
+     * 새로 카드가 생긴 회원에게 알린다. 한 사람이 방을 여러 개 만들면 카드도 여러 장 나오는데,
+     * 그대로 두면 새벽에 푸시가 연달아 가므로 이번 실행에서 이미 알린 회원은 건너뛴다(add 가
+     * false 를 돌려준다).
+     */
+    private fun notifyCreated(
+        conversationId: Long,
+        memberId: Long,
+        tally: RunTally,
+    ) {
+        if (!tally.notifiedMemberIds.add(memberId)) {
             // 건너뛴 것도 남긴다. 백오피스에서 "대상이었지만 다른 방으로 이미 나갔다"와 "애초에
             // 대상이 아니었다"(기록 없음)가 구분돼야 한다.
-            notificationLogRecorder.record(
-                cardCreatedMemberId,
-                listOf(conversationId),
-                NotificationType.CARD_CREATED,
-                NotificationOutcome.SKIPPED,
-            )
+            notificationLogRecorder.record(memberId, listOf(conversationId), NotificationType.CARD_CREATED, NotificationOutcome.SKIPPED)
             return
         }
-        val sent = cardCreatedNotifier.notifyCardCreated(cardCreatedMemberId)
-        notificationLogRecorder.record(cardCreatedMemberId, listOf(conversationId), NotificationType.CARD_CREATED, sent)
+        val sent = cardCreatedNotifier.notifyCardCreated(memberId)
+        notificationLogRecorder.record(memberId, listOf(conversationId), NotificationType.CARD_CREATED, sent)
         tally.notifiedSuccessCount += sent.successCount
         tally.notifiedFailureCount += sent.failureCount
+    }
+
+    /**
+     * 이 방의 카드는 이미 다른 경로(주로 사용자의 수동 종료+생성)로 만들어져 있었다. 새로 보낼
+     * 알림은 없지만, 이 사실 자체를 남기지 않으면 백오피스가 "배치가 실제로 봤는데 할 일이
+     * 없었다"와 "배치가 애초에 보지도 않았다"를 구분하지 못한다.
+     */
+    private fun recordAlreadyHandled(
+        conversationId: Long,
+        memberId: Long,
+    ) {
+        notificationLogRecorder.record(memberId, listOf(conversationId), NotificationType.CARD_CREATED, NotificationOutcome.ALREADY_HANDLED)
     }
 
     /**
@@ -185,19 +210,18 @@ class DailyAutoCardScheduler(
     }
 
     /**
-     * 방 하나를 처리한 결과. 카드를 실제로 만든 경우에만 [cardCreatedMemberId] 가 채워진다.
-     * 그 자리에서 알림을 보낼 대상이다.
+     * 방 하나를 처리한 결과. [memberId] 는 카드를 실제로 만들었거나([AutoCardOutcome.CREATED]), 이미
+     * 다른 경로로 만들어져 있던 경우([AutoCardOutcome.ALREADY_HANDLED])에만 채워진다 - 둘 다 알리거나
+     * 기록을 남길 대상이 있다는 뜻이다.
      */
     private data class ProcessResult(
         val outcome: AutoCardOutcome,
-        val cardCreatedMemberId: Long? = null,
+        val memberId: Long? = null,
     )
 
     private fun process(conversationId: Long): ProcessResult =
         try {
             createCardForEndedConversation(conversationId)
-        } catch (e: BusinessException) {
-            ProcessResult(classify(e, conversationId))
         } catch (e: Exception) {
             // 방 하나의 예상 못 한 실패가 남은 방들을 막지 않게 한다. 카드 생성 상태는 실패 경로에서
             // 이미 FAILED로 되돌아가 있어 다음 실행이 다시 시도한다.
@@ -213,9 +237,15 @@ class DailyAutoCardScheduler(
         if (memberService.getById(conversation.memberId).isWithdrawn()) {
             return ProcessResult(AutoCardOutcome.WITHDRAWN_MEMBER)
         }
-        // 요약이 null이어도 그대로 넘긴다. 카드 생성 경로가 유저 메시지 원문으로 대신 만든다.
-        cardService.createCard(conversation.memberId, conversationId, emotion = null, summary = conversation.summary)
-        return ProcessResult(AutoCardOutcome.CREATED, cardCreatedMemberId = conversation.memberId)
+        return try {
+            // 요약이 null이어도 그대로 넘긴다. 카드 생성 경로가 유저 메시지 원문으로 대신 만든다.
+            cardService.createCard(conversation.memberId, conversationId, emotion = null, summary = conversation.summary)
+            ProcessResult(AutoCardOutcome.CREATED, memberId = conversation.memberId)
+        } catch (e: BusinessException) {
+            // memberId 를 여기서 채워야 ALREADY_HANDLED 를 그 방·회원 이름으로 기록할 수 있다
+            // (classify 는 outcome 만 가른다).
+            ProcessResult(classify(e, conversationId), memberId = conversation.memberId)
+        }
     }
 
     /** 배치 입장에서 정상인 실패와 진짜 실패를 가른다. */

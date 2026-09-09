@@ -25,7 +25,7 @@ interface ConversationUsage {
   cardNotification: NotificationOutcome | null
 }
 
-type NotificationOutcome = 'SENT' | 'NO_DEVICE' | 'FAILED' | 'SKIPPED'
+type NotificationOutcome = 'SENT' | 'NO_DEVICE' | 'FAILED' | 'SKIPPED' | 'ALREADY_HANDLED'
 
 const PAGE_SIZE = 20
 const COLUMN_COUNT = 13
@@ -37,10 +37,13 @@ const STATUS_META: Record<ConversationUsage['status'], { label: string; variant:
 }
 
 /**
- * 알림 결과 네 가지를 다르게 보여준다.
+ * 알림 결과를 다르게 보여준다.
  * 기기 없음(알림 끔)과 건너뜀은 실패가 아니므로 실패와 같은 색으로 그리면 대응할 것이 묻힌다.
- * 기록이 아예 없으면(null) 그 회차에 대상이 아니었다는 뜻인데, 이유가 갈린다 - 사용자가 이미
- * 직접 처리해서 대상이 아니게 된 경우(직접 종료·직접 생성)와, 순수하게 시간대 밖이라 처음부터
+ * ALREADY_HANDLED 는 배치가 이 방을 대상으로 잡아 처리하려 했지만, 그사이 사용자가 직접
+ * 종료+카드 생성을 먼저 끝내 놓은 경우다 - 배치가 실제로 봤다는 사실이 로그에 남은 값이라, 프론트가
+ * status/cardCreated 로 추측하는 값(NOT_TARGET_META, notTargetCardLabel)보다 신뢰도가 높다.
+ * 기록이 아예 없으면(null) 그 회차에 배치가 이 방을 보지도 않았다는 뜻인데, 이유가 갈린다 - 사용자가
+ * 이미 직접 처리해서 대상이 아니게 된 경우(직접 종료·직접 생성)와, 순수하게 시간대 밖이라 처음부터
  * 대상이 아니었던 경우(대상 아님)를 구분해서 보여준다. 빈칸(-) 하나로 두면 기기 없음과도,
  * 서로와도 시각적으로 구분이 안 돼 헷갈린다.
  */
@@ -49,48 +52,62 @@ const NOTIFICATION_META: Record<NotificationOutcome, { label: string; variant: '
   NO_DEVICE: { label: '기기 없음', variant: 'muted', title: '알림을 껐거나 앱을 지운 회원이라 보낼 기기가 없었습니다' },
   FAILED: { label: '실패', variant: 'destructive', title: 'FCM 이 실패를 돌려줬습니다' },
   SKIPPED: { label: '건너뜀', variant: 'muted', title: '같은 회원의 다른 방으로 이미 같은 알림이 나갔습니다' },
+  ALREADY_HANDLED: {
+    label: '직접 생성',
+    variant: 'muted',
+    title: '배치가 카드를 만들려 했지만, 그사이 사용자가 앱에서 직접 종료하고 카드를 먼저 생성했습니다',
+  },
 }
 
 const NOT_TARGET_META = { label: '대상 아님', title: '배치가 이 방을 이 회차의 대상으로 보지 않았습니다(시간대 밖 생성 등)' }
+const DELETED_META = { label: '삭제됨', title: '삭제된 방이라 알림 결과가 더 이상 의미가 없습니다' }
 
-/**
- * 삭제는 종료 여부와 무관하게 일어날 수 있어(진행 중인 방도 바로 삭제 가능), 삭제된 방의 상태값은
- * "삭제 전에 종료했었는지" 정보를 남기지 않는다. 그래서 종료·카드 생성 여부를 따지기 전에
- * 삭제부터 먼저 확인해 "직접 종료"·"직접 생성"으로 잘못 단정하지 않는다.
- */
+/** 리마인더가 뜨기 전에 사용자가 이미 대화를 직접 종료해서 알릴 필요가 없었던 경우다. */
 function notTargetReminderLabel(status: ConversationUsage['status']): string | undefined {
-  if (status === 'DELETED') return '삭제됨'
-  if (status === 'ENDED') return '직접 종료'
-  return undefined
+  return status === 'ENDED' ? '직접 종료' : undefined
 }
 
 function notTargetReminderTitle(status: ConversationUsage['status']): string | undefined {
-  if (status === 'DELETED') return '삭제된 방이라 리마인더가 더 이상 의미가 없습니다'
-  if (status === 'ENDED') return '리마인더가 뜨기 전에 사용자가 이미 대화를 직접 종료해서 알릴 필요가 없었습니다'
-  return undefined
+  return status === 'ENDED' ? '리마인더가 뜨기 전에 사용자가 이미 대화를 직접 종료해서 알릴 필요가 없었습니다' : undefined
 }
 
-function notTargetCardLabel(status: ConversationUsage['status'], cardCreated: boolean): string | undefined {
-  if (status === 'DELETED') return '삭제됨'
-  if (cardCreated) return '직접 생성'
-  return undefined
+/**
+ * 카드가 있는데 배치 알림 기록이 없다면, 배치가 이 방을 아예 보지 못한 채로(시간대 밖 생성 등)
+ * 사용자가 직접 만든 것이다. 배치가 실제로 이 방을 봤는데 사용자가 먼저 끝낸 경우는 이제
+ * ALREADY_HANDLED 로 기록이 남으므로(NOTIFICATION_META), 이 추측은 기록이 아예 없는 나머지
+ * 경우에만 쓰인다.
+ */
+function notTargetCardLabel(cardCreated: boolean): string | undefined {
+  return cardCreated ? '직접 생성' : undefined
 }
 
-function notTargetCardTitle(status: ConversationUsage['status'], cardCreated: boolean): string | undefined {
-  if (status === 'DELETED') return '삭제된 방이라 카드 알림이 더 이상 의미가 없습니다'
-  if (cardCreated) return '배치가 아니라 사용자가 앱에서 직접 종료하고 카드를 생성했습니다'
-  return undefined
+function notTargetCardTitle(cardCreated: boolean): string | undefined {
+  return cardCreated ? '배치가 이 방을 보기 전에 사용자가 앱에서 직접 종료하고 카드를 생성했습니다' : undefined
 }
 
+/**
+ * 삭제는 종료 여부와 무관하게 일어날 수 있고(진행 중인 방도 바로 삭제 가능), 삭제 전에 실제
+ * 발송 이력(SENT·FAILED 등)이 있었을 수도 있다. 그 이력이 있든 없든 삭제된 방은 더 이상 조치할
+ * 게 없으므로, outcome 값을 따지기 전에 삭제 여부부터 확인해 항상 "삭제됨"으로 보여준다.
+ */
 function NotificationCell({
   outcome,
+  deleted,
   notTargetLabel,
   notTargetTitle,
 }: {
   outcome: NotificationOutcome | null
+  deleted: boolean
   notTargetLabel?: string
   notTargetTitle?: string
 }) {
+  if (deleted) {
+    return (
+      <Badge variant="secondary" title={DELETED_META.title}>
+        {DELETED_META.label}
+      </Badge>
+    )
+  }
   if (outcome === null) {
     return (
       <Badge variant="secondary" title={notTargetTitle ?? NOT_TARGET_META.title}>
@@ -196,6 +213,7 @@ export function UsageTable() {
                     <TableCell className="text-center">
                       <NotificationCell
                         outcome={row.reminderNotification}
+                        deleted={row.status === 'DELETED'}
                         notTargetLabel={notTargetReminderLabel(row.status)}
                         notTargetTitle={notTargetReminderTitle(row.status)}
                       />
@@ -203,8 +221,9 @@ export function UsageTable() {
                     <TableCell className="text-center">
                       <NotificationCell
                         outcome={row.cardNotification}
-                        notTargetLabel={notTargetCardLabel(row.status, row.cardCreated)}
-                        notTargetTitle={notTargetCardTitle(row.status, row.cardCreated)}
+                        deleted={row.status === 'DELETED'}
+                        notTargetLabel={notTargetCardLabel(row.cardCreated)}
+                        notTargetTitle={notTargetCardTitle(row.cardCreated)}
                       />
                     </TableCell>
                     <TableCell className="text-right font-medium tabular-nums">{row.totalTokens.toLocaleString()}</TableCell>

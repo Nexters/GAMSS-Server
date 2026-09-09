@@ -275,6 +275,34 @@ class DailyAutoCardSchedulerTest {
         verify(exactly = 1) { cardService.createCard(any(), 30L, any(), any()) }
     }
 
+    /**
+     * 배치가 대상으로 뽑아 처리하려 했는데 그사이 사용자가 직접 끝내놓은 경우다. 이 사실을 남기지
+     * 않으면 백오피스가 "배치가 실제로 봤는데 할 일이 없었다"와 "애초에 보지도 않았다"(기록 없음)를
+     * 구분하지 못한다.
+     */
+    @Test
+    fun `이미 처리된 방은 ALREADY_HANDLED 로 기록한다`() {
+        stubTargets(10L, 20L)
+        every { conversationService.endForAutoBatch(any()) } returns conversation()
+        every {
+            cardService.createCard(any(), 10L, any(), any())
+        } throws BusinessException(ErrorCode.CARD_ALREADY_EXISTS)
+        every {
+            cardService.createCard(any(), 20L, any(), any())
+        } throws BusinessException(ErrorCode.CARD_GENERATION_IN_PROGRESS)
+
+        scheduler.runFor(createdAfter, createdBefore)
+
+        verify(exactly = 1) {
+            notificationLogRecorder.record(MEMBER_ID, listOf(10L), NotificationType.CARD_CREATED, NotificationOutcome.ALREADY_HANDLED)
+        }
+        verify(exactly = 1) {
+            notificationLogRecorder.record(MEMBER_ID, listOf(20L), NotificationType.CARD_CREATED, NotificationOutcome.ALREADY_HANDLED)
+        }
+        // 이미 처리된 방이라 새로 알릴 것이 없다 - 기록만 남기고 푸시는 보내지 않는다.
+        verify(exactly = 0) { cardCreatedNotifier.notifyCardCreated(any()) }
+    }
+
     @Test
     fun `대상이 없으면 아무것도 하지 않는다`() {
         stubTargets()
