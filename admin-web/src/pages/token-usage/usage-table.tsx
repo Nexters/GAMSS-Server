@@ -45,9 +45,10 @@ const STATUS_META: Record<ConversationUsage['status'], { label: string; variant:
  * 텍스트도 "직접 생성"(확인된 사실)과 "직접 생성 추정"(추측)으로 갈라, 툴팁을 열지 않아도
  * 신뢰도 차이가 보이게 한다.
  * 기록이 아예 없으면(null) 그 회차에 배치가 이 방을 보지도 않았다는 뜻인데, 이유가 갈린다 - 사용자가
- * 이미 직접 처리해서 대상이 아니게 된 경우(직접 종료·직접 생성)와, 순수하게 시간대 밖이라 처음부터
- * 대상이 아니었던 경우(대상 아님)를 구분해서 보여준다. 빈칸(-) 하나로 두면 기기 없음과도,
- * 서로와도 시각적으로 구분이 안 돼 헷갈린다.
+ * 이미 직접 처리해서 대상이 아니게 된 경우(직접 종료 추정, 직접 생성 추정)와, 순수하게 시간대 밖이라
+ * 처음부터 대상이 아니었던 경우(대상 아님)를 구분해서 보여준다. 빈칸(-) 하나로 두면 기기 없음과도,
+ * 서로와도 시각적으로 구분이 안 돼 헷갈린다. 프론트가 status/cardCreated 로 짚는 두 값은 모두
+ * "추정"을 붙여, 배치가 확인해 준 값과 라벨만 보고도 갈리게 한다.
  */
 const NOTIFICATION_META: Record<NotificationOutcome, { label: string; variant: 'success' | 'muted' | 'destructive'; title: string }> = {
   SENT: { label: '발송', variant: 'success', title: 'FCM 이 성공을 돌려줬습니다' },
@@ -85,7 +86,14 @@ function isCreatedInReminderGap(createdAt: string): boolean {
   return minutesSinceMidnight >= 4 * 60 + 30 && minutesSinceMidnight < 5 * 60
 }
 
-/** 리마인더가 뜨기 전에 사용자가 이미 대화를 직접 종료해서 알릴 필요가 없었던 경우다. */
+/**
+ * 리마인더가 뜨기 전에 사용자가 이미 대화를 직접 종료해서 알릴 필요가 없었던 것으로 보이는 경우다.
+ *
+ * 단정하지 않고 "추정"으로 두는 이유가 있다. 리마인더는 회원마다 따로 보내면서 예외를 삼키지 않아
+ * (UnfinishedConversationReminder), 중간 한 회원에서 터지면 뒤쪽 회원들의 기록이 통째로 빠진다. 그
+ * 방들은 30분 뒤 배치가 ENDED 로 만들고, 04:30 전에 만들어졌으면 아래 틈 검사에도 안 걸려서 실제로
+ * 직접 종료한 방과 구분이 안 된다. 카드 칸의 추측(notTargetCardLabel)과도 신뢰도 표기를 맞춘다.
+ */
 function notTargetReminder(
   status: ConversationUsage['status'],
   createdAt: string,
@@ -94,8 +102,9 @@ function notTargetReminder(
     return {}
   }
   return {
-    label: '직접 종료',
-    title: '리마인더가 뜨기 전에 사용자가 이미 대화를 직접 종료해서 알릴 필요가 없었습니다',
+    label: '직접 종료 추정',
+    title:
+      '리마인더 기록은 없는데 방이 종료돼 있어, 리마인더가 뜨기 전에 사용자가 직접 종료한 것으로 추정합니다(확인된 사실 아님). 리마인더 발송이 중간에 끊겨 기록만 빠진 방도 여기로 들어옵니다',
   }
 }
 
@@ -104,7 +113,7 @@ function notTargetReminder(
  * 사용자가 직접 만든 것이다. 배치가 실제로 이 방을 봤는데 사용자가 먼저 끝낸 경우는 이제
  * ALREADY_HANDLED 로 기록이 남으므로(NOTIFICATION_META), 이 추측은 기록이 아예 없는 나머지
  * 경우에만 쓰인다. ALREADY_HANDLED 와 텍스트를 다르게 둬서, 배치가 실제로 확인한 값과 프론트가
- * 추측한 값을 라벨만 보고도 구분할 수 있게 한다.
+ * 추측한 값을 라벨만 보고도 구분할 수 있게 한다(리마인더 칸의 notTargetReminder 와 같은 규칙).
  */
 function notTargetCardLabel(cardCreated: boolean): string | undefined {
   return cardCreated ? '직접 생성 추정' : undefined
