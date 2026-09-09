@@ -225,7 +225,15 @@ class DailyAutoCardScheduler(
 
     private fun process(conversationId: Long): ProcessResult =
         try {
-            createCardForEndedConversation(conversationId)
+            createCardForEndedConversation(conversationId).also { result ->
+                // ProcessResult 의 불변식(memberId 는 CREATED·ALREADY_HANDLED 에만 채워진다)을 여기서
+                // 확인한다. processAndNotify 는 이 결과를 그대로 checkNotNull 로 풀어 쓰므로, 불변식이
+                // 깨진 채로 넘어가면 이 방 하나가 아니라 runFor 의 forEach 전체가 예외로 끊긴다.
+                val needsMemberId = result.outcome == AutoCardOutcome.CREATED || result.outcome == AutoCardOutcome.ALREADY_HANDLED
+                check(!needsMemberId || result.memberId != null) {
+                    "memberId 없이 ${result.outcome} 을 반환했습니다: conversationId=$conversationId"
+                }
+            }
         } catch (e: Exception) {
             // 방 하나의 예상 못 한 실패가 남은 방들을 막지 않게 한다. 카드 생성 상태는 실패 경로에서
             // 이미 FAILED로 되돌아가 있어 다음 실행이 다시 시도한다.
