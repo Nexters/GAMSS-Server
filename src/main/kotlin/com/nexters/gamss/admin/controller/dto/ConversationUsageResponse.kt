@@ -36,9 +36,11 @@ data class ConversationUsageResponse(
     )
     val reminderNotification: String?,
     @field:Schema(
-        description = "05:00 카드 도착 알림 결과. 이 방이 그 알림의 대상이 아니었으면 null",
+        description =
+            "05:00 카드 도착 알림 결과. 이 방이 그 알림의 대상이 아니었으면 null. " +
+                "ALREADY_HANDLED 는 배치가 대상으로 잡았지만 그사이 사용자가 직접 종료하고 카드를 먼저 만들어 보낼 알림이 없었던 경우다",
         example = "SENT",
-        allowableValues = ["SENT", "NO_DEVICE", "FAILED", "SKIPPED"],
+        allowableValues = ["SENT", "NO_DEVICE", "FAILED", "SKIPPED", "ALREADY_HANDLED"],
         nullable = true,
     )
     val cardNotification: String?,
