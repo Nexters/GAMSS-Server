@@ -52,7 +52,7 @@ class GeminiCommentGenerator(
     ): CommentGenerationOutput {
         val response =
             try {
-                connections.activeClient().models.generateContent(
+                connections.active().client().models.generateContent(
                     settings.model,
                     promptProvider.buildUserContent(context),
                     buildConfig(settings.systemPrompt, commentFeedSchema()),
@@ -117,7 +117,7 @@ class GeminiCommentGenerator(
     ): ReplyGenerationOutput {
         val response =
             try {
-                connections.activeClient().models.generateContent(
+                connections.active().client().models.generateContent(
                     settings.model,
                     promptProvider.buildReplyUserContent(diaryContent, characterId, characterComment, userReply),
                     buildConfig(settings.systemPrompt, replySchema()),

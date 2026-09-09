@@ -55,7 +55,7 @@ class GeminiCardMessageGenerator(
     ): CardMessageOutput {
         val response =
             try {
-                connections.activeClient().models.generateContent(
+                connections.active().client().models.generateContent(
                     settings.model,
                     promptProvider.buildCardUserContent(emotion, summary),
                     buildConfig(settings.systemPrompt),

@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card'
 import { Select } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
+import { ApiError } from '@/lib/api'
 import { PageHeader } from '@/components/page-header'
 import { SegmentedTabs } from '@/components/segmented-tabs'
 import { PromptRevisionHistory } from '@/pages/prompt-revision-history'
@@ -259,7 +260,7 @@ function ProviderSection({ onSwitched }: { onSwitched: (provider: LlmProvider) =
         // 인증 설정이 없는 경로로 전환하면 서버가 이유를 담아 400을 준다. 그대로 보여준다.
         onError: (e) => {
           setProvider(savedProvider)
-          setError(e?.message || '전환에 실패했습니다')
+          setError(e instanceof ApiError && e.detail ? e.detail : '전환에 실패했습니다')
         },
       },
     )

@@ -1,6 +1,5 @@
 package com.nexters.gamss.llm.provider
 
-import com.google.genai.Client
 import org.springframework.data.domain.Sort
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -16,11 +15,12 @@ class GeminiConnectionService(
 ) {
     private val byProvider = connections.associateBy { it.provider }
 
+    /**
+     * 지금 쓰는 연결. 경로와 클라이언트를 따로 물으면 그 사이에 전환이 끼어들어 서로 다른 경로를
+     * 볼 수 있으므로, 한 번에 하나로 돌려준다.
+     */
     @Transactional(readOnly = true)
-    fun activeProvider(): LlmProvider = requireRow().provider
-
-    @Transactional(readOnly = true)
-    fun activeClient(): Client = connection(requireRow().provider).client()
+    fun active(): GeminiConnection = connection(requireRow().provider)
 
     /** 백오피스가 고를 수 있는 경로. 구현체가 없는 값은 고를 수 없으므로 등록된 것만 준다. */
     fun availableProviders(): List<LlmProvider> = LlmProvider.entries.filter { it in byProvider }

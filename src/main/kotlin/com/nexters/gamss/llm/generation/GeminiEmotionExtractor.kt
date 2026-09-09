@@ -36,7 +36,7 @@ class GeminiEmotionExtractor(
     override fun extract(userMessages: List<String>): EmotionExtractionOutput {
         val response =
             try {
-                connections.activeClient().models.generateContent(
+                connections.active().client().models.generateContent(
                     llmSettingsService.currentModel(),
                     promptProvider.buildCardEmotionUserContent(userMessages),
                     buildConfig(llmSettingsService.currentPrompt(PromptType.CARD_EMOTION)),

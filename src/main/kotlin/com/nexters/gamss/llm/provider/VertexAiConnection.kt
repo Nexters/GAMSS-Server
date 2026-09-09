@@ -1,6 +1,7 @@
 package com.nexters.gamss.llm.provider
 
 import com.google.auth.oauth2.GoogleCredentials
+import com.google.auth.oauth2.ServiceAccountCredentials
 import com.google.genai.Client
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
@@ -45,10 +46,11 @@ class VertexAiConnection(
                 throw BusinessException(ErrorCode.INVALID_INPUT, "Vertex AI 서비스 계정 키가 base64 가 아닙니다: ${e.message}")
             }
         return try {
-            // fromStream 이 돌려주는 자격증명은 스코프가 비어 있고, SDK 는 직접 넘긴 자격증명에
-            // 스코프를 채워주지 않는다(ApplicationDefault 경로에서만 채운다). 그대로 두면 scope 없는
-            // JWT 로 토큰을 요청해 인증이 거부된다.
-            GoogleCredentials.fromStream(decoded.inputStream()).createScoped(CLOUD_PLATFORM_SCOPE)
+            // 서비스 계정만 받는다. GoogleCredentials.fromStream 은 authorized_user 등 다른 형식도
+            // 읽어들여, 엉뚱한 주체로 호출되는 설정 실수를 걸러내지 못한다.
+            // 스코프도 여기서 채운다 — SDK 는 직접 넘긴 자격증명에는 채워주지 않아(ApplicationDefault
+            // 경로에서만 채운다) 그대로 두면 scope 없는 JWT 로 토큰을 요청해 인증이 거부된다.
+            ServiceAccountCredentials.fromStream(decoded.inputStream()).createScoped(CLOUD_PLATFORM_SCOPE)
         } catch (e: IOException) {
             throw BusinessException(ErrorCode.INVALID_INPUT, "Vertex AI 서비스 계정 키를 읽을 수 없습니다: ${e.message}")
         }

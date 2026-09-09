@@ -19,10 +19,11 @@ class GeminiConnectionServiceTest {
     private val service = GeminiConnectionService(listOf(aiStudio, vertex), repository)
 
     @Test
-    fun `설정된 경로의 클라이언트를 준다`() {
+    fun `설정된 경로의 연결을 준다`() {
         givenRow(LlmProvider.VERTEX_AI)
 
-        assertEquals(vertexClient, service.activeClient())
+        assertEquals(LlmProvider.VERTEX_AI, service.active().provider)
+        assertEquals(vertexClient, service.active().client())
     }
 
     @Test

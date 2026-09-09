@@ -47,7 +47,7 @@ class AdminLlmProviderController(
 
     private fun response(): LlmProviderResponse =
         LlmProviderResponse(
-            provider = connections.activeProvider(),
+            provider = connections.active().provider,
             availableProviders = connections.availableProviders(),
         )
 }

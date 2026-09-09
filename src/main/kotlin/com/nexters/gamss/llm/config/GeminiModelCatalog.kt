@@ -1,6 +1,7 @@
 package com.nexters.gamss.llm.config
 
 import com.google.genai.types.ListModelsConfig
+import com.nexters.gamss.llm.provider.GeminiConnection
 import com.nexters.gamss.llm.provider.GeminiConnectionService
 import com.nexters.gamss.llm.provider.LlmProvider
 import org.slf4j.LoggerFactory
@@ -25,19 +26,20 @@ class GeminiModelCatalog(
 
     fun availableModels(): List<String> {
         // 경로 조회(DB)도 실패할 수 있다. 여기서 던지면 모델 설정 화면 전체가 죽으므로 빈 목록으로 내린다.
-        val provider =
-            runCatching { connections.activeProvider() }
+        // 캐시 키와 조회 대상이 어긋나지 않도록 연결을 한 번만 잡아 끝까지 쓴다.
+        val connection =
+            runCatching { connections.active() }
                 .getOrElse { e ->
                     log.warn("호출 경로 조회 실패 — 모델 목록을 비운다", e)
                     return emptyList()
                 }
         val now = System.currentTimeMillis()
-        val snapshot = cache[provider]
+        val snapshot = cache[connection.provider]
         if (snapshot != null && now - snapshot.atEpochMs < CACHE_TTL_MS) {
             return snapshot.models
         }
-        return runCatching { fetch() }
-            .onSuccess { cache[provider] = CachedModels(it, now) }
+        return runCatching { fetch(connection) }
+            .onSuccess { cache[connection.provider] = CachedModels(it, now) }
             .getOrElse { e ->
                 log.warn("Gemini 모델 목록 조회 실패 — 이전 캐시로 폴백한다", e)
                 snapshot?.models ?: emptyList()
@@ -45,9 +47,9 @@ class GeminiModelCatalog(
     }
 
     // 이름 형식이 경로마다 다르다(AI Studio는 models/..., Vertex는 publishers/google/models/...).
-    private fun fetch(): List<String> =
-        connections
-            .activeClient()
+    private fun fetch(connection: GeminiConnection): List<String> =
+        connection
+            .client()
             .models
             .list(ListModelsConfig.builder().queryBase(true).build())
             .asSequence()
