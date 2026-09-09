@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
 class GeminiPropertiesTest {
     @Test
     fun `유효한 타임아웃으로 생성된다`() {
-        val properties = GeminiProperties(apiKey = "key", model = "model", requestTimeout = Duration.ofSeconds(15))
+        val properties = GeminiProperties(model = "model", requestTimeout = Duration.ofSeconds(15))
 
         assertEquals(Duration.ofSeconds(15), properties.requestTimeout)
         assertEquals(15_000, properties.requestTimeoutMillis)
@@ -19,27 +19,27 @@ class GeminiPropertiesTest {
     @Test
     fun `타임아웃이 0이면 예외`() {
         assertFailsWith<IllegalArgumentException> {
-            GeminiProperties(apiKey = "key", model = "model", requestTimeout = Duration.ZERO)
+            GeminiProperties(model = "model", requestTimeout = Duration.ZERO)
         }
     }
 
     @Test
     fun `타임아웃이 음수면 예외`() {
         assertFailsWith<IllegalArgumentException> {
-            GeminiProperties(apiKey = "key", model = "model", requestTimeout = Duration.ofSeconds(-1))
+            GeminiProperties(model = "model", requestTimeout = Duration.ofSeconds(-1))
         }
     }
 
     @Test
     fun `타임아웃이 1밀리초 미만의 양수면 예외`() {
         assertFailsWith<IllegalArgumentException> {
-            GeminiProperties(apiKey = "key", model = "model", requestTimeout = Duration.ofNanos(1))
+            GeminiProperties(model = "model", requestTimeout = Duration.ofNanos(1))
         }
     }
 
     @Test
     fun `타임아웃이 1밀리초면 통과한다`() {
-        val properties = GeminiProperties(apiKey = "key", model = "model", requestTimeout = Duration.ofMillis(1))
+        val properties = GeminiProperties(model = "model", requestTimeout = Duration.ofMillis(1))
 
         assertEquals(1, properties.requestTimeoutMillis)
     }
@@ -47,7 +47,7 @@ class GeminiPropertiesTest {
     @Test
     fun `타임아웃이 Int 밀리초 범위를 넘으면 예외`() {
         assertFailsWith<IllegalArgumentException> {
-            GeminiProperties(apiKey = "key", model = "model", requestTimeout = Duration.ofMillis(Int.MAX_VALUE.toLong() + 1))
+            GeminiProperties(model = "model", requestTimeout = Duration.ofMillis(Int.MAX_VALUE.toLong() + 1))
         }
     }
 
@@ -56,7 +56,7 @@ class GeminiPropertiesTest {
         val perAttemptMillis = smallestPerAttemptOverBudget()
 
         assertFailsWith<IllegalArgumentException> {
-            GeminiProperties(apiKey = "key", model = "model", requestTimeout = Duration.ofMillis(perAttemptMillis))
+            GeminiProperties(model = "model", requestTimeout = Duration.ofMillis(perAttemptMillis))
         }
     }
 
@@ -65,7 +65,7 @@ class GeminiPropertiesTest {
         val perAttemptMillis = smallestPerAttemptOverBudget() - STEP_MILLIS
 
         val properties =
-            GeminiProperties(apiKey = "key", model = "model", requestTimeout = Duration.ofMillis(perAttemptMillis))
+            GeminiProperties(model = "model", requestTimeout = Duration.ofMillis(perAttemptMillis))
 
         assertEquals(perAttemptMillis.toInt(), properties.requestTimeoutMillis)
     }
@@ -83,14 +83,14 @@ class GeminiPropertiesTest {
         )
 
         assertFailsWith<IllegalArgumentException> {
-            GeminiProperties(apiKey = "key", model = "model", requestTimeout = Duration.ofMillis(perAttemptMillis))
+            GeminiProperties(model = "model", requestTimeout = Duration.ofMillis(perAttemptMillis))
         }
     }
 
     @Test
     fun `운영 설정값 15초는 카드 경로까지 예산 안에 들어온다`() {
         // application.yml의 gemini.request-timeout과 같은 값. 이 테스트가 깨지면 배포가 뜨지 않는다.
-        GeminiProperties(apiKey = "key", model = "model", requestTimeout = Duration.ofSeconds(15))
+        GeminiProperties(model = "model", requestTimeout = Duration.ofSeconds(15))
     }
 
     /** 예산을 처음으로 넘어서는 per-attempt 타임아웃. 상수가 바뀌어도 경계를 따라가도록 계산으로 구한다. */

@@ -36,8 +36,9 @@ services:
       # 잃어버리면 이 환경의 대화 데이터를 영구히 읽을 수 없으니 별도 보관할 것.
       DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY}
       SEARCH_INDEX_KEY: ${SEARCH_INDEX_KEY}
-      # 감정 캐릭터 댓글·카드 생성용 Gemini API 키.
+      # 감정 캐릭터 댓글·카드 생성용 Gemini 인증. 어느 경로로 호출할지는 백오피스에서 정하므로 둘 다 넣는다.
       GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_VERTEX_CREDENTIALS_BASE64: ${GEMINI_VERTEX_CREDENTIALS_BASE64:-}
       # 푸시 알림 발송용 Firebase 서비스 계정 키(JSON 을 base64 로 한 줄). 비어 있으면
       # 앱은 정상 기동하고 푸시만 나가지 않는다.
       FIREBASE_CREDENTIALS_BASE64: ${FIREBASE_CREDENTIALS_BASE64:-}

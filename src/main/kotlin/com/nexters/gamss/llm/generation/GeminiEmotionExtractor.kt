@@ -1,6 +1,5 @@
 package com.nexters.gamss.llm.generation
 
-import com.google.genai.Client
 import com.google.genai.types.Content
 import com.google.genai.types.GenerateContentConfig
 import com.google.genai.types.HttpOptions
@@ -11,6 +10,7 @@ import com.nexters.gamss.llm.config.GeminiProperties
 import com.nexters.gamss.llm.error.CardGenerationFailedException
 import com.nexters.gamss.llm.prompt.PromptProvider
 import com.nexters.gamss.llm.prompt.PromptType
+import com.nexters.gamss.llm.provider.GeminiConnectionService
 import com.nexters.gamss.llm.settings.LlmSettingsService
 import org.springframework.stereotype.Component
 import tools.jackson.core.JacksonException
@@ -28,16 +28,15 @@ import tools.jackson.databind.json.JsonMapper
 @Component
 class GeminiEmotionExtractor(
     private val properties: GeminiProperties,
+    private val connections: GeminiConnectionService,
     private val promptProvider: PromptProvider,
     private val llmSettingsService: LlmSettingsService,
     private val jsonMapper: JsonMapper,
 ) : EmotionExtractor {
-    private val client: Client by lazy { Client.builder().apiKey(properties.apiKey).build() }
-
     override fun extract(userMessages: List<String>): EmotionExtractionOutput {
         val response =
             try {
-                client.models.generateContent(
+                connections.active().client().models.generateContent(
                     llmSettingsService.currentModel(),
                     promptProvider.buildCardEmotionUserContent(userMessages),
                     buildConfig(llmSettingsService.currentPrompt(PromptType.CARD_EMOTION)),

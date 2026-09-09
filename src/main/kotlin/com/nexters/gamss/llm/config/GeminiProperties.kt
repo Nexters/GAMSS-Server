@@ -4,9 +4,9 @@ import com.nexters.gamss.llm.generation.LlmRetryPolicy
 import org.springframework.boot.context.properties.ConfigurationProperties
 import java.time.Duration
 
+/** 호출 경로와 무관한 공용 설정. 경로별 인증 값은 각 경로의 프로퍼티가 갖는다. */
 @ConfigurationProperties(prefix = "gemini")
 data class GeminiProperties(
-    val apiKey: String,
     val model: String,
     /**
      * LLM 호출 **1회당** 타임아웃. "보통 얼마나 걸리나"가 아니라 "언제 포기하나"를 정하는 값이라,
