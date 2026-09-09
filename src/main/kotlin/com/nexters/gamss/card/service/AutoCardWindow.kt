@@ -51,6 +51,26 @@ class AutoCardWindow(
         return if (now < todayBoundary) todayBoundary.toInstant() else todayBoundary.plusDays(1).toInstant()
     }
 
+    /**
+     * 리마인더 시각과 하루 경계 사이(KST)에 만들어진 방인가.
+     *
+     * 리마인더는 도는 그 순간 이미 존재하는 방만 조회하므로, 이 틈에 만들어진 방은 리마인더 대상일
+     * 수 없었는데도 [REMINDER_MINUTES_BEFORE] 분 뒤 배치가 곧바로 자동 종료시킨다. 알림 기록은
+     * 없는데 상태만 종료가 되는 방이라, "사용자가 직접 종료했다"고 읽으면 틀린다.
+     *
+     * 백오피스 '대화방별 사용량' 표가 그 방을 가려내려고 쓴다. 판정을 화면 쪽에 두면 경계 값이
+     * 여기와 화면 두 곳에 살아, 경계를 옮겼을 때 표만 옛 값으로 남고 틀린 라벨이 조용히 나간다.
+     */
+    fun isCreatedInReminderGap(createdAt: Instant): Boolean {
+        val minuteOfDay = createdAt.atZone(ZONE).let { it.hour * 60 + it.minute }
+        val boundary = DAY_BOUNDARY_HOUR * 60
+        // 경계를 자정 가까이 옮기면 이 구간이 자정을 넘어간다.
+        if (REMINDER_MINUTE_OF_DAY > boundary) {
+            return minuteOfDay >= REMINDER_MINUTE_OF_DAY || minuteOfDay < boundary
+        }
+        return minuteOfDay >= REMINDER_MINUTE_OF_DAY && minuteOfDay < boundary
+    }
+
     /** [date]의 하루가 시작하는 시각(KST [DAY_BOUNDARY_HOUR]시). */
     private fun dayStart(date: LocalDate): Instant = date.atTime(DAY_BOUNDARY_HOUR, 0).atZone(ZONE).toInstant()
 
@@ -66,6 +86,26 @@ class AutoCardWindow(
          * 이 상수를 근거로 다른 곳의 날짜 경계를 옮기면 그쪽 조회가 어긋난다.
          */
         const val DAY_BOUNDARY_HOUR = 5
+
+        /**
+         * 리마인더가 배치보다 얼마나 앞서 도는지(분). 직접 마무리할 시간을 주되, 그사이 새로
+         * 만들어져 리마인더를 받지 못하는 방([isCreatedInReminderGap])이 길게 생기지 않을 만큼이다.
+         *
+         * 리마인더 시각은 이 값과 [DAY_BOUNDARY_HOUR] 에서 나온다. 리마인더의 cron
+         * ([com.nexters.gamss.notification.service.UnfinishedConversationReminder])과 백오피스 표의
+         * 틈 판정이 모두 여기서 값을 받아 가므로, 경계를 옮길 때 고칠 곳은 이 companion 뿐이다.
+         */
+        const val REMINDER_MINUTES_BEFORE = 30
+
+        private const val MINUTES_PER_DAY = 24 * 60
+
+        private const val REMINDER_MINUTE_OF_DAY =
+            (DAY_BOUNDARY_HOUR * 60 - REMINDER_MINUTES_BEFORE + MINUTES_PER_DAY) % MINUTES_PER_DAY
+
+        /** 리마인더가 도는 시각(KST). cron 이 시와 분을 따로 받아 가므로 갈라 둔다. */
+        const val REMINDER_HOUR = REMINDER_MINUTE_OF_DAY / 60
+
+        const val REMINDER_MINUTE = REMINDER_MINUTE_OF_DAY % 60
 
         private val ZONE: ZoneId = ZoneId.of(ZONE_ID)
     }

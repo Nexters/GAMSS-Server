@@ -23,9 +23,10 @@ interface ConversationUsage {
   estimatedCostUsd: number
   reminderNotification: NotificationOutcome | null
   cardNotification: NotificationOutcome | null
+  createdInReminderGap: boolean
 }
 
-type NotificationOutcome = 'SENT' | 'NO_DEVICE' | 'FAILED' | 'SKIPPED'
+type NotificationOutcome = 'SENT' | 'NO_DEVICE' | 'FAILED' | 'SKIPPED' | 'ALREADY_HANDLED'
 
 const PAGE_SIZE = 20
 const COLUMN_COUNT = 13
@@ -37,20 +38,107 @@ const STATUS_META: Record<ConversationUsage['status'], { label: string; variant:
 }
 
 /**
- * 알림 결과 네 가지를 다르게 보여준다.
+ * 알림 결과를 다르게 보여준다.
  * 기기 없음(알림 끔)과 건너뜀은 실패가 아니므로 실패와 같은 색으로 그리면 대응할 것이 묻힌다.
- * 기록이 아예 없으면(null) 그 회차에 대상이 아니었다는 뜻이라 빈칸으로 둔다.
+ * ALREADY_HANDLED 는 배치가 이 방을 대상으로 잡아 처리하려 했지만, 그사이 사용자가 직접
+ * 종료+카드 생성을 먼저 끝내 놓은 경우다 - 배치가 실제로 봤다는 사실이 로그에 남은 값이라, 프론트가
+ * status/cardCreated 로 추측하는 값(NOT_TARGET_META, notTargetCardLabel)보다 신뢰도가 높다. 라벨
+ * 텍스트도 "직접 생성"(확인된 사실)과 "직접 생성 추정"(추측)으로 갈라, 툴팁을 열지 않아도
+ * 신뢰도 차이가 보이게 한다.
+ * 기록이 아예 없으면(null) 그 회차에 배치가 이 방을 보지도 않았다는 뜻인데, 이유가 갈린다 - 사용자가
+ * 이미 직접 처리해서 대상이 아니게 된 경우(직접 종료 추정, 직접 생성 추정)와, 순수하게 시간대 밖이라
+ * 처음부터 대상이 아니었던 경우(대상 아님)를 구분해서 보여준다. 빈칸(-) 하나로 두면 기기 없음과도,
+ * 서로와도 시각적으로 구분이 안 돼 헷갈린다. 프론트가 status/cardCreated 로 짚는 두 값은 모두
+ * "추정"을 붙여, 배치가 확인해 준 값과 라벨만 보고도 갈리게 한다.
  */
 const NOTIFICATION_META: Record<NotificationOutcome, { label: string; variant: 'success' | 'muted' | 'destructive'; title: string }> = {
   SENT: { label: '발송', variant: 'success', title: 'FCM 이 성공을 돌려줬습니다' },
   NO_DEVICE: { label: '기기 없음', variant: 'muted', title: '알림을 껐거나 앱을 지운 회원이라 보낼 기기가 없었습니다' },
   FAILED: { label: '실패', variant: 'destructive', title: 'FCM 이 실패를 돌려줬습니다' },
   SKIPPED: { label: '건너뜀', variant: 'muted', title: '같은 회원의 다른 방으로 이미 같은 알림이 나갔습니다' },
+  ALREADY_HANDLED: {
+    label: '직접 생성',
+    variant: 'muted',
+    title: '배치가 카드를 만들려 했지만, 그사이 사용자가 앱에서 직접 종료하고 카드를 먼저 생성했습니다',
+  },
 }
 
-function NotificationCell({ outcome }: { outcome: NotificationOutcome | null }) {
+const NOT_TARGET_META = { label: '대상 아님', title: '배치가 이 방을 이 회차의 대상으로 보지 않았습니다(시간대 밖 생성 등)' }
+const DELETED_META = { label: '삭제됨', title: '삭제된 방이라 알림 결과가 더 이상 의미가 없습니다' }
+
+/**
+ * 리마인더가 뜨기 전에 사용자가 이미 대화를 직접 종료해서 알릴 필요가 없었던 것으로 보이는 경우다.
+ *
+ * 단정하지 않고 "추정"으로 두는 이유가 있다. 리마인더는 회원마다 따로 보내면서 예외를 삼키지 않아
+ * (UnfinishedConversationReminder), 중간 한 회원에서 터지면 뒤쪽 회원들의 기록이 통째로 빠진다. 그
+ * 방들은 30분 뒤 배치가 ENDED 로 만들고, 리마인더 시각 전에 만들어졌으면 createdInReminderGap 에도
+ * 안 걸려서 실제로 직접 종료한 방과 구분이 안 된다. 카드 칸의 추측(notTargetCardLabel)과도 신뢰도
+ * 표기를 맞춘다.
+ *
+ * 리마인더 시각과 하루 경계는 여기에 적지 않는다. 두 값은 배치가 가진 것이라
+ * (AutoCardWindow), 화면이 다시 적어 두면 경계를 옮겼을 때 이 표만 옛 값으로 남는다. 서버가
+ * 내려주는 createdInReminderGap 을 그대로 쓴다.
+ */
+function notTargetReminder(
+  status: ConversationUsage['status'],
+  createdInReminderGap: boolean,
+): { label?: string; title?: string } {
+  if (status !== 'ENDED' || createdInReminderGap) {
+    return {}
+  }
+  return {
+    label: '직접 종료 추정',
+    title:
+      '리마인더 기록은 없는데 방이 종료돼 있어, 리마인더가 뜨기 전에 사용자가 직접 종료한 것으로 추정합니다(확인된 사실 아님). 리마인더 발송이 중간에 끊겨 기록만 빠진 방도 여기로 들어옵니다',
+  }
+}
+
+/**
+ * 카드가 있는데 배치 알림 기록이 없다면, 배치가 이 방을 아예 보지 못한 채로(시간대 밖 생성 등)
+ * 사용자가 직접 만든 것이다. 배치가 실제로 이 방을 봤는데 사용자가 먼저 끝낸 경우는 이제
+ * ALREADY_HANDLED 로 기록이 남으므로(NOTIFICATION_META), 이 추측은 기록이 아예 없는 나머지
+ * 경우에만 쓰인다. ALREADY_HANDLED 와 텍스트를 다르게 둬서, 배치가 실제로 확인한 값과 프론트가
+ * 추측한 값을 라벨만 보고도 구분할 수 있게 한다(리마인더 칸의 notTargetReminder 와 같은 규칙).
+ */
+function notTargetCardLabel(cardCreated: boolean): string | undefined {
+  return cardCreated ? '직접 생성 추정' : undefined
+}
+
+function notTargetCardTitle(cardCreated: boolean): string | undefined {
+  return cardCreated
+    ? '배치 기록은 없지만 카드가 있어, 배치가 보기 전에 사용자가 직접 종료하고 카드를 만들었을 것으로 추정합니다(확인된 사실 아님)'
+    : undefined
+}
+
+/**
+ * 삭제는 종료 여부와 무관하게 일어날 수 있고(진행 중인 방도 바로 삭제 가능), 삭제 전에 실제
+ * 발송 이력(SENT·FAILED 등)이 있었을 수도 있다. 그 이력이 있든 없든 삭제된 방은 더 이상 조치할
+ * 게 없으므로, outcome 값을 따지기 전에 삭제 여부부터 확인해 항상 "삭제됨"으로 보여준다.
+ */
+function NotificationCell({
+  outcome,
+  deleted,
+  notTargetLabel,
+  notTargetTitle,
+}: {
+  outcome: NotificationOutcome | null
+  deleted: boolean
+  notTargetLabel?: string
+  notTargetTitle?: string
+}) {
+  if (deleted) {
+    return (
+      <Badge variant="secondary" title={DELETED_META.title}>
+        {DELETED_META.label}
+      </Badge>
+    )
+  }
   if (outcome === null) {
-    return <span className="text-xs text-muted-foreground" title="이 회차에 알림 대상이 아니었습니다">-</span>
+    return (
+      <Badge variant="secondary" title={notTargetTitle ?? NOT_TARGET_META.title}>
+        {notTargetLabel ?? NOT_TARGET_META.label}
+      </Badge>
+    )
   }
   const meta = NOTIFICATION_META[outcome]
   return (
@@ -128,12 +216,13 @@ export function UsageTable() {
             ) : (
               rows.map((row) => {
                 const status = STATUS_META[row.status]
+                const reminderNotTarget = notTargetReminder(row.status, row.createdInReminderGap)
                 return (
                   <TableRow key={row.conversationId} className="hover:bg-transparent">
                     <TableCell className="font-mono text-xs text-muted-foreground">{row.conversationId}</TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">{row.memberId}</TableCell>
                     <TableCell className="max-w-64 truncate">
-                      {row.title ?? <span className="text-muted-foreground">-</span>}
+                      {row.title ?? <Badge variant="muted">제목 없음</Badge>}
                     </TableCell>
                     <TableCell>
                       <Badge variant={status.variant}>{status.label}</Badge>
@@ -144,14 +233,24 @@ export function UsageTable() {
                       {row.cardCreated ? (
                         <Badge variant="success">생성</Badge>
                       ) : (
-                        <span className="text-xs text-muted-foreground">-</span>
+                        <Badge variant="muted">미생성</Badge>
                       )}
                     </TableCell>
                     <TableCell className="text-center">
-                      <NotificationCell outcome={row.reminderNotification} />
+                      <NotificationCell
+                        outcome={row.reminderNotification}
+                        deleted={row.status === 'DELETED'}
+                        notTargetLabel={reminderNotTarget.label}
+                        notTargetTitle={reminderNotTarget.title}
+                      />
                     </TableCell>
                     <TableCell className="text-center">
-                      <NotificationCell outcome={row.cardNotification} />
+                      <NotificationCell
+                        outcome={row.cardNotification}
+                        deleted={row.status === 'DELETED'}
+                        notTargetLabel={notTargetCardLabel(row.cardCreated)}
+                        notTargetTitle={notTargetCardTitle(row.cardCreated)}
+                      />
                     </TableCell>
                     <TableCell className="text-right font-medium tabular-nums">{row.totalTokens.toLocaleString()}</TableCell>
                     <TableCell className="text-right tabular-nums text-muted-foreground">
@@ -164,7 +263,7 @@ export function UsageTable() {
                           <span className="text-xs text-muted-foreground">{formatKrw(row.estimatedCostUsd)}</span>
                         </div>
                       ) : (
-                        <span className="text-muted-foreground">-</span>
+                        <Badge variant="muted">비용 없음</Badge>
                       )}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-sm text-muted-foreground">{formatDateTime(row.createdAt)}</TableCell>
