@@ -23,6 +23,7 @@ interface ConversationUsage {
   estimatedCostUsd: number
   reminderNotification: NotificationOutcome | null
   cardNotification: NotificationOutcome | null
+  createdInReminderGap: boolean
 }
 
 type NotificationOutcome = 'SENT' | 'NO_DEVICE' | 'FAILED' | 'SKIPPED' | 'ALREADY_HANDLED'
@@ -65,40 +66,24 @@ const NOTIFICATION_META: Record<NotificationOutcome, { label: string; variant: '
 const NOT_TARGET_META = { label: '대상 아님', title: '배치가 이 방을 이 회차의 대상으로 보지 않았습니다(시간대 밖 생성 등)' }
 const DELETED_META = { label: '삭제됨', title: '삭제된 방이라 알림 결과가 더 이상 의미가 없습니다' }
 
-const SEOUL_HOUR_MINUTE = new Intl.DateTimeFormat('en-US', {
-  timeZone: 'Asia/Seoul',
-  hour: '2-digit',
-  minute: '2-digit',
-  hour12: false,
-})
-
-/**
- * 리마인더(04:30)는 그 시점에 이미 존재하는 방만 조회한다. 04:30~05:00 사이에 생성된 방은 조회
- * 시점에 아직 없어 리마인더 대상일 수 없었는데도, 05:00 배치가 곧바로 자동 종료시킨다
- * (AutoCardWindow.DAY_BOUNDARY_HOUR). 이 방은 reminderNotification 이 null 이면서 상태만 ENDED가
- * 되므로, 생성 시각이 이 틈에 걸리면 "사용자가 직접 종료했다"고 단정할 수 없다.
- */
-function isCreatedInReminderGap(createdAt: string): boolean {
-  const parts = SEOUL_HOUR_MINUTE.formatToParts(new Date(createdAt))
-  const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? 0) % 24
-  const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? 0)
-  const minutesSinceMidnight = hour * 60 + minute
-  return minutesSinceMidnight >= 4 * 60 + 30 && minutesSinceMidnight < 5 * 60
-}
-
 /**
  * 리마인더가 뜨기 전에 사용자가 이미 대화를 직접 종료해서 알릴 필요가 없었던 것으로 보이는 경우다.
  *
  * 단정하지 않고 "추정"으로 두는 이유가 있다. 리마인더는 회원마다 따로 보내면서 예외를 삼키지 않아
  * (UnfinishedConversationReminder), 중간 한 회원에서 터지면 뒤쪽 회원들의 기록이 통째로 빠진다. 그
- * 방들은 30분 뒤 배치가 ENDED 로 만들고, 04:30 전에 만들어졌으면 아래 틈 검사에도 안 걸려서 실제로
- * 직접 종료한 방과 구분이 안 된다. 카드 칸의 추측(notTargetCardLabel)과도 신뢰도 표기를 맞춘다.
+ * 방들은 30분 뒤 배치가 ENDED 로 만들고, 리마인더 시각 전에 만들어졌으면 createdInReminderGap 에도
+ * 안 걸려서 실제로 직접 종료한 방과 구분이 안 된다. 카드 칸의 추측(notTargetCardLabel)과도 신뢰도
+ * 표기를 맞춘다.
+ *
+ * 리마인더 시각과 하루 경계는 여기에 적지 않는다. 두 값은 배치가 가진 것이라
+ * (AutoCardWindow), 화면이 다시 적어 두면 경계를 옮겼을 때 이 표만 옛 값으로 남는다. 서버가
+ * 내려주는 createdInReminderGap 을 그대로 쓴다.
  */
 function notTargetReminder(
   status: ConversationUsage['status'],
-  createdAt: string,
+  createdInReminderGap: boolean,
 ): { label?: string; title?: string } {
-  if (status !== 'ENDED' || isCreatedInReminderGap(createdAt)) {
+  if (status !== 'ENDED' || createdInReminderGap) {
     return {}
   }
   return {
@@ -231,7 +216,7 @@ export function UsageTable() {
             ) : (
               rows.map((row) => {
                 const status = STATUS_META[row.status]
-                const reminderNotTarget = notTargetReminder(row.status, row.createdAt)
+                const reminderNotTarget = notTargetReminder(row.status, row.createdInReminderGap)
                 return (
                   <TableRow key={row.conversationId} className="hover:bg-transparent">
                     <TableCell className="font-mono text-xs text-muted-foreground">{row.conversationId}</TableCell>

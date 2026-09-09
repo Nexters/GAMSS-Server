@@ -44,6 +44,13 @@ data class ConversationUsageResponse(
         nullable = true,
     )
     val cardNotification: String?,
+    @field:Schema(
+        description =
+            "04:30 리마인더와 05:00 자동 종료 사이에 만들어져 리마인더 대상일 수 없었던 방인지. " +
+                "true 면 리마인더 기록이 없고 상태가 종료여도 사용자가 직접 종료한 것으로 볼 수 없다",
+        example = "false",
+    )
+    val createdInReminderGap: Boolean,
 ) {
     companion object {
         fun from(usage: ConversationUsage): ConversationUsageResponse =
@@ -61,6 +68,7 @@ data class ConversationUsageResponse(
                 estimatedCostUsd = usage.estimatedCostUsd,
                 reminderNotification = usage.reminderNotification?.name,
                 cardNotification = usage.cardNotification?.name,
+                createdInReminderGap = usage.createdInReminderGap,
             )
     }
 }

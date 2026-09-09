@@ -8,6 +8,7 @@ import java.time.ZoneId
 import java.time.ZonedDateTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -75,6 +76,50 @@ class AutoCardWindowTest {
         assertTrue(lastNight < upperBound, "30분 뒤 닫힐 방이 리마인더 기간에 들어와야 한다")
     }
 
+    /**
+     * 리마인더 시각이 하루 경계에서 만들어져 나오는지 본다. 값을 그대로 적지 않고 관계로 적은 것은,
+     * 경계를 옮겼을 때 이 관계가 그대로여야 리마인더 cron 과 백오피스 표의 틈 판정이 함께 따라오기
+     * 때문이다. 어긋나면 배치가 닫은 뒤에 알리거나, 표가 실제와 다른 틈을 본다.
+     */
+    @Test
+    fun `리마인더 시각은 하루 경계에서 앞당긴 만큼이다`() {
+        assertEquals(
+            AutoCardWindow.DAY_BOUNDARY_HOUR * 60 - AutoCardWindow.REMINDER_MINUTES_BEFORE,
+            AutoCardWindow.REMINDER_HOUR * 60 + AutoCardWindow.REMINDER_MINUTE,
+        )
+    }
+
+    /** 틈 안. 이 방은 리마인더가 볼 수 없었는데도 30분 뒤 배치가 곧바로 종료시킨다. */
+    @Test
+    fun `04시 30분과 05시 사이에 만든 방은 리마인더 틈에 걸린다`() {
+        assertTrue(window.isCreatedInReminderGap(kstInstant("2026-08-19T04:40:00")))
+    }
+
+    /** 시작 경계는 포함이다. 04:30 정각 생성은 리마인더 조회가 잡지 못한다. */
+    @Test
+    fun `04시 30분 정각도 리마인더 틈에 걸린다`() {
+        assertTrue(window.isCreatedInReminderGap(kstInstant("2026-08-19T04:30:00")))
+    }
+
+    /** 끝 경계는 제외다. 05:00 생성은 이번 배치가 아니라 다음 회차 몫이라 틈이 아니다. */
+    @Test
+    fun `05시 정각은 리마인더 틈이 아니다`() {
+        assertFalse(window.isCreatedInReminderGap(kstInstant("2026-08-19T05:00:00")))
+    }
+
+    /** 틈 1분 전. 이 방은 리마인더 대상이었으므로 기록이 없으면 다른 이유를 봐야 한다. */
+    @Test
+    fun `04시 29분은 리마인더 틈이 아니다`() {
+        assertFalse(window.isCreatedInReminderGap(kstInstant("2026-08-19T04:29:00")))
+    }
+
+    /** UTC 로 읽으면 한국 시간 04:40 이 전날 19:40 이라 틈을 놓친다. */
+    @Test
+    fun `틈 판정은 한국 시간 기준이다`() {
+        assertTrue(window.isCreatedInReminderGap(Instant.parse("2026-08-18T19:40:00Z")))
+        assertFalse(window.isCreatedInReminderGap(Instant.parse("2026-08-19T04:40:00Z")))
+    }
+
     @Test
     fun `하한은 설정한 날짜의 05시다`() {
         assertEquals(Instant.parse("2026-08-14T20:00:00Z"), window.createdAfter())
@@ -82,4 +127,6 @@ class AutoCardWindowTest {
 
     private fun kst(localDateTime: String): ZonedDateTime =
         ZonedDateTime.of(LocalDateTime.parse(localDateTime), ZoneId.of(AutoCardWindow.ZONE_ID))
+
+    private fun kstInstant(localDateTime: String): Instant = kst(localDateTime).toInstant()
 }

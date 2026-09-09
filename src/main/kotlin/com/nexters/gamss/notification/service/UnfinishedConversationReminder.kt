@@ -88,8 +88,12 @@ class UnfinishedConversationReminder(
     }
 
     companion object {
-        /** 5시 배치([AutoCardWindow.DAY_BOUNDARY_HOUR])보다 30분 앞선다. */
-        private const val CRON = "0 30 4 * * *"
+        /**
+         * 배치([AutoCardWindow.DAY_BOUNDARY_HOUR])보다 [AutoCardWindow.REMINDER_MINUTES_BEFORE] 분
+         * 앞선다. 시각을 직접 적지 않고 만들어 쓰는 것은, 경계를 옮겼을 때 여기만 옛 시각으로 남아
+         * 배치가 닫은 뒤에 알리는 일이 없게 하기 위해서다.
+         */
+        private const val CRON = "0 ${AutoCardWindow.REMINDER_MINUTE} ${AutoCardWindow.REMINDER_HOUR} * * *"
 
         /**
          * 알림 문구. 이 알림이 알려야 하는 것은 **곧 자동으로 종료된다**는 예고까지다. 카드가

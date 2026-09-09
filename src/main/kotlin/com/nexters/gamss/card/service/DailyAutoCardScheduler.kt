@@ -302,7 +302,9 @@ class DailyAutoCardScheduler(
          * 2회로 하루 상한 대비 미미하므로 카드를 확실히 만드는 쪽을 택했다.
          *
          * `reset_hour`는 백오피스에서 바꿀 수 있는 값이다. 하루 경계를 옮기게 되면 이 상수와
-         * [AutoCardWindow.DAY_BOUNDARY_HOUR]도 함께 봐야 한다.
+         * [AutoCardWindow.DAY_BOUNDARY_HOUR]도 함께 봐야 한다. 04:30 리마인더의 cron 과 백오피스
+         * 표의 틈 판정은 그 상수에서 값을 받아 가므로 따로 손댈 것이 없다
+         * ([AutoCardWindow.REMINDER_MINUTES_BEFORE]).
          */
         private const val CRON = "0 0 ${AutoCardWindow.DAY_BOUNDARY_HOUR} * * *"
     }
