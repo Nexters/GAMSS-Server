@@ -7,6 +7,7 @@ import com.google.genai.types.Part
 import com.google.genai.types.Schema
 import com.nexters.gamss.llm.config.GeminiProperties
 import com.nexters.gamss.llm.error.CommentGenerationFailedException
+import com.nexters.gamss.llm.error.LlmFailureKind
 import com.nexters.gamss.llm.parsing.CommentFeedJsonParser
 import com.nexters.gamss.llm.parsing.ReplyJsonParser
 import com.nexters.gamss.llm.prompt.CommentPromptContext
@@ -41,7 +42,9 @@ class GeminiCommentGenerator(
             try {
                 systemPromptResolver.resolve(PromptType.COMMENT)
             } catch (e: Exception) {
-                throw CommentGenerationFailedException("LLM 호출에 실패했습니다.", e)
+                // 설정 조회(DB) 실패다. 일시적 장애로 보고 쉬었다 다시 부른다 — 기본값(검증 실패)에 맡기면
+                // 간격 없이 곧바로 DB를 다시 두드린다.
+                throw CommentGenerationFailedException("LLM 호출에 실패했습니다.", e, kind = LlmFailureKind.CALL)
             }
         return generateComment(context, settings)
     }
@@ -58,7 +61,7 @@ class GeminiCommentGenerator(
                     buildConfig(settings.systemPrompt, commentFeedSchema()),
                 )
             } catch (e: Exception) {
-                throw CommentGenerationFailedException("LLM 호출에 실패했습니다.", e)
+                throw CommentGenerationFailedException("LLM 호출에 실패했습니다.", e, kind = GeminiFailureKinds.of(e))
             }
 
         // 토큰은 파싱 전에 뽑는다 — 이후 파싱이 실패해도 이미 과금된 토큰을 실패 로그에 전달할 수 있게 한다.
@@ -88,6 +91,7 @@ class GeminiCommentGenerator(
                     cachedTokens,
                     inputTokens,
                     outputTokens,
+                    e.kind,
                 )
             }
         return CommentGenerationOutput(feed, usedTokens, cachedTokens, inputTokens, outputTokens)
@@ -103,7 +107,7 @@ class GeminiCommentGenerator(
             try {
                 systemPromptResolver.resolve(PromptType.REPLY)
             } catch (e: Exception) {
-                throw CommentGenerationFailedException("LLM 호출에 실패했습니다.", e)
+                throw CommentGenerationFailedException("LLM 호출에 실패했습니다.", e, kind = LlmFailureKind.CALL)
             }
         return generateReply(diaryContent, characterId, characterComment, userReply, settings)
     }
@@ -123,7 +127,7 @@ class GeminiCommentGenerator(
                     buildConfig(settings.systemPrompt, replySchema()),
                 )
             } catch (e: Exception) {
-                throw CommentGenerationFailedException("LLM 호출에 실패했습니다.", e)
+                throw CommentGenerationFailedException("LLM 호출에 실패했습니다.", e, kind = GeminiFailureKinds.of(e))
             }
 
         val usedTokens = response.usageMetadata().flatMap { it.totalTokenCount() }.orElse(0)
@@ -152,6 +156,7 @@ class GeminiCommentGenerator(
                     cachedTokens,
                     inputTokens,
                     outputTokens,
+                    e.kind,
                 )
             }
         return ReplyGenerationOutput(replyText, usedTokens, cachedTokens, inputTokens, outputTokens)

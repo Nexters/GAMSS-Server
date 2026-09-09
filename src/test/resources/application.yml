@@ -36,7 +36,7 @@ card:
 
 gemini:
   model: gemini-3.1-flash-lite
-  request-timeout: PT30S
+  request-timeout: PT15S
   ai-studio:
     api-key: test-gemini-api-key-dummy-value
   pricing:

@@ -79,7 +79,7 @@ fcm:
 
 gemini:
   model: gemini-3.1-flash-lite
-  request-timeout: PT30S
+  request-timeout: PT15S
   # 어느 경로로 호출할지는 DB(llm_provider_setting)가 정한다. 여기엔 두 경로의 인증 값을 모두 둬서
   # 백오피스에서 언제든 되돌릴 수 있게 한다.
   ai-studio:
