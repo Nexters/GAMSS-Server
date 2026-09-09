@@ -68,8 +68,9 @@ interface ConversationRepository : JpaRepository<Conversation, Long> {
      * - 실패한 방([CardGenerationStatus.FAILED])은 재시도가 살아 있어야 하므로 상태로 뺄 수 없다.
      *   대신 마지막 시도가 이번 하루 안이면 건너뛰어 **하루 한 번**으로 제한한다. 배치 카드 한 장은
      *   감정 분류와 한 줄 생성으로 LLM을 두 번 부르고 각 호출이 재시도까지 하므로 최악 여섯 번인데,
-     *   카드 경로는 일일 토큰 상한을 보지 않으므로(#195) 영구적으로 실패하는 방을 묶는 장치가
-     *   사실상 이 하루 한 번뿐이다.
+     *   카드 경로는 일일 토큰 상한을 보지 않으므로(#195) **방 하나가 영구적으로 실패할 때 태우는
+     *   양을 묶는 장치는 이 하루 한 번뿐이다.** 한 회차의 방들이 다 같은 벽에 부딪히는 경우(쿼터
+     *   초과)는 배치가 따로 끊는다([com.nexters.gamss.card.service.DailyAutoCardScheduler]).
      */
     @Query(
         "select c.id from Conversation c " +

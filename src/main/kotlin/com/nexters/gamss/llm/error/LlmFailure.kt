@@ -12,3 +12,17 @@ package com.nexters.gamss.llm.error
 interface LlmFailure {
     val kind: LlmFailureKind
 }
+
+/**
+ * 이 예외가 실은 어떤 LLM 실패였는지. LLM 실패가 아니면 null.
+ *
+ * 생성 경로는 LLM 실패를 `BusinessException` 으로 갈아 끼워 올리므로(`initCause`), 부르는 쪽이 손에
+ * 쥐는 것은 껍데기다. 원인 사슬을 훑어야 종류가 보인다.
+ */
+fun Throwable.llmFailureKind(): LlmFailureKind? =
+    generateSequence(this) { it.cause }
+        .take(MAX_CAUSE_DEPTH)
+        .firstNotNullOfOrNull { (it as? LlmFailure)?.kind }
+
+/** 사슬을 도는 예외가 들어와도 멈추게 한다. 실제로 싸이는 겹은 하나뿐이다. */
+private const val MAX_CAUSE_DEPTH = 5
