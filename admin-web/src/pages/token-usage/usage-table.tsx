@@ -64,6 +64,13 @@ const NOTIFICATION_META: Record<NotificationOutcome, { label: string; variant: '
 const NOT_TARGET_META = { label: '대상 아님', title: '배치가 이 방을 이 회차의 대상으로 보지 않았습니다(시간대 밖 생성 등)' }
 const DELETED_META = { label: '삭제됨', title: '삭제된 방이라 알림 결과가 더 이상 의미가 없습니다' }
 
+const SEOUL_HOUR_MINUTE = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'Asia/Seoul',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+})
+
 /**
  * 리마인더(04:30)는 그 시점에 이미 존재하는 방만 조회한다. 04:30~05:00 사이에 생성된 방은 조회
  * 시점에 아직 없어 리마인더 대상일 수 없었는데도, 05:00 배치가 곧바로 자동 종료시킨다
@@ -71,12 +78,7 @@ const DELETED_META = { label: '삭제됨', title: '삭제된 방이라 알림 �
  * 되므로, 생성 시각이 이 틈에 걸리면 "사용자가 직접 종료했다"고 단정할 수 없다.
  */
 function isCreatedInReminderGap(createdAt: string): boolean {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Asia/Seoul',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).formatToParts(new Date(createdAt))
+  const parts = SEOUL_HOUR_MINUTE.formatToParts(new Date(createdAt))
   const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? 0) % 24
   const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? 0)
   const minutesSinceMidnight = hour * 60 + minute
@@ -84,14 +86,17 @@ function isCreatedInReminderGap(createdAt: string): boolean {
 }
 
 /** 리마인더가 뜨기 전에 사용자가 이미 대화를 직접 종료해서 알릴 필요가 없었던 경우다. */
-function notTargetReminderLabel(status: ConversationUsage['status'], createdAt: string): string | undefined {
-  return status === 'ENDED' && !isCreatedInReminderGap(createdAt) ? '직접 종료' : undefined
-}
-
-function notTargetReminderTitle(status: ConversationUsage['status'], createdAt: string): string | undefined {
-  return status === 'ENDED' && !isCreatedInReminderGap(createdAt)
-    ? '리마인더가 뜨기 전에 사용자가 이미 대화를 직접 종료해서 알릴 필요가 없었습니다'
-    : undefined
+function notTargetReminder(
+  status: ConversationUsage['status'],
+  createdAt: string,
+): { label?: string; title?: string } {
+  if (status !== 'ENDED' || isCreatedInReminderGap(createdAt)) {
+    return {}
+  }
+  return {
+    label: '직접 종료',
+    title: '리마인더가 뜨기 전에 사용자가 이미 대화를 직접 종료해서 알릴 필요가 없었습니다',
+  }
 }
 
 /**
@@ -217,6 +222,7 @@ export function UsageTable() {
             ) : (
               rows.map((row) => {
                 const status = STATUS_META[row.status]
+                const reminderNotTarget = notTargetReminder(row.status, row.createdAt)
                 return (
                   <TableRow key={row.conversationId} className="hover:bg-transparent">
                     <TableCell className="font-mono text-xs text-muted-foreground">{row.conversationId}</TableCell>
@@ -240,8 +246,8 @@ export function UsageTable() {
                       <NotificationCell
                         outcome={row.reminderNotification}
                         deleted={row.status === 'DELETED'}
-                        notTargetLabel={notTargetReminderLabel(row.status, row.createdAt)}
-                        notTargetTitle={notTargetReminderTitle(row.status, row.createdAt)}
+                        notTargetLabel={reminderNotTarget.label}
+                        notTargetTitle={reminderNotTarget.title}
                       />
                     </TableCell>
                     <TableCell className="text-center">
