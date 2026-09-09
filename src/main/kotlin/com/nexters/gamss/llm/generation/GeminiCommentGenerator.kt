@@ -1,6 +1,5 @@
 package com.nexters.gamss.llm.generation
 
-import com.google.genai.Client
 import com.google.genai.types.Content
 import com.google.genai.types.GenerateContentConfig
 import com.google.genai.types.HttpOptions
@@ -14,6 +13,7 @@ import com.nexters.gamss.llm.prompt.CommentPromptContext
 import com.nexters.gamss.llm.prompt.PromptCharacterId
 import com.nexters.gamss.llm.prompt.PromptProvider
 import com.nexters.gamss.llm.prompt.PromptType
+import com.nexters.gamss.llm.provider.GeminiConnectionService
 import com.nexters.gamss.llm.settings.LlmSettingsView
 import com.nexters.gamss.llm.settings.SystemPromptResolver
 import org.springframework.stereotype.Component
@@ -28,13 +28,12 @@ import org.springframework.stereotype.Component
 @Component
 class GeminiCommentGenerator(
     private val properties: GeminiProperties,
+    private val connections: GeminiConnectionService,
     private val promptProvider: PromptProvider,
     private val commentFeedJsonParser: CommentFeedJsonParser,
     private val replyJsonParser: ReplyJsonParser,
     private val systemPromptResolver: SystemPromptResolver,
 ) : CommentGenerator {
-    private val client: Client by lazy { Client.builder().apiKey(properties.apiKey).build() }
-
     override fun generateComment(context: CommentPromptContext): CommentGenerationOutput {
         // 운영 중 백오피스에서 바꾼 값을 매 호출 반영한다(재배포 불필요).
         // 설정 조회(DB) 실패도 잡아 재시도·FAILED 계약을 유지한다(500·PENDING 고착 방지).
@@ -53,7 +52,7 @@ class GeminiCommentGenerator(
     ): CommentGenerationOutput {
         val response =
             try {
-                client.models.generateContent(
+                connections.activeClient().models.generateContent(
                     settings.model,
                     promptProvider.buildUserContent(context),
                     buildConfig(settings.systemPrompt, commentFeedSchema()),
@@ -118,7 +117,7 @@ class GeminiCommentGenerator(
     ): ReplyGenerationOutput {
         val response =
             try {
-                client.models.generateContent(
+                connections.activeClient().models.generateContent(
                     settings.model,
                     promptProvider.buildReplyUserContent(diaryContent, characterId, characterComment, userReply),
                     buildConfig(settings.systemPrompt, replySchema()),

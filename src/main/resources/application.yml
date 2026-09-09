@@ -78,9 +78,17 @@ fcm:
   credentials-base64: ${FIREBASE_CREDENTIALS_BASE64:}
 
 gemini:
-  api-key: ${GEMINI_API_KEY}
   model: gemini-3.1-flash-lite
   request-timeout: PT30S
+  # 어느 경로로 호출할지는 DB(llm_provider_setting)가 정한다. 여기엔 두 경로의 인증 값을 모두 둬서
+  # 백오피스에서 언제든 되돌릴 수 있게 한다.
+  ai-studio:
+    api-key: ${GEMINI_API_KEY:}
+  vertex:
+    project-id: ${GEMINI_VERTEX_PROJECT_ID:gamss-cbdcb}
+    # gemini-3.1-flash-lite 는 global 엔드포인트만 지원한다.
+    location: ${GEMINI_VERTEX_LOCATION:global}
+    credentials-base64: ${GEMINI_VERTEX_CREDENTIALS_BASE64:}
   # 모델별 토큰 요금(USD, 100만 토큰당, 글로벌 기준). Gemini는 요금 API가 없어 문서 기준으로 둔다
   # (2026-07, ai.google.dev/gemini-api/docs/pricing). 캐시 입력은 할인가, 출력은 캐시 안 됨.
   # 새 모델을 쓰면 항목만 추가하면 비용 계산이 자동 반영된다. 키에 점(.)이 있어 [ ] 로 감싼다.

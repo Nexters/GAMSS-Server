@@ -35,9 +35,10 @@ card:
     base-url: https://gamss.kr/c
 
 gemini:
-  api-key: test-gemini-api-key-dummy-value
   model: gemini-3.1-flash-lite
   request-timeout: PT30S
+  ai-studio:
+    api-key: test-gemini-api-key-dummy-value
   pricing:
     models:
       "[gemini-3.1-flash-lite]": { input-per1m: 0.25, cached-input-per1m: 0.025, output-per1m: 1.50 }

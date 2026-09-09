@@ -16,7 +16,7 @@ import kotlin.test.assertFailsWith
 class LlmSettingsServiceTest {
     private val repository = mockk<LlmSettingsRepository>()
     private val geminiProperties =
-        GeminiProperties(apiKey = "k", model = "gemini-3.1-flash-lite", requestTimeout = Duration.ofSeconds(30))
+        GeminiProperties(model = "gemini-3.1-flash-lite", requestTimeout = Duration.ofSeconds(30))
     private val modelCatalog = mockk<GeminiModelCatalog>()
     private val service = LlmSettingsService(repository, geminiProperties, modelCatalog)
 
