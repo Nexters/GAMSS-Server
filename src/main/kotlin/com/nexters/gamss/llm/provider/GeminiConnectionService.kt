@@ -1,6 +1,7 @@
 package com.nexters.gamss.llm.provider
 
 import com.google.genai.Client
+import org.springframework.data.domain.Sort
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -34,8 +35,9 @@ class GeminiConnectionService(
     private fun connection(provider: LlmProvider): GeminiConnection =
         checkNotNull(byProvider[provider]) { "$provider 를 처리할 GeminiConnection 구현체가 없습니다." }
 
+    // 행이 늘어난 적이 없어도 정렬은 고정한다 — 읽기와 쓰기가 다른 행을 잡으면 전환이 조용히 무시된다.
     private fun requireRow(): LlmProviderSetting =
-        checkNotNull(repository.findAll().firstOrNull()) {
+        checkNotNull(repository.findAll(Sort.by("id")).firstOrNull()) {
             "llm_provider_setting 행이 없습니다. V37 시딩 마이그레이션이 적용됐는지 확인하세요."
         }
 }

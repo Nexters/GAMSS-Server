@@ -24,7 +24,13 @@ class GeminiModelCatalog(
     private val cache = ConcurrentHashMap<LlmProvider, CachedModels>()
 
     fun availableModels(): List<String> {
-        val provider = connections.activeProvider()
+        // 경로 조회(DB)도 실패할 수 있다. 여기서 던지면 모델 설정 화면 전체가 죽으므로 빈 목록으로 내린다.
+        val provider =
+            runCatching { connections.activeProvider() }
+                .getOrElse { e ->
+                    log.warn("호출 경로 조회 실패 — 모델 목록을 비운다", e)
+                    return emptyList()
+                }
         val now = System.currentTimeMillis()
         val snapshot = cache[provider]
         if (snapshot != null && now - snapshot.atEpochMs < CACHE_TTL_MS) {
