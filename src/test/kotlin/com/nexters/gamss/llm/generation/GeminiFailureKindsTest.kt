@@ -3,6 +3,8 @@ package com.nexters.gamss.llm.generation
 import com.google.genai.errors.ClientException
 import com.google.genai.errors.GenAiIOException
 import com.google.genai.errors.ServerException
+import com.nexters.gamss.global.exception.BusinessException
+import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.llm.error.LlmFailureKind
 import java.io.IOException
 import kotlin.test.Test
@@ -45,6 +47,17 @@ class GeminiFailureKindsTest {
         val error = GenAiIOException("read timed out", IOException("socket"))
 
         assertEquals(LlmFailureKind.CALL, GeminiFailureKinds.of(error))
+    }
+
+    /**
+     * 인증 설정이 비면 제너레이터가 연결을 얻는 단계에서 BusinessException 을 만난다. 이것을 CALL 로
+     * 두면 사람이 설정을 고치기 전에는 절대 성공하지 않을 호출을 세 번씩 반복한다.
+     */
+    @Test
+    fun `인증 설정이 빠져 생긴 실패는 영구 실패로 분류한다`() {
+        val error = BusinessException(ErrorCode.INVALID_INPUT, "AI Studio API 키가 설정되지 않았습니다.")
+
+        assertEquals(LlmFailureKind.PERMANENT, GeminiFailureKinds.of(error))
     }
 
     @Test
