@@ -7,6 +7,8 @@ import com.nexters.gamss.conversation.service.ConversationCardGenerationService
 import com.nexters.gamss.conversation.service.ConversationService
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
+import com.nexters.gamss.llm.error.CardGenerationFailedException
+import com.nexters.gamss.llm.error.LlmFailureKind
 import com.nexters.gamss.member.domain.Member
 import com.nexters.gamss.member.service.MemberService
 import com.nexters.gamss.notification.domain.NotificationOutcome
@@ -172,6 +174,101 @@ class DailyAutoCardSchedulerTest {
 
     private fun stubTargets(vararg ids: Long) {
         every { conversationCardGenerationService.findAutoCardTargetIds(any(), any()) } returns ids.toList()
+    }
+
+    /**
+     * 카드 생성 경로가 올려보내는 모양 그대로 만든다. LLM 실패는 CARD_GENERATION_FAILED 로 갈아 끼워
+     * 올라오므로, 배치가 429 를 알아보려면 원인 사슬까지 있어야 한다.
+     */
+    private fun cardGenerationFailure(kind: LlmFailureKind): BusinessException =
+        BusinessException(ErrorCode.CARD_GENERATION_FAILED).apply {
+            initCause(CardGenerationFailedException("생성 실패", kind = kind))
+        }
+
+    /**
+     * 방들은 같은 쿼터를 나눠 쓴다. 한 방이 429 로 실패했다는 것은 그 방 안에서 재시도를 다 쓰고도
+     * 429 였다는 뜻이라, 계속 돌아봐야 남은 방들도 같은 벽에 부딪히며 마른 쿼터를 더 태울 뿐이다.
+     */
+    @Test
+    fun `쿼터 초과가 연달아 나면 남은 방을 건드리지 않고 중단한다`() {
+        stubTargets(10L, 20L, 30L, 40L, 50L)
+        every { conversationService.endForAutoBatch(any()) } returns conversation()
+        every {
+            cardService.createCard(any(), any(), any(), any())
+        } throws cardGenerationFailure(LlmFailureKind.RATE_LIMITED)
+
+        scheduler.runFor(createdAfter, createdBefore)
+
+        verify(exactly = 3) { cardService.createCard(any(), any(), any(), any()) }
+        verify(exactly = 0) { cardService.createCard(any(), 40L, any(), any()) }
+        verify(exactly = 0) { cardService.createCard(any(), 50L, any(), any()) }
+    }
+
+    /** 중간에 한 방이라도 성공하면 쿼터가 아직 남아 있다는 뜻이라, 연속이 끊기고 배치는 계속 돈다. */
+    @Test
+    fun `쿼터 초과 사이에 성공한 방이 있으면 중단하지 않는다`() {
+        stubTargets(10L, 20L, 30L, 40L, 50L)
+        every { conversationService.endForAutoBatch(any()) } returns conversation()
+        every {
+            cardService.createCard(any(), any(), any(), any())
+        } throws cardGenerationFailure(LlmFailureKind.RATE_LIMITED)
+        every { cardService.createCard(any(), 30L, any(), any()) } returns mockk<Card>()
+
+        scheduler.runFor(createdAfter, createdBefore)
+
+        verify(exactly = 5) { cardService.createCard(any(), any(), any(), any()) }
+    }
+
+    /**
+     * 400 같은 영구 실패는 그 방의 내용 때문일 수 있다. 방 하나를 이유로 나머지를 포기하면, 못난 방
+     * 하나가 그날 모두의 카드를 없앤다.
+     */
+    @Test
+    fun `쿼터 초과가 아닌 실패는 연달아 나도 중단하지 않는다`() {
+        stubTargets(10L, 20L, 30L, 40L, 50L)
+        every { conversationService.endForAutoBatch(any()) } returns conversation()
+        every {
+            cardService.createCard(any(), any(), any(), any())
+        } throws cardGenerationFailure(LlmFailureKind.PERMANENT)
+
+        scheduler.runFor(createdAfter, createdBefore)
+
+        verify(exactly = 5) { cardService.createCard(any(), any(), any(), any()) }
+    }
+
+    /**
+     * 대상 수가 임계값과 같으면 마지막 방을 처리하는 순간 중단 조건이 성립한다. 그때 끊어도 끊을
+     * 것이 없어야 하고, 무엇보다 **마지막 방을 건너뛰면 안 된다.**
+     *
+     * 이 실행이 로그에 "완료"로 남는지("중단"이 아니라)까지는 여기서 못 본다. `completed` 는 로그
+     * 문구로만 드러나고 이 레포에는 로그 검증 장치가 없다. 지표로 뽑는다면 그때 덮인다.
+     */
+    @Test
+    fun `대상 수가 임계값과 같아도 마지막 방까지 처리한다`() {
+        stubTargets(10L, 20L, 30L)
+        every { conversationService.endForAutoBatch(any()) } returns conversation()
+        every {
+            cardService.createCard(any(), any(), any(), any())
+        } throws cardGenerationFailure(LlmFailureKind.RATE_LIMITED)
+
+        scheduler.runFor(createdAfter, createdBefore)
+
+        verify(exactly = 3) { cardService.createCard(any(), any(), any(), any()) }
+        assertEquals(3.0, outcomeCount(AutoCardOutcome.FAILED))
+    }
+
+    /** 중단해도 그때까지 처리한 방들은 이미 커밋돼 있다. 집계에서 빠지면 아무 일 없던 날과 같아진다. */
+    @Test
+    fun `쿼터 초과로 중단해도 그때까지의 결과는 집계에 남는다`() {
+        stubTargets(10L, 20L, 30L, 40L)
+        every { conversationService.endForAutoBatch(any()) } returns conversation()
+        every {
+            cardService.createCard(any(), any(), any(), any())
+        } throws cardGenerationFailure(LlmFailureKind.RATE_LIMITED)
+
+        scheduler.runFor(createdAfter, createdBefore)
+
+        assertEquals(3.0, outcomeCount(AutoCardOutcome.FAILED))
     }
 
     @Test

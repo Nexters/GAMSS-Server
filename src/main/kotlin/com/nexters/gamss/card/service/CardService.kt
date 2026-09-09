@@ -187,7 +187,6 @@ class CardService(
             try {
                 llmRetryExecutor.execute(
                     retryOn = CardGenerationFailedException::class,
-                    maxAttempts = CARD_MAX_ATTEMPTS,
                     onAttemptFailure = { _, e -> tokens.addFailed(e) },
                     onNonRetryable = handleFailure,
                     onExhausted = handleFailure,
@@ -264,7 +263,6 @@ class CardService(
         return try {
             llmRetryExecutor.execute(
                 retryOn = CardGenerationFailedException::class,
-                maxAttempts = CARD_MAX_ATTEMPTS,
                 onAttemptFailure = { _, e -> tokens.addFailed(e) },
                 onNonRetryable = handleFailure,
                 onExhausted = handleFailure,
@@ -497,12 +495,6 @@ class CardService(
     fun deleteAllCards(memberId: Long): Int = deleteCardsWithConversations(cardRepository.findDeletableConversationIds(memberId))
 
     companion object {
-        /**
-         * 카드 경로는 아직 재시도하지 않는다. 한 요청이 감정 분류·한 줄 생성으로 LLM을 두 번 순차
-         * 호출하는 구간이라, 시도 횟수를 늘리려면 nginx `proxy_read_timeout`까지 다시 계산해야 한다(#162).
-         */
-        private const val CARD_MAX_ATTEMPTS = 1
-
         private val ZONE = ZoneId.of("Asia/Seoul")
         private val log = LoggerFactory.getLogger(CardService::class.java)
     }

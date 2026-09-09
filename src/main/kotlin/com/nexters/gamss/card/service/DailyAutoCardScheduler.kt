@@ -4,6 +4,8 @@ import com.nexters.gamss.conversation.service.ConversationCardGenerationService
 import com.nexters.gamss.conversation.service.ConversationService
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
+import com.nexters.gamss.llm.error.LlmFailureKind
+import com.nexters.gamss.llm.error.llmFailureKind
 import com.nexters.gamss.member.service.MemberService
 import com.nexters.gamss.notification.domain.NotificationOutcome
 import com.nexters.gamss.notification.domain.NotificationType
@@ -24,6 +26,9 @@ import java.time.Instant
  * 대화방 하나의 실패가 나머지를 막지 않도록 방 단위로 예외를 삼키고, 처리 결과만 집계해 남긴다.
  * 중복 실행과 재시도에 대한 멱등성은 이 클래스가 아니라 카드 생성 경로가 보장한다. CAS 선점과
  * `cards.conversation_id` 유니크 제약에 걸린 요청은 여기서 "이미 처리됨"으로 분류된다.
+ *
+ * 예외가 하나 있다. **LLM 쿼터 초과(429)만은 방 하나의 실패로 보지 않는다** — 방들이 같은 쿼터를
+ * 나눠 쓰므로 한 방이 부딪힌 벽에 나머지도 그대로 부딪힌다([RATE_LIMIT_ABORT_STREAK]).
  *
  * 요약([com.nexters.gamss.conversation.domain.Conversation.summary])이 없는 방도 카드를 만든다.
  * 요약은 프론트가 메시지마다 보내주는 값이라 한 줄만 쓰고 나간 방에는 없는데, 그게 가장 흔한 이탈
@@ -105,7 +110,20 @@ class DailyAutoCardScheduler(
                 return
             }
             tally.targetCount = targetIds.size
-            targetIds.forEach { processAndNotify(it, tally) }
+            targetIds.forEachIndexed { index, conversationId ->
+                processAndNotify(conversationId, tally)
+                // 마지막 방에서 조건이 걸리면 끊을 것이 없다. 그때도 중단으로 처리하면 대상을 다 본
+                // 실행이 로그에 "중단"으로 남아, 남은 방이 있는 줄 알고 헛짚게 된다.
+                val remaining = targetIds.size - index - 1
+                if (remaining > 0 && tally.rateLimitStreak >= RATE_LIMIT_ABORT_STREAK) {
+                    log.warn(
+                        "자동 카드 생성 배치 중단: 쿼터 초과(429)로 실패한 방이 {}개 연달아 나왔다. 남은 {}개는 다음 실행이 본다",
+                        tally.rateLimitStreak,
+                        remaining,
+                    )
+                    return
+                }
+            }
             tally.completed = true
         } finally {
             started.stop(batchTimer)
@@ -120,6 +138,9 @@ class DailyAutoCardScheduler(
     ) {
         val result = process(conversationId)
         tally.counts.merge(result.outcome, 1, Int::plus)
+        // 연속으로 세는 것은 한 번 튄 429와 말라버린 쿼터를 가르기 위해서다. 중간에 한 방이라도
+        // 성공하면 쿼터가 아직 남아 있다는 뜻이라 처음부터 다시 센다.
+        tally.rateLimitStreak = if (result.rateLimited) tally.rateLimitStreak + 1 else 0
         when (result.outcome) {
             AutoCardOutcome.CREATED -> notifyCreated(conversationId, checkNotNull(result.memberId), tally)
 
@@ -221,6 +242,9 @@ class DailyAutoCardScheduler(
         var notifiedFailureCount = 0
         var targetCount = 0
         var completed = false
+
+        /** 쿼터 초과(429)로 실패한 방이 몇 개나 연달아 나왔는지. */
+        var rateLimitStreak = 0
     }
 
     /**
@@ -231,6 +255,8 @@ class DailyAutoCardScheduler(
     private data class ProcessResult(
         val outcome: AutoCardOutcome,
         val memberId: Long? = null,
+        /** 쿼터 초과(429)로 실패했는가. 배치를 중단할지 판단하는 근거다([RATE_LIMIT_ABORT_STREAK]). */
+        val rateLimited: Boolean = false,
     )
 
     private fun process(conversationId: Long): ProcessResult =
@@ -264,12 +290,16 @@ class DailyAutoCardScheduler(
             cardService.createCard(conversation.memberId, conversationId, emotion = null, summary = conversation.summary)
             ProcessResult(AutoCardOutcome.CREATED, memberId = conversation.memberId)
         } catch (e: BusinessException) {
+            // 실패 종류는 원인 사슬에서 읽는다. 카드 생성 경로가 LLM 실패를 CARD_GENERATION_FAILED 로
+            // 갈아 끼워 올리므로, 에러 코드만으로는 429인지 형식 오류인지 갈리지 않는다.
+            //
             // memberId 는 기록할 대상이 있을 때만 채운다. classify 가 FAILED 를 돌려주면 남길 기록이
-            // 없으므로 비워 둬야 ProcessResult 문서의 불변식(memberId 는 CREATED·ALREADY_HANDLED
-            // 에만 채워진다)이 유지된다.
+            // 없으므로 비워 둬야 ProcessResult 문서의 불변식(memberId 는 CREATED, ALREADY_HANDLED
+            // 에만 채워진다)이 유지된다. 반대로 429 는 실패 쪽에만 붙는다. ALREADY_HANDLED 는
+            // 쿼터와 무관하게 정상으로 끝난 것이라, 여기서 연속 카운트가 이어지면 안 된다.
             when (val outcome = classify(e, conversationId)) {
                 AutoCardOutcome.ALREADY_HANDLED -> ProcessResult(outcome, memberId = conversation.memberId)
-                else -> ProcessResult(outcome)
+                else -> ProcessResult(outcome, rateLimited = e.llmFailureKind() == LlmFailureKind.RATE_LIMITED)
             }
         }
     }
@@ -307,5 +337,21 @@ class DailyAutoCardScheduler(
          * ([AutoCardWindow.REMINDER_MINUTES_BEFORE]).
          */
         private const val CRON = "0 0 ${AutoCardWindow.DAY_BOUNDARY_HOUR} * * *"
+
+        /**
+         * 쿼터 초과(429)로 실패한 방이 이만큼 연달아 나오면 그 회차를 중단한다.
+         *
+         * 방 하나가 429 로 실패했다는 것은 이미 그 방 안에서 재시도를 다 쓰고도 429 였다는 뜻이다
+         * ([com.nexters.gamss.llm.generation.LlmRetryPolicy]). 그런 방이 연달아 나오면 쿼터가 말랐다고
+         * 보고 남은 방은 건드리지 않는다. 계속 돌아봐야 방마다 최악 여섯 번(감정 분류·한 줄 생성 x
+         * 재시도 3)을 마른 쿼터에 더 쏘고 백오프로 8초씩 더 붙잡을 뿐, 결과는 같은 벽이다.
+         *
+         * 중단해도 잃는 것은 하루뿐이다. 손대지 않은 방은 상태가 그대로라
+         * [ConversationCardGenerationService.findAutoCardTargetIds] 대상에 남고 다음 새벽이 이어서 본다.
+         *
+         * **429 만 이렇게 다룬다.** 400 같은 영구 실패는 그 방의 내용 때문일 수 있어, 방 하나 때문에
+         * 나머지를 포기하게 된다. 429 는 쿼터라는 공유 자원의 문제라 방을 가리지 않는다.
+         */
+        private const val RATE_LIMIT_ABORT_STREAK = 3
     }
 }

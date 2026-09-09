@@ -43,7 +43,11 @@ class GeminiEmotionExtractor(
                     buildConfig(llmSettingsService.currentPrompt(PromptType.CARD_EMOTION)),
                 )
             } catch (e: Exception) {
-                throw CardGenerationFailedException("카드 감정 분류 LLM 호출에 실패했습니다.", e)
+                throw CardGenerationFailedException(
+                    "카드 감정 분류 LLM 호출에 실패했습니다.",
+                    e,
+                    kind = GeminiFailureKinds.of(e),
+                )
             }
 
         // 토큰은 파싱 전에 뽑는다 — 이후 파싱이 실패해도 이미 과금된 토큰을 실패 로그에 전달할 수 있게 한다.
@@ -73,6 +77,7 @@ class GeminiEmotionExtractor(
                     cachedTokens,
                     inputTokens,
                     outputTokens,
+                    e.kind,
                 )
             }
         return EmotionExtractionOutput(emotion, usedTokens, cachedTokens, inputTokens, outputTokens)

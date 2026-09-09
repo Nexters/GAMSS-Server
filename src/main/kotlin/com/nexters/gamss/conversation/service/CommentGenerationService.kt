@@ -30,7 +30,7 @@ import org.springframework.stereotype.Service
 import java.time.Instant
 
 /**
- * 선점(CAS) -> LLM 호출+검증(트랜잭션 밖, 최대 2회) -> 저장을 오케스트레이션한다.
+ * 선점(CAS) -> LLM 호출+검증(트랜잭션 밖, 최대 [LlmRetryPolicy.MAX_ATTEMPTS]회) -> 저장을 오케스트레이션한다.
  * 이 클래스 자체는 @Transactional이 아니다 — 세 단계가 각자 다른 트랜잭션 경계(또는 트랜잭션 밖)에
  * 있어야 하기 때문이다(락/트랜잭션 안에 LLM 호출을 넣지 않는다).
  */

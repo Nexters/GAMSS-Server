@@ -55,7 +55,7 @@ class ConversationController(
             "사용자 메시지를 저장하고, 같은 요청 안에서 캐릭터 댓글(일기) 또는 재응답(답글) 생성까지 동기로 " +
                 "처리해 함께 반환합니다(폴링 불필요). conversationId가 없으면 새 채팅방을 만들고, " +
                 "있으면 해당 채팅방에 이어서 저장합니다. 응답의 conversationId로 대화를 이어갈 수 있습니다.\n\n" +
-                "LLM 생성이 재시도(최대 2회) 끝에 실패해도 저장은 유지됩니다 — 이 경우 commentStatus=FAILED, " +
+                "LLM 생성이 재시도(최대 3회) 끝에 실패해도 저장은 유지됩니다 — 이 경우 commentStatus=FAILED, " +
                 "comments는 빈 리스트로 반환되며, 실패한 메시지는 `/messages/comments`류 엔드포인트로 " +
                 "재시도할 수 있습니다.\n\n" +
                 "유저의 일일 토큰 상한(prod 전용)을 넘긴 경우에도 저장은 유지되고 생성만 건너뜁니다 — " +
