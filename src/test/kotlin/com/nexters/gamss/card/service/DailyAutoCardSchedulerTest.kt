@@ -303,6 +303,25 @@ class DailyAutoCardSchedulerTest {
         verify(exactly = 0) { cardCreatedNotifier.notifyCardCreated(any()) }
     }
 
+    /**
+     * ALREADY_HANDLED 는 백오피스에서 "직접 생성"으로 보인다. 진짜 실패(CARD_ALREADY_EXISTS·
+     * CARD_GENERATION_IN_PROGRESS 가 아닌 다른 에러코드)가 이 값으로 새면, 운영자가 장애를 정상
+     * 흐름으로 잘못 읽는다.
+     */
+    @Test
+    fun `다른 실패는 ALREADY_HANDLED 로 기록하지 않는다`() {
+        stubTargets(10L)
+        every { conversationService.endForAutoBatch(10L) } returns conversation()
+        every {
+            cardService.createCard(any(), 10L, any(), any())
+        } throws BusinessException(ErrorCode.CARD_GENERATION_FAILED)
+
+        scheduler.runFor(createdAfter, createdBefore)
+
+        verify(exactly = 0) { notificationLogRecorder.record(any(), any(), any(), any<NotificationOutcome>()) }
+        verify(exactly = 0) { cardCreatedNotifier.notifyCardCreated(any()) }
+    }
+
     @Test
     fun `대상이 없으면 아무것도 하지 않는다`() {
         stubTargets()

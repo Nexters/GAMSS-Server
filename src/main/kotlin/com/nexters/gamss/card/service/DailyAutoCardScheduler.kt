@@ -125,9 +125,13 @@ class DailyAutoCardScheduler(
 
             AutoCardOutcome.ALREADY_HANDLED -> recordAlreadyHandled(conversationId, checkNotNull(result.memberId))
 
-            // SKIPPED_DELETED · WITHDRAWN_MEMBER · FAILED 는 기록하지 않는다. 삭제된 방은 백오피스가
-            // 상태(DELETED)만으로 이미 구분하고, 탈퇴·실패는 이 배치가 아니라 다음 실행이 다시 본다.
-            else -> Unit
+            // 아래 결과는 기록하지 않는다. 삭제된 방은 백오피스가 상태(DELETED)만으로 이미 구분하고,
+            // 탈퇴·실패는 이 배치가 아니라 다음 실행이 다시 본다. 결과가 늘면 여기서 컴파일이 깨져
+            // 기록 여부를 다시 정하게 한다.
+            AutoCardOutcome.SKIPPED_DELETED,
+            AutoCardOutcome.WITHDRAWN_MEMBER,
+            AutoCardOutcome.FAILED,
+            -> Unit
         }
     }
 
@@ -242,9 +246,13 @@ class DailyAutoCardScheduler(
             cardService.createCard(conversation.memberId, conversationId, emotion = null, summary = conversation.summary)
             ProcessResult(AutoCardOutcome.CREATED, memberId = conversation.memberId)
         } catch (e: BusinessException) {
-            // memberId 를 여기서 채워야 ALREADY_HANDLED 를 그 방·회원 이름으로 기록할 수 있다
-            // (classify 는 outcome 만 가른다).
-            ProcessResult(classify(e, conversationId), memberId = conversation.memberId)
+            // memberId 는 기록할 대상이 있을 때만 채운다. classify 가 FAILED 를 돌려주면 남길 기록이
+            // 없으므로 비워 둬야 ProcessResult 문서의 불변식(memberId 는 CREATED·ALREADY_HANDLED
+            // 에만 채워진다)이 유지된다.
+            when (val outcome = classify(e, conversationId)) {
+                AutoCardOutcome.ALREADY_HANDLED -> ProcessResult(outcome, memberId = conversation.memberId)
+                else -> ProcessResult(outcome)
+            }
         }
     }
 
