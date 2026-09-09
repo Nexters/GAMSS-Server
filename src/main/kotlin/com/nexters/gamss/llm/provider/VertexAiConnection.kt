@@ -35,8 +35,13 @@ class VertexAiConnection(
         credentials()
     }
 
-    /** 값이 있는지가 아니라 실제로 읽히는지까지 본다 — 깨진 키로 전환하면 다음 생성부터 전부 죽는다. */
-    private fun credentials(): GoogleCredentials {
+    /**
+     * 값이 있는지가 아니라 실제로 읽히는지까지 본다 - 깨진 키로 전환하면 다음 생성부터 전부 죽는다.
+     *
+     * private 이 아니라 internal 인 것은 테스트가 결과 자격증명을 직접 보기 위해서다. 공백 제거와
+     * createScoped 는 빠뜨려도 ensureUsable 이 그대로 통과해, 배포 후 첫 생성에서야 드러난다.
+     */
+    internal fun credentials(): GoogleCredentials {
         val encoded = required(properties.credentialsBase64, "gemini.vertex.credentials-base64")
         // base64 는 76자마다 줄을 바꾸는 구현이 있어 개행이 섞여 들어온다.
         val decoded =
