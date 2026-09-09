@@ -216,7 +216,7 @@ const PROVIDERS: Record<LlmProvider, { label: string; hint: string }> = {
   },
 }
 
-function ProviderSection() {
+function ProviderSection({ onSwitched }: { onSwitched: (provider: LlmProvider) => void }) {
   const { data, isLoading, isError, refetch } = useCustom<ProviderSetting>({
     url: '/api/admin/llm-settings/provider',
     method: 'get',
@@ -235,8 +235,9 @@ function ProviderSection() {
       initialized.current = true
       setProvider(settings.provider)
       setSavedProvider(settings.provider)
+      onSwitched(settings.provider)
     }
-  }, [settings])
+  }, [settings, onSwitched])
 
   const dirty = provider !== savedProvider
 
@@ -252,6 +253,8 @@ function ProviderSection() {
           setError('')
           setFlash(true)
           window.setTimeout(() => setFlash(false), 2500)
+          // 선택 가능한 모델이 경로마다 다르다. 모델 목록을 다시 받게 알린다.
+          onSwitched(provider)
         },
         // 인증 설정이 없는 경로로 전환하면 서버가 이유를 담아 400을 준다. 그대로 보여준다.
         onError: (e) => {
@@ -271,7 +274,7 @@ function ProviderSection() {
         {savedProvider && (
           <span className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/10">
             <span className="size-1.5 rounded-full bg-emerald-500" />
-            적용 중 · {PROVIDERS[savedProvider].label}
+            적용 중 · {PROVIDERS[savedProvider]?.label ?? savedProvider}
           </span>
         )}
       </div>
@@ -306,7 +309,7 @@ function ProviderSection() {
             {error && <span className="text-sm text-destructive">{error}</span>}
           </div>
           <p className="text-xs text-muted-foreground">
-            {PROVIDERS[provider].hint} 모델·프롬프트 설정은 경로와 무관하게 그대로 적용됩니다.
+            {PROVIDERS[provider]?.hint} 모델·프롬프트 설정은 경로와 무관하게 그대로 적용됩니다.
             {dirty && <span className="ml-1 font-medium text-foreground">저장해야 전환됩니다.</span>}
           </p>
         </>
@@ -444,14 +447,17 @@ function PromptSection() {
 }
 
 export function LlmSettingsPage() {
+  // 경로가 바뀌면 ModelSection을 다시 마운트해 그 경로의 모델 목록을 받는다.
+  const [provider, setProvider] = useState<LlmProvider | ''>('')
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="LLM 설정"
         description="호출 경로·모델은 앱 전체 공통, 프롬프트는 타입별로 수정하면 재배포 없이 다음 생성부터 반영됩니다."
       />
-      <ProviderSection />
-      <ModelSection />
+      <ProviderSection onSwitched={setProvider} />
+      <ModelSection key={provider} />
       <PromptSection />
     </div>
   )
