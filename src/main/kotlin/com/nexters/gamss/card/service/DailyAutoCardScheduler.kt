@@ -126,8 +126,18 @@ class DailyAutoCardScheduler(
             AutoCardOutcome.ALREADY_HANDLED -> recordAlreadyHandled(conversationId, checkNotNull(result.memberId))
 
             // 아래 결과는 기록하지 않는다. 삭제된 방은 백오피스가 상태(DELETED)만으로 이미 구분하고,
-            // 탈퇴·실패는 이 배치가 아니라 다음 실행이 다시 본다. 결과가 늘면 여기서 컴파일이 깨져
-            // 기록 여부를 다시 정하게 한다.
+            // 실패는 카드 생성 상태가 FAILED 로 되돌아가 다음 실행이 다시 본다.
+            //
+            // 탈퇴는 사정이 다르다. 다음 실행에서도 결론이 안 바뀐다. endForAutoBatch 는 status 만
+            // 바꿔 cardGenerationStatus 가 NONE 으로 남고, findAutoCardTargetIds 는 DELETED 가
+            // 아니면서 DONE 이 아닌 방을 뽑으므로 이 방은 매일 다시 대상이 된다. MemberService
+            // .getById 도 탈퇴 회원을 그대로 돌려줘서 매번 같은 WITHDRAWN_MEMBER 로 끝난다.
+            // 그래도 기록하지 않는 것은, NotificationLog 가 회차마다 행을 새로 쌓기만 해
+            // (NotificationLogRecorder 에 중복 제거가 없다) 이 방 하나가 매일 한 줄씩 늘기 때문이다.
+            // 대신 백오피스 표에서 "배치가 봤지만 할 일이 없었다"가 계속 "대상 아님"으로 보이는
+            // 것은 감수한다.
+            //
+            // 결과가 늘면 여기서 컴파일이 깨져 기록 여부를 다시 정하게 한다.
             AutoCardOutcome.SKIPPED_DELETED,
             AutoCardOutcome.WITHDRAWN_MEMBER,
             AutoCardOutcome.FAILED,
