@@ -41,7 +41,9 @@ const STATUS_META: Record<ConversationUsage['status'], { label: string; variant:
  * 기기 없음(알림 끔)과 건너뜀은 실패가 아니므로 실패와 같은 색으로 그리면 대응할 것이 묻힌다.
  * ALREADY_HANDLED 는 배치가 이 방을 대상으로 잡아 처리하려 했지만, 그사이 사용자가 직접
  * 종료+카드 생성을 먼저 끝내 놓은 경우다 - 배치가 실제로 봤다는 사실이 로그에 남은 값이라, 프론트가
- * status/cardCreated 로 추측하는 값(NOT_TARGET_META, notTargetCardLabel)보다 신뢰도가 높다.
+ * status/cardCreated 로 추측하는 값(NOT_TARGET_META, notTargetCardLabel)보다 신뢰도가 높다. 라벨
+ * 텍스트도 "직접 생성"(확인된 사실)과 "직접 생성 추정"(추측)으로 갈라, 툴팁을 열지 않아도
+ * 신뢰도 차이가 보이게 한다.
  * 기록이 아예 없으면(null) 그 회차에 배치가 이 방을 보지도 않았다는 뜻인데, 이유가 갈린다 - 사용자가
  * 이미 직접 처리해서 대상이 아니게 된 경우(직접 종료·직접 생성)와, 순수하게 시간대 밖이라 처음부터
  * 대상이 아니었던 경우(대상 아님)를 구분해서 보여준다. 빈칸(-) 하나로 두면 기기 없음과도,
@@ -62,27 +64,51 @@ const NOTIFICATION_META: Record<NotificationOutcome, { label: string; variant: '
 const NOT_TARGET_META = { label: '대상 아님', title: '배치가 이 방을 이 회차의 대상으로 보지 않았습니다(시간대 밖 생성 등)' }
 const DELETED_META = { label: '삭제됨', title: '삭제된 방이라 알림 결과가 더 이상 의미가 없습니다' }
 
-/** 리마인더가 뜨기 전에 사용자가 이미 대화를 직접 종료해서 알릴 필요가 없었던 경우다. */
-function notTargetReminderLabel(status: ConversationUsage['status']): string | undefined {
-  return status === 'ENDED' ? '직접 종료' : undefined
+/**
+ * 리마인더(04:30)는 그 시점에 이미 존재하는 방만 조회한다. 04:30~05:00 사이에 생성된 방은 조회
+ * 시점에 아직 없어 리마인더 대상일 수 없었는데도, 05:00 배치가 곧바로 자동 종료시킨다
+ * (AutoCardWindow.DAY_BOUNDARY_HOUR). 이 방은 reminderNotification 이 null 이면서 상태만 ENDED가
+ * 되므로, 생성 시각이 이 틈에 걸리면 "사용자가 직접 종료했다"고 단정할 수 없다.
+ */
+function isCreatedInReminderGap(createdAt: string): boolean {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Seoul',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date(createdAt))
+  const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? 0) % 24
+  const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? 0)
+  const minutesSinceMidnight = hour * 60 + minute
+  return minutesSinceMidnight >= 4 * 60 + 30 && minutesSinceMidnight < 5 * 60
 }
 
-function notTargetReminderTitle(status: ConversationUsage['status']): string | undefined {
-  return status === 'ENDED' ? '리마인더가 뜨기 전에 사용자가 이미 대화를 직접 종료해서 알릴 필요가 없었습니다' : undefined
+/** 리마인더가 뜨기 전에 사용자가 이미 대화를 직접 종료해서 알릴 필요가 없었던 경우다. */
+function notTargetReminderLabel(status: ConversationUsage['status'], createdAt: string): string | undefined {
+  return status === 'ENDED' && !isCreatedInReminderGap(createdAt) ? '직접 종료' : undefined
+}
+
+function notTargetReminderTitle(status: ConversationUsage['status'], createdAt: string): string | undefined {
+  return status === 'ENDED' && !isCreatedInReminderGap(createdAt)
+    ? '리마인더가 뜨기 전에 사용자가 이미 대화를 직접 종료해서 알릴 필요가 없었습니다'
+    : undefined
 }
 
 /**
  * 카드가 있는데 배치 알림 기록이 없다면, 배치가 이 방을 아예 보지 못한 채로(시간대 밖 생성 등)
  * 사용자가 직접 만든 것이다. 배치가 실제로 이 방을 봤는데 사용자가 먼저 끝낸 경우는 이제
  * ALREADY_HANDLED 로 기록이 남으므로(NOTIFICATION_META), 이 추측은 기록이 아예 없는 나머지
- * 경우에만 쓰인다.
+ * 경우에만 쓰인다. ALREADY_HANDLED 와 텍스트를 다르게 둬서, 배치가 실제로 확인한 값과 프론트가
+ * 추측한 값을 라벨만 보고도 구분할 수 있게 한다.
  */
 function notTargetCardLabel(cardCreated: boolean): string | undefined {
-  return cardCreated ? '직접 생성' : undefined
+  return cardCreated ? '직접 생성 추정' : undefined
 }
 
 function notTargetCardTitle(cardCreated: boolean): string | undefined {
-  return cardCreated ? '배치가 이 방을 보기 전에 사용자가 앱에서 직접 종료하고 카드를 생성했습니다' : undefined
+  return cardCreated
+    ? '배치 기록은 없지만 카드가 있어, 배치가 보기 전에 사용자가 직접 종료하고 카드를 만들었을 것으로 추정합니다(확인된 사실 아님)'
+    : undefined
 }
 
 /**
@@ -214,8 +240,8 @@ export function UsageTable() {
                       <NotificationCell
                         outcome={row.reminderNotification}
                         deleted={row.status === 'DELETED'}
-                        notTargetLabel={notTargetReminderLabel(row.status)}
-                        notTargetTitle={notTargetReminderTitle(row.status)}
+                        notTargetLabel={notTargetReminderLabel(row.status, row.createdAt)}
+                        notTargetTitle={notTargetReminderTitle(row.status, row.createdAt)}
                       />
                     </TableCell>
                     <TableCell className="text-center">
