@@ -80,7 +80,7 @@ fcm:
 gemini:
   api-key: ${GEMINI_API_KEY}
   model: gemini-3.1-flash-lite
-  request-timeout: PT30S
+  request-timeout: PT15S
   # 모델별 토큰 요금(USD, 100만 토큰당, 글로벌 기준). Gemini는 요금 API가 없어 문서 기준으로 둔다
   # (2026-07, ai.google.dev/gemini-api/docs/pricing). 캐시 입력은 할인가, 출력은 캐시 안 됨.
   # 새 모델을 쓰면 항목만 추가하면 비용 계산이 자동 반영된다. 키에 점(.)이 있어 [ ] 로 감싼다.
