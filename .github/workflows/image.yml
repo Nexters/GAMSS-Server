@@ -191,6 +191,7 @@ jobs:
           DATA_ENCRYPTION_KEY=${{ secrets.DATA_ENCRYPTION_KEY }}
           SEARCH_INDEX_KEY=${{ secrets.SEARCH_INDEX_KEY }}
           GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+          GEMINI_VERTEX_CREDENTIALS_BASE64=${{ secrets.GEMINI_VERTEX_CREDENTIALS_BASE64 }}
           MYSQL_EXPORTER_PASSWORD=${{ secrets.MYSQL_EXPORTER_PASSWORD }}
           ADMIN_EMAILS=${{ vars.ADMIN_EMAILS }}
           EOF
