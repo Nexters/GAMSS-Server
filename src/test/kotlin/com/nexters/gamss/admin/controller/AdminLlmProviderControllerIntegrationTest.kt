@@ -47,7 +47,8 @@ class AdminLlmProviderControllerIntegrationTest {
             }.andExpect {
                 status { isOk() }
                 jsonPath("$.data.provider") { value("AI_STUDIO") }
-                jsonPath("$.data.availableProviders") { value(listOf("AI_STUDIO", "VERTEX_AI")) }
+                jsonPath("$.data.availableProviders[0]") { value("AI_STUDIO") }
+                jsonPath("$.data.availableProviders[1]") { value("VERTEX_AI") }
             }
     }
 

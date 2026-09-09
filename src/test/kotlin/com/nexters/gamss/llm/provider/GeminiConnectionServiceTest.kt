@@ -5,6 +5,7 @@ import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import io.mockk.every
 import io.mockk.mockk
+import org.springframework.data.domain.Sort
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -53,7 +54,7 @@ class GeminiConnectionServiceTest {
 
     private fun givenRow(provider: LlmProvider): LlmProviderSetting {
         val row = LlmProviderSetting(provider)
-        every { repository.findAll() } returns listOf(row)
+        every { repository.findAll(any<Sort>()) } returns listOf(row)
         return row
     }
 
