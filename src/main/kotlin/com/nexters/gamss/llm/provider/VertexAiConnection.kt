@@ -45,7 +45,10 @@ class VertexAiConnection(
                 throw BusinessException(ErrorCode.INVALID_INPUT, "Vertex AI 서비스 계정 키가 base64 가 아닙니다: ${e.message}")
             }
         return try {
-            GoogleCredentials.fromStream(decoded.inputStream())
+            // fromStream 이 돌려주는 자격증명은 스코프가 비어 있고, SDK 는 직접 넘긴 자격증명에
+            // 스코프를 채워주지 않는다(ApplicationDefault 경로에서만 채운다). 그대로 두면 scope 없는
+            // JWT 로 토큰을 요청해 인증이 거부된다.
+            GoogleCredentials.fromStream(decoded.inputStream()).createScoped(CLOUD_PLATFORM_SCOPE)
         } catch (e: IOException) {
             throw BusinessException(ErrorCode.INVALID_INPUT, "Vertex AI 서비스 계정 키를 읽을 수 없습니다: ${e.message}")
         }
@@ -57,4 +60,8 @@ class VertexAiConnection(
     ): String =
         value?.takeIf { it.isNotBlank() }
             ?: throw BusinessException(ErrorCode.INVALID_INPUT, "Vertex AI 설정이 없습니다: $name")
+
+    companion object {
+        private const val CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform"
+    }
 }
