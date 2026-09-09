@@ -5,8 +5,6 @@ import jakarta.persistence.Entity
 import jakarta.persistence.EntityListeners
 import jakarta.persistence.EnumType
 import jakarta.persistence.Enumerated
-import jakarta.persistence.GeneratedValue
-import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
 import jakarta.persistence.Table
 import org.springframework.data.annotation.LastModifiedDate
@@ -22,9 +20,9 @@ class LlmProviderSetting(
     @Column(name = "provider", length = 20, nullable = false)
     var provider: LlmProvider,
 ) {
+    /** 단일 행이라 채번하지 않는다. DB 가 id = 1 을 강제한다(V37). */
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    val id: Long = 0L
+    val id: Long = SINGLE_ROW_ID
 
     @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
@@ -33,5 +31,9 @@ class LlmProviderSetting(
 
     fun update(provider: LlmProvider) {
         this.provider = provider
+    }
+
+    private companion object {
+        const val SINGLE_ROW_ID = 1L
     }
 }
