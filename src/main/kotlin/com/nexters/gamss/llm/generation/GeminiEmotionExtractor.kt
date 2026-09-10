@@ -10,7 +10,6 @@ import com.nexters.gamss.llm.config.GeminiProperties
 import com.nexters.gamss.llm.error.CardGenerationFailedException
 import com.nexters.gamss.llm.prompt.PromptProvider
 import com.nexters.gamss.llm.prompt.PromptType
-import com.nexters.gamss.llm.provider.GeminiConnectionService
 import com.nexters.gamss.llm.settings.LlmSettingsService
 import org.springframework.stereotype.Component
 import tools.jackson.core.JacksonException
@@ -28,25 +27,19 @@ import tools.jackson.databind.json.JsonMapper
 @Component
 class GeminiEmotionExtractor(
     private val properties: GeminiProperties,
-    private val connections: GeminiConnectionService,
+    private val geminiCaller: GeminiCaller,
     private val promptProvider: PromptProvider,
     private val llmSettingsService: LlmSettingsService,
     private val jsonMapper: JsonMapper,
 ) : EmotionExtractor {
     override fun extract(userMessages: List<String>): EmotionExtractionOutput {
         val response =
-            try {
-                connections.active().client().models.generateContent(
-                    llmSettingsService.currentModel(),
-                    promptProvider.buildCardEmotionUserContent(userMessages),
-                    buildConfig(llmSettingsService.currentPrompt(PromptType.CARD_EMOTION)),
-                )
-            } catch (e: Exception) {
-                throw CardGenerationFailedException(
-                    "카드 감정 분류 LLM 호출에 실패했습니다.",
-                    e,
-                    kind = GeminiFailureKinds.of(e),
-                )
+            geminiCaller.call(
+                llmSettingsService.currentModel(),
+                promptProvider.buildCardEmotionUserContent(userMessages),
+                buildConfig(llmSettingsService.currentPrompt(PromptType.CARD_EMOTION)),
+            ) { cause, kind ->
+                CardGenerationFailedException("카드 감정 분류 LLM 호출에 실패했습니다.", cause, kind = kind)
             }
 
         // 토큰은 파싱 전에 뽑는다 — 이후 파싱이 실패해도 이미 과금된 토큰을 실패 로그에 전달할 수 있게 한다.

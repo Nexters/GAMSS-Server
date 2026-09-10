@@ -14,7 +14,6 @@ import com.nexters.gamss.llm.prompt.CommentPromptContext
 import com.nexters.gamss.llm.prompt.PromptCharacterId
 import com.nexters.gamss.llm.prompt.PromptProvider
 import com.nexters.gamss.llm.prompt.PromptType
-import com.nexters.gamss.llm.provider.GeminiConnectionService
 import com.nexters.gamss.llm.settings.LlmSettingsView
 import com.nexters.gamss.llm.settings.SystemPromptResolver
 import org.springframework.stereotype.Component
@@ -29,7 +28,7 @@ import org.springframework.stereotype.Component
 @Component
 class GeminiCommentGenerator(
     private val properties: GeminiProperties,
-    private val connections: GeminiConnectionService,
+    private val geminiCaller: GeminiCaller,
     private val promptProvider: PromptProvider,
     private val commentFeedJsonParser: CommentFeedJsonParser,
     private val replyJsonParser: ReplyJsonParser,
@@ -54,14 +53,12 @@ class GeminiCommentGenerator(
         settings: LlmSettingsView,
     ): CommentGenerationOutput {
         val response =
-            try {
-                connections.active().client().models.generateContent(
-                    settings.model,
-                    promptProvider.buildUserContent(context),
-                    buildConfig(settings.systemPrompt, commentFeedSchema()),
-                )
-            } catch (e: Exception) {
-                throw CommentGenerationFailedException("LLM 호출에 실패했습니다.", e, kind = GeminiFailureKinds.of(e))
+            geminiCaller.call(
+                settings.model,
+                promptProvider.buildUserContent(context),
+                buildConfig(settings.systemPrompt, commentFeedSchema()),
+            ) { cause, kind ->
+                CommentGenerationFailedException("LLM 호출에 실패했습니다.", cause, kind = kind)
             }
 
         // 토큰은 파싱 전에 뽑는다 — 이후 파싱이 실패해도 이미 과금된 토큰을 실패 로그에 전달할 수 있게 한다.
@@ -120,14 +117,12 @@ class GeminiCommentGenerator(
         settings: LlmSettingsView,
     ): ReplyGenerationOutput {
         val response =
-            try {
-                connections.active().client().models.generateContent(
-                    settings.model,
-                    promptProvider.buildReplyUserContent(diaryContent, characterId, characterComment, userReply),
-                    buildConfig(settings.systemPrompt, replySchema()),
-                )
-            } catch (e: Exception) {
-                throw CommentGenerationFailedException("LLM 호출에 실패했습니다.", e, kind = GeminiFailureKinds.of(e))
+            geminiCaller.call(
+                settings.model,
+                promptProvider.buildReplyUserContent(diaryContent, characterId, characterComment, userReply),
+                buildConfig(settings.systemPrompt, replySchema()),
+            ) { cause, kind ->
+                CommentGenerationFailedException("LLM 호출에 실패했습니다.", cause, kind = kind)
             }
 
         val usedTokens = response.usageMetadata().flatMap { it.totalTokenCount() }.orElse(0)
