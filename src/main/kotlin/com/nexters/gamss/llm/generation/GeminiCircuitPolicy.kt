@@ -4,7 +4,6 @@ import com.nexters.gamss.llm.error.LlmFailureKind
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig
 import java.time.Clock
 import java.time.Duration
-import java.util.concurrent.TimeUnit
 
 /**
  * Gemini **전송 호출 하나**를 감싸는 서킷의 임계치와 집계 대상이다. 업스트림이 죽었을 때 매 호출이
@@ -48,16 +47,16 @@ internal object GeminiCircuitPolicy {
     /**
      * 서킷 설정 하나를 만든다.
      *
-     * [clock]을 받는 이유는 테스트 때문이다. 라이브러리 기본값은 경과 시간을 `System.nanoTime()`으로
-     * 재서 주입한 시계를 무시하므로, `currentTimestampFunction`까지 시계에서 읽도록 함께 바꿔야
-     * 가짜 시계가 실제로 먹는다. 그래야 open → half-open 회복을 30초 자지 않고 검증할 수 있다
+     * [clock]을 받는 이유는 테스트 때문이다. 오픈 상태의 만료는 라이브러리가 `clock.instant()` 로
+     * 판단하므로, 시계를 갈아 끼우면 open → half-open 회복을 30초 자지 않고 검증할 수 있다
      * ([LlmRetryExecutor]가 [RetrySleeper]를 받는 것과 같은 이유다).
      *
      * 프로덕션은 기본값(시스템 시계)을 쓴다. 임계치는 테스트와 프로덕션이 같은 것을 쓰게 해서, 테스트가
      * 검증하는 값과 실제로 도는 값이 갈라지지 않게 한다.
      *
-     * 대신 프로덕션의 대기 시간도 단조 시계가 아니라 벽시계로 재게 된다. NTP 가 시계를 뒤로 돌리면
-     * 그만큼 오픈 상태가 길어지는데, 30초짜리 대기라 실질적인 영향은 없다고 보고 택했다.
+     * 그래서 오픈 유지 시간은 단조 시계가 아니라 벽시계로 잰다. 이건 라이브러리 기본 동작이고, NTP 가
+     * 시계를 보정하면 그만큼 30초가 늘거나 줄 수 있다. 단조 시계를 쓰려면 `nanoTime` 기반 [Clock] 을
+     * 따로 구현해 넣어야 하는데, 30초짜리 창 하나 때문에 들일 값은 아니라고 봤다.
      */
     fun config(clock: Clock = Clock.systemUTC()): CircuitBreakerConfig =
         CircuitBreakerConfig
@@ -72,7 +71,6 @@ internal object GeminiCircuitPolicy {
             // 다음 호출을 기다려 전이하는 기본 동작이면 서킷이 열린 채로 하루를 넘긴다.
             .automaticTransitionFromOpenToHalfOpenEnabled(true)
             .clock(clock)
-            .currentTimestampFunction({ it.millis() }, TimeUnit.MILLISECONDS)
             .ignoreException(::tellsNothingAboutAvailability)
             .build()
 
