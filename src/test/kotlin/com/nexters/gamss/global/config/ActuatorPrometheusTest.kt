@@ -56,4 +56,18 @@ class ActuatorPrometheusTest {
                 content { string(org.hamcrest.Matchers.containsString("gamss_domain_metrics_last_success_timestamp_seconds")) }
             }
     }
+
+    @Test
+    fun `Gemini 호출 경로별 서킷 상태가 노출된다`() {
+        // 서킷이 여닫히는 것은 로그를 뒤지지 않으면 보이지 않는다. 기동 직후부터 두 경로가 다 보여야
+        // 첫 장애 전에도 대시보드가 비어 있지 않다.
+        mockMvc
+            .get("/actuator/prometheus")
+            .andExpect {
+                status { isOk() }
+                content { string(org.hamcrest.Matchers.containsString("resilience4j_circuitbreaker_state")) }
+                content { string(org.hamcrest.Matchers.containsString("gemini-ai-studio")) }
+                content { string(org.hamcrest.Matchers.containsString("gemini-vertex-ai")) }
+            }
+    }
 }
