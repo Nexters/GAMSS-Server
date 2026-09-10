@@ -12,6 +12,7 @@ import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
+import kotlin.test.assertTrue
 
 /**
  * 모니터링 서버가 긁어가는 메트릭 엔드포인트가 열려 있는지 고정한다.
@@ -61,13 +62,19 @@ class ActuatorPrometheusTest {
     fun `Gemini 호출 경로별 서킷 상태가 노출된다`() {
         // 서킷이 여닫히는 것은 로그를 뒤지지 않으면 보이지 않는다. 기동 직후부터 두 경로가 다 보여야
         // 첫 장애 전에도 대시보드가 비어 있지 않다.
-        mockMvc
-            .get("/actuator/prometheus")
-            .andExpect {
-                status { isOk() }
-                content { string(org.hamcrest.Matchers.containsString("resilience4j_circuitbreaker_state")) }
-                content { string(org.hamcrest.Matchers.containsString("gemini-ai-studio")) }
-                content { string(org.hamcrest.Matchers.containsString("gemini-vertex-ai")) }
-            }
+        val body =
+            mockMvc
+                .get("/actuator/prometheus")
+                .andExpect { status { isOk() } }
+                .andReturn()
+                .response
+                .contentAsString
+
+        // 메트릭 이름과 경로 이름을 따로 찾으면, 다른 메트릭에만 그 라벨이 붙어 있어도 통과한다.
+        // 대시보드가 읽는 것은 "상태 메트릭 + 경로 라벨"이 한 행에 있는 시계열이라 그 형태로 확인한다.
+        listOf("gemini-ai-studio", "gemini-vertex-ai").forEach { name ->
+            val series = Regex("""resilience4j_circuitbreaker_state\{[^}]*name="$name"[^}]*}""")
+            assertTrue(series.containsMatchIn(body), "서킷 상태 메트릭에 $name 시계열이 없습니다")
+        }
     }
 }
