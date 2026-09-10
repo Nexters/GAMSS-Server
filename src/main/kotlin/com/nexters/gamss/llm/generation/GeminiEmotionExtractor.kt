@@ -33,11 +33,26 @@ class GeminiEmotionExtractor(
     private val jsonMapper: JsonMapper,
 ) : EmotionExtractor {
     override fun extract(userMessages: List<String>): EmotionExtractionOutput {
+        // 운영 중 백오피스에서 바꾼 값을 매 호출 반영한다(재배포 불필요).
+        // 설정 조회(DB)는 전송 호출보다 먼저 일어나 [GeminiCaller] 의 예외 번역이 닿지 않으므로, 여기서
+        // 직접 종류를 실어 보낸다. 인자 자리에 두면 원래 예외가 그대로 빠져나가 재시도 대상 판정
+        // ([LlmRetryExecutor] 의 `retryOn`)에 걸리지 않고, 재시도도 503 계약도 함께 사라진다.
+        val (model, systemPrompt) =
+            try {
+                llmSettingsService.currentModel() to llmSettingsService.currentPrompt(PromptType.CARD_EMOTION)
+            } catch (e: Exception) {
+                throw CardGenerationFailedException(
+                    "카드 감정 분류 LLM 호출에 실패했습니다.",
+                    e,
+                    kind = GeminiFailureKinds.of(e),
+                )
+            }
+
         val response =
             geminiCaller.call(
-                llmSettingsService.currentModel(),
+                model,
                 promptProvider.buildCardEmotionUserContent(userMessages),
-                buildConfig(llmSettingsService.currentPrompt(PromptType.CARD_EMOTION)),
+                buildConfig(systemPrompt),
             ) { cause, kind ->
                 CardGenerationFailedException("카드 감정 분류 LLM 호출에 실패했습니다.", cause, kind = kind)
             }
