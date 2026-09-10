@@ -4,7 +4,6 @@ import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import jakarta.persistence.Column
 import jakarta.persistence.Embeddable
-import java.text.BreakIterator
 
 /**
  * 회원 닉네임 값 객체. 앞뒤 공백을 정리하고 길이·금칙어 불변식을 스스로 보장한다.
@@ -29,27 +28,13 @@ class Nickname(
         // 컬럼(varchar)이 세는 단위인 코드 포인트로 방어한다 - 병적인 초장문 ZWJ 조합이
         // 그래핌 검사를 통과해도 컬럼을 넘으면 거부한다. UTF-16 유닛으로 세면 조합 이모지
         // (그래핌당 유닛 11개 등)가 컬럼에는 들어가는데도 과하게 거부된다.
-        if (graphemeCount(value) in MIN_LENGTH..MAX_LENGTH && value.codePointCount(0, value.length) <= COLUMN_LENGTH) {
+        if (GraphemeText.count(value) in MIN_LENGTH..MAX_LENGTH && value.codePointCount(0, value.length) <= COLUMN_LENGTH) {
             return
         }
         throw BusinessException(
             ErrorCode.INVALID_NICKNAME,
             "닉네임은 ${MIN_LENGTH}자 이상 ${MAX_LENGTH}자 이하여야 합니다.",
         )
-    }
-
-    /**
-     * 사용자가 보는 글자 수(그래핌 클러스터). [String.length]는 UTF-16 유닛 수라 이모지가
-     * 2자로 계산되고, 코드 포인트로 세도 피부톤·ZWJ 조합 이모지는 여러 자로 계산된다.
-     */
-    private fun graphemeCount(value: String): Int {
-        val iterator = BreakIterator.getCharacterInstance()
-        iterator.setText(value)
-        var count = 0
-        while (iterator.next() != BreakIterator.DONE) {
-            count++
-        }
-        return count
     }
 
     private fun validateBannedWord(value: String) {
