@@ -20,6 +20,7 @@ import org.springframework.stereotype.Component
 @Component
 class GeminiCaller(
     private val connections: GeminiConnectionService,
+    private val circuitBreakers: GeminiCircuitBreakers,
 ) {
     /**
      * [userContent] 를 [model] 에 보내고 응답을 그대로 돌려준다.
@@ -35,11 +36,15 @@ class GeminiCaller(
         wrapFailure: (cause: Throwable, kind: LlmFailureKind) -> E,
     ): GenerateContentResponse =
         try {
-            connections
-                .active()
-                .client()
-                .models
-                .generateContent(model, userContent, config)
+            // 서킷이 열려 있어도 경로는 먼저 물어야 한다 - 서킷이 경로별이라 어느 서킷을 볼지가 여기서
+            // 정해지기 때문이다. 조회는 DB 한 번이고 클라이언트는 경로가 한 번 만들어 재사용한다.
+            val connection = connections.active()
+            val client = connection.client()
+
+            // 서킷이 감싸는 것은 전송 호출 하나다. 응답 파싱·검증은 부르는 쪽에 남는다.
+            circuitBreakers.of(connection.provider).executeSupplier {
+                client.models.generateContent(model, userContent, config)
+            }
         } catch (e: Exception) {
             throw wrapFailure(e, GeminiFailureKinds.of(e))
         }
