@@ -11,7 +11,7 @@ data class MemberResponse(
     val email: String?,
     @field:Schema(description = "이름 (소셜 제공자가 제공하지 않으면 null)", example = "홍길동")
     val name: String?,
-    @field:Schema(description = "닉네임 (탈퇴 등으로 비워진 경우가 아니면 항상 값이 있다)", example = "바다")
+    @field:Schema(description = "닉네임 (탈퇴로 비워졌거나, 이 정책 이전에 가입해 미설정으로 남은 기존 회원이면 null)", example = "바다")
     val nickname: String?,
     @field:Schema(description = "회원 상태", example = "ACTIVE", allowableValues = ["ACTIVE", "WITHDRAWN"])
     val status: String,
