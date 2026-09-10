@@ -18,5 +18,4 @@ export const PLAY_STORE_URL =
  * **심사가 끝나면 이 값을 `null` 로 바꾸면 된다** — 버튼·구조화 데이터·공유 페이지의 iOS 이동이
  * 한꺼번에 앱스토어로 돌아온다. 세 파일을 각각 되짚지 않으려고 한 곳에 모아 뒀다.
  */
-export const IOS_PENDING_FORM_URL: string | null =
-  "https://docs.google.com/forms/d/e/1FAIpQLSfZiJ64Pkc5DqMYwyOT_0tdR0miCQgLzBUc0dX4xTTOopTJdw/viewform";
+export const IOS_PENDING_FORM_URL: string | null = null;

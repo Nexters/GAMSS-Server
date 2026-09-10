@@ -1,6 +1,5 @@
 package com.nexters.gamss.llm.generation
 
-import com.google.genai.Client
 import com.google.genai.types.Content
 import com.google.genai.types.GenerateContentConfig
 import com.google.genai.types.HttpOptions
@@ -8,12 +7,14 @@ import com.google.genai.types.Part
 import com.google.genai.types.Schema
 import com.nexters.gamss.llm.config.GeminiProperties
 import com.nexters.gamss.llm.error.CommentGenerationFailedException
+import com.nexters.gamss.llm.error.LlmFailureKind
 import com.nexters.gamss.llm.parsing.CommentFeedJsonParser
 import com.nexters.gamss.llm.parsing.ReplyJsonParser
 import com.nexters.gamss.llm.prompt.CommentPromptContext
 import com.nexters.gamss.llm.prompt.PromptCharacterId
 import com.nexters.gamss.llm.prompt.PromptProvider
 import com.nexters.gamss.llm.prompt.PromptType
+import com.nexters.gamss.llm.provider.GeminiConnectionService
 import com.nexters.gamss.llm.settings.LlmSettingsView
 import com.nexters.gamss.llm.settings.SystemPromptResolver
 import org.springframework.stereotype.Component
@@ -28,13 +29,12 @@ import org.springframework.stereotype.Component
 @Component
 class GeminiCommentGenerator(
     private val properties: GeminiProperties,
+    private val connections: GeminiConnectionService,
     private val promptProvider: PromptProvider,
     private val commentFeedJsonParser: CommentFeedJsonParser,
     private val replyJsonParser: ReplyJsonParser,
     private val systemPromptResolver: SystemPromptResolver,
 ) : CommentGenerator {
-    private val client: Client by lazy { Client.builder().apiKey(properties.apiKey).build() }
-
     override fun generateComment(context: CommentPromptContext): CommentGenerationOutput {
         // 운영 중 백오피스에서 바꾼 값을 매 호출 반영한다(재배포 불필요).
         // 설정 조회(DB) 실패도 잡아 재시도·FAILED 계약을 유지한다(500·PENDING 고착 방지).
@@ -42,7 +42,9 @@ class GeminiCommentGenerator(
             try {
                 systemPromptResolver.resolve(PromptType.COMMENT)
             } catch (e: Exception) {
-                throw CommentGenerationFailedException("LLM 호출에 실패했습니다.", e)
+                // 설정 조회(DB) 실패다. 일시적 장애로 보고 쉬었다 다시 부른다 — 기본값(검증 실패)에 맡기면
+                // 간격 없이 곧바로 DB를 다시 두드린다.
+                throw CommentGenerationFailedException("LLM 호출에 실패했습니다.", e, kind = LlmFailureKind.CALL)
             }
         return generateComment(context, settings)
     }
@@ -53,13 +55,13 @@ class GeminiCommentGenerator(
     ): CommentGenerationOutput {
         val response =
             try {
-                client.models.generateContent(
+                connections.active().client().models.generateContent(
                     settings.model,
                     promptProvider.buildUserContent(context),
                     buildConfig(settings.systemPrompt, commentFeedSchema()),
                 )
             } catch (e: Exception) {
-                throw CommentGenerationFailedException("LLM 호출에 실패했습니다.", e)
+                throw CommentGenerationFailedException("LLM 호출에 실패했습니다.", e, kind = GeminiFailureKinds.of(e))
             }
 
         // 토큰은 파싱 전에 뽑는다 — 이후 파싱이 실패해도 이미 과금된 토큰을 실패 로그에 전달할 수 있게 한다.
@@ -89,6 +91,7 @@ class GeminiCommentGenerator(
                     cachedTokens,
                     inputTokens,
                     outputTokens,
+                    e.kind,
                 )
             }
         return CommentGenerationOutput(feed, usedTokens, cachedTokens, inputTokens, outputTokens)
@@ -104,7 +107,7 @@ class GeminiCommentGenerator(
             try {
                 systemPromptResolver.resolve(PromptType.REPLY)
             } catch (e: Exception) {
-                throw CommentGenerationFailedException("LLM 호출에 실패했습니다.", e)
+                throw CommentGenerationFailedException("LLM 호출에 실패했습니다.", e, kind = LlmFailureKind.CALL)
             }
         return generateReply(diaryContent, characterId, characterComment, userReply, settings)
     }
@@ -118,13 +121,13 @@ class GeminiCommentGenerator(
     ): ReplyGenerationOutput {
         val response =
             try {
-                client.models.generateContent(
+                connections.active().client().models.generateContent(
                     settings.model,
                     promptProvider.buildReplyUserContent(diaryContent, characterId, characterComment, userReply),
                     buildConfig(settings.systemPrompt, replySchema()),
                 )
             } catch (e: Exception) {
-                throw CommentGenerationFailedException("LLM 호출에 실패했습니다.", e)
+                throw CommentGenerationFailedException("LLM 호출에 실패했습니다.", e, kind = GeminiFailureKinds.of(e))
             }
 
         val usedTokens = response.usageMetadata().flatMap { it.totalTokenCount() }.orElse(0)
@@ -153,6 +156,7 @@ class GeminiCommentGenerator(
                     cachedTokens,
                     inputTokens,
                     outputTokens,
+                    e.kind,
                 )
             }
         return ReplyGenerationOutput(replyText, usedTokens, cachedTokens, inputTokens, outputTokens)

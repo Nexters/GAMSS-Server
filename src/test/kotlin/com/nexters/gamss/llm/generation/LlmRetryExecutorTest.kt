@@ -1,5 +1,7 @@
 package com.nexters.gamss.llm.generation
 
+import com.nexters.gamss.llm.error.CommentGenerationFailedException
+import com.nexters.gamss.llm.error.LlmFailureKind
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -197,6 +199,70 @@ class LlmRetryExecutorTest {
         assertFailsWith<IllegalArgumentException> {
             executor.execute(retryOn = RetryableFailure::class, maxAttempts = 0) { "성공" }
         }
+    }
+
+    @Test
+    fun `retryIf가 거부한 실패는 재시도하지 않고 비재시도 콜백으로 보낸다`() {
+        // 타입은 재시도 대상인데 정책이 막는 경우 — 400·401·403이 이 자리에 온다.
+        val attempts = mutableListOf<Int>()
+        val failedAttempts = mutableListOf<Int>()
+        var nonRetryableAttempt: Int? = null
+
+        assertFailsWith<RetryableFailure> {
+            executor.execute<String, RetryableFailure>(
+                retryOn = RetryableFailure::class,
+                maxAttempts = 3,
+                retryIf = { false },
+                onAttemptFailure = { attempt, _ -> failedAttempts += attempt },
+                onNonRetryable = { attempt, _ -> nonRetryableAttempt = attempt },
+            ) { attempt ->
+                attempts += attempt
+                throw RetryableFailure("실패")
+            }
+        }
+
+        assertEquals(listOf(1), attempts)
+        assertEquals(1, nonRetryableAttempt)
+        // 시도 실패 콜백은 재시도하는 실패에만 붙는다 — 여기서 부르면 실패 로그가 두 번 남는다.
+        assertTrue(failedAttempts.isEmpty())
+        assertTrue(sleeper.sleptMillis.isEmpty())
+    }
+
+    @Test
+    fun `기본 정책은 영구 실패를 재시도하지 않는다`() {
+        // retryIf를 넘기지 않는 운영 호출부(댓글·답글·카드 4곳)가 이 동작에 기댄다.
+        val attempts = mutableListOf<Int>()
+
+        assertFailsWith<CommentGenerationFailedException> {
+            executor.execute<String, CommentGenerationFailedException>(
+                retryOn = CommentGenerationFailedException::class,
+                maxAttempts = 3,
+            ) { attempt ->
+                attempts += attempt
+                throw CommentGenerationFailedException("권한 없음", kind = LlmFailureKind.PERMANENT)
+            }
+        }
+
+        assertEquals(listOf(1), attempts)
+    }
+
+    @Test
+    fun `기본 정책은 429에 고정 간격을, 검증 실패에 즉시 재시도를 준다`() {
+        assertFailsWith<CommentGenerationFailedException> {
+            executor.execute<String, CommentGenerationFailedException>(
+                retryOn = CommentGenerationFailedException::class,
+                maxAttempts = 3,
+            ) { attempt ->
+                throw if (attempt == 1) {
+                    CommentGenerationFailedException("쿼터 초과", kind = LlmFailureKind.RATE_LIMITED)
+                } else {
+                    CommentGenerationFailedException("형식 오류", kind = LlmFailureKind.VALIDATION)
+                }
+            }
+        }
+
+        // 1차(429)는 고정 간격만큼 기다리고, 2차(검증 실패)는 대기가 0이라 아예 재우지 않는다.
+        assertEquals(listOf(LlmRetryPolicy.RATE_LIMIT_BACKOFF_MILLIS), sleeper.sleptMillis)
     }
 }
 

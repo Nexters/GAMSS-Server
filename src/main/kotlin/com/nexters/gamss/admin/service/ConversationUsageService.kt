@@ -1,5 +1,6 @@
 package com.nexters.gamss.admin.service
 
+import com.nexters.gamss.card.service.AutoCardWindow
 import com.nexters.gamss.card.service.CardStatsService
 import com.nexters.gamss.conversation.domain.SenderType
 import com.nexters.gamss.conversation.service.ConversationStatsService
@@ -24,6 +25,7 @@ class ConversationUsageService(
     private val generationLogStatsService: GenerationLogStatsService,
     private val notificationLogStatsService: NotificationLogStatsService,
     private val geminiPricing: GeminiPricing,
+    private val autoCardWindow: AutoCardWindow,
 ) {
     @Transactional(readOnly = true)
     fun getUsage(pageable: Pageable): Page<ConversationUsage> {
@@ -77,6 +79,9 @@ class ConversationUsageService(
                     estimatedCostUsd = (rawCost * 10000).roundToLong() / 10000.0,
                     reminderNotification = notificationsByConversation[conversation.id]?.reminder,
                     cardNotification = notificationsByConversation[conversation.id]?.cardCreated,
+                    // 리마인더 시각과 하루 경계는 배치가 가진 값이다. 화면이 그 시각을 다시 적어
+                    // 두면 경계를 옮겼을 때 표만 옛 값으로 남으므로, 판정을 여기서 끝낸다.
+                    createdInReminderGap = autoCardWindow.isCreatedInReminderGap(conversation.createdAt),
                 )
             }
         return PageImpl(rows, pageable, page.totalElements)

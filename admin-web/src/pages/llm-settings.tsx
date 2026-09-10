@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useCustom, useCustomMutation } from '@refinedev/core'
-import { Check, Cpu, Layers, RotateCcw, Save } from 'lucide-react'
+import { Check, Cpu, Layers, Plug, RotateCcw, Save } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Select } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
+import { ApiError } from '@/lib/api'
 import { PageHeader } from '@/components/page-header'
 import { SegmentedTabs } from '@/components/segmented-tabs'
 import { PromptRevisionHistory } from '@/pages/prompt-revision-history'
@@ -198,6 +199,126 @@ function ModelSection() {
   )
 }
 
+type LlmProvider = 'AI_STUDIO' | 'VERTEX_AI'
+
+interface ProviderSetting {
+  provider: LlmProvider
+  availableProviders: LlmProvider[]
+}
+
+const PROVIDERS: Record<LlmProvider, { label: string; hint: string }> = {
+  AI_STUDIO: {
+    label: 'AI Studio',
+    hint: 'API 키로 호출합니다. 요금은 AI Studio 결제 잔액에서 빠지며 GCP 무료 크레딧이 적용되지 않습니다.',
+  },
+  VERTEX_AI: {
+    label: 'Vertex AI',
+    hint: '서비스 계정으로 호출합니다. 요금이 GCP 결제 계정으로 잡혀 무료 크레딧을 쓸 수 있습니다.',
+  },
+}
+
+function ProviderSection({ onSwitched }: { onSwitched: (provider: LlmProvider) => void }) {
+  const { data, isLoading, isError, refetch } = useCustom<ProviderSetting>({
+    url: '/api/admin/llm-settings/provider',
+    method: 'get',
+  })
+  const { mutate: save, isLoading: saving } = useCustomMutation()
+  const settings = data?.data
+
+  const [provider, setProvider] = useState<LlmProvider | ''>('')
+  const [savedProvider, setSavedProvider] = useState<LlmProvider | ''>('')
+  const [flash, setFlash] = useState(false)
+  const [error, setError] = useState('')
+  const initialized = useRef(false)
+
+  useEffect(() => {
+    if (settings && !initialized.current) {
+      initialized.current = true
+      setProvider(settings.provider)
+      setSavedProvider(settings.provider)
+      onSwitched(settings.provider)
+    }
+  }, [settings, onSwitched])
+
+  const dirty = provider !== savedProvider
+
+  const onSave = () => {
+    if (!dirty || !provider) {
+      return
+    }
+    save(
+      { url: '/api/admin/llm-settings/provider', method: 'put', values: { provider } },
+      {
+        onSuccess: () => {
+          setSavedProvider(provider)
+          setError('')
+          setFlash(true)
+          window.setTimeout(() => setFlash(false), 2500)
+          // 선택 가능한 모델이 경로마다 다르다. 모델 목록을 다시 받게 알린다.
+          onSwitched(provider)
+        },
+        // 인증 설정이 없는 경로로 전환하면 서버가 이유를 담아 400을 준다. 그대로 보여준다.
+        onError: (e) => {
+          setProvider(savedProvider)
+          setError(e instanceof ApiError && e.detail ? e.detail : '전환에 실패했습니다')
+        },
+      },
+    )
+  }
+
+  return (
+    <Card className="space-y-3 p-6">
+      <div className="flex items-center gap-2">
+        <Plug className="size-4 text-muted-foreground" />
+        <span className="text-sm font-medium">호출 경로</span>
+        <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">앱 전체 공통</span>
+        {savedProvider && (
+          <span className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/10">
+            <span className="size-1.5 rounded-full bg-emerald-500" />
+            적용 중 · {PROVIDERS[savedProvider]?.label ?? savedProvider}
+          </span>
+        )}
+      </div>
+
+      {isError && !settings ? (
+        <div className="flex items-center gap-3">
+          <p className="text-sm text-muted-foreground">호출 경로를 불러오지 못했습니다.</p>
+          <Button variant="outline" size="sm" onClick={() => refetch()}>
+            <RotateCcw className="size-4" />
+            다시 시도
+          </Button>
+        </div>
+      ) : isLoading || !settings || !provider ? (
+        <Skeleton className="h-9 w-full max-w-xs" />
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="w-full max-w-xs">
+              <Select value={provider} onChange={(e) => setProvider(e.target.value as LlmProvider)}>
+                {settings.availableProviders.map((p) => (
+                  <option key={p} value={p}>
+                    {PROVIDERS[p]?.label ?? p}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <Button size="sm" onClick={onSave} disabled={!dirty || saving}>
+              <Save className="size-4" />
+              저장
+            </Button>
+            <SavedFlash show={flash} />
+            {error && <span className="text-sm text-destructive">{error}</span>}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {PROVIDERS[provider]?.hint} 모델·프롬프트 설정은 경로와 무관하게 그대로 적용됩니다.
+            {dirty && <span className="ml-1 font-medium text-foreground">저장해야 전환됩니다.</span>}
+          </p>
+        </>
+      )}
+    </Card>
+  )
+}
+
 interface PromptSetting {
   promptType: PromptType
   systemPrompt: string
@@ -327,13 +448,17 @@ function PromptSection() {
 }
 
 export function LlmSettingsPage() {
+  // 경로가 바뀌면 ModelSection을 다시 마운트해 그 경로의 모델 목록을 받는다.
+  const [provider, setProvider] = useState<LlmProvider | ''>('')
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="LLM 설정"
-        description="모델은 앱 전체 공통, 프롬프트는 타입별로 수정하면 재배포 없이 다음 생성부터 반영됩니다."
+        description="호출 경로·모델은 앱 전체 공통, 프롬프트는 타입별로 수정하면 재배포 없이 다음 생성부터 반영됩니다."
       />
-      <ModelSection />
+      <ProviderSection onSwitched={setProvider} />
+      <ModelSection key={provider} />
       <PromptSection />
     </div>
   )

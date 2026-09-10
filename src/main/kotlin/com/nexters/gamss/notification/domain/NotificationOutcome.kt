@@ -23,4 +23,14 @@ enum class NotificationOutcome {
      * 후자는 행 자체가 없다.
      */
     SKIPPED,
+
+    /**
+     * 배치가 대상으로 뽑아 처리하려 했지만, 그사이 다른 경로(주로 사용자의 수동 종료+생성)로 이미
+     * 끝나 있었다. 05:00 카드 알림([com.nexters.gamss.card.service.DailyAutoCardScheduler])에서만
+     * 쓰인다.
+     *
+     * 이 값이 없으면 "배치가 실제로 이 방을 봤는데 할 일이 없었다"와 "배치가 이 방을 애초에 보지도
+     * 않았다"(행 자체가 없음)가 구분되지 않는다.
+     */
+    ALREADY_HANDLED,
 }

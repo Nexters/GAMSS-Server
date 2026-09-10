@@ -1,5 +1,4 @@
 package com.nexters.gamss.llm.generation
-import com.google.genai.Client
 import com.google.genai.types.Content
 import com.google.genai.types.GenerateContentConfig
 import com.google.genai.types.HttpOptions
@@ -8,8 +7,10 @@ import com.google.genai.types.Schema
 import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.llm.config.GeminiProperties
 import com.nexters.gamss.llm.error.CardGenerationFailedException
+import com.nexters.gamss.llm.error.LlmFailureKind
 import com.nexters.gamss.llm.prompt.PromptProvider
 import com.nexters.gamss.llm.prompt.PromptType
+import com.nexters.gamss.llm.provider.GeminiConnectionService
 import com.nexters.gamss.llm.settings.LlmSettingsService
 import com.nexters.gamss.llm.settings.LlmSettingsView
 import org.springframework.stereotype.Component
@@ -28,12 +29,11 @@ import tools.jackson.databind.json.JsonMapper
 @Component
 class GeminiCardMessageGenerator(
     private val properties: GeminiProperties,
+    private val connections: GeminiConnectionService,
     private val promptProvider: PromptProvider,
     private val llmSettingsService: LlmSettingsService,
     private val jsonMapper: JsonMapper,
 ) : CardMessageGenerator {
-    private val client: Client by lazy { Client.builder().apiKey(properties.apiKey).build() }
-
     override fun generate(
         emotion: EmotionType,
         summary: String,
@@ -44,7 +44,8 @@ class GeminiCardMessageGenerator(
             try {
                 LlmSettingsView(llmSettingsService.currentModel(), llmSettingsService.currentPrompt(PromptType.CARD))
             } catch (e: Exception) {
-                throw CardGenerationFailedException("카드 한 줄 LLM 호출에 실패했습니다.", e)
+                // 설정 조회(DB) 실패다 — 간격을 두고 재시도해야 한다(GeminiCommentGenerator와 같은 이유).
+                throw CardGenerationFailedException("카드 한 줄 LLM 호출에 실패했습니다.", e, kind = LlmFailureKind.CALL)
             }
         return generate(emotion, summary, settings)
     }
@@ -56,13 +57,17 @@ class GeminiCardMessageGenerator(
     ): CardMessageOutput {
         val response =
             try {
-                client.models.generateContent(
+                connections.active().client().models.generateContent(
                     settings.model,
                     promptProvider.buildCardUserContent(emotion, summary),
                     buildConfig(settings.systemPrompt),
                 )
             } catch (e: Exception) {
-                throw CardGenerationFailedException("카드 한 줄 LLM 호출에 실패했습니다.", e)
+                throw CardGenerationFailedException(
+                    "카드 한 줄 LLM 호출에 실패했습니다.",
+                    e,
+                    kind = GeminiFailureKinds.of(e),
+                )
             }
 
         // 토큰은 파싱 전에 뽑는다 — 이후 파싱이 실패해도 이미 과금된 토큰을 실패 로그에 전달할 수 있게 한다.
@@ -92,6 +97,7 @@ class GeminiCardMessageGenerator(
                     cachedTokens,
                     inputTokens,
                     outputTokens,
+                    e.kind,
                 )
             }
         return CardMessageOutput(line, usedTokens, cachedTokens, inputTokens, outputTokens)

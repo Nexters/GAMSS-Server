@@ -325,6 +325,8 @@ class CardServiceTest {
 
         assertEquals(ErrorCode.CARD_GENERATION_FAILED, exception.errorCode)
         assertEquals(extractionFailure, exception.cause)
+        // 카드 경로도 댓글과 같은 재시도 보호를 받는다 — 네트워크가 한 번 튀었다고 그대로 실패하지 않는다.
+        verify(exactly = 3) { emotionExtractor.extract(any()) }
         verify(exactly = 0) { cardMessageGenerator.generate(any(), any()) }
         verify(exactly = 0) { cardPersistenceService.save(any(), any(), any()) }
         verify(exactly = 1) {
@@ -334,7 +336,7 @@ class CardServiceTest {
             generationLogRecorder.record(
                 type = GenerationType.CARD_EMOTION,
                 success = false,
-                attemptCount = 1,
+                attemptCount = 3,
                 latencyMs = any(),
                 memberId = MEMBER_ID,
                 conversationId = CONVERSATION_ID,
@@ -342,6 +344,42 @@ class CardServiceTest {
                 cachedTokens = any(),
                 inputTokens = any(),
                 outputTokens = any(),
+                failureReason = any(),
+            )
+        }
+    }
+
+    /**
+     * 검증·파싱에 실패한 시도도 **호출은 됐으니 과금된다.** 카드 경로에 재시도가 붙으면서 이 합산이
+     * 처음으로 여러 시도에 걸쳐 일어난다 — 마지막 한 시도만 기록하면 비용이 과소 집계된다.
+     */
+    @Test
+    fun `감정 분류가 재시도 끝에 실패하면 시도마다의 토큰을 합산해 기록한다`() {
+        stubOwnedConversation(endedConversation())
+        stubClaimSuccess()
+        every { conversationCardGenerationService.findUserMessageContents(CONVERSATION_ID) } returns listOf("오늘 일기")
+        every { emotionExtractor.extract(any()) } throwsMany
+            listOf(
+                CardGenerationFailedException("1차", usedTokens = 100, cachedTokens = 10, inputTokens = 80, outputTokens = 20),
+                CardGenerationFailedException("2차", usedTokens = 200, cachedTokens = 20, inputTokens = 150, outputTokens = 50),
+                CardGenerationFailedException("3차", usedTokens = 400, cachedTokens = 30, inputTokens = 300, outputTokens = 100),
+            )
+        stubFinishStatus(CardGenerationStatus.FAILED)
+
+        assertFailsWith<BusinessException> { service.createCard(MEMBER_ID, CONVERSATION_ID, null, "요약") }
+
+        verify(exactly = 1) {
+            generationLogRecorder.record(
+                type = GenerationType.CARD_EMOTION,
+                success = false,
+                attemptCount = 3,
+                latencyMs = any(),
+                memberId = MEMBER_ID,
+                conversationId = CONVERSATION_ID,
+                usedTokens = 700,
+                cachedTokens = 60,
+                inputTokens = 530,
+                outputTokens = 170,
                 failureReason = any(),
             )
         }

@@ -4,6 +4,8 @@ import com.nexters.gamss.conversation.service.ConversationCardGenerationService
 import com.nexters.gamss.conversation.service.ConversationService
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
+import com.nexters.gamss.llm.error.LlmFailureKind
+import com.nexters.gamss.llm.error.llmFailureKind
 import com.nexters.gamss.member.service.MemberService
 import com.nexters.gamss.notification.domain.NotificationOutcome
 import com.nexters.gamss.notification.domain.NotificationType
@@ -24,6 +26,9 @@ import java.time.Instant
  * 대화방 하나의 실패가 나머지를 막지 않도록 방 단위로 예외를 삼키고, 처리 결과만 집계해 남긴다.
  * 중복 실행과 재시도에 대한 멱등성은 이 클래스가 아니라 카드 생성 경로가 보장한다. CAS 선점과
  * `cards.conversation_id` 유니크 제약에 걸린 요청은 여기서 "이미 처리됨"으로 분류된다.
+ *
+ * 예외가 하나 있다. **LLM 쿼터 초과(429)만은 방 하나의 실패로 보지 않는다** — 방들이 같은 쿼터를
+ * 나눠 쓰므로 한 방이 부딪힌 벽에 나머지도 그대로 부딪힌다([RATE_LIMIT_ABORT_STREAK]).
  *
  * 요약([com.nexters.gamss.conversation.domain.Conversation.summary])이 없는 방도 카드를 만든다.
  * 요약은 프론트가 메시지마다 보내주는 값이라 한 줄만 쓰고 나간 방에는 없는데, 그게 가장 흔한 이탈
@@ -105,7 +110,20 @@ class DailyAutoCardScheduler(
                 return
             }
             tally.targetCount = targetIds.size
-            targetIds.forEach { processAndNotify(it, tally) }
+            targetIds.forEachIndexed { index, conversationId ->
+                processAndNotify(conversationId, tally)
+                // 마지막 방에서 조건이 걸리면 끊을 것이 없다. 그때도 중단으로 처리하면 대상을 다 본
+                // 실행이 로그에 "중단"으로 남아, 남은 방이 있는 줄 알고 헛짚게 된다.
+                val remaining = targetIds.size - index - 1
+                if (remaining > 0 && tally.rateLimitStreak >= RATE_LIMIT_ABORT_STREAK) {
+                    log.warn(
+                        "자동 카드 생성 배치 중단: 쿼터 초과(429)로 실패한 방이 {}개 연달아 나왔다. 남은 {}개는 다음 실행이 본다",
+                        tally.rateLimitStreak,
+                        remaining,
+                    )
+                    return
+                }
+            }
             tally.completed = true
         } finally {
             started.stop(batchTimer)
@@ -113,31 +131,73 @@ class DailyAutoCardScheduler(
         }
     }
 
-    /** 방 하나를 처리하고, 카드가 새로 생긴 회원이면 그 자리에서 알린다. 결과는 [tally] 에 쌓는다. */
+    /** 방 하나를 처리하고, 결과에 따라 알리거나 기록만 남긴다. 집계는 [tally] 에 쌓는다. */
     private fun processAndNotify(
         conversationId: Long,
         tally: RunTally,
     ) {
         val result = process(conversationId)
         tally.counts.merge(result.outcome, 1, Int::plus)
-        val cardCreatedMemberId = result.cardCreatedMemberId ?: return
-        // 한 사람이 방을 여러 개 만들면 카드도 여러 장 나온다. 그대로 두면 새벽에 푸시가 연달아
-        // 가므로, 이번 실행에서 이미 알린 회원은 건너뛴다(add 가 false 를 돌려준다).
-        if (!tally.notifiedMemberIds.add(cardCreatedMemberId)) {
+        // 연속으로 세는 것은 한 번 튄 429와 말라버린 쿼터를 가르기 위해서다. 중간에 한 방이라도
+        // 성공하면 쿼터가 아직 남아 있다는 뜻이라 처음부터 다시 센다.
+        tally.rateLimitStreak = if (result.rateLimited) tally.rateLimitStreak + 1 else 0
+        when (result.outcome) {
+            AutoCardOutcome.CREATED -> notifyCreated(conversationId, checkNotNull(result.memberId), tally)
+
+            AutoCardOutcome.ALREADY_HANDLED -> recordAlreadyHandled(conversationId, checkNotNull(result.memberId))
+
+            // 아래 결과는 기록하지 않는다. 삭제된 방은 백오피스가 상태(DELETED)만으로 이미 구분하고,
+            // 실패는 카드 생성 상태가 FAILED 로 되돌아가 다음 실행이 다시 본다.
+            //
+            // 탈퇴는 사정이 다르다. 다음 실행에서도 결론이 안 바뀐다. endForAutoBatch 는 status 만
+            // 바꿔 cardGenerationStatus 가 NONE 으로 남고, findAutoCardTargetIds 는 DELETED 가
+            // 아니면서 DONE 이 아닌 방을 뽑으므로 이 방은 매일 다시 대상이 된다. MemberService
+            // .getById 도 탈퇴 회원을 그대로 돌려줘서 매번 같은 WITHDRAWN_MEMBER 로 끝난다.
+            // 그래도 기록하지 않는 것은, NotificationLog 가 회차마다 행을 새로 쌓기만 해
+            // (NotificationLogRecorder 에 중복 제거가 없다) 이 방 하나가 매일 한 줄씩 늘기 때문이다.
+            // 대신 백오피스 표에서 "배치가 봤지만 할 일이 없었다"가 계속 "대상 아님"으로 보이는
+            // 것은 감수한다.
+            //
+            // 결과가 늘면 여기서 컴파일이 깨져 기록 여부를 다시 정하게 한다.
+            AutoCardOutcome.SKIPPED_DELETED,
+            AutoCardOutcome.WITHDRAWN_MEMBER,
+            AutoCardOutcome.FAILED,
+            -> Unit
+        }
+    }
+
+    /**
+     * 새로 카드가 생긴 회원에게 알린다. 한 사람이 방을 여러 개 만들면 카드도 여러 장 나오는데,
+     * 그대로 두면 새벽에 푸시가 연달아 가므로 이번 실행에서 이미 알린 회원은 건너뛴다(add 가
+     * false 를 돌려준다).
+     */
+    private fun notifyCreated(
+        conversationId: Long,
+        memberId: Long,
+        tally: RunTally,
+    ) {
+        if (!tally.notifiedMemberIds.add(memberId)) {
             // 건너뛴 것도 남긴다. 백오피스에서 "대상이었지만 다른 방으로 이미 나갔다"와 "애초에
             // 대상이 아니었다"(기록 없음)가 구분돼야 한다.
-            notificationLogRecorder.record(
-                cardCreatedMemberId,
-                listOf(conversationId),
-                NotificationType.CARD_CREATED,
-                NotificationOutcome.SKIPPED,
-            )
+            notificationLogRecorder.record(memberId, listOf(conversationId), NotificationType.CARD_CREATED, NotificationOutcome.SKIPPED)
             return
         }
-        val sent = cardCreatedNotifier.notifyCardCreated(cardCreatedMemberId)
-        notificationLogRecorder.record(cardCreatedMemberId, listOf(conversationId), NotificationType.CARD_CREATED, sent)
+        val sent = cardCreatedNotifier.notifyCardCreated(memberId)
+        notificationLogRecorder.record(memberId, listOf(conversationId), NotificationType.CARD_CREATED, sent)
         tally.notifiedSuccessCount += sent.successCount
         tally.notifiedFailureCount += sent.failureCount
+    }
+
+    /**
+     * 이 방의 카드는 이미 다른 경로(주로 사용자의 수동 종료+생성)로 만들어져 있었다. 새로 보낼
+     * 알림은 없지만, 이 사실 자체를 남기지 않으면 백오피스가 "배치가 실제로 봤는데 할 일이
+     * 없었다"와 "배치가 애초에 보지도 않았다"를 구분하지 못한다.
+     */
+    private fun recordAlreadyHandled(
+        conversationId: Long,
+        memberId: Long,
+    ) {
+        notificationLogRecorder.record(memberId, listOf(conversationId), NotificationType.CARD_CREATED, NotificationOutcome.ALREADY_HANDLED)
     }
 
     /**
@@ -182,22 +242,34 @@ class DailyAutoCardScheduler(
         var notifiedFailureCount = 0
         var targetCount = 0
         var completed = false
+
+        /** 쿼터 초과(429)로 실패한 방이 몇 개나 연달아 나왔는지. */
+        var rateLimitStreak = 0
     }
 
     /**
-     * 방 하나를 처리한 결과. 카드를 실제로 만든 경우에만 [cardCreatedMemberId] 가 채워진다.
-     * 그 자리에서 알림을 보낼 대상이다.
+     * 방 하나를 처리한 결과. [memberId] 는 카드를 실제로 만들었거나([AutoCardOutcome.CREATED]), 이미
+     * 다른 경로로 만들어져 있던 경우([AutoCardOutcome.ALREADY_HANDLED])에만 채워진다 - 둘 다 알리거나
+     * 기록을 남길 대상이 있다는 뜻이다.
      */
     private data class ProcessResult(
         val outcome: AutoCardOutcome,
-        val cardCreatedMemberId: Long? = null,
+        val memberId: Long? = null,
+        /** 쿼터 초과(429)로 실패했는가. 배치를 중단할지 판단하는 근거다([RATE_LIMIT_ABORT_STREAK]). */
+        val rateLimited: Boolean = false,
     )
 
     private fun process(conversationId: Long): ProcessResult =
         try {
-            createCardForEndedConversation(conversationId)
-        } catch (e: BusinessException) {
-            ProcessResult(classify(e, conversationId))
+            createCardForEndedConversation(conversationId).also { result ->
+                // ProcessResult 의 불변식(memberId 는 CREATED·ALREADY_HANDLED 에만 채워진다)을 여기서
+                // 확인한다. processAndNotify 는 이 결과를 그대로 checkNotNull 로 풀어 쓰므로, 불변식이
+                // 깨진 채로 넘어가면 이 방 하나가 아니라 runFor 의 forEach 전체가 예외로 끊긴다.
+                val needsMemberId = result.outcome == AutoCardOutcome.CREATED || result.outcome == AutoCardOutcome.ALREADY_HANDLED
+                check(!needsMemberId || result.memberId != null) {
+                    "memberId 없이 ${result.outcome} 을 반환했습니다: conversationId=$conversationId"
+                }
+            }
         } catch (e: Exception) {
             // 방 하나의 예상 못 한 실패가 남은 방들을 막지 않게 한다. 카드 생성 상태는 실패 경로에서
             // 이미 FAILED로 되돌아가 있어 다음 실행이 다시 시도한다.
@@ -213,9 +285,23 @@ class DailyAutoCardScheduler(
         if (memberService.getById(conversation.memberId).isWithdrawn()) {
             return ProcessResult(AutoCardOutcome.WITHDRAWN_MEMBER)
         }
-        // 요약이 null이어도 그대로 넘긴다. 카드 생성 경로가 유저 메시지 원문으로 대신 만든다.
-        cardService.createCard(conversation.memberId, conversationId, emotion = null, summary = conversation.summary)
-        return ProcessResult(AutoCardOutcome.CREATED, cardCreatedMemberId = conversation.memberId)
+        return try {
+            // 요약이 null이어도 그대로 넘긴다. 카드 생성 경로가 유저 메시지 원문으로 대신 만든다.
+            cardService.createCard(conversation.memberId, conversationId, emotion = null, summary = conversation.summary)
+            ProcessResult(AutoCardOutcome.CREATED, memberId = conversation.memberId)
+        } catch (e: BusinessException) {
+            // 실패 종류는 원인 사슬에서 읽는다. 카드 생성 경로가 LLM 실패를 CARD_GENERATION_FAILED 로
+            // 갈아 끼워 올리므로, 에러 코드만으로는 429인지 형식 오류인지 갈리지 않는다.
+            //
+            // memberId 는 기록할 대상이 있을 때만 채운다. classify 가 FAILED 를 돌려주면 남길 기록이
+            // 없으므로 비워 둬야 ProcessResult 문서의 불변식(memberId 는 CREATED, ALREADY_HANDLED
+            // 에만 채워진다)이 유지된다. 반대로 429 는 실패 쪽에만 붙는다. ALREADY_HANDLED 는
+            // 쿼터와 무관하게 정상으로 끝난 것이라, 여기서 연속 카운트가 이어지면 안 된다.
+            when (val outcome = classify(e, conversationId)) {
+                AutoCardOutcome.ALREADY_HANDLED -> ProcessResult(outcome, memberId = conversation.memberId)
+                else -> ProcessResult(outcome, rateLimited = e.llmFailureKind() == LlmFailureKind.RATE_LIMITED)
+            }
+        }
     }
 
     /** 배치 입장에서 정상인 실패와 진짜 실패를 가른다. */
@@ -246,8 +332,26 @@ class DailyAutoCardScheduler(
          * 2회로 하루 상한 대비 미미하므로 카드를 확실히 만드는 쪽을 택했다.
          *
          * `reset_hour`는 백오피스에서 바꿀 수 있는 값이다. 하루 경계를 옮기게 되면 이 상수와
-         * [AutoCardWindow.DAY_BOUNDARY_HOUR]도 함께 봐야 한다.
+         * [AutoCardWindow.DAY_BOUNDARY_HOUR]도 함께 봐야 한다. 04:30 리마인더의 cron 과 백오피스
+         * 표의 틈 판정은 그 상수에서 값을 받아 가므로 따로 손댈 것이 없다
+         * ([AutoCardWindow.REMINDER_MINUTES_BEFORE]).
          */
         private const val CRON = "0 0 ${AutoCardWindow.DAY_BOUNDARY_HOUR} * * *"
+
+        /**
+         * 쿼터 초과(429)로 실패한 방이 이만큼 연달아 나오면 그 회차를 중단한다.
+         *
+         * 방 하나가 429 로 실패했다는 것은 이미 그 방 안에서 재시도를 다 쓰고도 429 였다는 뜻이다
+         * ([com.nexters.gamss.llm.generation.LlmRetryPolicy]). 그런 방이 연달아 나오면 쿼터가 말랐다고
+         * 보고 남은 방은 건드리지 않는다. 계속 돌아봐야 방마다 최악 여섯 번(감정 분류·한 줄 생성 x
+         * 재시도 3)을 마른 쿼터에 더 쏘고 백오프로 8초씩 더 붙잡을 뿐, 결과는 같은 벽이다.
+         *
+         * 중단해도 잃는 것은 하루뿐이다. 손대지 않은 방은 상태가 그대로라
+         * [ConversationCardGenerationService.findAutoCardTargetIds] 대상에 남고 다음 새벽이 이어서 본다.
+         *
+         * **429 만 이렇게 다룬다.** 400 같은 영구 실패는 그 방의 내용 때문일 수 있어, 방 하나 때문에
+         * 나머지를 포기하게 된다. 429 는 쿼터라는 공유 자원의 문제라 방을 가리지 않는다.
+         */
+        private const val RATE_LIMIT_ABORT_STREAK = 3
     }
 }

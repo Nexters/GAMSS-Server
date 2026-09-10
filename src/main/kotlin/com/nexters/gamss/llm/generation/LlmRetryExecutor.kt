@@ -20,10 +20,13 @@ class LlmRetryExecutor(
     /**
      * [call]을 최대 [maxAttempts]회 시도하고, 성공한 결과를 돌려준다.
      *
-     * [retryOn] 타입의 예외만 재시도한다. 그 외 예외는 다시 불러도 결과가 같을 것이라 보고 즉시
-     * 중단한다. 어느 쪽이든 마지막에는 원래 예외를 그대로 던진다 — 호출자가 예외 타입으로 분기하는
+     * 재시도 대상인지는 **두 관문**을 거친다 — [retryOn] 타입이어야 하고("내가 아는 실패인가"),
+     * [retryIf]가 승낙해야 한다("다시 시도할 값어치가 있나"). 타입만으로 가를 수 없는 이유는
+     * 400·401·403 같은 영구 실패가 같은 예외 타입에 실려 오기 때문이다([LlmFailureRetryPolicy]).
+     * 어느 관문에서 막히든 마지막에는 원래 예외를 그대로 던진다 — 호출자가 예외 타입으로 분기하는
      * 기존 동작을 바꾸지 않기 위해서다.
      *
+     * @param retryIf 재시도 대상 타입 중에서도 다시 부를 것을 고른다. 기본값은 영구 실패만 걸러낸다.
      * @param call 한 번의 시도. 시도 번호(1부터)를 받는다. LLM 호출·검증·성공 로그가 여기 들어간다.
      * @param onAttemptFailure 재시도 대상 실패마다. **마지막 시도에서도 불린다** — 그 시도의 토큰도
      *   합산돼야 하기 때문이다.
@@ -33,7 +36,8 @@ class LlmRetryExecutor(
     fun <T, E : Exception> execute(
         retryOn: KClass<E>,
         maxAttempts: Int = LlmRetryPolicy.MAX_ATTEMPTS,
-        backoff: BackoffPolicy = BackoffPolicy.fixed(LlmRetryPolicy.RETRY_BACKOFF_MILLIS),
+        retryIf: (E) -> Boolean = { LlmFailureRetryPolicy.shouldRetry(it) },
+        backoff: BackoffPolicy = LlmFailureRetryPolicy,
         onAttemptFailure: (attempt: Int, e: E) -> Unit = { _, _ -> },
         onNonRetryable: (attempt: Int, e: Exception) -> Unit = { _, _ -> },
         onExhausted: (attempt: Int, e: E) -> Unit = { _, _ -> },
@@ -52,12 +56,16 @@ class LlmRetryExecutor(
                     throw e
                 }
                 @Suppress("UNCHECKED_CAST")
-                val retryable = e as E
-                lastError = retryable
-                onAttemptFailure(attempt, retryable)
-                // 마지막 시도 뒤에는 잘 이유가 없다. 정책이 0을 주면(현재 기본값) 아예 재우지 않는다.
+                val failure = e as E
+                if (!retryIf(failure)) {
+                    onNonRetryable(attempt, e)
+                    throw e
+                }
+                lastError = failure
+                onAttemptFailure(attempt, failure)
+                // 마지막 시도 뒤에는 잘 이유가 없다. 정책이 0을 주면(검증 실패) 아예 재우지 않는다.
                 if (attempt < maxAttempts) {
-                    val delayMillis = backoff.delayMillisFor(attempt, retryable)
+                    val delayMillis = backoff.delayMillisFor(attempt, failure)
                     if (delayMillis > 0) {
                         sleeper.sleep(delayMillis)
                     }
