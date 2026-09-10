@@ -178,7 +178,7 @@ class DailyAutoCardSchedulerTest {
 
     /**
      * 카드 생성 경로가 올려보내는 모양 그대로 만든다. LLM 실패는 CARD_GENERATION_FAILED 로 갈아 끼워
-     * 올라오므로, 배치가 429 를 알아보려면 원인 사슬까지 있어야 한다.
+     * 올라오므로, 배치가 실패 종류를 알아보려면 원인 사슬까지 있어야 한다.
      */
     private fun cardGenerationFailure(kind: LlmFailureKind): BusinessException =
         BusinessException(ErrorCode.CARD_GENERATION_FAILED).apply {
@@ -202,6 +202,42 @@ class DailyAutoCardSchedulerTest {
         verify(exactly = 3) { cardService.createCard(any(), any(), any(), any()) }
         verify(exactly = 0) { cardService.createCard(any(), 40L, any(), any()) }
         verify(exactly = 0) { cardService.createCard(any(), 50L, any(), any()) }
+    }
+
+    /**
+     * 서킷이 열렸다는 것은 "업스트림이 아프다"는 판정이 이미 끝났다는 뜻이라, 남은 방들도 같은 벽에
+     * 부딪힌다. 빠르게 실패하긴 하지만 방마다 상태 쓰기와 실패 로그가 방 개수만큼 쌓인다.
+     */
+    @Test
+    fun `서킷이 열려 연달아 막히면 남은 방을 건드리지 않고 중단한다`() {
+        stubTargets(10L, 20L, 30L, 40L, 50L)
+        every { conversationService.endForAutoBatch(any()) } returns conversation()
+        every {
+            cardService.createCard(any(), any(), any(), any())
+        } throws cardGenerationFailure(LlmFailureKind.CIRCUIT_OPEN)
+
+        scheduler.runFor(createdAfter, createdBefore)
+
+        verify(exactly = 3) { cardService.createCard(any(), any(), any(), any()) }
+        verify(exactly = 0) { cardService.createCard(any(), 40L, any(), any()) }
+        verify(exactly = 0) { cardService.createCard(any(), 50L, any(), any()) }
+    }
+
+    /**
+     * 429 와 서킷 오픈은 한 연속으로 센다. 둘 다 공유 자원이 막혔다는 같은 이야기라, 종류가 섞여
+     * 나온다고 해서 "아직 괜찮다"고 볼 이유가 없다.
+     */
+    @Test
+    fun `쿼터 초과와 서킷 오픈이 섞여도 같은 연속으로 센다`() {
+        stubTargets(10L, 20L, 30L, 40L, 50L)
+        every { conversationService.endForAutoBatch(any()) } returns conversation()
+        every { cardService.createCard(any(), 10L, any(), any()) } throws cardGenerationFailure(LlmFailureKind.RATE_LIMITED)
+        every { cardService.createCard(any(), 20L, any(), any()) } throws cardGenerationFailure(LlmFailureKind.CIRCUIT_OPEN)
+        every { cardService.createCard(any(), 30L, any(), any()) } throws cardGenerationFailure(LlmFailureKind.RATE_LIMITED)
+
+        scheduler.runFor(createdAfter, createdBefore)
+
+        verify(exactly = 3) { cardService.createCard(any(), any(), any(), any()) }
     }
 
     /** 중간에 한 방이라도 성공하면 쿼터가 아직 남아 있다는 뜻이라, 연속이 끊기고 배치는 계속 돈다. */
