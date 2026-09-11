@@ -12,6 +12,7 @@ import java.util.Optional
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
@@ -34,23 +35,23 @@ class MemberServiceTest {
     }
 
     @Test
-    fun `이름이 없으면 이름·닉네임 없이 생성한다`() {
+    fun `이름이 없어도 무작위 닉네임으로 채운다`() {
         every { memberRepository.save(any()) } answers { firstArg() }
 
         val member = memberService.create("a@example.com", null)
 
         assertNull(member.name)
-        assertNull(member.nickname)
+        assertNotNull(member.nickname)
     }
 
     @Test
-    fun `이름이 닉네임 규칙에 어긋나면 이름만 저장하고 닉네임은 비워 둔다`() {
+    fun `이름이 닉네임 규칙에 어긋나도 폴백을 거쳐 닉네임을 채운다`() {
         every { memberRepository.save(any()) } answers { firstArg() }
 
         val member = memberService.create("a@example.com", "김")
 
         assertEquals("김", member.name)
-        assertNull(member.nickname)
+        assertNotNull(member.nickname)
     }
 
     @Test

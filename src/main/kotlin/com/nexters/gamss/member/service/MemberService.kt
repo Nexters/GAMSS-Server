@@ -2,6 +2,7 @@ package com.nexters.gamss.member.service
 
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
+import com.nexters.gamss.member.domain.InitialNicknameResolver
 import com.nexters.gamss.member.domain.Member
 import com.nexters.gamss.member.domain.MemberStatus
 import com.nexters.gamss.member.domain.Nickname
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional
 class MemberService(
     private val memberRepository: MemberRepository,
     private val withdrawnMemberCleaners: WithdrawnMemberCleaners,
+    private val initialNicknameResolver: InitialNicknameResolver = InitialNicknameResolver(),
 ) {
     @Transactional(readOnly = true)
     fun getById(id: Long): Member =
@@ -31,12 +33,13 @@ class MemberService(
         pageable: Pageable,
     ): Page<Member> = memberRepository.search(keyword?.takeIf { it.isNotBlank() }, status, pageable)
 
-    // 닉네임 초기값은 소셜 이름. 이름이 닉네임 규칙(길이·금칙어)에 어긋나면 미설정(null)으로 둔다.
+    // 닉네임 초기값은 [InitialNicknameResolver] 가 정한다 - 소셜 이름을 우선 쓰되, 규칙(길이·
+    // 금칙어)에 어긋나면 단어 단위 분리·절단을 거쳐 마지막엔 무작위 닉네임으로 반드시 채운다.
     @Transactional
     fun create(
         email: String?,
         name: String?,
-    ): Member = memberRepository.save(Member(email, name, Nickname.tryCreate(name)))
+    ): Member = memberRepository.save(Member(email, name, initialNicknameResolver.resolve(name)))
 
     @Transactional
     fun updateNickname(
