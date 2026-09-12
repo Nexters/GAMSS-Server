@@ -68,7 +68,7 @@ class TokenQuotaBackfillIntegrationTest {
 
     /** 덮어쓰면 관측 테이블이 사실상 진실의 원천으로 되돌아간다. 재기동에도 안전해야 한다. */
     @Test
-    fun `이미 적립된 쿼터는 덮어쓰지 않는다`() {
+    fun `기록된 사용량을 낮추지 않는다`() {
         val member = givenMappedMember("keep@a.com")
         recorder.record(GenerationType.COMMENT, member.id, 1_000)
         generationLogRepository.save(generationLog(member.id, GenerationType.COMMENT, usedTokens = 42))
@@ -76,6 +76,21 @@ class TokenQuotaBackfillIntegrationTest {
         backfill.seed()
 
         assertEquals(1_000, usedTokens(member))
+    }
+
+    /**
+     * 웹 서버는 ApplicationReadyEvent 보다 먼저 요청을 받는다. 재기동 직후 요청이 먼저 적립해 행을
+     * 만들면, 건너뛰기만 하는 시드는 그 주체의 재기동 이전 사용량을 통째로 잃는다.
+     */
+    @Test
+    fun `실시간 적립이 먼저 행을 만들어도 로그 합으로 끌어올린다`() {
+        val member = givenMappedMember("raise@a.com")
+        recorder.record(GenerationType.COMMENT, member.id, 500)
+        generationLogRepository.save(generationLog(member.id, GenerationType.COMMENT, usedTokens = 50_000))
+
+        backfill.seed()
+
+        assertEquals(50_000, usedTokens(member))
     }
 
     /** 매핑 백필이 먼저 돌아야 하는 이유다. */

@@ -9,6 +9,7 @@ import com.nexters.gamss.member.service.MemberSocialIdentityService
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import io.mockk.verifyOrder
 import org.springframework.dao.DataIntegrityViolationException
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
@@ -35,6 +36,8 @@ class SocialAccountServiceTest {
         assertSame(member, result.member)
         assertFalse(result.isNewMember)
         verify(exactly = 0) { memberService.create(any(), any()) }
+        // 기존 회원도 매핑을 확인해야 한다. 배포 전 가입자가 매핑 없이 남으면 한도가 그 회원에게만 꺼진다.
+        verify(exactly = 1) { memberSocialIdentityService.ensureMapped(5L, "GOOGLE", "sub-1") }
     }
 
     @Test
@@ -52,6 +55,12 @@ class SocialAccountServiceTest {
             socialAccountRepository.save(
                 match { it.memberId == 9L && it.provider == "APPLE" && it.providerId == "sub-2" },
             )
+        }
+        // 순서가 중요하다. 소셜 계정 저장이 유니크 제약에 걸려 되돌아갈 회원에게 먼저 매핑을 달면,
+        // 재시도로 만들어진 진짜 회원이 아닌 쪽에 주체가 붙는다.
+        verifyOrder {
+            socialAccountRepository.save(any())
+            memberSocialIdentityService.ensureMapped(9L, "APPLE", "sub-2")
         }
     }
 
