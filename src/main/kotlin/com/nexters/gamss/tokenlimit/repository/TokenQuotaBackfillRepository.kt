@@ -20,7 +20,10 @@ interface TokenQuotaBackfillRepository : JpaRepository<TokenQuotaUsage, TokenQuo
      * 쿼터 행이 없는 주체에 [windowStart] 이후 `generation_log` 합을 채운다.
      *
      * 이미 있는 행은 건드리지 않는다(`used_tokens = used_tokens`) - 덮어쓰면 기동마다 재계산돼
-     * 관측 테이블이 사실상 진실의 원천으로 되돌아간다. 카드 제외는 예전 합산 쿼리와 같은 기준이다.
+     * 관측 테이블이 사실상 진실의 원천으로 되돌아간다.
+     *
+     * 제외 목록은 적립 쪽과 같은 곳에서 받는다
+     * ([com.nexters.gamss.monitoring.domain.GenerationType.namesNotCountingTowardQuota]).
      */
     @Transactional
     @Modifying(flushAutomatically = true, clearAutomatically = true)
@@ -31,12 +34,13 @@ interface TokenQuotaBackfillRepository : JpaRepository<TokenQuotaUsage, TokenQuo
                 "from member_social_identity i " +
                 "join generation_log g on g.member_id = i.member_id " +
                 "where g.created_at >= :windowStart and g.used_tokens is not null " +
-                "and g.generation_type not in ('CARD', 'CARD_EMOTION') " +
+                "and g.generation_type not in (:excludedTypes) " +
                 "group by i.subject_key " +
                 "on duplicate key update used_tokens = used_tokens",
         nativeQuery = true,
     )
     fun seedCurrentWindow(
         @Param("windowStart") windowStart: Instant,
+        @Param("excludedTypes") excludedTypes: Collection<String>,
     ): Int
 }

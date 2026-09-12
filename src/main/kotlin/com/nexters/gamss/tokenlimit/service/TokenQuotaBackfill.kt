@@ -1,6 +1,7 @@
 package com.nexters.gamss.tokenlimit.service
 
 import com.nexters.gamss.auth.service.SocialIdentityBackfill
+import com.nexters.gamss.monitoring.domain.GenerationType
 import com.nexters.gamss.tokenlimit.domain.TokenQuotaWindow
 import com.nexters.gamss.tokenlimit.repository.TokenQuotaBackfillRepository
 import org.slf4j.LoggerFactory
@@ -32,7 +33,7 @@ class TokenQuotaBackfill(
         // 시드는 한 번의 편의일 뿐이라 기동을 좌우할 자격이 없다. 실패하면 다음 기동이 다시 한다.
         runCatching {
             val windowStart = TokenQuotaWindow.startOf(tokenPolicyService.current().resetHour)
-            val seeded = repository.seedCurrentWindow(windowStart)
+            val seeded = repository.seedCurrentWindow(windowStart, GenerationType.namesNotCountingTowardQuota())
             log.info("쿼터 시드 완료: 구간 시작={}, 채운 주체={}개", windowStart, seeded)
         }.onFailure { log.error("쿼터 시드 실패(무시). 이 구간은 0 에서 시작한다", it) }
     }

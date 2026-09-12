@@ -6,6 +6,7 @@ import com.nexters.gamss.member.domain.MemberSocialIdentity
 import com.nexters.gamss.member.domain.Nickname
 import com.nexters.gamss.member.repository.MemberRepository
 import com.nexters.gamss.member.repository.MemberSocialIdentityRepository
+import com.nexters.gamss.monitoring.domain.GenerationType
 import com.nexters.gamss.support.TestcontainersConfig
 import com.nexters.gamss.tokenlimit.service.TokenQuotaRecorder
 import org.hamcrest.Matchers.nullValue
@@ -226,7 +227,7 @@ class MemberControllerIntegrationTest {
         if (!memberSocialIdentityRepository.existsByMemberId(member.id)) {
             memberSocialIdentityRepository.save(MemberSocialIdentity(member.id, "test-subject-%064d".format(member.id).takeLast(64)))
         }
-        tokenQuotaRecorder.record(member.id, usedTokens)
+        tokenQuotaRecorder.record(GenerationType.COMMENT, member.id, usedTokens)
     }
 
     private fun bearerFor(member: Member): String = "Bearer ${jwtIssuer.issueAccessToken(member.id)}"

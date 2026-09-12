@@ -9,6 +9,7 @@ import com.nexters.gamss.auth.social.SocialUser
 import com.nexters.gamss.member.repository.MemberRepository
 import com.nexters.gamss.member.repository.MemberSocialIdentityRepository
 import com.nexters.gamss.member.service.MemberService
+import com.nexters.gamss.monitoring.domain.GenerationType
 import com.nexters.gamss.support.TestcontainersConfig
 import com.nexters.gamss.tokenlimit.repository.TokenQuotaUsageRepository
 import org.junit.jupiter.api.AfterEach
@@ -92,7 +93,7 @@ class RejoinTokenLimitIntegrationTest {
         val exhausted = tokenPolicyService.current().dailyTokenLimit.toInt()
         authService.login("idtok")
         val oldMemberId = currentMemberId()
-        recorder.record(oldMemberId, exhausted)
+        recorder.record(GenerationType.COMMENT, oldMemberId, exhausted)
         assertFalse(limitService.isWithinLimit(oldMemberId), "전제가 깨졌다 - 한도를 넘긴 상태를 만들지 못했다")
 
         memberService.withdraw(oldMemberId)
@@ -108,12 +109,12 @@ class RejoinTokenLimitIntegrationTest {
     fun `재가입 후 사용량은 이전 사용량 위에 쌓인다`() {
         authService.login("idtok")
         val oldMemberId = currentMemberId()
-        recorder.record(oldMemberId, 1_000)
+        recorder.record(GenerationType.COMMENT, oldMemberId, 1_000)
 
         memberService.withdraw(oldMemberId)
         authService.login("idtok")
         val newMemberId = currentMemberId()
-        recorder.record(newMemberId, 500)
+        recorder.record(GenerationType.COMMENT, newMemberId, 500)
 
         assertEquals(1_500, limitService.usageFor(newMemberId).usedTokens)
     }
@@ -123,7 +124,7 @@ class RejoinTokenLimitIntegrationTest {
     fun `사용량을 이어받아도 재가입은 여전히 새 회원이다`() {
         authService.login("idtok")
         val oldMemberId = currentMemberId()
-        recorder.record(oldMemberId, 1_000)
+        recorder.record(GenerationType.COMMENT, oldMemberId, 1_000)
 
         memberService.withdraw(oldMemberId)
         authService.login("idtok")

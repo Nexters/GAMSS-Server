@@ -70,7 +70,7 @@ class TokenQuotaBackfillIntegrationTest {
     @Test
     fun `이미 적립된 쿼터는 덮어쓰지 않는다`() {
         val member = givenMappedMember("keep@a.com")
-        recorder.record(member.id, 1_000)
+        recorder.record(GenerationType.COMMENT, member.id, 1_000)
         generationLogRepository.save(generationLog(member.id, GenerationType.COMMENT, usedTokens = 42))
 
         backfill.seed()

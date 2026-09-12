@@ -7,6 +7,7 @@ import com.nexters.gamss.member.domain.Member
 import com.nexters.gamss.member.domain.MemberSocialIdentity
 import com.nexters.gamss.member.repository.MemberRepository
 import com.nexters.gamss.member.repository.MemberSocialIdentityRepository
+import com.nexters.gamss.monitoring.domain.GenerationType
 import com.nexters.gamss.support.FakeCardMessageGeneratorConfig
 import com.nexters.gamss.support.FakeEmotionExtractorConfig
 import com.nexters.gamss.support.TestcontainersConfig
@@ -98,7 +99,7 @@ class CardTokenLimitIntegrationTest {
     private fun memberWithExhaustedTokens(email: String): Member {
         val member = memberRepository.save(Member(email))
         memberSocialIdentityRepository.save(MemberSocialIdentity(member.id, subjectKeyFor(member)))
-        tokenQuotaRecorder.record(member.id, tokenPolicyService.current().dailyTokenLimit.toInt())
+        tokenQuotaRecorder.record(GenerationType.COMMENT, member.id, tokenPolicyService.current().dailyTokenLimit.toInt())
         assertFalse(
             dailyTokenLimitService.isWithinLimit(member.id),
             "이 테스트의 전제가 깨졌다 — 한도를 넘긴 상태를 만들지 못했다",

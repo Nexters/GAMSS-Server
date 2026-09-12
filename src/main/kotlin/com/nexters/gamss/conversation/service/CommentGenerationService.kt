@@ -380,7 +380,8 @@ class CommentGenerationService(
             failureReason = failureReasonOf(error),
         )
         // 한도 집행용 적립은 관측 기록과 따로 간다. 값은 같지만 실패 허용도가 달라 묶지 않는다.
-        tokenQuotaRecorder.record(memberId, tokens.used)
+        // 합산 대상인지는 종류가 정한다(GenerationType.countsTowardQuota).
+        tokenQuotaRecorder.record(type, memberId, tokens.used)
     }
 
     private fun currentStatusResult(messageId: Long): GenerationResult {

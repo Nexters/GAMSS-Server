@@ -20,6 +20,7 @@ import com.nexters.gamss.llm.generation.TokenUsageAccumulator
 import com.nexters.gamss.llm.prompt.CardMessageWindow
 import com.nexters.gamss.monitoring.domain.GenerationType
 import com.nexters.gamss.monitoring.service.GenerationLogRecorder
+import com.nexters.gamss.tokenlimit.service.TokenQuotaRecorder
 import org.slf4j.LoggerFactory
 import org.springframework.dao.DataAccessException
 import org.springframework.dao.DataIntegrityViolationException
@@ -42,6 +43,7 @@ class CardService(
     private val cardMessageGenerator: CardMessageGenerator,
     private val emotionExtractor: EmotionExtractor,
     private val generationLogRecorder: GenerationLogRecorder,
+    private val tokenQuotaRecorder: TokenQuotaRecorder,
     private val cardPersistenceService: CardPersistenceService,
     private val llmRetryExecutor: LlmRetryExecutor = LlmRetryExecutor(),
 ) {
@@ -331,8 +333,9 @@ class CardService(
             outputTokens = tokens.output,
             failureReason = error?.let { (it.cause ?: it).javaClass.simpleName },
         )
-        // 쿼터에는 적립하지 않는다. 예전 합산 쿼리도 CARD·CARD_EMOTION 을 빼고 셌다 - 대화 1개당
-        // 1장이고 cards.conversation_id UNIQUE 로 묶여 반복 소비가 불가능하다.
+        // 카드 종류는 한도에 합산되지 않지만(GenerationType.countsTowardQuota) 그 판단은 여기서
+        // 하지 않는다 - 호출부마다 정하면 정책이 흩어져 한 곳을 빠뜨렸을 때 조용히 어긋난다.
+        tokenQuotaRecorder.record(type, memberId, tokens.used)
     }
 
     private fun markCardGenerationStatus(

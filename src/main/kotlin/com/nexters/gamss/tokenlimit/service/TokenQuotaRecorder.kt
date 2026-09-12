@@ -1,5 +1,6 @@
 package com.nexters.gamss.tokenlimit.service
 
+import com.nexters.gamss.monitoring.domain.GenerationType
 import com.nexters.gamss.tokenlimit.domain.TokenQuotaWindow
 import com.nexters.gamss.tokenlimit.repository.TokenQuotaUsageRepository
 import io.micrometer.core.instrument.Counter
@@ -35,11 +36,16 @@ class TokenQuotaRecorder(
                 .register(meterRegistry)
         }
 
+    /**
+     * 한도에 합산되는 종류인지는 [GenerationType.countsTowardQuota] 가 정한다 - 호출부가 부를지
+     * 말지로 정하면 정책이 호출부 수만큼 흩어져, 한 곳을 빠뜨렸을 때 조용히 어긋난다.
+     */
     fun record(
+        type: GenerationType,
         memberId: Long,
         usedTokens: Int,
     ) {
-        if (usedTokens <= 0) {
+        if (!type.countsTowardQuota || usedTokens <= 0) {
             return
         }
         try {
