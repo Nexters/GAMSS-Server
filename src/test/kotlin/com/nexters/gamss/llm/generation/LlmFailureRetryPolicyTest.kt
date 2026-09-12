@@ -22,6 +22,12 @@ class LlmFailureRetryPolicyTest {
     }
 
     @Test
+    fun `서킷이 열려 막힌 호출은 재시도하지 않는다`() {
+        // 다시 불러도 SDK까지 가지 못하고 같은 자리에서 막힌다. 재시도는 사용자를 기다리게만 한다.
+        assertFalse(LlmFailureRetryPolicy.shouldRetry(failure(LlmFailureKind.CIRCUIT_OPEN)))
+    }
+
+    @Test
     fun `실패 종류를 모르는 예외는 재시도 대상으로 본다`() {
         // 종류를 못 읽었다는 이유로 재시도를 포기하지 않는다.
         assertTrue(LlmFailureRetryPolicy.shouldRetry(IllegalStateException("종류 없음")))

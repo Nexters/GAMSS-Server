@@ -247,6 +247,26 @@ class LlmRetryExecutorTest {
     }
 
     @Test
+    fun `기본 정책은 서킷이 열린 실패에서 재시도도 대기도 하지 않는다`() {
+        // 서킷을 다는 값어치가 여기서 나온다. 이 동작이 없으면 서킷이 열려 있는데도 루프가 3회를
+        // 돌면서 백오프까지 헛되이 자고, 요청 스레드는 그동안 묶여 있다.
+        val attempts = mutableListOf<Int>()
+
+        assertFailsWith<CommentGenerationFailedException> {
+            executor.execute<String, CommentGenerationFailedException>(
+                retryOn = CommentGenerationFailedException::class,
+                maxAttempts = 3,
+            ) { attempt ->
+                attempts += attempt
+                throw CommentGenerationFailedException("서킷 오픈", kind = LlmFailureKind.CIRCUIT_OPEN)
+            }
+        }
+
+        assertEquals(listOf(1), attempts)
+        assertTrue(sleeper.sleptMillis.isEmpty())
+    }
+
+    @Test
     fun `기본 정책은 429에 고정 간격을, 검증 실패에 즉시 재시도를 준다`() {
         assertFailsWith<CommentGenerationFailedException> {
             executor.execute<String, CommentGenerationFailedException>(
