@@ -5,6 +5,7 @@ import com.nexters.gamss.auth.repository.SocialAccountRepository
 import com.nexters.gamss.auth.social.SocialProvider
 import com.nexters.gamss.member.domain.Member
 import com.nexters.gamss.member.service.MemberService
+import com.nexters.gamss.member.service.MemberSocialIdentityService
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -18,7 +19,9 @@ import kotlin.test.assertTrue
 class SocialAccountServiceTest {
     private val socialAccountRepository = mockk<SocialAccountRepository>()
     private val memberService = mockk<MemberService>()
-    private val socialAccountService = SocialAccountService(socialAccountRepository, memberService)
+    private val memberSocialIdentityService = mockk<MemberSocialIdentityService>(relaxed = true)
+    private val socialAccountService =
+        SocialAccountService(socialAccountRepository, memberService, memberSocialIdentityService)
 
     @Test
     fun `기존 소셜 계정이면 연결된 회원을 반환한다`() {

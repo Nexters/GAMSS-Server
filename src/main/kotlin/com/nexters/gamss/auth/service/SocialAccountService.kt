@@ -4,6 +4,7 @@ import com.nexters.gamss.auth.domain.SocialAccount
 import com.nexters.gamss.auth.repository.SocialAccountRepository
 import com.nexters.gamss.auth.social.SocialProvider
 import com.nexters.gamss.member.service.MemberService
+import com.nexters.gamss.member.service.MemberSocialIdentityService
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional
 class SocialAccountService(
     private val socialAccountRepository: SocialAccountRepository,
     private val memberService: MemberService,
+    private val memberSocialIdentityService: MemberSocialIdentityService,
 ) {
     @Transactional
     fun resolveMember(
@@ -27,6 +29,9 @@ class SocialAccountService(
         val storedProvider = provider.name
         val socialAccount = socialAccountRepository.findByProviderAndProviderId(storedProvider, providerId)
         if (socialAccount != null) {
+            // 기존 회원도 매핑을 확인한다. 이 기능 배포 전에 가입한 회원은 매핑이 없어, 그대로 두면
+            // 사용량이 집계되지 않아 한도가 그 회원에게만 꺼진다(#222).
+            memberSocialIdentityService.ensureMapped(socialAccount.memberId, storedProvider, providerId)
             return ResolvedMember(memberService.getById(socialAccount.memberId), isNewMember = false)
         }
         val member = memberService.create(email, name)
@@ -37,6 +42,9 @@ class SocialAccountService(
         } catch (e: DataIntegrityViolationException) {
             throw ConcurrentRegistrationException(provider, providerId)
         }
+        // 소셜 계정 저장 뒤에 매핑한다. 앞이 유니크 제약에 걸려 되돌아갈 회원에게 매핑을 달아두면,
+        // 재시도로 만들어진 진짜 회원이 아닌 쪽에 주체가 붙는다.
+        memberSocialIdentityService.ensureMapped(member.id, storedProvider, providerId)
         return ResolvedMember(member, isNewMember = true)
     }
 }
