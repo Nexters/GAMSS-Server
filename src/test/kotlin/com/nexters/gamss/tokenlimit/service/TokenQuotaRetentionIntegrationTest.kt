@@ -18,10 +18,7 @@ import java.time.Duration
 import java.time.Instant
 import kotlin.test.assertEquals
 
-/**
- * 한도는 하루짜리라 지난 구간의 사용량은 더 쓸 데가 없다. 남겨두면 주체별로 행이 무한히 쌓이는데,
- * 특히 탈퇴·재가입을 반복하는 쪽이 만드는 행은 우리가 막으려는 그 행위의 부산물이다(#222).
- */
+/** 지난 구간의 사용량은 쓸 데가 없다. 남겨두면 주체별로 행이 무한히 쌓인다(#222). */
 @SpringBootTest
 @Import(TestcontainersConfig::class)
 @Transactional

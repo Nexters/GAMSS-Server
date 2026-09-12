@@ -11,21 +11,16 @@ import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
 
 /**
- * 기동 1회 백필 전용 쿼리. 평소 경로([TokenQuotaUsageRepository])와 갈라 둔 것은 **여기만
- * `generation_log` 를 읽기** 때문이다 - 한도 판정을 관측 테이블에서 떼어낸 것이 이번 작업의
- * 성과인데, 그 의존이 평소 경로에 섞여 들어오면 금방 되돌아간다.
+ * 기동 1회 백필 전용. 평소 경로([TokenQuotaUsageRepository])와 갈라 둔 것은 여기만 `generation_log`
+ * 를 읽기 때문이다 - 판정을 관측 테이블에서 떼어낸 것이 이번 작업의 성과다.
  */
 @Repository
 interface TokenQuotaBackfillRepository : JpaRepository<TokenQuotaUsage, TokenQuotaUsageId> {
     /**
-     * 매핑은 있는데 쿼터 행이 없는 주체에, [windowStart] 이후 `generation_log` 합을 채운다.
+     * 쿼터 행이 없는 주체에 [windowStart] 이후 `generation_log` 합을 채운다.
      *
-     * **이미 있는 행은 건드리지 않는다**(`used_tokens = used_tokens`). 덮어쓰면 기동마다 카운터가
-     * generation_log 기준으로 재계산돼, 적립이 성공했지만 관측 기록이 실패한 만큼이 사라진다 -
-     * 그러면 사실상 관측 테이블이 진실의 원천으로 되돌아간다. 구멍만 메우고 손은 대지 않는다.
-     *
-     * 카드는 제외한다. 예전 합산 쿼리와 같은 기준이어야 백필이 없던 사용량을 만들어내지 않는다
-     * ([com.nexters.gamss.card.service.CardService] 가 적립하지 않는 이유와 같다).
+     * 이미 있는 행은 건드리지 않는다(`used_tokens = used_tokens`) - 덮어쓰면 기동마다 재계산돼
+     * 관측 테이블이 사실상 진실의 원천으로 되돌아간다. 카드 제외는 예전 합산 쿼리와 같은 기준이다.
      */
     @Transactional
     @Modifying(flushAutomatically = true, clearAutomatically = true)

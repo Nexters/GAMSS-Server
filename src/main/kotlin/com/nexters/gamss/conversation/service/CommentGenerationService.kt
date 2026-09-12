@@ -379,8 +379,7 @@ class CommentGenerationService(
             outputTokens = tokens.output,
             failureReason = failureReasonOf(error),
         )
-        // 한도 집행용 적립은 관측 기록과 따로 간다(TokenQuotaRecorder). 값은 같지만 소비자와 실패
-        // 허용도가 달라, 한쪽 실패가 다른 쪽을 끌고 내려가지 않게 묶지 않는다.
+        // 한도 집행용 적립은 관측 기록과 따로 간다. 값은 같지만 실패 허용도가 달라 묶지 않는다.
         tokenQuotaRecorder.record(memberId, tokens.used)
     }
 
