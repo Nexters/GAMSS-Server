@@ -2,12 +2,12 @@ package com.nexters.gamss.member.controller
 
 import com.nexters.gamss.global.security.JwtIssuer
 import com.nexters.gamss.member.domain.Member
+import com.nexters.gamss.member.domain.MemberSocialIdentity
 import com.nexters.gamss.member.domain.Nickname
 import com.nexters.gamss.member.repository.MemberRepository
-import com.nexters.gamss.monitoring.domain.GenerationLog
-import com.nexters.gamss.monitoring.domain.GenerationType
-import com.nexters.gamss.monitoring.repository.GenerationLogRepository
+import com.nexters.gamss.member.repository.MemberSocialIdentityRepository
 import com.nexters.gamss.support.TestcontainersConfig
+import com.nexters.gamss.tokenlimit.service.TokenQuotaRecorder
 import org.hamcrest.Matchers.nullValue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -42,7 +42,10 @@ class MemberControllerIntegrationTest {
     private lateinit var jwtIssuer: JwtIssuer
 
     @Autowired
-    private lateinit var generationLogRepository: GenerationLogRepository
+    private lateinit var memberSocialIdentityRepository: MemberSocialIdentityRepository
+
+    @Autowired
+    private lateinit var tokenQuotaRecorder: TokenQuotaRecorder
 
     private lateinit var mockMvc: MockMvc
 
@@ -172,8 +175,8 @@ class MemberControllerIntegrationTest {
     @Test
     fun `오늘 소비한 토큰 합을 조회하고 상한 비활성 환경(dev)에서는 상한이 null로 내려간다`() {
         val member = memberRepository.save(Member("me@a.com"))
-        generationLogRepository.save(generationLog(member.id, usedTokens = 100))
-        generationLogRepository.save(generationLog(member.id, usedTokens = 200))
+        givenUsedTokens(member, 100)
+        givenUsedTokens(member, 200)
 
         mockMvc
             .get("/api/members/me/token-usage") {
@@ -186,12 +189,13 @@ class MemberControllerIntegrationTest {
             }
     }
 
+    /** 주체가 다르면 사용량도 갈린다. 재가입 이월이 남의 사용량까지 끌어오면 안 된다(#222). */
     @Test
-    fun `다른 회원의 생성 로그는 내 토큰 사용량에 합산되지 않는다`() {
+    fun `다른 주체의 사용량은 내 토큰 사용량에 합산되지 않는다`() {
         val member = memberRepository.save(Member("me@a.com"))
         val other = memberRepository.save(Member("other@a.com"))
-        generationLogRepository.save(generationLog(member.id, usedTokens = 100))
-        generationLogRepository.save(generationLog(other.id, usedTokens = 900))
+        givenUsedTokens(member, 100)
+        givenUsedTokens(other, 900)
 
         mockMvc
             .get("/api/members/me/token-usage") {
@@ -211,20 +215,19 @@ class MemberControllerIntegrationTest {
             }
     }
 
-    private fun generationLog(
-        memberId: Long,
+    /**
+     * 적립 경로([TokenQuotaRecorder])를 그대로 써서 사용량을 만든다. 주체 매핑이 없으면 적립이
+     * 조용히 무효과가 되므로 매핑도 함께 보장한다.
+     */
+    private fun givenUsedTokens(
+        member: Member,
         usedTokens: Int,
-    ): GenerationLog =
-        GenerationLog(
-            generationType = GenerationType.COMMENT,
-            model = "test-model",
-            memberId = memberId,
-            success = true,
-            attemptCount = 1,
-            usedTokens = usedTokens,
-            latencyMs = 100,
-            createdAt = Instant.now(),
-        )
+    ) {
+        if (!memberSocialIdentityRepository.existsByMemberId(member.id)) {
+            memberSocialIdentityRepository.save(MemberSocialIdentity(member.id, "test-subject-%064d".format(member.id).takeLast(64)))
+        }
+        tokenQuotaRecorder.record(member.id, usedTokens)
+    }
 
     private fun bearerFor(member: Member): String = "Bearer ${jwtIssuer.issueAccessToken(member.id)}"
 }

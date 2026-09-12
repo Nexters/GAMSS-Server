@@ -17,7 +17,6 @@ import com.nexters.gamss.llm.generation.EmotionExtractionOutput
 import com.nexters.gamss.llm.generation.EmotionExtractor
 import com.nexters.gamss.monitoring.domain.GenerationType
 import com.nexters.gamss.monitoring.service.GenerationLogRecorder
-import com.nexters.gamss.tokenlimit.service.TokenQuotaRecorder
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -41,7 +40,6 @@ class CardServiceTest {
     private val emotionExtractor = mockk<EmotionExtractor>()
     private val generationLogRecorder = mockk<GenerationLogRecorder>(relaxed = true)
     private val cardPersistenceService = mockk<CardPersistenceService>()
-    private val tokenQuotaRecorder = mockk<TokenQuotaRecorder>(relaxed = true)
     private val service =
         CardService(
             cardRepository,
@@ -50,7 +48,6 @@ class CardServiceTest {
             cardMessageGenerator,
             emotionExtractor,
             generationLogRecorder,
-            tokenQuotaRecorder,
             cardPersistenceService,
         )
 

@@ -20,7 +20,6 @@ import com.nexters.gamss.llm.generation.TokenUsageAccumulator
 import com.nexters.gamss.llm.prompt.CardMessageWindow
 import com.nexters.gamss.monitoring.domain.GenerationType
 import com.nexters.gamss.monitoring.service.GenerationLogRecorder
-import com.nexters.gamss.tokenlimit.service.TokenQuotaRecorder
 import org.slf4j.LoggerFactory
 import org.springframework.dao.DataAccessException
 import org.springframework.dao.DataIntegrityViolationException
@@ -43,7 +42,6 @@ class CardService(
     private val cardMessageGenerator: CardMessageGenerator,
     private val emotionExtractor: EmotionExtractor,
     private val generationLogRecorder: GenerationLogRecorder,
-    private val tokenQuotaRecorder: TokenQuotaRecorder,
     private val cardPersistenceService: CardPersistenceService,
     private val llmRetryExecutor: LlmRetryExecutor = LlmRetryExecutor(),
 ) {
@@ -333,8 +331,10 @@ class CardService(
             outputTokens = tokens.output,
             failureReason = error?.let { (it.cause ?: it).javaClass.simpleName },
         )
-        // 한도 집행용 적립은 관측 기록과 따로 간다(TokenQuotaRecorder).
-        tokenQuotaRecorder.record(memberId, tokens.used)
+        // **쿼터에 적립하지 않는다.** 카드는 대화 1개당 1장이고 cards.conversation_id UNIQUE 로 묶여
+        // 있어 사용자가 반복해서 비용을 늘릴 수 없다 - 눌러서 계속 만들 수 있는 댓글·답글과 같은 통을
+        // 쓸 이유가 없다. 예전 합산 쿼리도 CARD·CARD_EMOTION 을 빼고 셌으므로 그 계약을 그대로 잇는다.
+        // 관측 기록에는 그대로 남아 백오피스의 대화방별 비용 집계는 영향이 없다.
     }
 
     private fun markCardGenerationStatus(
