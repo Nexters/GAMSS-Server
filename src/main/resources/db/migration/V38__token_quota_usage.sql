@@ -17,17 +17,17 @@ CREATE TABLE token_quota_usage (
 
 -- 회원과 쿼터 주체를 잇는 매핑. 적립·판정 모두 member_id 로 들어와 주체를 찾는다.
 --
--- **탈퇴 시 지우지 않는다.** social_accounts 는 (provider, provider_id) 유니크 제약 때문에 탈퇴 시
--- 하드 삭제해야 하고(AuthResourceCleaner), 그래서 지금까지는 탈퇴 전후를 이어줄 식별자가 하나도
--- 남지 않았다. 이 테이블이 그 고리다 - WithdrawnMemberCleaner 구현을 만들면 안 된다.
+-- 탈퇴 시 다른 자원과 함께 지운다(MemberSocialIdentityCleaner). 지워도 재가입 이월은 깨지지 않는다 -
+-- subject_key 가 소셜 신원에서 결정론적으로 나와서, 재가입하면 같은 키로 매핑이 새로 생기고 사용량이
+-- 쌓인 token_quota_usage 행에 그대로 붙는다. 이월을 떠받치는 것은 이 행이 아니라 키의 결정론성이다.
 --
--- 대신 영구히 두지도 않는다. 막으려는 것은 '하루' 한도이므로 한 구간만 지나면 연결을 끊는다
--- (TokenQuotaRetentionScheduler). 탈퇴자를 과거 행적에 영구히 연결할 수 있는 상태로 두지 않는다.
+-- 탈퇴한 회원에게 이 행은 쓸 데가 없다(다시 로그인할 수 없으니 적립도 판정도 없다). 남겨두면 그 사람을
+-- 과거 행적에 다시 연결할 고리만 남는다.
 CREATE TABLE member_social_identity (
     -- 회원당 하나. 동시 최초 로그인에서 중복 삽입이 유니크 위반으로 걸리게 PK 로 둔다.
     member_id   BIGINT      NOT NULL PRIMARY KEY,
     subject_key CHAR(64)    NOT NULL,
     created_at  DATETIME(6) NOT NULL,
-    -- 주체로 회원들을 거꾸로 찾는 경로(기동 백필, 보관기간 정리)에 쓴다.
+    -- 주체로 묶어 집계하는 경로(기동 백필의 generation_log 시드)에 쓴다.
     INDEX idx_member_social_identity_subject (subject_key)
 );
