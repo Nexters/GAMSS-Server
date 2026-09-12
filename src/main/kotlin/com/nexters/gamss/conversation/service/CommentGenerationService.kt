@@ -25,6 +25,7 @@ import com.nexters.gamss.llm.selection.PastSummaryPolicy
 import com.nexters.gamss.monitoring.domain.GenerationType
 import com.nexters.gamss.monitoring.service.GenerationLogRecorder
 import com.nexters.gamss.tokenlimit.service.DailyTokenLimitService
+import com.nexters.gamss.tokenlimit.service.TokenQuotaRecorder
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.time.Instant
@@ -44,6 +45,7 @@ class CommentGenerationService(
     private val commentFeedValidator: CommentFeedValidator,
     private val commentPersistenceService: CommentPersistenceService,
     private val generationLogRecorder: GenerationLogRecorder,
+    private val tokenQuotaRecorder: TokenQuotaRecorder,
     private val dailyTokenLimitService: DailyTokenLimitService,
     private val llmRetryExecutor: LlmRetryExecutor = LlmRetryExecutor(),
 ) {
@@ -377,6 +379,9 @@ class CommentGenerationService(
             outputTokens = tokens.output,
             failureReason = failureReasonOf(error),
         )
+        // 한도 집행용 적립은 관측 기록과 따로 간다(TokenQuotaRecorder). 값은 같지만 소비자와 실패
+        // 허용도가 달라, 한쪽 실패가 다른 쪽을 끌고 내려가지 않게 묶지 않는다.
+        tokenQuotaRecorder.record(memberId, tokens.used)
     }
 
     private fun currentStatusResult(messageId: Long): GenerationResult {

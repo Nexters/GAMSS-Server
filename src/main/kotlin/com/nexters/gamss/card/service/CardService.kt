@@ -20,6 +20,7 @@ import com.nexters.gamss.llm.generation.TokenUsageAccumulator
 import com.nexters.gamss.llm.prompt.CardMessageWindow
 import com.nexters.gamss.monitoring.domain.GenerationType
 import com.nexters.gamss.monitoring.service.GenerationLogRecorder
+import com.nexters.gamss.tokenlimit.service.TokenQuotaRecorder
 import org.slf4j.LoggerFactory
 import org.springframework.dao.DataAccessException
 import org.springframework.dao.DataIntegrityViolationException
@@ -42,6 +43,7 @@ class CardService(
     private val cardMessageGenerator: CardMessageGenerator,
     private val emotionExtractor: EmotionExtractor,
     private val generationLogRecorder: GenerationLogRecorder,
+    private val tokenQuotaRecorder: TokenQuotaRecorder,
     private val cardPersistenceService: CardPersistenceService,
     private val llmRetryExecutor: LlmRetryExecutor = LlmRetryExecutor(),
 ) {
@@ -331,6 +333,8 @@ class CardService(
             outputTokens = tokens.output,
             failureReason = error?.let { (it.cause ?: it).javaClass.simpleName },
         )
+        // 한도 집행용 적립은 관측 기록과 따로 간다(TokenQuotaRecorder).
+        tokenQuotaRecorder.record(memberId, tokens.used)
     }
 
     private fun markCardGenerationStatus(

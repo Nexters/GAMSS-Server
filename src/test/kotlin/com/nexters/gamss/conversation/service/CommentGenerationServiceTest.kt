@@ -27,6 +27,7 @@ import com.nexters.gamss.llm.selection.PastSummaryPolicy
 import com.nexters.gamss.monitoring.domain.GenerationType
 import com.nexters.gamss.monitoring.service.GenerationLogRecorder
 import com.nexters.gamss.tokenlimit.service.DailyTokenLimitService
+import com.nexters.gamss.tokenlimit.service.TokenQuotaRecorder
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -47,6 +48,8 @@ class CommentGenerationServiceTest {
     private val generationLogRecorder = mockk<GenerationLogRecorder>(relaxed = true)
     private val dailyTokenLimitService = mockk<DailyTokenLimitService> { every { isWithinLimit(any()) } returns true }
 
+    private val tokenQuotaRecorder = mockk<TokenQuotaRecorder>(relaxed = true)
+
     private val service =
         CommentGenerationService(
             messageRepository,
@@ -57,6 +60,7 @@ class CommentGenerationServiceTest {
             commentFeedValidator,
             commentPersistenceService,
             generationLogRecorder,
+            tokenQuotaRecorder,
             dailyTokenLimitService,
         )
 
