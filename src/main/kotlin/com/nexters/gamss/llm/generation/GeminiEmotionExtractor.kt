@@ -10,7 +10,6 @@ import com.nexters.gamss.llm.config.GeminiProperties
 import com.nexters.gamss.llm.error.CardGenerationFailedException
 import com.nexters.gamss.llm.prompt.PromptProvider
 import com.nexters.gamss.llm.prompt.PromptType
-import com.nexters.gamss.llm.provider.GeminiConnectionService
 import com.nexters.gamss.llm.settings.LlmSettingsService
 import org.springframework.stereotype.Component
 import tools.jackson.core.JacksonException
@@ -28,25 +27,34 @@ import tools.jackson.databind.json.JsonMapper
 @Component
 class GeminiEmotionExtractor(
     private val properties: GeminiProperties,
-    private val connections: GeminiConnectionService,
+    private val geminiCaller: GeminiCaller,
     private val promptProvider: PromptProvider,
     private val llmSettingsService: LlmSettingsService,
     private val jsonMapper: JsonMapper,
 ) : EmotionExtractor {
     override fun extract(userMessages: List<String>): EmotionExtractionOutput {
-        val response =
+        // 운영 중 백오피스에서 바꾼 값을 매 호출 반영한다(재배포 불필요).
+        // 설정 조회(DB)는 전송 호출보다 먼저 일어나 [GeminiCaller] 의 예외 번역이 닿지 않으므로, 여기서
+        // 직접 종류를 실어 보낸다. 인자 자리에 두면 원래 예외가 그대로 빠져나가 재시도 대상 판정
+        // ([LlmRetryExecutor] 의 `retryOn`)에 걸리지 않고, 재시도도 503 계약도 함께 사라진다.
+        val (model, systemPrompt) =
             try {
-                connections.active().client().models.generateContent(
-                    llmSettingsService.currentModel(),
-                    promptProvider.buildCardEmotionUserContent(userMessages),
-                    buildConfig(llmSettingsService.currentPrompt(PromptType.CARD_EMOTION)),
-                )
+                llmSettingsService.currentModel() to llmSettingsService.currentPrompt(PromptType.CARD_EMOTION)
             } catch (e: Exception) {
                 throw CardGenerationFailedException(
                     "카드 감정 분류 LLM 호출에 실패했습니다.",
                     e,
                     kind = GeminiFailureKinds.of(e),
                 )
+            }
+
+        val response =
+            geminiCaller.call(
+                model,
+                promptProvider.buildCardEmotionUserContent(userMessages),
+                buildConfig(systemPrompt),
+            ) { cause, kind ->
+                CardGenerationFailedException("카드 감정 분류 LLM 호출에 실패했습니다.", cause, kind = kind)
             }
 
         // 토큰은 파싱 전에 뽑는다 — 이후 파싱이 실패해도 이미 과금된 토큰을 실패 로그에 전달할 수 있게 한다.

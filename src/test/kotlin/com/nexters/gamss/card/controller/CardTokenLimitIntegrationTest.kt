@@ -4,15 +4,16 @@ import com.nexters.gamss.conversation.domain.Conversation
 import com.nexters.gamss.conversation.repository.ConversationRepository
 import com.nexters.gamss.global.security.JwtIssuer
 import com.nexters.gamss.member.domain.Member
+import com.nexters.gamss.member.domain.MemberSocialIdentity
 import com.nexters.gamss.member.repository.MemberRepository
-import com.nexters.gamss.monitoring.domain.GenerationLog
+import com.nexters.gamss.member.repository.MemberSocialIdentityRepository
 import com.nexters.gamss.monitoring.domain.GenerationType
-import com.nexters.gamss.monitoring.repository.GenerationLogRepository
 import com.nexters.gamss.support.FakeCardMessageGeneratorConfig
 import com.nexters.gamss.support.FakeEmotionExtractorConfig
 import com.nexters.gamss.support.TestcontainersConfig
 import com.nexters.gamss.tokenlimit.service.DailyTokenLimitService
 import com.nexters.gamss.tokenlimit.service.TokenPolicyService
+import com.nexters.gamss.tokenlimit.service.TokenQuotaRecorder
 import jakarta.persistence.EntityManager
 import jakarta.persistence.PersistenceContext
 import org.junit.jupiter.api.BeforeEach
@@ -39,7 +40,7 @@ import kotlin.test.assertFalse
  *
  * 단위 테스트로는 이 시나리오를 만들 수 없다 — [com.nexters.gamss.card.service.CardService] 가
  * [DailyTokenLimitService] 를 더 이상 받지 않아 "한도를 다 쓴 회원" 이라는 상태 자체를 주입할
- * 곳이 없다. 그래서 `generation_log` 를 상한까지 채운 회원으로 API 를 부른다.
+ * 곳이 없다. 그래서 쿼터를 상한까지 채운 회원으로 API 를 부른다.
  *
  * 상한은 `gamss.token-limit.enabled` 기본값이 false 라 평소엔 꺼져 있다. 켜지 않으면
  * [DailyTokenLimitService.isWithinLimit] 이 항상 true 라 아래 테스트가 **통과해도 아무것도
@@ -61,7 +62,10 @@ class CardTokenLimitIntegrationTest {
     private lateinit var conversationRepository: ConversationRepository
 
     @Autowired
-    private lateinit var generationLogRepository: GenerationLogRepository
+    private lateinit var memberSocialIdentityRepository: MemberSocialIdentityRepository
+
+    @Autowired
+    private lateinit var tokenQuotaRecorder: TokenQuotaRecorder
 
     @Autowired
     private lateinit var dailyTokenLimitService: DailyTokenLimitService
@@ -86,27 +90,25 @@ class CardTokenLimitIntegrationTest {
                 .build()
     }
 
-    /** 상한을 꽉 채운 회원. 댓글로 채운다 — 카드로 채우면 애초에 합산에서 빠져 상한에 닿지 않는다. */
+    /**
+     * 상한을 꽉 채운 회원.
+     *
+     * 적립 경로([TokenQuotaRecorder])를 그대로 써서 채운다 - 쿼터 행을 직접 넣으면 주체 매핑을
+     * 거치는 실제 경로가 빠져, 판정만 맞고 적립이 깨진 상태를 통과시킨다.
+     */
     private fun memberWithExhaustedTokens(email: String): Member {
         val member = memberRepository.save(Member(email))
-        generationLogRepository.save(
-            GenerationLog(
-                generationType = GenerationType.COMMENT,
-                model = "gemini-3.1-flash-lite",
-                memberId = member.id,
-                success = true,
-                attemptCount = 1,
-                usedTokens = tokenPolicyService.current().dailyTokenLimit.toInt(),
-                latencyMs = 100,
-                createdAt = Instant.now(),
-            ),
-        )
+        memberSocialIdentityRepository.save(MemberSocialIdentity(member.id, subjectKeyFor(member)))
+        tokenQuotaRecorder.record(GenerationType.COMMENT, member.id, tokenPolicyService.current().dailyTokenLimit.toInt())
         assertFalse(
             dailyTokenLimitService.isWithinLimit(member.id),
             "이 테스트의 전제가 깨졌다 — 한도를 넘긴 상태를 만들지 못했다",
         )
         return member
     }
+
+    /** 회원마다 다른 주체. 실제 값은 소셜 신원의 HMAC 이지만, 여기서 필요한 것은 유일성뿐이다. */
+    private fun subjectKeyFor(member: Member): String = "test-subject-%064d".format(member.id).takeLast(64)
 
     /**
      * 카드에서 막으면 대화는 이미 종료(커밋)된 뒤라 "종료됐는데 카드 없는" 방이 남고, 그 방은

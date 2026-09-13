@@ -27,6 +27,7 @@ import com.nexters.gamss.llm.selection.PastSummaryPolicy
 import com.nexters.gamss.monitoring.domain.GenerationType
 import com.nexters.gamss.monitoring.service.GenerationLogRecorder
 import com.nexters.gamss.tokenlimit.service.DailyTokenLimitService
+import com.nexters.gamss.tokenlimit.service.TokenQuotaRecorder
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -47,6 +48,8 @@ class CommentGenerationServiceTest {
     private val generationLogRecorder = mockk<GenerationLogRecorder>(relaxed = true)
     private val dailyTokenLimitService = mockk<DailyTokenLimitService> { every { isWithinLimit(any()) } returns true }
 
+    private val tokenQuotaRecorder = mockk<TokenQuotaRecorder>(relaxed = true)
+
     private val service =
         CommentGenerationService(
             messageRepository,
@@ -57,6 +60,7 @@ class CommentGenerationServiceTest {
             commentFeedValidator,
             commentPersistenceService,
             generationLogRecorder,
+            tokenQuotaRecorder,
             dailyTokenLimitService,
         )
 
@@ -147,6 +151,8 @@ class CommentGenerationServiceTest {
         assertEquals(CommentGenerationOutcome.DONE, result.outcome)
         assertEquals(savedMessages, result.messages)
         assertEquals(123, result.usedTokens)
+        // 적립이 빠지면 생성 토큰이 주체 기반 쿼터에 안 쌓여 한도가 조용히 느슨해진다.
+        verify(exactly = 1) { tokenQuotaRecorder.record(GenerationType.COMMENT, 1L, 123) }
     }
 
     @Test
@@ -372,6 +378,8 @@ class CommentGenerationServiceTest {
                 failureReason = any(),
             )
         }
+        // 쿼터도 같은 합산값을 받아야 한다. 마지막 시도만 적립하면 재시도로 쓴 토큰이 한도를 빠져나간다.
+        verify(exactly = 1) { tokenQuotaRecorder.record(GenerationType.COMMENT, 1L, 300) }
     }
 
     @Test

@@ -3,9 +3,9 @@ package com.nexters.gamss.llm.error
 /**
  * LLM 생성이 실패한 원인의 종류. 재시도 여부와 시도 사이 대기 간격이 이 값 하나로 갈린다.
  *
- * SDK 타입(`ApiException` 등)은 제너레이터 밖으로 나가지 않으므로, 제너레이터가 SDK 예외를 이 값으로
- * 번역해 예외에 실어 보낸다 — 덕분에 재시도 정책([com.nexters.gamss.llm.generation.LlmFailureRetryPolicy])은
- * Gemini를 모른 채로 남는다.
+ * SDK 타입(`ApiException` 등)은 전송 호출 자리 밖으로 나가지 않으므로,
+ * [com.nexters.gamss.llm.generation.GeminiCaller]가 SDK 예외를 이 값으로 번역해 예외에 실어 보낸다 —
+ * 덕분에 재시도 정책([com.nexters.gamss.llm.generation.LlmFailureRetryPolicy])은 Gemini를 모른 채로 남는다.
  */
 enum class LlmFailureKind {
     /** 네트워크·IO·5xx. 상대가 아픈 것이라 짧게 쉬었다 다시 부른다. */
@@ -28,4 +28,14 @@ enum class LlmFailureKind {
      * 하되 간격 없이 곧바로 다시 부른다.
      */
     VALIDATION,
+
+    /**
+     * 서킷브레이커가 열려 호출이 나가지 못했다. "업스트림이 아프다"는 판정이 이미 끝난 상태라 다시
+     * 불러야 SDK까지 가지도 못하고 같은 자리에서 막힌다. 재시도도 대기도 사용자를 기다리게 할 뿐이라
+     * 즉시 중단한다([com.nexters.gamss.llm.generation.GeminiCircuitPolicy]).
+     *
+     * 이것이 예외 타입이 아니라 종류인 이유는 [LlmFailure] KDoc에 있다 — 재시도 금지 실패를
+     * 서브클래스로 만들면 `retryOn` 타입 판정에 걸려 되레 재시도된다.
+     */
+    CIRCUIT_OPEN,
 }

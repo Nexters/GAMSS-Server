@@ -62,6 +62,15 @@ dependencies {
     // LLM — Gemini 공식 SDK (버전은 구현 시 Maven Central에서 최신으로 재확인)
     implementation("com.google.genai:google-genai:1.51.0")
 
+    // 서킷브레이커 — resilience4j 코어 모듈만 쓴다. Spring 스타터·어노테이션은 쓰지 않는다:
+    // 코어는 Spring 의존이 없어 Boot 4 호환 리스크가 없고, 어노테이션 재시도는 시도별 토큰 합산과
+    // 충돌한다(LlmRetryExecutor KDoc). micrometer 모듈은 /actuator/prometheus 에 서킷 상태를 싣는
+    // MeterBinder 하나 때문에 쓰는데, bulkhead·retry·ratelimiter·timelimiter 를 runtime 으로 함께
+    // 끌고 온다 — 우리가 부르지 않을 뿐 클래스패스에는 들어온다. 제외하면 그 모듈들의 태그 메트릭
+    // 클래스가 깨질 수 있어 그대로 둔다.
+    implementation("io.github.resilience4j:resilience4j-circuitbreaker:2.4.0")
+    implementation("io.github.resilience4j:resilience4j-micrometer:2.4.0")
+
     // 푸시 알림 — FCM 발송(Admin SDK). 소셜 로그인 토큰 검증은 이 SDK가 아니라 nimbus로 직접 한다.
     implementation("com.google.firebase:firebase-admin:9.9.0")
 
