@@ -48,7 +48,12 @@ export interface CardPreviewResult {
   model: string
   systemPrompt: string
   userContent: string
+  /** 실제 카드에 붙을 대표 감정. 판정이 NONSENSE면 요청한 감정과 달리 QUIRKY. */
   emotion: string
+  /** 카드 한 줄 판정. 판정 호출이 실패하면 null. */
+  kind: 'EVENT' | 'NONSENSE' | null
+  /** NONSENSE일 때 한 줄로 그대로 쓴 엉뚱이 소재. EVENT거나 판정이 실패하면 null. */
+  eongttungTopic: string | null
   /** 실제 저장될 한 줄. 생성 실패 시 null. */
   line: string | null
   length: number | null
