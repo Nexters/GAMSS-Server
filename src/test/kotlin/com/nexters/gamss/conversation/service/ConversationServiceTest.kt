@@ -339,6 +339,7 @@ class ConversationServiceTest {
         val ended = conversationService.endConversation(1L, 10L)
 
         assertEquals(ConversationStatus.ENDED, ended.status)
+        assertEquals(ConversationEndedBy.USER, ended.endedBy)
     }
 
     @Test
@@ -362,6 +363,7 @@ class ConversationServiceTest {
         val result = conversationService.endForAutoBatch(10L)
 
         assertEquals(ConversationStatus.ENDED, conversation.status)
+        assertEquals(ConversationEndedBy.AUTO_BATCH, conversation.endedBy)
         assertEquals(conversation, result)
     }
 

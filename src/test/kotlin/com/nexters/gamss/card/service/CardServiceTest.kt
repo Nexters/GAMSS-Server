@@ -95,7 +95,22 @@ class CardServiceTest {
         // 카드에 남는 것은 한 줄뿐이라 두 필드가 같은 값을 갖는다(어느 필드를 읽는 클라이언트든 깨지지 않게).
         assertEquals(saved.captured.summary, saved.captured.message)
         assertEquals(conversation.createdAt, saved.captured.conversationCreatedAt)
+        assertEquals(CardCreatedBy.USER, saved.captured.createdBy)
         verify(exactly = 1) { cardPersistenceService.save(any(), CONVERSATION_ID, "요약") }
+    }
+
+    @Test
+    fun `생성 주체는 호출부가 넘긴 값을 그대로 저장한다`() {
+        val conversation = endedConversation()
+        stubOwnedConversation(conversation)
+        stubClaimSuccess()
+        every { cardMessageGenerator.generate(EmotionType.ANGER, "요약") } returns CardMessageOutput("한 줄", 10, 0)
+        val saved = slot<Card>()
+        every { cardPersistenceService.save(capture(saved), CONVERSATION_ID, "요약") } answers { firstArg() }
+
+        service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약", createdBy = CardCreatedBy.AUTO_BATCH)
+
+        assertEquals(CardCreatedBy.AUTO_BATCH, saved.captured.createdBy)
     }
 
     @Test

@@ -4,6 +4,7 @@ import com.nexters.gamss.card.domain.Card
 import com.nexters.gamss.card.domain.CardCreatedBy
 import com.nexters.gamss.card.repository.CardRepository
 import com.nexters.gamss.conversation.domain.Conversation
+import com.nexters.gamss.conversation.domain.ConversationEndedBy
 import com.nexters.gamss.conversation.domain.Message
 import com.nexters.gamss.conversation.domain.SenderType
 import com.nexters.gamss.conversation.repository.ConversationRepository
@@ -49,7 +50,7 @@ class ConversationUsageIntegrationTest : RepositoryTest() {
     @Test
     fun `대화방별 메시지 수, 카드 여부, 토큰 합, 비용을 집계한다`() {
         val member = memberRepository.save(Member())
-        val withCard = conversationRepository.save(Conversation(memberId = member.id))
+        val withCard = conversationRepository.save(Conversation(memberId = member.id).apply { end(ConversationEndedBy.USER) })
         val withoutCard = conversationRepository.save(Conversation(memberId = member.id))
 
         // withCard: 유저 2, 캐릭터 3, 카드 O. 토큰과 비용은 아래 두 로그 합.
@@ -96,6 +97,8 @@ class ConversationUsageIntegrationTest : RepositoryTest() {
         assertEquals(7000, a.totalTokens)
         assertEquals(3000, a.cachedTokens)
         assertEquals(0.0023, a.estimatedCostUsd, 1e-9)
+        assertEquals(ConversationEndedBy.USER, a.endedBy)
+        assertEquals(CardCreatedBy.USER, a.cardCreatedBy)
 
         val b = byId.getValue(withoutCard.id)
         assertEquals(1, b.userMessageCount)
@@ -104,6 +107,8 @@ class ConversationUsageIntegrationTest : RepositoryTest() {
         assertEquals(0, b.totalTokens)
         assertEquals(0, b.cachedTokens)
         assertEquals(0.0, b.estimatedCostUsd, 1e-9)
+        assertNull(b.endedBy, "종료되지 않은 방은 종료 주체가 없어야 한다")
+        assertNull(b.cardCreatedBy, "카드가 없는 방은 생성 주체가 없어야 한다")
     }
 
     private fun saveLog(
