@@ -57,7 +57,7 @@ export interface CardPreviewResult {
   /** 실제 저장될 한 줄. 생성 실패 시 null. */
   line: string | null
   length: number | null
-  /** LLM이 그대로 돌려준 값(자르기 전). 프롬프트가 길이 지시를 지키는지 보는 용도. */
+  /** 다듬기 전 한 줄. EVENT면 LLM이 돌려준 원문, NONSENSE면 고른 엉뚱이 소재 문장이다. 길이 초과 여부를 보는 용도. */
   rawLine: string | null
   rawLength: number | null
   truncated: boolean

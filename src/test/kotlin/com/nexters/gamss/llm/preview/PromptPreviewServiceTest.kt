@@ -314,6 +314,19 @@ class PromptPreviewServiceTest {
     }
 
     @Test
+    fun `카드 미리보기는 공백만 정리된 한 줄을 잘린 것으로 표시하지 않는다`() {
+        // 잘림 표시는 프롬프트의 길이 지시를 고칠지 판단하는 근거다. 공백 정리까지 잘림으로 보이면 멀쩡한 프롬프트를 고치게 된다.
+        every { systemPromptResolver.resolveStandaloneForPreview(PromptType.CARD, null) } returns settings
+        every { cardMessageGenerator.generate(EmotionType.JOY, listOf("오늘 있었던 일"), null, settings) } returns
+            CardMessageOutput("오늘   힘들었어요", 10, 0)
+
+        val result = service.previewCard(CardPreviewCommand(null, EmotionType.JOY, listOf("오늘 있었던 일"), null))
+
+        assertEquals("오늘 힘들었어요", result.line)
+        assertFalse(result.truncated)
+    }
+
+    @Test
     fun `카드 생성이 실패해도 예외 대신 결과에 담아 돌려준다`() {
         every { systemPromptResolver.resolveStandaloneForPreview(PromptType.CARD, null) } returns settings
         every { cardMessageGenerator.generate(EmotionType.ANGER, listOf("오늘 있었던 일"), null, settings) } throws

@@ -232,7 +232,8 @@ class PromptPreviewService(
             line = line,
             rawLine = rawLine,
             rawLength = rawLine?.let { CardSummary.graphemeCount(it) },
-            truncated = line != null && line != rawLine,
+            // 공백 정리만 된 한 줄은 잘린 것이 아니다. 정리 전후가 다른지로 보면 멀쩡한 한 줄도 잘림으로 표시된다.
+            truncated = rawLine != null && CardSummary.exceedsMaxLength(rawLine),
             generationError = generationError,
             usage = usage,
             latencyMs = elapsedMs(startedAt),

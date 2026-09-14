@@ -283,8 +283,11 @@ export function CardPreviewSection() {
                   자르기 전 원문 ({result.rawLength}자)
                 </p>
                 <p className="break-keep text-sm">{result.rawLine}</p>
+                {/* NONSENSE의 원문은 LLM 출력이 아니라 소재 목록 문장이라, 고칠 곳도 프롬프트가 아니라 목록이다. */}
                 <p className="text-[11px] text-muted-foreground">
-                  프롬프트가 길이 지시를 지키지 못했습니다. 서버 자르기에 기대는 만큼 문장이 어색해질 수 있습니다.
+                  {result.kind === 'NONSENSE'
+                    ? `엉뚱이 소재 문장이 길어 서버가 잘랐습니다. 소재 목록에서 이 문장을 ${MAX_LENGTH}자 이내로 줄여주세요.`
+                    : '프롬프트가 길이 지시를 지키지 못했습니다. 서버 자르기에 기대는 만큼 문장이 어색해질 수 있습니다.'}
                 </p>
               </Card>
             )}

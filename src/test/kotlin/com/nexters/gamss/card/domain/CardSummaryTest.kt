@@ -37,6 +37,19 @@ class CardSummaryTest {
     }
 
     @Test
+    fun `공백만 접히는 상한 이내 문장은 상한을 넘는 것으로 보지 않는다`() {
+        // 미리보기의 "서버가 자름" 표시가 이 판단을 쓴다. 공백 정리까지 잘림으로 보면 멀쩡한 프롬프트를 고치게 된다.
+        assertFalse(CardSummary.exceedsMaxLength("  오늘   힘들었어요  "))
+    }
+
+    @Test
+    fun `공백을 접고도 상한을 넘을 때만 상한을 넘는 것으로 본다`() {
+        assertTrue(CardSummary.exceedsMaxLength("가".repeat(CardSummary.MAX_LENGTH + 1)))
+        // 원문은 상한보다 길지만 공백을 접으면 정확히 상한이 되는 문장은 자르지 않는다.
+        assertFalse(CardSummary.exceedsMaxLength("가".repeat(CardSummary.MAX_LENGTH - 2) + "   가"))
+    }
+
+    @Test
     fun `정확히 상한 길이면 자르지 않는다`() {
         val line = "가".repeat(CardSummary.MAX_LENGTH)
 
