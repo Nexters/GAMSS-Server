@@ -104,6 +104,12 @@ interface CardRepository : JpaRepository<Card, Long> {
         @Param("conversationIds") conversationIds: Collection<Long>,
     ): List<Long>
 
+    /** [conversationIds] 중 카드가 있는 방의 생성 주체(백오피스 대화방 사용량 페이지). */
+    @Query("select c.conversationId as conversationId, c.createdBy as createdBy from Card c where c.conversationId in :conversationIds")
+    fun findCreatedByByConversationIdIn(
+        @Param("conversationIds") conversationIds: Collection<Long>,
+    ): List<CardCreatedByProjection>
+
     /**
      * 회원의 특정 감정 카드 중 **일괄 삭제 대상**인 카드의 대화방 id 를 모은다.
      *
