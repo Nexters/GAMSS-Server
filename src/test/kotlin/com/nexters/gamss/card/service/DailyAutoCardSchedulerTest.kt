@@ -59,7 +59,7 @@ class DailyAutoCardSchedulerTest {
     fun `카드를 만든 회원에게 알림을 보낸다`() {
         stubTargets(10L)
         every { conversationService.endForAutoBatch(10L) } returns conversation()
-        every { cardService.createCard(any(), any(), any(), any()) } returns mockk<Card>()
+        every { cardService.createCard(any(), any(), any(), any(), any()) } returns mockk<Card>()
 
         scheduler.runFor(createdAfter, createdBefore)
 
@@ -73,7 +73,7 @@ class DailyAutoCardSchedulerTest {
     fun `한 회원이 카드를 여러 장 받아도 알림은 한 번만 간다`() {
         stubTargets(10L, 20L, 30L)
         every { conversationService.endForAutoBatch(any()) } returns conversation()
-        every { cardService.createCard(any(), any(), any(), any()) } returns mockk<Card>()
+        every { cardService.createCard(any(), any(), any(), any(), any()) } returns mockk<Card>()
 
         scheduler.runFor(createdAfter, createdBefore)
 
@@ -89,7 +89,7 @@ class DailyAutoCardSchedulerTest {
     fun `건너뛴 방도 SKIPPED 로 기록한다`() {
         stubTargets(10L, 20L)
         every { conversationService.endForAutoBatch(any()) } returns conversation()
-        every { cardService.createCard(any(), any(), any(), any()) } returns mockk<Card>()
+        every { cardService.createCard(any(), any(), any(), any(), any()) } returns mockk<Card>()
         val sent = PushSendResult(successCount = 1, failureCount = 0, invalidTokens = emptyList())
         every { cardCreatedNotifier.notifyCardCreated(MEMBER_ID) } returns sent
 
@@ -120,7 +120,7 @@ class DailyAutoCardSchedulerTest {
         stubTargets(10L, 20L)
         every { conversationService.endForAutoBatch(10L) } returns conversation(memberId = MEMBER_ID)
         every { conversationService.endForAutoBatch(20L) } returns conversation(memberId = OTHER_MEMBER_ID)
-        every { cardService.createCard(any(), any(), any(), any()) } returns mockk<Card>()
+        every { cardService.createCard(any(), any(), any(), any(), any()) } returns mockk<Card>()
 
         scheduler.runFor(createdAfter, createdBefore)
 
@@ -137,13 +137,13 @@ class DailyAutoCardSchedulerTest {
     fun `알림이 트랜잭션 가드에 걸리면 배치를 중단한다`() {
         stubTargets(10L, 20L, 30L)
         every { conversationService.endForAutoBatch(any()) } returns conversation()
-        every { cardService.createCard(any(), any(), any(), any()) } returns mockk<Card>()
+        every { cardService.createCard(any(), any(), any(), any(), any()) } returns mockk<Card>()
         every { cardCreatedNotifier.notifyCardCreated(any()) } throws PushInTransactionException("트랜잭션 안")
 
         assertFailsWith<PushInTransactionException> { scheduler.runFor(createdAfter, createdBefore) }
 
         // 첫 카드에서 멈추므로 뒤쪽 방은 손대지 않는다.
-        verify(exactly = 1) { cardService.createCard(any(), any(), any(), any()) }
+        verify(exactly = 1) { cardService.createCard(any(), any(), any(), any(), any()) }
         // 멈추기 전에 만든 카드는 이미 커밋됐다. 지표가 0 이면 아무 일 없던 날과 구별되지 않는다.
         assertEquals(1.0, outcomeCount(AutoCardOutcome.CREATED))
     }
@@ -194,14 +194,14 @@ class DailyAutoCardSchedulerTest {
         stubTargets(10L, 20L, 30L, 40L, 50L)
         every { conversationService.endForAutoBatch(any()) } returns conversation()
         every {
-            cardService.createCard(any(), any(), any(), any())
+            cardService.createCard(any(), any(), any(), any(), any())
         } throws cardGenerationFailure(LlmFailureKind.RATE_LIMITED)
 
         scheduler.runFor(createdAfter, createdBefore)
 
-        verify(exactly = 3) { cardService.createCard(any(), any(), any(), any()) }
-        verify(exactly = 0) { cardService.createCard(any(), 40L, any(), any()) }
-        verify(exactly = 0) { cardService.createCard(any(), 50L, any(), any()) }
+        verify(exactly = 3) { cardService.createCard(any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { cardService.createCard(any(), 40L, any(), any(), any()) }
+        verify(exactly = 0) { cardService.createCard(any(), 50L, any(), any(), any()) }
     }
 
     /**
@@ -213,14 +213,14 @@ class DailyAutoCardSchedulerTest {
         stubTargets(10L, 20L, 30L, 40L, 50L)
         every { conversationService.endForAutoBatch(any()) } returns conversation()
         every {
-            cardService.createCard(any(), any(), any(), any())
+            cardService.createCard(any(), any(), any(), any(), any())
         } throws cardGenerationFailure(LlmFailureKind.CIRCUIT_OPEN)
 
         scheduler.runFor(createdAfter, createdBefore)
 
-        verify(exactly = 3) { cardService.createCard(any(), any(), any(), any()) }
-        verify(exactly = 0) { cardService.createCard(any(), 40L, any(), any()) }
-        verify(exactly = 0) { cardService.createCard(any(), 50L, any(), any()) }
+        verify(exactly = 3) { cardService.createCard(any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { cardService.createCard(any(), 40L, any(), any(), any()) }
+        verify(exactly = 0) { cardService.createCard(any(), 50L, any(), any(), any()) }
     }
 
     /**
@@ -231,13 +231,13 @@ class DailyAutoCardSchedulerTest {
     fun `쿼터 초과와 서킷 오픈이 섞여도 같은 연속으로 센다`() {
         stubTargets(10L, 20L, 30L, 40L, 50L)
         every { conversationService.endForAutoBatch(any()) } returns conversation()
-        every { cardService.createCard(any(), 10L, any(), any()) } throws cardGenerationFailure(LlmFailureKind.RATE_LIMITED)
-        every { cardService.createCard(any(), 20L, any(), any()) } throws cardGenerationFailure(LlmFailureKind.CIRCUIT_OPEN)
-        every { cardService.createCard(any(), 30L, any(), any()) } throws cardGenerationFailure(LlmFailureKind.RATE_LIMITED)
+        every { cardService.createCard(any(), 10L, any(), any(), any()) } throws cardGenerationFailure(LlmFailureKind.RATE_LIMITED)
+        every { cardService.createCard(any(), 20L, any(), any(), any()) } throws cardGenerationFailure(LlmFailureKind.CIRCUIT_OPEN)
+        every { cardService.createCard(any(), 30L, any(), any(), any()) } throws cardGenerationFailure(LlmFailureKind.RATE_LIMITED)
 
         scheduler.runFor(createdAfter, createdBefore)
 
-        verify(exactly = 3) { cardService.createCard(any(), any(), any(), any()) }
+        verify(exactly = 3) { cardService.createCard(any(), any(), any(), any(), any()) }
     }
 
     /** 중간에 한 방이라도 성공하면 쿼터가 아직 남아 있다는 뜻이라, 연속이 끊기고 배치는 계속 돈다. */
@@ -246,13 +246,13 @@ class DailyAutoCardSchedulerTest {
         stubTargets(10L, 20L, 30L, 40L, 50L)
         every { conversationService.endForAutoBatch(any()) } returns conversation()
         every {
-            cardService.createCard(any(), any(), any(), any())
+            cardService.createCard(any(), any(), any(), any(), any())
         } throws cardGenerationFailure(LlmFailureKind.RATE_LIMITED)
-        every { cardService.createCard(any(), 30L, any(), any()) } returns mockk<Card>()
+        every { cardService.createCard(any(), 30L, any(), any(), any()) } returns mockk<Card>()
 
         scheduler.runFor(createdAfter, createdBefore)
 
-        verify(exactly = 5) { cardService.createCard(any(), any(), any(), any()) }
+        verify(exactly = 5) { cardService.createCard(any(), any(), any(), any(), any()) }
     }
 
     /**
@@ -264,12 +264,12 @@ class DailyAutoCardSchedulerTest {
         stubTargets(10L, 20L, 30L, 40L, 50L)
         every { conversationService.endForAutoBatch(any()) } returns conversation()
         every {
-            cardService.createCard(any(), any(), any(), any())
+            cardService.createCard(any(), any(), any(), any(), any())
         } throws cardGenerationFailure(LlmFailureKind.PERMANENT)
 
         scheduler.runFor(createdAfter, createdBefore)
 
-        verify(exactly = 5) { cardService.createCard(any(), any(), any(), any()) }
+        verify(exactly = 5) { cardService.createCard(any(), any(), any(), any(), any()) }
     }
 
     /**
@@ -284,12 +284,12 @@ class DailyAutoCardSchedulerTest {
         stubTargets(10L, 20L, 30L)
         every { conversationService.endForAutoBatch(any()) } returns conversation()
         every {
-            cardService.createCard(any(), any(), any(), any())
+            cardService.createCard(any(), any(), any(), any(), any())
         } throws cardGenerationFailure(LlmFailureKind.RATE_LIMITED)
 
         scheduler.runFor(createdAfter, createdBefore)
 
-        verify(exactly = 3) { cardService.createCard(any(), any(), any(), any()) }
+        verify(exactly = 3) { cardService.createCard(any(), any(), any(), any(), any()) }
         assertEquals(3.0, outcomeCount(AutoCardOutcome.FAILED))
     }
 
@@ -299,7 +299,7 @@ class DailyAutoCardSchedulerTest {
         stubTargets(10L, 20L, 30L, 40L)
         every { conversationService.endForAutoBatch(any()) } returns conversation()
         every {
-            cardService.createCard(any(), any(), any(), any())
+            cardService.createCard(any(), any(), any(), any(), any())
         } throws cardGenerationFailure(LlmFailureKind.RATE_LIMITED)
 
         scheduler.runFor(createdAfter, createdBefore)
@@ -311,26 +311,26 @@ class DailyAutoCardSchedulerTest {
     fun `대상 대화방을 종료하고 emotion 없이 카드를 만든다`() {
         stubTargets(10L)
         every { conversationService.endForAutoBatch(10L) } returns conversation()
-        every { cardService.createCard(any(), any(), any(), any()) } returns mockk<Card>()
+        every { cardService.createCard(any(), any(), any(), any(), any()) } returns mockk<Card>()
 
         scheduler.runFor(createdAfter, createdBefore)
 
         // emotion을 null로 넘겨 서버가 유저 메시지로 분류하게 한다. 배치엔 클라이언트가 없다.
-        verify(exactly = 1) { cardService.createCard(MEMBER_ID, 10L, null, "오늘 억울한 일이 있었다") }
+        verify(exactly = 1) { cardService.createCard(MEMBER_ID, 10L, null, "오늘 억울한 일이 있었다", any()) }
     }
 
     @Test
     fun `한 대화방이 실패해도 나머지 대화방은 계속 처리한다`() {
         stubTargets(10L, 20L, 30L)
         every { conversationService.endForAutoBatch(any()) } returns conversation()
-        every { cardService.createCard(any(), 20L, any(), any()) } throws IllegalStateException("예상 못 한 실패")
-        every { cardService.createCard(any(), 10L, any(), any()) } returns mockk<Card>()
-        every { cardService.createCard(any(), 30L, any(), any()) } returns mockk<Card>()
+        every { cardService.createCard(any(), 20L, any(), any(), any()) } throws IllegalStateException("예상 못 한 실패")
+        every { cardService.createCard(any(), 10L, any(), any(), any()) } returns mockk<Card>()
+        every { cardService.createCard(any(), 30L, any(), any(), any()) } returns mockk<Card>()
 
         scheduler.runFor(createdAfter, createdBefore)
 
-        verify(exactly = 1) { cardService.createCard(any(), 10L, any(), any()) }
-        verify(exactly = 1) { cardService.createCard(any(), 30L, any(), any()) }
+        verify(exactly = 1) { cardService.createCard(any(), 10L, any(), any(), any()) }
+        verify(exactly = 1) { cardService.createCard(any(), 30L, any(), any(), any()) }
     }
 
     @Test
@@ -340,13 +340,13 @@ class DailyAutoCardSchedulerTest {
         stubTargets(10L, 20L)
         every { conversationService.endForAutoBatch(10L) } returns conversation(summary = null)
         every { conversationService.endForAutoBatch(20L) } returns conversation(summary = "   ")
-        every { cardService.createCard(any(), any(), any(), any()) } returns mockk<Card>()
+        every { cardService.createCard(any(), any(), any(), any(), any()) } returns mockk<Card>()
 
         scheduler.runFor(createdAfter, createdBefore)
 
         // 요약을 판정하지 않고 그대로 넘긴다. 원문으로 대체할지는 카드 생성 경로가 정한다.
-        verify(exactly = 1) { cardService.createCard(MEMBER_ID, 10L, null, null) }
-        verify(exactly = 1) { cardService.createCard(MEMBER_ID, 20L, null, "   ") }
+        verify(exactly = 1) { cardService.createCard(MEMBER_ID, 10L, null, null, any()) }
+        verify(exactly = 1) { cardService.createCard(MEMBER_ID, 20L, null, "   ", any()) }
     }
 
     @Test
@@ -354,7 +354,7 @@ class DailyAutoCardSchedulerTest {
         // SKIPPED로 못 박던 자리다. 다시 박으면 그 방이 다음 실행 대상에서 빠져 카드를 영영 못 받는다.
         stubTargets(10L)
         every { conversationService.endForAutoBatch(10L) } returns conversation(summary = null)
-        every { cardService.createCard(any(), any(), any(), any()) } returns mockk<Card>()
+        every { cardService.createCard(any(), any(), any(), any(), any()) } returns mockk<Card>()
 
         scheduler.runFor(createdAfter, createdBefore)
 
@@ -368,7 +368,7 @@ class DailyAutoCardSchedulerTest {
 
         scheduler.runFor(createdAfter, createdBefore)
 
-        verify(exactly = 0) { cardService.createCard(any(), any(), any(), any()) }
+        verify(exactly = 0) { cardService.createCard(any(), any(), any(), any(), any()) }
     }
 
     @Test
@@ -378,13 +378,13 @@ class DailyAutoCardSchedulerTest {
         every { memberService.getById(MEMBER_ID) } returns Member().apply { withdraw() }
         every { memberService.getById(OTHER_MEMBER_ID) } returns Member()
         every { conversationService.endForAutoBatch(20L) } returns conversation(memberId = OTHER_MEMBER_ID)
-        every { cardService.createCard(any(), any(), any(), any()) } returns mockk<Card>()
+        every { cardService.createCard(any(), any(), any(), any(), any()) } returns mockk<Card>()
 
         scheduler.runFor(createdAfter, createdBefore)
 
         // 탈퇴 후에는 그 사람의 대화로 새 카드를 만들지 않는다.
-        verify(exactly = 0) { cardService.createCard(MEMBER_ID, any(), any(), any()) }
-        verify(exactly = 1) { cardService.createCard(OTHER_MEMBER_ID, 20L, any(), any()) }
+        verify(exactly = 0) { cardService.createCard(MEMBER_ID, any(), any(), any(), any()) }
+        verify(exactly = 1) { cardService.createCard(OTHER_MEMBER_ID, 20L, any(), any(), any()) }
         // 카드가 없으니 "카드가 도착했어요" 도 가면 안 된다. 탈퇴하면 기기 토큰도 지워지지만
         // (DeviceTokenCleaner) 방어선이 그것 하나뿐인 상태로 두지 않는다.
         verify(exactly = 0) { cardCreatedNotifier.notifyCardCreated(MEMBER_ID) }
@@ -396,16 +396,16 @@ class DailyAutoCardSchedulerTest {
         stubTargets(10L, 20L, 30L)
         every { conversationService.endForAutoBatch(any()) } returns conversation()
         every {
-            cardService.createCard(any(), 10L, any(), any())
+            cardService.createCard(any(), 10L, any(), any(), any())
         } throws BusinessException(ErrorCode.CARD_ALREADY_EXISTS)
         every {
-            cardService.createCard(any(), 20L, any(), any())
+            cardService.createCard(any(), 20L, any(), any(), any())
         } throws BusinessException(ErrorCode.CARD_GENERATION_IN_PROGRESS)
-        every { cardService.createCard(any(), 30L, any(), any()) } returns mockk<Card>()
+        every { cardService.createCard(any(), 30L, any(), any(), any()) } returns mockk<Card>()
 
         scheduler.runFor(createdAfter, createdBefore)
 
-        verify(exactly = 1) { cardService.createCard(any(), 30L, any(), any()) }
+        verify(exactly = 1) { cardService.createCard(any(), 30L, any(), any(), any()) }
     }
 
     /**
@@ -418,10 +418,10 @@ class DailyAutoCardSchedulerTest {
         stubTargets(10L, 20L)
         every { conversationService.endForAutoBatch(any()) } returns conversation()
         every {
-            cardService.createCard(any(), 10L, any(), any())
+            cardService.createCard(any(), 10L, any(), any(), any())
         } throws BusinessException(ErrorCode.CARD_ALREADY_EXISTS)
         every {
-            cardService.createCard(any(), 20L, any(), any())
+            cardService.createCard(any(), 20L, any(), any(), any())
         } throws BusinessException(ErrorCode.CARD_GENERATION_IN_PROGRESS)
 
         scheduler.runFor(createdAfter, createdBefore)
@@ -446,7 +446,7 @@ class DailyAutoCardSchedulerTest {
         stubTargets(10L)
         every { conversationService.endForAutoBatch(10L) } returns conversation()
         every {
-            cardService.createCard(any(), 10L, any(), any())
+            cardService.createCard(any(), 10L, any(), any(), any())
         } throws BusinessException(ErrorCode.CARD_GENERATION_FAILED)
 
         scheduler.runFor(createdAfter, createdBefore)
@@ -462,7 +462,7 @@ class DailyAutoCardSchedulerTest {
         scheduler.runFor(createdAfter, createdBefore)
 
         verify(exactly = 0) { conversationService.endForAutoBatch(any()) }
-        verify(exactly = 0) { cardService.createCard(any(), any(), any(), any()) }
+        verify(exactly = 0) { cardService.createCard(any(), any(), any(), any(), any()) }
     }
 
     @Test

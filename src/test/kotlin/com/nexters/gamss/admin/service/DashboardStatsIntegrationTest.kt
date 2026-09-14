@@ -1,6 +1,7 @@
 package com.nexters.gamss.admin.service
 
 import com.nexters.gamss.card.domain.Card
+import com.nexters.gamss.card.domain.CardCreatedBy
 import com.nexters.gamss.card.repository.CardRepository
 import com.nexters.gamss.conversation.domain.Conversation
 import com.nexters.gamss.conversation.domain.Message
@@ -61,6 +62,7 @@ class DashboardStatsIntegrationTest : RepositoryTest() {
                 summary = "요약",
                 message = "한 줄 대사",
                 conversationCreatedAt = Instant.now(),
+                createdBy = CardCreatedBy.USER,
             ),
         )
 

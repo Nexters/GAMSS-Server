@@ -1,6 +1,7 @@
 package com.nexters.gamss.conversation.service
 
 import com.nexters.gamss.conversation.domain.Conversation
+import com.nexters.gamss.conversation.domain.ConversationEndedBy
 import com.nexters.gamss.conversation.domain.ConversationStatus
 import com.nexters.gamss.conversation.domain.Message
 import com.nexters.gamss.conversation.domain.SenderType
@@ -342,7 +343,7 @@ class ConversationServiceTest {
 
     @Test
     fun `이미 종료된 채팅방을 다시 종료하면 CONVERSATION_ALREADY_ENDED`() {
-        val conversation = Conversation(memberId = 1L).apply { end() }
+        val conversation = Conversation(memberId = 1L).apply { end(ConversationEndedBy.USER) }
         every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
 
         val exception =
@@ -367,7 +368,7 @@ class ConversationServiceTest {
     @Test
     fun `자동 종료 배치는 이미 종료된 채팅방을 예외 없이 그대로 돌려준다`() {
         // 종료까지만 되고 카드 생성에서 끊긴 방을 다음 실행이 이어서 처리해야 한다.
-        val conversation = Conversation(memberId = 1L).apply { end() }
+        val conversation = Conversation(memberId = 1L).apply { end(ConversationEndedBy.AUTO_BATCH) }
         every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
 
         val result = conversationService.endForAutoBatch(10L)
@@ -387,7 +388,7 @@ class ConversationServiceTest {
 
     @Test
     fun `종료된 채팅방에 메시지를 저장하면 CONVERSATION_ENDED`() {
-        val conversation = Conversation(memberId = 1L).apply { end() }
+        val conversation = Conversation(memberId = 1L).apply { end(ConversationEndedBy.USER) }
         every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
 
         val exception =
@@ -480,7 +481,7 @@ class ConversationServiceTest {
 
     @Test
     fun `종료된 채팅방도 삭제할 수 있다`() {
-        val conversation = Conversation(memberId = 1L).apply { end() }
+        val conversation = Conversation(memberId = 1L).apply { end(ConversationEndedBy.USER) }
         every { conversationRepository.findById(10L) } returns Optional.of(conversation)
         every { conversationRepository.findByIdForUpdate(10L) } returns Optional.of(conversation)
 

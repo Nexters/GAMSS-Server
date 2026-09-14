@@ -1,6 +1,7 @@
 package com.nexters.gamss.admin.service
 
 import com.nexters.gamss.card.domain.Card
+import com.nexters.gamss.card.domain.CardCreatedBy
 import com.nexters.gamss.card.repository.CardRepository
 import com.nexters.gamss.conversation.domain.Conversation
 import com.nexters.gamss.conversation.domain.Message
@@ -72,6 +73,7 @@ class ConversationUsageIntegrationTest : RepositoryTest() {
                 summary = "요약",
                 message = "한 줄",
                 conversationCreatedAt = Instant.now(),
+                createdBy = CardCreatedBy.USER,
             ),
         )
         // 총 토큰 7000 / 캐시 3000 / 비용 = row1(2000×0.25 + 3000×0.025 + 1000×1.50)/1e6 + row2(1000×0.25)/1e6

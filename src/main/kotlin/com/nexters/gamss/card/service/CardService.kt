@@ -1,6 +1,7 @@
 package com.nexters.gamss.card.service
 
 import com.nexters.gamss.card.domain.Card
+import com.nexters.gamss.card.domain.CardCreatedBy
 import com.nexters.gamss.card.domain.CardSummary
 import com.nexters.gamss.card.repository.CardRepository
 import com.nexters.gamss.conversation.domain.CardGenerationStatus
@@ -71,6 +72,7 @@ class CardService(
         conversationId: Long,
         emotion: EmotionType?,
         summary: String?,
+        createdBy: CardCreatedBy,
     ): Card {
         val conversation = claimForGeneration(conversationId, memberId)
         // 공백뿐인 요약은 없는 것과 같이 다룬다. LLM 입력에서만 걸러내고 대화방에는 남기면, 그 방이
@@ -96,6 +98,7 @@ class CardService(
                 // 같은 값을 채운다(Card KDoc 참고).
                 message = cardLine,
                 conversationCreatedAt = conversation.createdAt,
+                createdBy = createdBy,
             )
         // 대화방에는 클라이언트 원본 요약을 남긴다 — 다른 채팅방 댓글의 '과거 맥락'으로 쓰이는 값이라
         // 50자로 깎인 카드 문구보다 정보가 많은 쪽이 낫다. 없으면(배치 폴백) 남기지 않는다.
