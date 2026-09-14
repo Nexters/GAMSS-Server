@@ -1,8 +1,10 @@
 package com.nexters.gamss.admin.controller.dto
 
 import com.nexters.gamss.emotion.domain.EmotionType
+import com.nexters.gamss.llm.prompt.CardMessageWindow
 import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.NotEmpty
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
 
@@ -14,11 +16,25 @@ data class PromptCardPreviewRequest(
     @field:Schema(description = "대표 감정(어떤 사건을 고를지의 기준)", example = "ANGER")
     @field:NotNull(message = "emotion은 필수입니다.")
     val emotion: EmotionType?,
+    // 실제 서비스는 채팅방의 유저 메시지를 넣는다. 한 메시지의 상한은 메시지 저장 요청(SaveMessageRequest)과 같고,
+    // 개수 상한은 실제 생성이 한 번에 볼 수 있는 최대치(CardMessageWindow.MAX_MESSAGES)다 — 더 좁히면 짧은 메시지가
+    // 많은 대화를 재현할 수 없다.
     @field:Schema(
-        description = "다듬을 대화 요약(클라이언트가 보내는 값과 같은 성격)",
-        example = "오늘 팀장이 자기 할 일을 다 떠넘김. 야근함.",
+        description = "유저가 보낸 메시지 목록(시간순). 카드 한 줄의 사실 기준이며 실제 서비스는 채팅방의 유저 메시지를 넣는다",
+        example = "[\"오늘 팀장이 자기 할 일을 다 떠넘김\", \"결국 야근함\"]",
     )
-    @field:NotBlank(message = "summary는 필수입니다.")
+    @field:NotEmpty(message = "userMessages는 1개 이상이어야 합니다.")
+    @field:Size(max = CardMessageWindow.MAX_MESSAGES, message = "userMessages는 ${CardMessageWindow.MAX_MESSAGES}개 이하여야 합니다.")
+    val userMessages: List<
+        @NotBlank(message = "메시지는 비어 있을 수 없습니다.")
+        @Size(max = 140, message = "메시지 하나는 140자 이하여야 합니다.")
+        String,
+    >?,
+    @field:Schema(
+        description = "클라이언트가 만든 대화 요약(선택, 참고용). 비우면 요약이 없는 새벽 배치와 같은 조건으로 시험한다",
+        example = "오늘 팀장이 자기 할 일을 다 떠넘김. 야근함.",
+        nullable = true,
+    )
     @field:Size(max = 2000, message = "summary는 2000자 이하여야 합니다.")
-    val summary: String,
+    val summary: String? = null,
 )

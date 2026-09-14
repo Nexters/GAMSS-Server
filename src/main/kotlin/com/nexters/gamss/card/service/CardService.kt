@@ -12,12 +12,14 @@ import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.llm.error.CardGenerationFailedException
+import com.nexters.gamss.llm.generation.CardLineKind
 import com.nexters.gamss.llm.generation.CardMessageGenerator
 import com.nexters.gamss.llm.generation.CardMessageOutput
 import com.nexters.gamss.llm.generation.EmotionExtractor
 import com.nexters.gamss.llm.generation.LlmRetryExecutor
 import com.nexters.gamss.llm.generation.TokenUsageAccumulator
 import com.nexters.gamss.llm.prompt.CardMessageWindow
+import com.nexters.gamss.llm.selection.EongttungTopicSelector
 import com.nexters.gamss.monitoring.domain.GenerationType
 import com.nexters.gamss.monitoring.service.GenerationLogRecorder
 import com.nexters.gamss.tokenlimit.service.TokenQuotaRecorder
@@ -42,6 +44,7 @@ class CardService(
     private val conversationService: ConversationService,
     private val cardMessageGenerator: CardMessageGenerator,
     private val emotionExtractor: EmotionExtractor,
+    private val eongttungTopicSelector: EongttungTopicSelector,
     private val generationLogRecorder: GenerationLogRecorder,
     private val tokenQuotaRecorder: TokenQuotaRecorder,
     private val cardPersistenceService: CardPersistenceService,
@@ -51,20 +54,22 @@ class CardService(
      * 종료된 대화에 대해 그날 있었던 일 한 줄을 생성해 카드를 저장한다. 외부 LLM 호출이 DB
      * 커넥션을 오래 점유하지 않도록 트랜잭션으로 감싸지 않는다.
      *
-     * [summary]는 클라이언트가 만든 대화 요약이다. 그대로 카드에 싣지 않고 LLM으로 한 번 다듬는다 —
-     * 온프레미스 모델 산출물이라 문장이 투박하다(#111). 원본은 대화방에 남겨 다른 채팅방 댓글의
-     * '과거 맥락'으로 계속 쓴다.
-     *
-     * [summary]가 비어 있으면 요약을 만들어 줄 클라이언트가 없는 자동 생성 배치다
-     * ([com.nexters.gamss.card.service.DailyAutoCardScheduler]). 그때는 유저가 보낸 메시지 원문으로
-     * 대신 만들고([fallbackSummary]) 대화방에는 아무것도 남기지 않는다 — LLM 입력용 요약과 대화방에
-     * 저장할 값이 이 경우에만 갈린다.
+     * 한 줄의 사실 기준은 유저가 보낸 메시지 원문이다. [summary]는 클라이언트가 만든 대화 요약인데,
+     * 온프레미스 모델이 이미 한 번 압축한 값이라 그 과정에서 섞인 없는 내용을 서버가 걸러낼 수 없다.
+     * 그래서 LLM에는 참고로만 싣고, 원본은 대화방에 남겨 다른 채팅방 댓글의 '과거 맥락'으로 계속 쓴다.
+     * [summary]가 비어 있으면(요약을 만들어 줄 클라이언트가 없는 자동 생성 배치,
+     * [com.nexters.gamss.card.service.DailyAutoCardScheduler]) 메시지만으로 만들고 대화방에는 아무것도
+     * 남기지 않는다.
      *
      * LLM을 부르기 전에 [Conversation.cardGenerationStatus]를 CAS로 선점한다([Message.commentStatus]와
      * 같은 패턴) — 동시 중복 요청은 선점에 실패해 LLM을 아예 호출하지 않고 즉시 반환된다.
      *
      * [emotion]이 null이면(클라이언트 추출 실패) 유저가 보낸 메시지들만 보고 서버가 대표 감정을
      * 분류해 채운다 — 선점 이후에 분류해야 동시 요청이 분류 LLM을 중복 호출하지 않는다.
+     *
+     * LLM이 알아볼 수 있는 내용이 없는 대화라고 판정하면([CardLineKind.NONSENSE]) 사건을 지어내는 대신
+     * 엉뚱이 소재 목록에서 고른 한 줄을 그대로 남기고([selectEongttungLine]), 대표 감정은 [emotion]과 관계없이
+     * [EmotionType.QUIRKY]가 된다.
      */
     fun createCard(
         memberId: Long,
@@ -76,16 +81,23 @@ class CardService(
         // 공백뿐인 요약은 없는 것과 같이 다룬다. LLM 입력에서만 걸러내고 대화방에는 남기면, 그 방이
         // 과거 맥락 풀(`summary is not null`)에 들어가 내용 없이 자리만 차지한다.
         val clientSummary = summary?.takeIf { it.isNotBlank() }
-        // 감정 분류와 요약 폴백이 같은 재료(유저가 보낸 메시지 원문)를 쓴다. 둘 다 필요한 배치 경로가
-        // 같은 조회를 두 번 하지 않도록 한 번만 읽어 나눠 쓴다.
-        val userMessages = lazy { loadUserMessages(conversationId) }
-        val promptSummary = clientSummary ?: fallbackSummary(conversationId, userMessages.value)
+        // 카드 한 줄과 감정 분류가 같은 재료(유저가 보낸 메시지 원문)를 쓴다. 한 번만 읽어 나눠 쓴다.
+        val userMessages = loadUserMessages(conversationId)
+        ensureCardMaterial(conversationId, userMessages, clientSummary)
         // 유저 메시지가 하나도 없는 방어적 엣지 — 클라이언트가 만든 요약도 유저의 대화 내용이므로 그걸로 분류한다.
-        val resolvedEmotion =
-            emotion ?: extractEmotion(memberId, conversationId, userMessages.value.ifEmpty { listOfNotNull(clientSummary) })
-        val output = generateMessage(resolvedEmotion, promptSummary, memberId, conversationId)
+        val requestedEmotion =
+            emotion ?: extractEmotion(memberId, conversationId, userMessages.ifEmpty { listOfNotNull(clientSummary) })
+        val output = generateMessage(requestedEmotion, userMessages, clientSummary, memberId, conversationId)
+        val (resolvedEmotion, rawLine) =
+            when (output.kind) {
+                CardLineKind.EVENT -> requestedEmotion to checkNotNull(output.summary)
+
+                // 카드의 캐릭터와 색이 엉뚱이 한 줄과 맞아야 해서 대표 감정도 덮어쓴다. 클라이언트가 보낸 감정이
+                // 있어도 마찬가지다 — 내용이 없는 대화에서 뽑힌 값이라 기댈 근거가 없다.
+                CardLineKind.NONSENSE -> EmotionType.QUIRKY to selectEongttungLine(conversationId)
+            }
         // 프롬프트가 지시한 길이를 LLM이 넘길 수 있어 저장 직전에 한 번 자른다.
-        val cardLine = CardSummary.normalize(output.summary)
+        val cardLine = CardSummary.normalize(rawLine)
         val card =
             Card(
                 memberId = memberId,
@@ -98,7 +110,7 @@ class CardService(
                 conversationCreatedAt = conversation.createdAt,
             )
         // 대화방에는 클라이언트 원본 요약을 남긴다 — 다른 채팅방 댓글의 '과거 맥락'으로 쓰이는 값이라
-        // 50자로 깎인 카드 문구보다 정보가 많은 쪽이 낫다. 없으면(배치 폴백) 남기지 않는다.
+        // 50자로 깎인 카드 문구보다 정보가 많은 쪽이 낫다. 없으면(배치) 남기지 않는다.
         return persistCard(card, conversationId, clientSummary)
     }
 
@@ -205,7 +217,7 @@ class CardService(
     }
 
     /**
-     * 감정 분류와 요약 폴백에 넣을 유저 메시지를 읽는다. 이 조회는 CAS 선점 **이후**라 실패를 그대로
+     * 카드 한 줄과 감정 분류에 넣을 유저 메시지를 읽는다. 이 조회는 CAS 선점 **이후**라 실패를 그대로
      * 던지면 상태가 PENDING으로 남아, 재시도가 재시도 가능한 503이 아니라 409(생성 중)로 막힌다 —
      * 정리 스케줄러가 타임아웃시킬 때까지. LLM 실패와 같은 계약으로 FAILED까지 되돌린다.
      */
@@ -218,35 +230,29 @@ class CardService(
         }
 
     /**
-     * 클라이언트 요약이 없을 때 LLM 입력으로 대신 쓸 값. 유저가 보낸 메시지를 시간순으로 이어 붙인다.
-     * 요약을 만들 수 있는 것은 클라이언트뿐이라 배치는 그 값을 받을 길이 없지만, 카드 한 줄을 뽑을
-     * 재료 자체는 이미 이 방에 있다(#204).
+     * 카드를 만들 재료가 있는지 확인한다. 클라이언트 요약만 있어도 통과시킨다 — 요약도 유저의 대화
+     * 내용이라 한 줄을 만들 근거는 된다.
      *
-     * 담을 구간은 [CardMessageWindow]가 정한다 — 감정 분류와 **같은 구간**을 봐야 카드에 적힌 사건과
-     * 그 카드의 감정이 하루의 다른 절반에서 나오지 않는다.
+     * 담을 구간은 [CardMessageWindow]가 정한다. LLM에 실제로 실리는 메시지로 판단해야, 공백뿐인 메시지만
+     * 있는 방이 여기를 통과하고 빈 입력으로 LLM을 부르지 않는다.
      *
-     * **이 값은 대화방에 남기지 않는다.** [com.nexters.gamss.conversation.domain.Conversation.summary]는
-     * 다른 채팅방 댓글의 '과거 맥락'으로 읽히는 자리인데
-     * ([com.nexters.gamss.conversation.repository.ConversationRepository.findRandomPastSummaries]),
-     * 풀이 최근 5개뿐이라 압축되지 않은 원문이 들어가면 정보량이 많은 요약을 풀 밖으로 밀어낸다.
+     * 대화방은 첫 메시지 저장과 같은 트랜잭션에서만 만들어지고 메시지를 지우는 경로가 없어 여기가
+     * 비는 일은 없다. 그래도 비면 만들 재료가 없으니, 상태를 되돌려 다음 실행이 다시 보게 한다 — 대상
+     * 조회가 FAILED 재시도를 하루 한 번으로 묶으므로 영구 실패라도 태우는 양은 갇혀 있다.
      */
-    private fun fallbackSummary(
+    private fun ensureCardMaterial(
         conversationId: Long,
         userMessages: List<String>,
-    ): String {
-        val recent = CardMessageWindow.recentAsText(userMessages)
-        // 대화방은 첫 메시지 저장과 같은 트랜잭션에서만 만들어지고 메시지를 지우는 경로가 없어 여기가
-        // 비는 일은 없다. 그래도 비면(공백뿐인 메시지만 있는 경우 포함) 만들 재료가 없으니, 상태를
-        // 되돌려 다음 실행이 다시 보게 한다 — 대상 조회가 FAILED 재시도를 하루 한 번으로 묶으므로
-        // 영구 실패라도 태우는 양은 갇혀 있다.
-        if (recent.isEmpty()) {
-            markCardGenerationStatus(conversationId, CardGenerationStatus.FAILED)
-            throw BusinessException(
-                ErrorCode.CARD_GENERATION_FAILED,
-                "카드를 만들 대화 내용이 없습니다. conversationId=$conversationId",
-            )
+        clientSummary: String?,
+    ) {
+        if (clientSummary != null || CardMessageWindow.recent(userMessages).isNotEmpty()) {
+            return
         }
-        return recent
+        markCardGenerationStatus(conversationId, CardGenerationStatus.FAILED)
+        throw BusinessException(
+            ErrorCode.CARD_GENERATION_FAILED,
+            "카드를 만들 대화 내용이 없습니다. conversationId=$conversationId",
+        )
     }
 
     /**
@@ -255,7 +261,8 @@ class CardService(
      */
     private fun generateMessage(
         emotion: EmotionType,
-        summary: String,
+        userMessages: List<String>,
+        summary: String?,
         memberId: Long,
         conversationId: Long,
     ): CardMessageOutput {
@@ -269,7 +276,7 @@ class CardService(
                 onNonRetryable = handleFailure,
                 onExhausted = handleFailure,
             ) { attempt ->
-                cardMessageGenerator.generate(emotion, summary).also {
+                cardMessageGenerator.generate(emotion, userMessages, summary).also {
                     tokens.add(it)
                     recordCard(GenerationType.CARD, true, attempt, startedAt, memberId, conversationId, tokens)
                 }
@@ -278,6 +285,29 @@ class CardService(
             throw BusinessException(ErrorCode.CARD_GENERATION_FAILED, e.message).apply { initCause(e) }
         }
     }
+
+    /**
+     * 알아볼 수 있는 내용이 없는 대화의 카드에 남길 한 줄. 백오피스의 엉뚱이 소재 목록에서 하나를 골라 **그대로** 쓴다.
+     *
+     * LLM에게 소재로 한 줄을 지어 달라고 하지 않는 이유는 소재가 출발점에 그쳐 목록 밖의 장면을 지어내기 때문이다
+     * ("목마르다"가 "지나가던 길고양이가 빗물을 핥고 있던데"가 됐다). 이 경로는 사건을 지어내지 않으려고 만든
+     * 것이라 헛소리의 범위를 목록이 정하게 한다. 목록 문장은 이미 엉뚱이 말투로 쓰여 있고, 이런 날은 드물어
+     * 같은 문장이 반복돼도 눈에 띄지 않는다. 호출도 하나 줄어든다.
+     *
+     * 소재 조회는 CAS 선점 **이후**라 실패를 그대로 던지면 상태가 PENDING으로 남는다. [loadUserMessages]와 같이
+     * DB 조회 실패는 FAILED로 되돌린 뒤 재시도 가능한 CARD_GENERATION_FAILED로 바꾸고, 목록이 빈 설정 누락은
+     * 상태만 되돌리고 원래 예외를 올린다 — 예상 밖 결함을 업무 오류로 위장하지 않는다.
+     */
+    private fun selectEongttungLine(conversationId: Long): String =
+        try {
+            eongttungTopicSelector.select()
+        } catch (e: DataAccessException) {
+            markCardGenerationStatus(conversationId, CardGenerationStatus.FAILED)
+            throw BusinessException(ErrorCode.CARD_GENERATION_FAILED, e.message).apply { initCause(e) }
+        } catch (e: Exception) {
+            markCardGenerationStatus(conversationId, CardGenerationStatus.FAILED)
+            throw e
+        }
 
     /**
      * 생성이 실패로 끝날 때 할 일을 한 덩어리로 묶는다 — **실패 로그 한 줄과 FAILED 로의 상태 복구**다.

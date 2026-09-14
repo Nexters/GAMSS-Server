@@ -91,8 +91,11 @@ class AdminPromptPreviewController(
     @Operation(
         summary = "카드 한 줄 미리보기 생성",
         description =
-            "대표 감정과 대화 요약으로 카드에 남을 한 줄을 실제 카드 생성 경로로 시험합니다. " +
+            "유저 메시지와 대표 감정(요약은 선택)으로 카드에 남을 한 줄을 실제 카드 생성 경로로 시험합니다. " +
                 "카드 프롬프트는 공통 프롬프트와 조립되지 않으므로 commonPrompt를 받지 않습니다.\n\n" +
+                "LLM이 먼저 kind를 판정합니다. 알아볼 수 있는 내용이 없는 대화(NONSENSE)면 실제 생성처럼 " +
+                "엉뚱이 소재 목록에서 고른 한 줄을 그대로 돌려주고(LLM을 더 부르지 않음), 대표 감정은 QUIRKY가 됩니다. " +
+                "고른 소재는 eongttungTopic으로 함께 내려옵니다.\n\n" +
                 "자르기 전 원문(rawLine)과 실제 저장될 한 줄(line)을 함께 돌려줍니다 — " +
                 "프롬프트의 길이 지시가 지켜지는지, 서버 truncate에 얼마나 기대고 있는지 보기 위한 것입니다.\n\n" +
                 "프롬프트는 저장하지 않으며 실제 비용이 발생합니다(비용 추적용 PREVIEW 생성 로그만 기록). " +
@@ -100,7 +103,7 @@ class AdminPromptPreviewController(
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +
-                "| INVALID_INPUT | 400 | emotion·summary 누락, 길이 초과 |",
+                "| INVALID_INPUT | 400 | emotion, userMessages 누락 또는 길이 초과 |",
     )
     @PostMapping("/card")
     fun previewCard(
@@ -111,6 +114,7 @@ class AdminPromptPreviewController(
                 CardPreviewCommand(
                     cardPrompt = request.cardPrompt,
                     emotion = checkNotNull(request.emotion),
+                    userMessages = checkNotNull(request.userMessages),
                     summary = request.summary,
                 ),
             )

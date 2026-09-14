@@ -8,6 +8,7 @@ import com.nexters.gamss.llm.config.GeminiPricing
 import com.nexters.gamss.llm.config.ModelPricing
 import com.nexters.gamss.llm.error.CardGenerationFailedException
 import com.nexters.gamss.llm.error.CommentGenerationFailedException
+import com.nexters.gamss.llm.generation.CardLineKind
 import com.nexters.gamss.llm.generation.CardMessageGenerator
 import com.nexters.gamss.llm.generation.CardMessageOutput
 import com.nexters.gamss.llm.generation.CommentGenerationOutput
@@ -279,15 +280,18 @@ class PromptPreviewServiceTest {
     fun `카드 미리보기는 공통 프롬프트 없이 카드 프롬프트만 쓴다`() {
         // 카드 프롬프트는 조립되지 않으므로 미리보기도 같은 규칙이어야 한다 — 여기서 조립되면
         // 관리자가 시험한 결과와 실제 생성이 서로 다른 프롬프트를 쓰게 된다.
+        val messages = listOf("오늘 팀장이 자기 할 일을 다 떠넘김")
         every { systemPromptResolver.resolveStandaloneForPreview(PromptType.CARD, "카드 시험") } returns settings
-        every { cardMessageGenerator.generate(EmotionType.ANGER, "오늘 요약", settings) } returns
+        every { cardMessageGenerator.generate(EmotionType.ANGER, messages, "오늘 요약", settings) } returns
             CardMessageOutput("팀장이 자기 할 일을 다 떠넘겼어요", 10, 0)
 
-        val result = service.previewCard(CardPreviewCommand("카드 시험", EmotionType.ANGER, "오늘 요약"))
+        val result = service.previewCard(CardPreviewCommand("카드 시험", EmotionType.ANGER, messages, "오늘 요약"))
 
         assertEquals("test-model", result.model)
         assertEquals("조립된 프롬프트", result.systemPrompt)
         assertEquals("팀장이 자기 할 일을 다 떠넘겼어요", result.line)
+        assertEquals(CardLineKind.EVENT, result.kind)
+        assertNull(result.eongttungTopic)
         assertFalse(result.truncated)
         assertNull(result.generationError)
         assertTrue(result.userContent.contains("[대표 감정] 분노"))
@@ -298,9 +302,10 @@ class PromptPreviewServiceTest {
         // 프롬프트의 길이 지시가 지켜지는지 보려면 관리자가 원문 길이를 알아야 한다.
         val raw = "가".repeat(CardSummary.MAX_LENGTH + 10)
         every { systemPromptResolver.resolveStandaloneForPreview(PromptType.CARD, null) } returns settings
-        every { cardMessageGenerator.generate(EmotionType.JOY, "오늘 요약", settings) } returns CardMessageOutput(raw, 10, 0)
+        every { cardMessageGenerator.generate(EmotionType.JOY, listOf("오늘 있었던 일"), null, settings) } returns
+            CardMessageOutput(raw, 10, 0)
 
-        val result = service.previewCard(CardPreviewCommand(null, EmotionType.JOY, "오늘 요약"))
+        val result = service.previewCard(CardPreviewCommand(null, EmotionType.JOY, listOf("오늘 있었던 일"), null))
 
         assertEquals(raw, result.rawLine)
         assertEquals(raw.length, result.rawLength)
@@ -311,14 +316,40 @@ class PromptPreviewServiceTest {
     @Test
     fun `카드 생성이 실패해도 예외 대신 결과에 담아 돌려준다`() {
         every { systemPromptResolver.resolveStandaloneForPreview(PromptType.CARD, null) } returns settings
-        every { cardMessageGenerator.generate(EmotionType.ANGER, "오늘 요약", settings) } throws
+        every { cardMessageGenerator.generate(EmotionType.ANGER, listOf("오늘 있었던 일"), null, settings) } throws
             CardGenerationFailedException("카드 한 줄 JSON 파싱에 실패했습니다.", usedTokens = 7, cachedTokens = 0)
 
-        val result = service.previewCard(CardPreviewCommand(null, EmotionType.ANGER, "오늘 요약"))
+        val result = service.previewCard(CardPreviewCommand(null, EmotionType.ANGER, listOf("오늘 있었던 일"), null))
 
         assertNull(result.line)
+        assertNull(result.kind)
         assertEquals("카드 한 줄 JSON 파싱에 실패했습니다.", result.generationError)
         // 검증 실패한 시도도 호출은 됐으니 과금된다 — 토큰이 결과에 실려야 한다.
         assertEquals(7, result.usage.usedTokens)
+    }
+
+    @Test
+    fun `카드 미리보기가 NONSENSE로 판정되면 엉뚱이 소재를 그대로 한 줄로 쓰고 대표 감정은 QUIRKY로 돌려준다`() {
+        // 실제 카드 생성과 같은 결과를 보여줘야 한다. 이 한 줄은 LLM이 쓴 문장이 아니라 소재 목록의 문장 그대로다.
+        every { systemPromptResolver.resolveStandaloneForPreview(PromptType.CARD, null) } returns settings
+        every { cardMessageGenerator.generate(EmotionType.ANGER, listOf("ㅊㅊ초쵸ㅛㅊ"), null, settings) } returns
+            CardMessageOutput(
+                summary = null,
+                usedTokens = 10,
+                cachedTokens = 0,
+                inputTokens = 8,
+                outputTokens = 2,
+                kind = CardLineKind.NONSENSE,
+            )
+        every { eongttungTopicSelector.select() } returns "목마르다"
+
+        val result = service.previewCard(CardPreviewCommand(null, EmotionType.ANGER, listOf("ㅊㅊ초쵸ㅛㅊ"), null))
+
+        assertEquals(CardLineKind.NONSENSE, result.kind)
+        assertEquals(EmotionType.QUIRKY, result.emotion)
+        assertEquals("목마르다", result.eongttungTopic)
+        assertEquals("목마르다", result.line)
+        // LLM을 더 부르지 않으므로 토큰은 판정 호출의 것뿐이다.
+        assertEquals(10, result.usage.usedTokens)
     }
 }

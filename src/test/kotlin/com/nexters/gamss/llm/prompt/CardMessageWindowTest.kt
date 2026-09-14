@@ -2,7 +2,6 @@ package com.nexters.gamss.llm.prompt
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -31,17 +30,23 @@ class CardMessageWindowTest {
     }
 
     @Test
-    fun `이어 붙인 결과도 상한을 넘지 않는다`() {
-        // 예산이 본문 길이만 재면 짧은 메시지가 많을 때 구분자 몫이 쌓여 여기서 상한을 넘고,
-        // 프롬프트 조립의 마지막 방어선이 한 번 더 자르면서 감정 쪽과 보는 구간이 어긋난다.
+    fun `1자짜리 메시지로 채우면 MAX_MESSAGES개까지 담긴다`() {
+        // 입력 개수를 제한하는 쪽(플레이그라운드 요청)이 이 값을 상한으로 쓴다. 실제 창과 어긋나면 짧은 메시지가
+        // 많은 대화를 미리보기로 재현할 수 없다.
+        val recent = CardMessageWindow.recent(List(CardMessageWindow.MAX_MESSAGES + 10) { "가" })
+
+        assertEquals(CardMessageWindow.MAX_MESSAGES, recent.size)
+    }
+
+    @Test
+    fun `불릿으로 감싼 몫까지 세어 짧은 메시지가 많아도 상한을 넘지 않는다`() {
+        // 예산이 본문 길이만 재면 짧은 메시지가 많을 때 "- "와 개행 몫이 쌓여 실제 프롬프트가 상한을 넘는다.
         val manyShortMessages = List(3_000) { "가" }
 
-        val text = CardMessageWindow.recentAsText(manyShortMessages)
+        val recent = CardMessageWindow.recent(manyShortMessages)
+        val renderedLength = recent.sumOf { "- $it\n".length }
 
-        assertTrue(
-            text.length <= CardMessageWindow.MAX_CHARS,
-            "이어 붙인 길이가 상한을 넘었다: ${text.length}",
-        )
+        assertTrue(renderedLength <= CardMessageWindow.MAX_CHARS, "불릿으로 감싼 길이가 상한을 넘었다: $renderedLength")
     }
 
     @Test
@@ -53,17 +58,8 @@ class CardMessageWindowTest {
     }
 
     @Test
-    fun `담을 메시지가 없으면 빈 문자열이다`() {
+    fun `담을 메시지가 없으면 빈 목록이다`() {
         // 예외를 여기서 던지지 않는다 — 그 경우를 어떻게 다룰지는 부르는 쪽이 정한다.
-        assertEquals("", CardMessageWindow.recentAsText(listOf("  ", "\n")))
-    }
-
-    @Test
-    fun `이어 붙일 때 메시지 경계가 남는다`() {
-        // 공백만으로 이으면 서로 다른 두 이야기가 한 문장처럼 읽힌다.
-        val text = CardMessageWindow.recentAsText(listOf("오늘 억울한 일이 있었어", "그래서 화가 났어"))
-
-        assertEquals("오늘 억울한 일이 있었어 / 그래서 화가 났어", text)
-        assertFalse(text.contains("\n"))
+        assertEquals(emptyList(), CardMessageWindow.recent(listOf("  ", "\n")))
     }
 }

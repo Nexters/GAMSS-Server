@@ -7,6 +7,7 @@ import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.llm.config.GeminiPricing
 import com.nexters.gamss.llm.error.CardGenerationFailedException
 import com.nexters.gamss.llm.error.CommentGenerationFailedException
+import com.nexters.gamss.llm.generation.CardLineKind
 import com.nexters.gamss.llm.generation.CardMessageGenerator
 import com.nexters.gamss.llm.generation.CommentGenerationOutput
 import com.nexters.gamss.llm.generation.CommentGenerator
@@ -18,6 +19,7 @@ import com.nexters.gamss.llm.prompt.PromptProvider
 import com.nexters.gamss.llm.prompt.PromptType
 import com.nexters.gamss.llm.selection.CharacterSelection
 import com.nexters.gamss.llm.selection.EongttungTopicSelector
+import com.nexters.gamss.llm.settings.LlmSettingsView
 import com.nexters.gamss.llm.settings.SystemPromptResolver
 import com.nexters.gamss.monitoring.domain.GenerationType
 import com.nexters.gamss.monitoring.service.GenerationLogRecorder
@@ -146,46 +148,95 @@ class PromptPreviewService(
     /**
      * 카드 한 줄 생성을 시험한다 - 실제 카드 생성 경로(CARD 단독 프롬프트·유저 콘텐츠·CardSummary
      * 정제)를 그대로 쓴다. 다듬기 전후를 함께 돌려줘 프롬프트의 길이 지시가 지켜지는지 볼 수 있다.
+     *
+     * 판정이 NONSENSE면 실제 생성처럼 엉뚱이 소재 목록에서 고른 한 줄을 그대로 쓰고 대표 감정은 QUIRKY로 돌려준다.
+     * 이때 LLM을 더 부르지 않으므로 토큰은 판정 호출의 것뿐이다.
      */
     fun previewCard(command: CardPreviewCommand): CardPreviewResult {
         val settings = systemPromptResolver.resolveStandaloneForPreview(PromptType.CARD, command.cardPrompt)
-        val userContent = promptProvider.buildCardUserContent(command.emotion, command.summary)
+        val userContent = promptProvider.buildCardUserContent(command.emotion, command.userMessages, command.summary)
 
         val startedAt = System.nanoTime()
         val result =
             try {
-                val output = cardMessageGenerator.generate(command.emotion, command.summary, settings)
-                val line = CardSummary.normalize(output.summary)
-                CardPreviewResult(
-                    model = settings.model,
-                    systemPrompt = settings.systemPrompt,
-                    userContent = userContent,
-                    emotion = command.emotion,
-                    line = line,
-                    rawLine = output.summary,
-                    rawLength = CardSummary.graphemeCount(output.summary),
-                    truncated = line != output.summary,
-                    generationError = null,
-                    usage = PreviewUsage.of(geminiPricing, settings.model, output),
-                    latencyMs = elapsedMs(startedAt),
-                )
+                val judged = cardMessageGenerator.generate(command.emotion, command.userMessages, command.summary, settings)
+                val usage = PreviewUsage.of(geminiPricing, settings.model, judged)
+                when (judged.kind) {
+                    CardLineKind.EVENT -> {
+                        cardPreviewResult(
+                            settings = settings,
+                            userContent = userContent,
+                            emotion = command.emotion,
+                            kind = CardLineKind.EVENT,
+                            eongttungTopic = null,
+                            rawLine = judged.summary,
+                            generationError = null,
+                            usage = usage,
+                            startedAt = startedAt,
+                        )
+                    }
+
+                    CardLineKind.NONSENSE -> {
+                        val topic = eongttungTopicSelector.select()
+                        cardPreviewResult(
+                            settings = settings,
+                            userContent = userContent,
+                            emotion = EmotionType.QUIRKY,
+                            kind = CardLineKind.NONSENSE,
+                            eongttungTopic = topic,
+                            rawLine = topic,
+                            generationError = null,
+                            usage = usage,
+                            startedAt = startedAt,
+                        )
+                    }
+                }
             } catch (e: CardGenerationFailedException) {
-                CardPreviewResult(
-                    model = settings.model,
-                    systemPrompt = settings.systemPrompt,
+                // 판정 호출 자체가 실패했다. 이미 과금된 토큰이 있으면(파싱 실패 등) 그대로 보여준다.
+                cardPreviewResult(
+                    settings = settings,
                     userContent = userContent,
                     emotion = command.emotion,
-                    line = null,
+                    kind = null,
+                    eongttungTopic = null,
                     rawLine = null,
-                    rawLength = null,
-                    truncated = false,
                     generationError = e.message,
                     usage = PreviewUsage.of(geminiPricing, settings.model, e),
-                    latencyMs = elapsedMs(startedAt),
+                    startedAt = startedAt,
                 )
             }
         recordUsage(result.usage, result.latencyMs, result.generationError)
         return result
+    }
+
+    /** 카드 미리보기 결과를 조립한다. 저장될 한 줄은 실제 저장과 같은 규칙([CardSummary.normalize])으로 다듬는다. */
+    private fun cardPreviewResult(
+        settings: LlmSettingsView,
+        userContent: String,
+        emotion: EmotionType,
+        kind: CardLineKind?,
+        eongttungTopic: String?,
+        rawLine: String?,
+        generationError: String?,
+        usage: PreviewUsage,
+        startedAt: Long,
+    ): CardPreviewResult {
+        val line = rawLine?.let { CardSummary.normalize(it) }
+        return CardPreviewResult(
+            model = settings.model,
+            systemPrompt = settings.systemPrompt,
+            userContent = userContent,
+            emotion = emotion,
+            kind = kind,
+            eongttungTopic = eongttungTopic,
+            line = line,
+            rawLine = rawLine,
+            rawLength = rawLine?.let { CardSummary.graphemeCount(it) },
+            truncated = line != null && line != rawLine,
+            generationError = generationError,
+            usage = usage,
+            latencyMs = elapsedMs(startedAt),
+        )
     }
 
     // 실험에 쓴 실제 과금을 남긴다. memberId·conversationId가 없어 일일 상한·대화방 집계에는 잡히지 않는다.
