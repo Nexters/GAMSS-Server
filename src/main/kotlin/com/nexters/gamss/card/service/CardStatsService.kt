@@ -34,9 +34,6 @@ class CardStatsService(
     fun countByEmotionSince(from: Instant): Map<EmotionType, Long> =
         cardRepository.countByEmotionSince(from).associate { it.emotion to it.count }
 
-    /** [conversationIds] 중 카드가 만들어진 대화방 id. */
-    fun findConversationIdsWithCard(conversationIds: Collection<Long>): List<Long> = cardRepository.findConversationIdsIn(conversationIds)
-
     /** [conversationIds] 각각의 카드 생성 주체. 카드가 없는 방은 맵에 없다. */
     fun findCreatedByByConversationId(conversationIds: Collection<Long>): Map<Long, CardCreatedBy?> =
         cardRepository.findCreatedByByConversationIdIn(conversationIds).associate { it.conversationId to it.createdBy }

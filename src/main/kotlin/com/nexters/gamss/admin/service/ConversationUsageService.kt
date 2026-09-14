@@ -46,7 +46,6 @@ class ConversationUsageService(
         // 비용은 모델별 단가라 행마다 요금표로 계산해 더한다(QualityStatsService 와 동일한 costUsd).
         val logsByConversation = generationLogStatsService.findByConversationIds(ids).groupBy { it.conversationId }
 
-        val cardConversationIds = cardStatsService.findConversationIdsWithCard(ids).toSet()
         val cardCreatedByConversation = cardStatsService.findCreatedByByConversationId(ids)
 
         // 기록이 없는 방은 그 회차에 대상이 아니었다는 뜻이라 맵에 없다.
@@ -72,7 +71,7 @@ class ConversationUsageService(
                     createdAt = conversation.createdAt,
                     userMessageCount = userCounts[conversation.id] ?: 0,
                     characterMessageCount = characterCounts[conversation.id] ?: 0,
-                    cardCreated = conversation.id in cardConversationIds,
+                    cardCreated = cardCreatedByConversation.containsKey(conversation.id),
                     endedBy = conversation.endedBy,
                     cardCreatedBy = cardCreatedByConversation[conversation.id],
                     totalTokens = logs.sumOf { (it.usedTokens ?: 0).toLong() },
