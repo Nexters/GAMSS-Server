@@ -2,6 +2,7 @@ package com.nexters.gamss.card.service
 
 import com.nexters.gamss.card.config.CardProperties
 import com.nexters.gamss.card.domain.Card
+import com.nexters.gamss.card.domain.CardCreatedBy
 import com.nexters.gamss.conversation.domain.Conversation
 import com.nexters.gamss.conversation.service.ConversationCardGenerationService
 import com.nexters.gamss.conversation.service.ConversationService
@@ -316,7 +317,9 @@ class DailyAutoCardSchedulerTest {
         scheduler.runFor(createdAfter, createdBefore)
 
         // emotion을 null로 넘겨 서버가 유저 메시지로 분류하게 한다. 배치엔 클라이언트가 없다.
-        verify(exactly = 1) { cardService.createCard(MEMBER_ID, 10L, null, "오늘 억울한 일이 있었다", any()) }
+        verify(exactly = 1) {
+            cardService.createCard(MEMBER_ID, 10L, null, "오늘 억울한 일이 있었다", CardCreatedBy.AUTO_BATCH)
+        }
     }
 
     @Test

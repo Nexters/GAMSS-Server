@@ -1,6 +1,7 @@
 package com.nexters.gamss.card.controller
 
 import com.nexters.gamss.card.domain.Card
+import com.nexters.gamss.card.domain.CardCreatedBy
 import com.nexters.gamss.card.domain.CardSummary
 import com.nexters.gamss.card.repository.CardRepository
 import com.nexters.gamss.conversation.domain.Conversation
@@ -119,6 +120,7 @@ class CardControllerIntegrationTest {
         val persistedCard = cardRepository.findAll().single { it.conversationId == conversation.id }
         assertEquals(persistedCard.summary, persistedCard.message)
         assertEquals(1, cardRepository.count())
+        assertEquals(CardCreatedBy.USER, persistedCard.createdBy)
     }
 
     @Test
