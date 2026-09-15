@@ -111,6 +111,29 @@ class ConversationUsageIntegrationTest : RepositoryTest() {
         assertNull(b.cardCreatedBy, "카드가 없는 방은 생성 주체가 없어야 한다")
     }
 
+    /** 주체를 기록하기 전에 만들어진 과거 카드는 createdBy 가 null 이지만, 카드 자체는 있으므로 cardCreated 는 true 여야 한다. */
+    @Test
+    fun `생성 주체가 없는 과거 카드도 카드 생성으로 집계한다`() {
+        val member = memberRepository.save(Member())
+        val conversation = conversationRepository.save(Conversation(memberId = member.id).apply { end(ConversationEndedBy.USER) })
+        cardRepository.save(
+            Card(
+                memberId = member.id,
+                conversationId = conversation.id,
+                emotion = EmotionType.ANGER,
+                summary = "요약",
+                message = "한 줄",
+                conversationCreatedAt = Instant.now(),
+                createdBy = null,
+            ),
+        )
+
+        val row = conversationUsageService.getUsage(PageRequest.of(0, 20)).content.first { it.conversationId == conversation.id }
+
+        assertTrue(row.cardCreated, "생성 주체를 모르더라도 카드가 있으면 카드 생성으로 집계돼야 한다")
+        assertNull(row.cardCreatedBy, "주체 기록이 없는 과거 카드는 생성 주체를 알 수 없어야 한다")
+    }
+
     private fun saveLog(
         conversationId: Long,
         input: Int,
