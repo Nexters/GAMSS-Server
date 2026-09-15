@@ -23,7 +23,7 @@ data class ConversationUsageResponse(
     @field:Schema(description = "이 대화방에서 카드가 생성됐는지", example = "true")
     val cardCreated: Boolean,
     @field:Schema(
-        description = "종료 주체. null 이면 과거 방이라 알 수 없다는 뜻이다(추정 아님)",
+        description = "종료 주체. 종료되지 않은 방이면 null, 종료됐는데 이 값이 null이면 과거 방이라 알 수 없다는 뜻이다",
         example = "USER",
         allowableValues = ["USER", "AUTO_BATCH"],
         nullable = true,

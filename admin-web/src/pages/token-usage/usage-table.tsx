@@ -42,16 +42,9 @@ const STATUS_META: Record<ConversationUsage['status'], { label: string; variant:
 /**
  * 알림 결과를 다르게 보여준다.
  * 기기 없음(알림 끔)과 건너뜀은 실패가 아니므로 실패와 같은 색으로 그리면 대응할 것이 묻힌다.
- * ALREADY_HANDLED 는 배치가 이 방을 대상으로 잡아 처리하려 했지만, 그사이 사용자가 직접
- * 종료+카드 생성을 먼저 끝내 놓은 경우다 - 배치가 실제로 봤다는 사실이 로그에 남은 값이라, 프론트가
- * status/cardCreated 로 추측하는 값(NOT_TARGET_META, notTargetCardLabel)보다 신뢰도가 높다. 라벨
- * 텍스트도 "직접 생성"(확인된 사실)과 "직접 생성 추정"(추측)으로 갈라, 툴팁을 열지 않아도
- * 신뢰도 차이가 보이게 한다.
- * 기록이 아예 없으면(null) 그 회차에 배치가 이 방을 보지도 않았다는 뜻인데, 이유가 갈린다 - 사용자가
- * 이미 직접 처리해서 대상이 아니게 된 경우(직접 종료 추정, 직접 생성 추정)와, 순수하게 시간대 밖이라
- * 처음부터 대상이 아니었던 경우(대상 아님)를 구분해서 보여준다. 빈칸(-) 하나로 두면 기기 없음과도,
- * 서로와도 시각적으로 구분이 안 돼 헷갈린다. 프론트가 status/cardCreated 로 짚는 두 값은 모두
- * "추정"을 붙여, 배치가 확인해 준 값과 라벨만 보고도 갈리게 한다.
+ * ALREADY_HANDLED 는 배치가 처리하려던 사이 사용자가 직접 종료·카드 생성을 먼저 끝낸 경우다.
+ * 기록이 없으면(null) 실제 종료·생성 주체(endedBy·cardCreatedBy)를 보여주고, 주체를 알 수 없는
+ * 과거 방이거나 애초에 배치 대상이 아니었던 경우에만 "알 수 없음"·"대상 아님"으로 표시한다.
  */
 const NOTIFICATION_META: Record<NotificationOutcome, { label: string; variant: 'success' | 'muted' | 'destructive'; title: string }> = {
   SENT: { label: '발송', variant: 'success', title: 'FCM 이 성공을 돌려줬습니다' },

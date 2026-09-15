@@ -19,7 +19,7 @@ data class ConversationUsage(
     val userMessageCount: Long,
     val characterMessageCount: Long,
     val cardCreated: Boolean,
-    /** 종료 주체. 값이 없으면 과거 방이라 알 수 없다는 뜻이다(추정 아님). */
+    /** 종료 주체. 종료되지 않은 방이면 null, 종료됐는데 값이 없으면 과거 방이라 알 수 없다는 뜻이다. */
     val endedBy: ConversationEndedBy?,
     /** 카드 생성 주체. 카드가 없으면 null. 값이 없으면 과거 카드라 알 수 없다는 뜻이다. */
     val cardCreatedBy: CardCreatedBy?,
