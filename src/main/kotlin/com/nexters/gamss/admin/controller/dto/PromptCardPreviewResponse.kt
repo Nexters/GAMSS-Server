@@ -12,13 +12,20 @@ data class PromptCardPreviewResponse(
     val systemPrompt: String,
     @field:Schema(description = "실제 전달된 user content")
     val userContent: String,
-    @field:Schema(description = "대표 감정", example = "ANGER")
+    @field:Schema(description = "실제 카드에 붙을 대표 감정. 판정이 NONSENSE면 요청한 감정과 관계없이 QUIRKY", example = "ANGER")
     val emotion: String,
+    @field:Schema(
+        description = "카드 한 줄 판정. EVENT는 유저 시점의 하루 기록, NONSENSE는 알아볼 수 있는 내용이 없어 유저가 보낸 첫 메시지를 그대로 남긴 경우. 판정 호출이 실패하면 null",
+        example = "EVENT",
+        allowableValues = ["EVENT", "NONSENSE"],
+        nullable = true,
+    )
+    val kind: String?,
     @field:Schema(description = "실제 저장될 한 줄(생성 실패 시 null)", example = "오늘 팀장이 자기 할 일을 다 떠넘겼어요", nullable = true)
     val line: String?,
     @field:Schema(description = "저장되는 한 줄의 길이(공백 포함)", example = "21", nullable = true)
     val length: Int?,
-    @field:Schema(description = "LLM이 그대로 돌려준 한 줄(자르기 전)", nullable = true)
+    @field:Schema(description = "다듬기 전 한 줄(EVENT면 LLM 원문, NONSENSE면 유저가 보낸 첫 메시지)", nullable = true)
     val rawLine: String?,
     @field:Schema(description = "자르기 전 길이(공백 포함)", example = "58", nullable = true)
     val rawLength: Int?,
@@ -46,6 +53,7 @@ data class PromptCardPreviewResponse(
                 systemPrompt = result.systemPrompt,
                 userContent = result.userContent,
                 emotion = result.emotion.name,
+                kind = result.kind?.name,
                 line = result.line,
                 // 관리자가 세는 글자 수와 서버가 자르는 기준이 같아야 한다(UTF-16 유닛이 아니라 그래핌).
                 length = result.line?.let { CardSummary.graphemeCount(it) },

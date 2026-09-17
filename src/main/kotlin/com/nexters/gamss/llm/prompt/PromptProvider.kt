@@ -69,27 +69,46 @@ class PromptProvider {
     }
 
     /**
-     * 클라이언트가 만든 대화 요약을 다듬어, 카드에 남길 하루 기록 한 줄을 요청하는 유저 콘텐츠.
+     * 카드에 남길 하루 기록 한 줄을 요청하는 유저 콘텐츠. 유저가 보낸 메시지가 사실의 기준이고,
+     * 클라이언트 요약은 있을 때만 참고로 싣는다([com.nexters.gamss.llm.generation.CardMessageGenerator] 참고).
+     *
+     * 메시지 구간은 [CardMessageWindow]가 정하고, 렌더링(시간순 불릿)도 감정 분류
+     * ([buildCardEmotionUserContent])와 같게 둔다. 두 호출이 **같은 구간**을 봐야 카드에 적힌 사건과
+     * 그 카드의 감정이 하루의 다른 절반에서 나오지 않는다.
      *
      * 감정을 캐릭터 id(`bunno`)가 아니라 한글 라벨(`분노`)로 넘긴다 — 캐릭터 id는 그 자체로 말투를
      * 연상시켜, 캐릭터 말투를 쓰지 말라는 시스템 프롬프트와 반대로 끌어당긴다. 카드 한 줄에서
      * 감정은 '누가 말하는지'가 아니라 '어떤 사건을 고를지'의 기준이므로 감정 이름이면 충분하다.
      *
+     * 마지막 지시문은 사건이 있다고 전제하지 않는다. "사건 하나를 골라"라고 시키면 알아볼 수 있는 내용이
+     * 없는 입력에서도 LLM이 사건을 지어낸다. 판정([com.nexters.gamss.llm.generation.CardLineKind])부터 하게 한다.
+     *
      * [summary]는 [CardMessageWindow.MAX_CHARS]까지만 담는다. 클라이언트 요약은 요청 검증
-     * (`@Size(max = 2000)`)에 이미 걸려 여기 닿지 않고, 배치가 넣는 메시지 원문도
-     * [CardMessageWindow]가 이미 같은 크기로 잘라서 온다 — 그래도 프롬프트에 실리기 직전의
-     * 마지막 방어선이라 남겨 둔다.
+     * (`@Size(max = 2000)`)에 이미 걸려 여기 닿지 않지만, 프롬프트에 실리기 직전의 마지막 방어선이라
+     * 남겨 둔다.
      */
     fun buildCardUserContent(
         emotion: EmotionType,
-        summary: String,
-    ): String =
-        buildString {
+        userMessages: List<String>,
+        summary: String?,
+    ): String {
+        val recent = CardMessageWindow.recent(userMessages)
+        val summaryText = summary?.normalizeForPrompt()?.ifBlank { null }
+        return buildString {
             appendLine("[대표 감정] ${emotion.label}")
-            appendLine("[오늘 대화 요약]")
-            appendLine(summary.normalizeForPrompt().truncateForPrompt(CardMessageWindow.MAX_CHARS))
-            append("위 요약에서 오늘을 대표하는 사건 하나를 골라, 유저 시점의 카드 한 줄을 JSON으로 출력해.")
+            // 메시지 없는 대화방은 만들어질 수 없지만(첫 메시지와 함께 생긴다), 비었는데 헤더만 남기면
+            // LLM이 "메시지가 없다"는 사실 자체를 판정 근거로 삼는다.
+            if (recent.isNotEmpty()) {
+                appendLine("[유저가 보낸 메시지] (시간순)")
+                recent.forEach { appendLine("- $it") }
+            }
+            if (summaryText != null) {
+                appendLine("[오늘 대화 요약] (참고용. 메시지에 없는 내용은 사실로 쓰지 마라)")
+                appendLine(summaryText.truncateForPrompt(CardMessageWindow.MAX_CHARS))
+            }
+            append("위 입력으로 kind를 먼저 판정하고, EVENT면 유저 시점의 카드 한 줄을 JSON으로 출력해.")
         }
+    }
 
     companion object {
         /**

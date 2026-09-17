@@ -20,26 +20,29 @@ internal object CardMessageWindow {
     const val MAX_CHARS = 4000
 
     /**
-     * 카드 한 줄 생성에 넣을 때 메시지를 잇는 구분자. 공백만으로 잇지 않는 것은 경계가 사라지면
-     * 서로 다른 두 이야기가 한 문장처럼 읽히기 때문이다.
-     */
-    const val SEPARATOR = " / "
-
-    /**
-     * 메시지 하나가 프롬프트에서 본문 말고 더 쓰는 글자 수. 카드는 [SEPARATOR]로 잇고 감정은
-     * `"- "`와 개행으로 감싸는데 마침 둘 다 3자다 — 그래서 예산 하나로 두 렌더링을 다 덮는다.
+     * 메시지 하나가 프롬프트에서 본문 말고 더 쓰는 글자 수. 감정 분류와 카드 한 줄 모두 메시지를
+     * `"- "`와 개행으로 감싸 3자다([PromptProvider]).
      *
      * **본문 길이만 재면 안 된다.** 짧은 메시지가 많은 방에서 이 몫이 쌓여 실제 프롬프트가 상한을
-     * 넘고, 그러면 [PromptProvider]의 마지막 방어선이 한 번 더 자르면서 카드만 첫 메시지를 조각으로
-     * 보게 된다(감정은 그 방어선을 안 타므로 둘이 어긋난다).
+     * 넘는다. 두 호출의 렌더링이 서로 달라지면 이 예산도 함께 다시 봐야 한다.
      */
     private const val PER_MESSAGE_OVERHEAD = 3
+
+    /**
+     * 구간에 담길 수 있는 메시지 수의 상한. 개수가 아니라 글자 수로 자르므로 가장 짧은 메시지(1자)로 채웠을 때가
+     * 최대다. 입력 개수를 제한하는 쪽(플레이그라운드 요청)은 이 값을 상한으로 써야 한다 — 더 좁히면 실제 생성이
+     * 보는 대화를 미리보기로 재현할 수 없다.
+     */
+    const val MAX_MESSAGES = MAX_CHARS / (1 + PER_MESSAGE_OVERHEAD)
 
     /**
      * [userMessages]에서 최근 [MAX_CHARS]자만큼을 **시간순으로** 돌려준다. 메시지 중간에서 자르지
      * 않고 통째로 넣거나 뺀다 — 문장 조각이 프롬프트에 실리지 않게 하려는 것이다.
      *
      * 상한을 혼자 넘기는 메시지 하나뿐이어도 빈 목록을 돌려주지 않는다. 그 방도 카드는 받아야 한다.
+     *
+     * 담을 메시지가 하나도 없으면 빈 목록이다. 그 경우를 어떻게 다룰지는 부르는 쪽이 정한다 — 카드 생성
+     * 경로는 상태를 되돌린 뒤 실패시킨다([com.nexters.gamss.card.service.CardService]).
      */
     fun recent(userMessages: List<String>): List<String> {
         val normalized = userMessages.map { it.normalizeForPrompt() }.filter { it.isNotBlank() }
@@ -54,12 +57,14 @@ internal object CardMessageWindow {
     }
 
     /**
-     * 카드 한 줄 생성의 입력으로 넣을 한 덩어리. 감정 분류가 보는 [recent]와 **같은 구간**을 그대로
-     * 이어 붙인다 — 이어 붙인 길이는 [PER_MESSAGE_OVERHEAD] 덕분에 항상 [MAX_CHARS] 안에 들어온다.
+     * 구간에서 가장 먼저 보낸 메시지. 알아볼 수 있는 내용이 없는 대화의 카드에는 이 메시지가 그대로 한 줄로
+     * 남는다([com.nexters.gamss.card.service.CardService]).
      *
-     * 담을 메시지가 하나도 없으면 빈 문자열이다. 부를 쪽에서 그 경우를 정하라는 뜻으로, 여기서
-     * 예외를 던지지는 않는다 — 카드 생성 경로는 상태를 되돌린 뒤 실패시킨다
-     * ([com.nexters.gamss.card.service.CardService]).
+     * 대화 전체가 아니라 구간에서 고르는 이유는 LLM이 판정할 때 본 메시지여야 하기 때문이다. 구간 밖으로 밀린
+     * 메시지는 "힘든 마음이 조금이라도 보이면 NONSENSE로 판정하지 않는다"는 규칙을 거치지 않아, 그런 말이 엉뚱
+     * 카드에 그대로 찍힐 수 있다. 현실의 대화방은 통째로 구간에 들어가므로 사용자에게는 대화방의 첫 발화다.
+     *
+     * 담을 메시지가 없으면 null이다. [recent]와 같이 그 경우를 어떻게 다룰지는 부르는 쪽이 정한다.
      */
-    fun recentAsText(userMessages: List<String>): String = recent(userMessages).joinToString(SEPARATOR)
+    fun first(userMessages: List<String>): String? = recent(userMessages).firstOrNull()
 }

@@ -8,6 +8,7 @@ import com.nexters.gamss.llm.config.GeminiPricing
 import com.nexters.gamss.llm.config.ModelPricing
 import com.nexters.gamss.llm.error.CardGenerationFailedException
 import com.nexters.gamss.llm.error.CommentGenerationFailedException
+import com.nexters.gamss.llm.generation.CardLineKind
 import com.nexters.gamss.llm.generation.CardMessageGenerator
 import com.nexters.gamss.llm.generation.CardMessageOutput
 import com.nexters.gamss.llm.generation.CommentGenerationOutput
@@ -279,15 +280,17 @@ class PromptPreviewServiceTest {
     fun `카드 미리보기는 공통 프롬프트 없이 카드 프롬프트만 쓴다`() {
         // 카드 프롬프트는 조립되지 않으므로 미리보기도 같은 규칙이어야 한다 — 여기서 조립되면
         // 관리자가 시험한 결과와 실제 생성이 서로 다른 프롬프트를 쓰게 된다.
+        val messages = listOf("오늘 팀장이 자기 할 일을 다 떠넘김")
         every { systemPromptResolver.resolveStandaloneForPreview(PromptType.CARD, "카드 시험") } returns settings
-        every { cardMessageGenerator.generate(EmotionType.ANGER, "오늘 요약", settings) } returns
+        every { cardMessageGenerator.generate(EmotionType.ANGER, messages, "오늘 요약", settings) } returns
             CardMessageOutput("팀장이 자기 할 일을 다 떠넘겼어요", 10, 0)
 
-        val result = service.previewCard(CardPreviewCommand("카드 시험", EmotionType.ANGER, "오늘 요약"))
+        val result = service.previewCard(CardPreviewCommand("카드 시험", EmotionType.ANGER, messages, "오늘 요약"))
 
         assertEquals("test-model", result.model)
         assertEquals("조립된 프롬프트", result.systemPrompt)
         assertEquals("팀장이 자기 할 일을 다 떠넘겼어요", result.line)
+        assertEquals(CardLineKind.EVENT, result.kind)
         assertFalse(result.truncated)
         assertNull(result.generationError)
         assertTrue(result.userContent.contains("[대표 감정] 분노"))
@@ -298,9 +301,10 @@ class PromptPreviewServiceTest {
         // 프롬프트의 길이 지시가 지켜지는지 보려면 관리자가 원문 길이를 알아야 한다.
         val raw = "가".repeat(CardSummary.MAX_LENGTH + 10)
         every { systemPromptResolver.resolveStandaloneForPreview(PromptType.CARD, null) } returns settings
-        every { cardMessageGenerator.generate(EmotionType.JOY, "오늘 요약", settings) } returns CardMessageOutput(raw, 10, 0)
+        every { cardMessageGenerator.generate(EmotionType.JOY, listOf("오늘 있었던 일"), null, settings) } returns
+            CardMessageOutput(raw, 10, 0)
 
-        val result = service.previewCard(CardPreviewCommand(null, EmotionType.JOY, "오늘 요약"))
+        val result = service.previewCard(CardPreviewCommand(null, EmotionType.JOY, listOf("오늘 있었던 일"), null))
 
         assertEquals(raw, result.rawLine)
         assertEquals(raw.length, result.rawLength)
@@ -309,16 +313,69 @@ class PromptPreviewServiceTest {
     }
 
     @Test
+    fun `카드 미리보기는 공백만 정리된 한 줄을 잘린 것으로 표시하지 않는다`() {
+        // 잘림 표시는 프롬프트의 길이 지시를 고칠지 판단하는 근거다. 공백 정리까지 잘림으로 보이면 멀쩡한 프롬프트를 고치게 된다.
+        every { systemPromptResolver.resolveStandaloneForPreview(PromptType.CARD, null) } returns settings
+        every { cardMessageGenerator.generate(EmotionType.JOY, listOf("오늘 있었던 일"), null, settings) } returns
+            CardMessageOutput("오늘   힘들었어요", 10, 0)
+
+        val result = service.previewCard(CardPreviewCommand(null, EmotionType.JOY, listOf("오늘 있었던 일"), null))
+
+        assertEquals("오늘 힘들었어요", result.line)
+        assertFalse(result.truncated)
+    }
+
+    @Test
     fun `카드 생성이 실패해도 예외 대신 결과에 담아 돌려준다`() {
         every { systemPromptResolver.resolveStandaloneForPreview(PromptType.CARD, null) } returns settings
-        every { cardMessageGenerator.generate(EmotionType.ANGER, "오늘 요약", settings) } throws
+        every { cardMessageGenerator.generate(EmotionType.ANGER, listOf("오늘 있었던 일"), null, settings) } throws
             CardGenerationFailedException("카드 한 줄 JSON 파싱에 실패했습니다.", usedTokens = 7, cachedTokens = 0)
 
-        val result = service.previewCard(CardPreviewCommand(null, EmotionType.ANGER, "오늘 요약"))
+        val result = service.previewCard(CardPreviewCommand(null, EmotionType.ANGER, listOf("오늘 있었던 일"), null))
 
         assertNull(result.line)
+        assertNull(result.kind)
         assertEquals("카드 한 줄 JSON 파싱에 실패했습니다.", result.generationError)
         // 검증 실패한 시도도 호출은 됐으니 과금된다 — 토큰이 결과에 실려야 한다.
         assertEquals(7, result.usage.usedTokens)
+    }
+
+    @Test
+    fun `카드 미리보기가 NONSENSE로 판정되면 유저가 보낸 첫 메시지를 그대로 한 줄로 쓰고 대표 감정은 QUIRKY로 돌려준다`() {
+        // 실제 카드 생성과 같은 결과를 보여줘야 한다. 이 한 줄은 LLM이 쓴 문장이 아니라 첫 메시지 그대로다.
+        every { systemPromptResolver.resolveStandaloneForPreview(PromptType.CARD, null) } returns settings
+        every { cardMessageGenerator.generate(EmotionType.ANGER, listOf("ㅊㅊ초쵸ㅛㅊ", "ㅁㄴㅇㄹ"), null, settings) } returns
+            CardMessageOutput(
+                summary = null,
+                usedTokens = 10,
+                cachedTokens = 0,
+                inputTokens = 8,
+                outputTokens = 2,
+                kind = CardLineKind.NONSENSE,
+            )
+
+        val result = service.previewCard(CardPreviewCommand(null, EmotionType.ANGER, listOf("ㅊㅊ초쵸ㅛㅊ", "ㅁㄴㅇㄹ"), null))
+
+        assertEquals(CardLineKind.NONSENSE, result.kind)
+        assertEquals(EmotionType.QUIRKY, result.emotion)
+        assertEquals("ㅊㅊ초쵸ㅛㅊ", result.line)
+        // LLM을 더 부르지 않으므로 토큰은 판정 호출의 것뿐이다.
+        assertEquals(10, result.usage.usedTokens)
+    }
+
+    @Test
+    fun `카드 미리보기가 NONSENSE인데 남길 메시지가 없으면 예외 대신 오류로 돌려준다`() {
+        // 공백뿐인 메시지만 오면 고를 첫 메시지가 없다. 실제 생성은 실패로 끝나는 경우라 500이 아니라 실패 관찰로 보여준다.
+        every { systemPromptResolver.resolveStandaloneForPreview(PromptType.CARD, null) } returns settings
+        every { cardMessageGenerator.generate(EmotionType.ANGER, listOf("   "), null, settings) } returns
+            CardMessageOutput(summary = null, usedTokens = 10, cachedTokens = 0, kind = CardLineKind.NONSENSE)
+
+        val result = service.previewCard(CardPreviewCommand(null, EmotionType.ANGER, listOf("   "), null))
+
+        assertEquals(CardLineKind.NONSENSE, result.kind)
+        assertNull(result.line)
+        assertEquals("카드에 남길 유저 메시지가 없습니다.", result.generationError)
+        // 판정 호출은 이미 과금됐다.
+        assertEquals(10, result.usage.usedTokens)
     }
 }
