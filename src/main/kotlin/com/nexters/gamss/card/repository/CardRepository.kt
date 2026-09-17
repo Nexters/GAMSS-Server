@@ -98,11 +98,14 @@ interface CardRepository : JpaRepository<Card, Long> {
      */
     fun existsByConversationId(conversationId: Long): Boolean
 
-    /** 카드가 생성된 대화방 id들만 골라 반환한다(백오피스 대화방 사용량 페이지의 카드 생성 여부 배치 조회). */
-    @Query("select c.conversationId from Card c where c.conversationId in :conversationIds")
-    fun findConversationIdsIn(
+    /**
+     * [conversationIds] 중 카드가 있는 방의 생성 주체(백오피스 대화방 사용량 페이지).
+     * 카드 존재 여부도 이 결과의 키 집합으로 판단한다 — 카드가 있는 방을 한 번 더 따로 묻지 않는다.
+     */
+    @Query("select c.conversationId as conversationId, c.createdBy as createdBy from Card c where c.conversationId in :conversationIds")
+    fun findCreatedByByConversationIdIn(
         @Param("conversationIds") conversationIds: Collection<Long>,
-    ): List<Long>
+    ): List<CardCreatedByProjection>
 
     /**
      * 회원의 특정 감정 카드 중 **일괄 삭제 대상**인 카드의 대화방 id 를 모은다.
