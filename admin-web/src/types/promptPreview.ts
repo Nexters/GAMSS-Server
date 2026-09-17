@@ -52,12 +52,10 @@ export interface CardPreviewResult {
   emotion: string
   /** 카드 한 줄 판정. 판정 호출이 실패하면 null. */
   kind: 'EVENT' | 'NONSENSE' | null
-  /** NONSENSE일 때 한 줄로 그대로 쓴 엉뚱이 소재. EVENT거나 판정이 실패하면 null. */
-  eongttungTopic: string | null
   /** 실제 저장될 한 줄. 생성 실패 시 null. */
   line: string | null
   length: number | null
-  /** 다듬기 전 한 줄. EVENT면 LLM이 돌려준 원문, NONSENSE면 고른 엉뚱이 소재 문장이다. 길이 초과 여부를 보는 용도. */
+  /** 다듬기 전 한 줄. EVENT면 LLM이 돌려준 원문, NONSENSE면 유저가 보낸 첫 메시지다. 길이 초과 여부를 보는 용도. */
   rawLine: string | null
   rawLength: number | null
   truncated: boolean

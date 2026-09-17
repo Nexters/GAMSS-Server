@@ -47,7 +47,7 @@ const CHARACTERS: { value: Emotion; label: string; emoji: string }[] = [
  */
 const EXPERIMENTS = [
   { value: 'feed' as const, label: '댓글 · 답글', hint: '샘플 일기로 캐릭터 댓글을 만들고, 실제 유저처럼 이어서 대화해봅니다.' },
-  { value: 'card' as const, label: '카드 한 줄', hint: '유저 메시지로 카드에 남을 한 줄을 만듭니다. 알아볼 수 있는 내용이 없는 대화는 엉뚱이 소재 한 줄로 바뀌는 것까지 확인합니다.' },
+  { value: 'card' as const, label: '카드 한 줄', hint: '유저 메시지로 카드에 남을 한 줄을 만듭니다. 알아볼 수 있는 내용이 없는 대화는 첫 메시지가 그대로 남는 것까지 확인합니다.' },
 ]
 type ExperimentTab = (typeof EXPERIMENTS)[number]['value']
 

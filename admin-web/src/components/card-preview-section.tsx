@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useCustomMutation } from '@refinedev/core'
-import { AlertTriangle, CircleDollarSign, Clock, Cpu, Play, Ruler, Scissors, Shuffle, Sparkles } from 'lucide-react'
+import { AlertTriangle, CircleDollarSign, Clock, Cpu, Play, Quote, Ruler, Scissors, Sparkles } from 'lucide-react'
 import type { CardPreviewResult } from '@/types/promptPreview'
 import { ApiError } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
@@ -60,8 +60,8 @@ function emotionLabelOf(value: string): string {
  * 규칙이 갈리면 사용자는 두 도구를 쓰는 것처럼 느낀다. 공통 프롬프트 오버라이드가 없는 것은 카드
  * 프롬프트가 조립되지 않기 때문이다(서버도 CARD를 단독으로 쓴다).
  *
- * 서버는 먼저 kind를 판정하고, 알아볼 수 있는 내용이 없는 대화(NONSENSE)면 LLM을 더 부르지 않고 엉뚱이 소재
- * 목록에서 고른 한 줄을 그대로 쓴다. 그래서 그 한 줄을 바꾸고 싶으면 프롬프트가 아니라 소재 목록을 고친다.
+ * 서버는 먼저 kind를 판정하고, 알아볼 수 있는 내용이 없는 대화(NONSENSE)면 LLM을 더 부르지 않고 유저가 보낸 첫
+ * 메시지를 그대로 한 줄로 쓴다. 그래서 그 한 줄은 프롬프트로 바뀌지 않는다.
  */
 export function CardPreviewSection() {
   const [emotion, setEmotion] = useState('ANGER')
@@ -228,15 +228,15 @@ export function CardPreviewSection() {
             {result.kind === 'NONSENSE' && (
               <Card className="space-y-1.5 border-dashed p-4">
                 <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                  <Shuffle className="size-3.5" />
+                  <Quote className="size-3.5" />
                   알아볼 수 있는 내용이 없는 대화로 판정됨
                 </p>
                 <p className="break-keep text-sm">
-                  사건을 지어내지 않고 엉뚱이 소재 목록에서 고른 한 줄을 그대로 남깁니다. 대표 감정은 요청과 관계없이{' '}
+                  사건을 지어내지 않고 유저가 보낸 첫 메시지를 그대로 남깁니다. 대표 감정은 요청과 관계없이{' '}
                   {emotionLabelOf(result.emotion)}(으)로 저장됩니다.
                 </p>
                 <p className="text-[11px] text-muted-foreground">
-                  이 한 줄은 LLM이 쓴 문장이 아닙니다. 바꾸려면 LLM 설정의 엉뚱이 소재 목록을 고치세요.
+                  이 한 줄은 LLM이 쓴 문장이 아니라 첫 메시지 그대로라 프롬프트를 고쳐도 바뀌지 않습니다.
                 </p>
               </Card>
             )}
@@ -258,7 +258,7 @@ export function CardPreviewSection() {
                   <p className="text-xs font-medium text-muted-foreground">카드에 남을 한 줄</p>
                   {result.kind === 'NONSENSE' && (
                     <Badge variant="secondary" className="text-[10px]">
-                      🤪 엉뚱이 소재
+                      💬 첫 메시지
                     </Badge>
                   )}
                   {result.truncated && (
@@ -283,10 +283,10 @@ export function CardPreviewSection() {
                   자르기 전 원문 ({result.rawLength}자)
                 </p>
                 <p className="break-keep text-sm">{result.rawLine}</p>
-                {/* NONSENSE의 원문은 LLM 출력이 아니라 소재 목록 문장이라, 고칠 곳도 프롬프트가 아니라 목록이다. */}
+                {/* NONSENSE의 원문은 LLM 출력이 아니라 유저 메시지라, 길이 지시를 고칠 프롬프트가 없다. */}
                 <p className="text-[11px] text-muted-foreground">
                   {result.kind === 'NONSENSE'
-                    ? `엉뚱이 소재 문장이 길어 서버가 잘랐습니다. 소재 목록에서 이 문장을 ${MAX_LENGTH}자 이내로 줄여주세요.`
+                    ? `첫 메시지가 ${MAX_LENGTH}자를 넘어 서버가 잘랐습니다. 실제 카드에도 잘린 채로 남습니다.`
                     : '프롬프트가 길이 지시를 지키지 못했습니다. 서버 자르기에 기대는 만큼 문장이 어색해질 수 있습니다.'}
                 </p>
               </Card>
