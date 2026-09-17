@@ -362,4 +362,20 @@ class PromptPreviewServiceTest {
         // LLM을 더 부르지 않으므로 토큰은 판정 호출의 것뿐이다.
         assertEquals(10, result.usage.usedTokens)
     }
+
+    @Test
+    fun `카드 미리보기가 NONSENSE인데 남길 메시지가 없으면 예외 대신 오류로 돌려준다`() {
+        // 공백뿐인 메시지만 오면 고를 첫 메시지가 없다. 실제 생성은 실패로 끝나는 경우라 500이 아니라 실패 관찰로 보여준다.
+        every { systemPromptResolver.resolveStandaloneForPreview(PromptType.CARD, null) } returns settings
+        every { cardMessageGenerator.generate(EmotionType.ANGER, listOf("   "), null, settings) } returns
+            CardMessageOutput(summary = null, usedTokens = 10, cachedTokens = 0, kind = CardLineKind.NONSENSE)
+
+        val result = service.previewCard(CardPreviewCommand(null, EmotionType.ANGER, listOf("   "), null))
+
+        assertEquals(CardLineKind.NONSENSE, result.kind)
+        assertNull(result.line)
+        assertEquals("카드에 남길 유저 메시지가 없습니다.", result.generationError)
+        // 판정 호출은 이미 과금됐다.
+        assertEquals(10, result.usage.usedTokens)
+    }
 }

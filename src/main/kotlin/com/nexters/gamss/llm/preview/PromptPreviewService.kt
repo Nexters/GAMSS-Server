@@ -177,16 +177,16 @@ class PromptPreviewService(
                     }
 
                     CardLineKind.NONSENSE -> {
-                        // 요청 검증(@NotEmpty, 메시지마다 @NotBlank)을 거쳐 들어오므로 고를 메시지는 항상 있다.
-                        val firstMessage =
-                            checkNotNull(CardMessageWindow.first(command.userMessages)) { "카드 미리보기에 유저 메시지가 없습니다." }
+                        // 요청 검증만 믿지 않는다 — 공백뿐인 메시지만 들어오면 고를 첫 메시지가 없다. 실제 생성은 이때
+                        // 실패로 끝나므로(CardService) 미리보기도 예외 대신 오류로 돌려준다.
+                        val firstMessage = CardMessageWindow.first(command.userMessages)
                         cardPreviewResult(
                             settings = settings,
                             userContent = userContent,
                             emotion = EmotionType.QUIRKY,
                             kind = CardLineKind.NONSENSE,
                             rawLine = firstMessage,
-                            generationError = null,
+                            generationError = if (firstMessage == null) "카드에 남길 유저 메시지가 없습니다." else null,
                             usage = usage,
                             startedAt = startedAt,
                         )
