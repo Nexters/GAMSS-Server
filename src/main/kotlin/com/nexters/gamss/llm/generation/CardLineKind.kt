@@ -12,8 +12,11 @@ enum class CardLineKind {
     EVENT,
 
     /**
-     * 알아볼 수 있는 내용 자체가 없다. 사건을 지어내는 대신 유저가 보낸 첫 메시지를 그대로 한 줄로 남긴다
-     * ([com.nexters.gamss.card.service.CardService]).
+     * 그날 있었던 일도, 기분이나 상태도 알 수 없다(자모 나열, 인사, 'ㅇㅋ' 같은 짧은 말). 사건을 지어내는 대신 유저가
+     * 보낸 첫 메시지를 그대로 한 줄로 남긴다([com.nexters.gamss.card.service.CardService]).
+     *
+     * 애매한 입력도 기분이나 상태가 드러나지 않으면 여기로 온다. EVENT로 보내면 LLM이 없는 사건이나 기분으로 한 줄을
+     * 채우지만, 첫 메시지는 유저가 친 말이라 지어낸 것이 없다.
      */
     NONSENSE,
 }
