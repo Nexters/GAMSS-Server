@@ -4,6 +4,7 @@ import com.nexters.gamss.card.controller.dto.CardCalendarResponse
 import com.nexters.gamss.card.controller.dto.CardDeleteResponse
 import com.nexters.gamss.card.controller.dto.CardResponse
 import com.nexters.gamss.card.controller.dto.CreateCardRequest
+import com.nexters.gamss.card.domain.CardCreatedBy
 import com.nexters.gamss.card.service.CardService
 import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.global.response.ApiResponse
@@ -63,6 +64,7 @@ class CardController(
                 conversationId = checkNotNull(request.conversationId),
                 emotion = request.emotion,
                 summary = checkNotNull(request.summary),
+                createdBy = CardCreatedBy.USER,
             )
         return ApiResponse.success(CardResponse.from(card))
     }

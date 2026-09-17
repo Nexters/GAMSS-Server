@@ -1,6 +1,7 @@
 package com.nexters.gamss.notification.service
 
 import com.nexters.gamss.conversation.domain.Conversation
+import com.nexters.gamss.conversation.domain.ConversationEndedBy
 import com.nexters.gamss.conversation.repository.ConversationRepository
 import com.nexters.gamss.member.domain.Member
 import com.nexters.gamss.member.repository.MemberRepository
@@ -143,7 +144,7 @@ class UnfinishedConversationReminderIntegrationTest {
     ) {
         val conversation = conversationRepository.save(Conversation(memberId = memberId))
         if (ended) {
-            conversation.end()
+            conversation.end(ConversationEndedBy.USER)
             conversationRepository.save(conversation)
         }
         // 리마인더는 트랜잭션 밖에서 돌아야 해서 이 테스트에 @Transactional 을 걸 수 없다.

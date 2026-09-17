@@ -1,6 +1,7 @@
 package com.nexters.gamss.conversation.service
 
 import com.nexters.gamss.conversation.domain.Conversation
+import com.nexters.gamss.conversation.domain.ConversationEndedBy
 import com.nexters.gamss.conversation.domain.ConversationStatus
 import com.nexters.gamss.conversation.domain.ConversationTitle
 import com.nexters.gamss.conversation.domain.ExcludedEmotionTypes
@@ -70,7 +71,7 @@ class ConversationService(
         conversationId: Long,
     ): Conversation {
         val conversation = getOwnedConversationForUpdate(conversationId, memberId)
-        conversation.end()
+        conversation.end(ConversationEndedBy.USER)
         return conversation
     }
 
@@ -86,7 +87,7 @@ class ConversationService(
             return null
         }
         if (conversation.status == ConversationStatus.ACTIVE) {
-            conversation.end()
+            conversation.end(ConversationEndedBy.AUTO_BATCH)
         }
         return conversation
     }

@@ -1,8 +1,10 @@
 package com.nexters.gamss.card.controller
 
 import com.nexters.gamss.card.domain.Card
+import com.nexters.gamss.card.domain.CardCreatedBy
 import com.nexters.gamss.card.repository.CardRepository
 import com.nexters.gamss.conversation.domain.Conversation
+import com.nexters.gamss.conversation.domain.ConversationEndedBy
 import com.nexters.gamss.conversation.repository.ConversationRepository
 import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.global.security.JwtIssuer
@@ -57,7 +59,7 @@ class CardShareControllerIntegrationTest {
     }
 
     private fun savedCard(member: Member): Card {
-        val conversation = conversationRepository.save(Conversation(member.id).apply { end() })
+        val conversation = conversationRepository.save(Conversation(member.id).apply { end(ConversationEndedBy.USER) })
         return cardRepository.save(
             Card(
                 memberId = member.id,
@@ -66,6 +68,7 @@ class CardShareControllerIntegrationTest {
                 summary = "우산을 안 챙겨서 옷이 다 젖어버렸어요",
                 message = "우산을 안 챙겨서 옷이 다 젖어버렸어요",
                 conversationCreatedAt = Instant.parse("2026-07-23T01:00:00Z"),
+                createdBy = CardCreatedBy.USER,
             ),
         )
     }
