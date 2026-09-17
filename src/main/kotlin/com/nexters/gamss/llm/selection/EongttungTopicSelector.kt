@@ -13,9 +13,6 @@ import kotlin.random.Random
  *
  * 소재 목록의 단일 원본은 DB([PromptType.EONGTTUNG_TOPIC], 한 줄에 소재 하나)다 — 백오피스에서
  * 편집하고 버전 이력이 남는다(V24 이관).
- *
- * 카드에서는 고른 한 줄이 프롬프트 재료가 아니라 **그대로 카드 문구**가 된다(알아볼 수 있는 내용이 없는 대화,
- * [com.nexters.gamss.card.service.CardService]). 그래서 이 목록의 문장은 사용자에게 보여도 되는 문장이어야 한다.
  */
 @Component
 class EongttungTopicSelector(

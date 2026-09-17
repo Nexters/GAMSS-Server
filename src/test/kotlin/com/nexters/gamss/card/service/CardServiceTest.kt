@@ -16,7 +16,6 @@ import com.nexters.gamss.llm.generation.CardMessageGenerator
 import com.nexters.gamss.llm.generation.CardMessageOutput
 import com.nexters.gamss.llm.generation.EmotionExtractionOutput
 import com.nexters.gamss.llm.generation.EmotionExtractor
-import com.nexters.gamss.llm.selection.EongttungTopicSelector
 import com.nexters.gamss.monitoring.domain.GenerationType
 import com.nexters.gamss.monitoring.service.GenerationLogRecorder
 import com.nexters.gamss.tokenlimit.service.TokenQuotaRecorder
@@ -41,7 +40,6 @@ class CardServiceTest {
     private val conversationCardGenerationService = mockk<ConversationCardGenerationService>()
     private val cardMessageGenerator = mockk<CardMessageGenerator>()
     private val emotionExtractor = mockk<EmotionExtractor>()
-    private val eongttungTopicSelector = mockk<EongttungTopicSelector>()
     private val generationLogRecorder = mockk<GenerationLogRecorder>(relaxed = true)
     private val cardPersistenceService = mockk<CardPersistenceService>()
     private val tokenQuotaRecorder = mockk<TokenQuotaRecorder>(relaxed = true)
@@ -52,7 +50,6 @@ class CardServiceTest {
             conversationService,
             cardMessageGenerator,
             emotionExtractor,
-            eongttungTopicSelector,
             generationLogRecorder,
             tokenQuotaRecorder,
             cardPersistenceService,
@@ -542,77 +539,57 @@ class CardServiceTest {
     }
 
     @Test
-    fun `알아볼 수 있는 내용이 없다고 판정되면 엉뚱이 소재를 그대로 한 줄로 저장하고 대표 감정을 QUIRKY로 덮어쓴다`() {
-        // 사건을 지어내지 않으려고 만든 경로라 헛소리의 범위를 소재 목록이 정한다. LLM에게 소재로 한 줄을 지어 달라고
-        // 하면 소재에 살이 붙어 목록 밖의 장면이 생긴다. 클라이언트가 보낸 감정도 내용 없는 대화에서 뽑힌 값이라 덮어쓴다.
+    fun `알아볼 수 있는 내용이 없다고 판정되면 유저가 보낸 첫 메시지를 그대로 한 줄로 저장하고 대표 감정을 QUIRKY로 덮어쓴다`() {
+        // 쓸 내용이 없는 대화라 LLM에게 한 줄을 맡기면 무엇을 쓰든 지어낸 문장이 된다. 유저가 친 말을 그대로 남긴다.
+        // 클라이언트가 보낸 감정도 내용 없는 대화에서 뽑힌 값이라 덮어쓴다.
         stubOwnedConversation(endedConversation())
         stubClaimSuccess()
         stubUserMessages(listOf("ㅊㅊ초쵸ㅛㅊ", "ㅁㄴㅇㄹ"))
         every { cardMessageGenerator.generate(EmotionType.ANGER, listOf("ㅊㅊ초쵸ㅛㅊ", "ㅁㄴㅇㄹ"), "요약") } returns nonsenseOutput()
-        every { eongttungTopicSelector.select() } returns "목마르다"
         val saved = slot<Card>()
         every { cardPersistenceService.save(capture(saved), CONVERSATION_ID, "요약") } answers { firstArg() }
 
         service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약")
 
         assertEquals(EmotionType.QUIRKY, saved.captured.emotion)
-        assertEquals("목마르다", saved.captured.summary)
+        assertEquals("ㅊㅊ초쵸ㅛㅊ", saved.captured.summary)
         assertEquals(saved.captured.summary, saved.captured.message)
         // 한 줄을 위해 LLM을 더 부르지 않는다.
         verify(exactly = 1) { cardMessageGenerator.generate(any(), any(), any()) }
     }
 
     @Test
-    fun `사건이 있다고 판정되면 엉뚱이 소재를 고르지 않는다`() {
+    fun `알아볼 수 있는 내용이 없는 대화의 첫 메시지가 상한을 넘으면 잘라서 저장한다`() {
+        // 메시지는 140자까지 저장되지만 카드 한 줄은 50자다. 그대로 넘기면 Card 불변식에 걸려 카드가 남지 않는다.
         stubOwnedConversation(endedConversation())
         stubClaimSuccess()
-        stubUserMessages()
-        every { cardMessageGenerator.generate(any(), any(), any()) } returns CardMessageOutput("팀장이 자기 할 일을 다 떠넘겼어요", 10, 0)
-        every { cardPersistenceService.save(any(), CONVERSATION_ID, "요약") } answers { firstArg() }
+        val longMessage = "ㅋ".repeat(140)
+        stubUserMessages(listOf(longMessage))
+        every { cardMessageGenerator.generate(any(), any(), any()) } returns nonsenseOutput()
+        val saved = slot<Card>()
+        every { cardPersistenceService.save(capture(saved), CONVERSATION_ID, "요약") } answers { firstArg() }
 
         service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약")
 
-        verify(exactly = 0) { eongttungTopicSelector.select() }
+        assertEquals(CardSummary.normalize(longMessage), saved.captured.summary)
+        assertTrue(CardSummary.graphemeCount(saved.captured.summary) <= CardSummary.MAX_LENGTH)
     }
 
     /**
-     * 소재 조회는 CAS 선점 이후라 그대로 던지면 PENDING이 남아 사용자의 재시도가 409(생성 중)로 막힌다.
-     * 목록이 빈 것은 설정 누락이라 업무 오류로 위장하지 않고 원래 예외를 올린다.
+     * 요약만 있어도 카드 재료 확인은 통과하므로, 유저 메시지 없이 NONSENSE가 나오면 남길 한 줄이 없다. 실제로는 오지 않는
+     * 방어적 엣지지만 선점 이후라 그대로 두면 PENDING이 남아 사용자의 재시도가 409(생성 중)로 막힌다.
      */
     @Test
-    fun `엉뚱이 소재 목록이 비어 있으면 FAILED로 전이하고 원래 예외를 그대로 올린다`() {
+    fun `알아볼 수 있는 내용이 없는데 남길 유저 메시지가 없으면 FAILED로 전이하고 CARD_GENERATION_FAILED`() {
         stubOwnedConversation(endedConversation())
         stubClaimSuccess()
-        stubUserMessages(listOf("ㅊㅊ초쵸ㅛㅊ"))
-        every { cardMessageGenerator.generate(any(), any(), any()) } returns nonsenseOutput()
-        val topicFailure = IllegalStateException("엉뚱이 소재가 비어 있습니다.")
-        every { eongttungTopicSelector.select() } throws topicFailure
-        stubFinishStatus(CardGenerationStatus.FAILED)
-
-        val thrown = assertFailsWith<IllegalStateException> { service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약") }
-
-        assertEquals(topicFailure, thrown)
-        verify(exactly = 0) { cardPersistenceService.save(any(), any(), any()) }
-        verify(exactly = 1) {
-            conversationCardGenerationService.finishCardGeneration(CONVERSATION_ID, CardGenerationStatus.FAILED)
-        }
-    }
-
-    /** [유저 메시지 조회가 실패해도 FAILED로 전이하고 CARD_GENERATION_FAILED - PENDING으로 남지 않는다]와 같은 계약. */
-    @Test
-    fun `엉뚱이 소재 조회가 DB 오류로 실패하면 FAILED로 전이하고 CARD_GENERATION_FAILED`() {
-        stubOwnedConversation(endedConversation())
-        stubClaimSuccess()
-        stubUserMessages(listOf("ㅊㅊ초쵸ㅛㅊ"))
-        every { cardMessageGenerator.generate(any(), any(), any()) } returns nonsenseOutput()
-        val readFailure = QueryTimeoutException("조회 타임아웃")
-        every { eongttungTopicSelector.select() } throws readFailure
+        stubUserMessages(emptyList())
+        every { cardMessageGenerator.generate(EmotionType.ANGER, emptyList(), "요약") } returns nonsenseOutput()
         stubFinishStatus(CardGenerationStatus.FAILED)
 
         val exception = assertFailsWith<BusinessException> { service.createCard(MEMBER_ID, CONVERSATION_ID, EmotionType.ANGER, "요약") }
 
         assertEquals(ErrorCode.CARD_GENERATION_FAILED, exception.errorCode)
-        assertEquals(readFailure, exception.cause)
         verify(exactly = 0) { cardPersistenceService.save(any(), any(), any()) }
         verify(exactly = 1) {
             conversationCardGenerationService.finishCardGeneration(CONVERSATION_ID, CardGenerationStatus.FAILED)

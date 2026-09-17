@@ -19,7 +19,6 @@ import com.nexters.gamss.llm.generation.EmotionExtractor
 import com.nexters.gamss.llm.generation.LlmRetryExecutor
 import com.nexters.gamss.llm.generation.TokenUsageAccumulator
 import com.nexters.gamss.llm.prompt.CardMessageWindow
-import com.nexters.gamss.llm.selection.EongttungTopicSelector
 import com.nexters.gamss.monitoring.domain.GenerationType
 import com.nexters.gamss.monitoring.service.GenerationLogRecorder
 import com.nexters.gamss.tokenlimit.service.TokenQuotaRecorder
@@ -44,7 +43,6 @@ class CardService(
     private val conversationService: ConversationService,
     private val cardMessageGenerator: CardMessageGenerator,
     private val emotionExtractor: EmotionExtractor,
-    private val eongttungTopicSelector: EongttungTopicSelector,
     private val generationLogRecorder: GenerationLogRecorder,
     private val tokenQuotaRecorder: TokenQuotaRecorder,
     private val cardPersistenceService: CardPersistenceService,
@@ -68,7 +66,7 @@ class CardService(
      * 분류해 채운다 — 선점 이후에 분류해야 동시 요청이 분류 LLM을 중복 호출하지 않는다.
      *
      * LLM이 알아볼 수 있는 내용이 없는 대화라고 판정하면([CardLineKind.NONSENSE]) 사건을 지어내는 대신
-     * 엉뚱이 소재 목록에서 고른 한 줄을 그대로 남기고([selectEongttungLine]), 대표 감정은 [emotion]과 관계없이
+     * 유저가 보낸 첫 메시지를 그대로 남기고([firstMessageLine]), 대표 감정은 [emotion]과 관계없이
      * [EmotionType.QUIRKY]가 된다.
      */
     fun createCard(
@@ -92,9 +90,9 @@ class CardService(
             when (output.kind) {
                 CardLineKind.EVENT -> requestedEmotion to checkNotNull(output.summary)
 
-                // 카드의 캐릭터와 색이 엉뚱이 한 줄과 맞아야 해서 대표 감정도 덮어쓴다. 클라이언트가 보낸 감정이
+                // 알아볼 수 없는 말이 그대로 남는 카드라 캐릭터와 색도 엉뚱이로 맞춘다. 클라이언트가 보낸 감정이
                 // 있어도 마찬가지다 — 내용이 없는 대화에서 뽑힌 값이라 기댈 근거가 없다.
-                CardLineKind.NONSENSE -> EmotionType.QUIRKY to selectEongttungLine(conversationId)
+                CardLineKind.NONSENSE -> EmotionType.QUIRKY to firstMessageLine(conversationId, userMessages)
             }
         // 프롬프트가 지시한 길이를 LLM이 넘길 수 있어 저장 직전에 한 번 자른다.
         val cardLine = CardSummary.normalize(rawLine)
@@ -287,27 +285,28 @@ class CardService(
     }
 
     /**
-     * 알아볼 수 있는 내용이 없는 대화의 카드에 남길 한 줄. 백오피스의 엉뚱이 소재 목록에서 하나를 골라 **그대로** 쓴다.
+     * 알아볼 수 있는 내용이 없는 대화의 카드에 남길 한 줄. 유저가 보낸 첫 메시지를 **그대로** 쓴다
+     * (고르는 규칙은 [CardMessageWindow.first]).
      *
-     * LLM에게 소재로 한 줄을 지어 달라고 하지 않는 이유는 소재가 출발점에 그쳐 목록 밖의 장면을 지어내기 때문이다
-     * ("목마르다"가 "지나가던 길고양이가 빗물을 핥고 있던데"가 됐다). 이 경로는 사건을 지어내지 않으려고 만든
-     * 것이라 헛소리의 범위를 목록이 정하게 한다. 목록 문장은 이미 엉뚱이 말투로 쓰여 있고, 이런 날은 드물어
-     * 같은 문장이 반복돼도 눈에 띄지 않는다. 호출도 하나 줄어든다.
+     * LLM에게 한 줄을 지어 달라고 하지 않는 이유는 쓸 내용이 없는 대화라 무엇을 쓰든 입력에 없는 문장이 되기
+     * 때문이다. 유저가 친 말을 그대로 남기면 지어낸 것이 없고, 호출도 하나 줄어든다. 첫 메시지로 고정하는 것은
+     * 재시도해도, 백오피스 미리보기에서도 같은 한 줄이 나오게 하려는 것이다.
      *
-     * 소재 조회는 CAS 선점 **이후**라 실패를 그대로 던지면 상태가 PENDING으로 남는다. [loadUserMessages]와 같이
-     * DB 조회 실패는 FAILED로 되돌린 뒤 재시도 가능한 CARD_GENERATION_FAILED로 바꾸고, 목록이 빈 설정 누락은
-     * 상태만 되돌리고 원래 예외를 올린다 — 예상 밖 결함을 업무 오류로 위장하지 않는다.
+     * 고를 메시지가 없는 것은 유저 메시지 없이 클라이언트 요약만으로 판정한 경우뿐이다([ensureCardMaterial]은
+     * 요약만 있어도 통과시킨다). 메시지는 대화방과 함께 만들어지고 공백만으로는 저장되지 않아 실제로는 오지 않는
+     * 방어적 엣지라, [ensureCardMaterial]과 같이 상태를 되돌린 뒤 실패시킨다.
      */
-    private fun selectEongttungLine(conversationId: Long): String =
-        try {
-            eongttungTopicSelector.select()
-        } catch (e: DataAccessException) {
-            markCardGenerationStatus(conversationId, CardGenerationStatus.FAILED)
-            throw BusinessException(ErrorCode.CARD_GENERATION_FAILED, e.message).apply { initCause(e) }
-        } catch (e: Exception) {
-            markCardGenerationStatus(conversationId, CardGenerationStatus.FAILED)
-            throw e
-        }
+    private fun firstMessageLine(
+        conversationId: Long,
+        userMessages: List<String>,
+    ): String {
+        CardMessageWindow.first(userMessages)?.let { return it }
+        markCardGenerationStatus(conversationId, CardGenerationStatus.FAILED)
+        throw BusinessException(
+            ErrorCode.CARD_GENERATION_FAILED,
+            "카드에 남길 유저 메시지가 없습니다. conversationId=$conversationId",
+        )
+    }
 
     /**
      * 생성이 실패로 끝날 때 할 일을 한 덩어리로 묶는다 — **실패 로그 한 줄과 FAILED 로의 상태 복구**다.

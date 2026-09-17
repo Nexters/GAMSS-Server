@@ -291,7 +291,6 @@ class PromptPreviewServiceTest {
         assertEquals("조립된 프롬프트", result.systemPrompt)
         assertEquals("팀장이 자기 할 일을 다 떠넘겼어요", result.line)
         assertEquals(CardLineKind.EVENT, result.kind)
-        assertNull(result.eongttungTopic)
         assertFalse(result.truncated)
         assertNull(result.generationError)
         assertTrue(result.userContent.contains("[대표 감정] 분노"))
@@ -342,10 +341,10 @@ class PromptPreviewServiceTest {
     }
 
     @Test
-    fun `카드 미리보기가 NONSENSE로 판정되면 엉뚱이 소재를 그대로 한 줄로 쓰고 대표 감정은 QUIRKY로 돌려준다`() {
-        // 실제 카드 생성과 같은 결과를 보여줘야 한다. 이 한 줄은 LLM이 쓴 문장이 아니라 소재 목록의 문장 그대로다.
+    fun `카드 미리보기가 NONSENSE로 판정되면 유저가 보낸 첫 메시지를 그대로 한 줄로 쓰고 대표 감정은 QUIRKY로 돌려준다`() {
+        // 실제 카드 생성과 같은 결과를 보여줘야 한다. 이 한 줄은 LLM이 쓴 문장이 아니라 첫 메시지 그대로다.
         every { systemPromptResolver.resolveStandaloneForPreview(PromptType.CARD, null) } returns settings
-        every { cardMessageGenerator.generate(EmotionType.ANGER, listOf("ㅊㅊ초쵸ㅛㅊ"), null, settings) } returns
+        every { cardMessageGenerator.generate(EmotionType.ANGER, listOf("ㅊㅊ초쵸ㅛㅊ", "ㅁㄴㅇㄹ"), null, settings) } returns
             CardMessageOutput(
                 summary = null,
                 usedTokens = 10,
@@ -354,14 +353,12 @@ class PromptPreviewServiceTest {
                 outputTokens = 2,
                 kind = CardLineKind.NONSENSE,
             )
-        every { eongttungTopicSelector.select() } returns "목마르다"
 
-        val result = service.previewCard(CardPreviewCommand(null, EmotionType.ANGER, listOf("ㅊㅊ초쵸ㅛㅊ"), null))
+        val result = service.previewCard(CardPreviewCommand(null, EmotionType.ANGER, listOf("ㅊㅊ초쵸ㅛㅊ", "ㅁㄴㅇㄹ"), null))
 
         assertEquals(CardLineKind.NONSENSE, result.kind)
         assertEquals(EmotionType.QUIRKY, result.emotion)
-        assertEquals("목마르다", result.eongttungTopic)
-        assertEquals("목마르다", result.line)
+        assertEquals("ㅊㅊ초쵸ㅛㅊ", result.line)
         // LLM을 더 부르지 않으므로 토큰은 판정 호출의 것뿐이다.
         assertEquals(10, result.usage.usedTokens)
     }

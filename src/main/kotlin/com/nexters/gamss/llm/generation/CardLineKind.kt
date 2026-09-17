@@ -12,7 +12,7 @@ enum class CardLineKind {
     EVENT,
 
     /**
-     * 알아볼 수 있는 내용 자체가 없다. 사건을 지어내는 대신 엉뚱이 소재 목록에서 고른 한 줄을 그대로 남긴다
+     * 알아볼 수 있는 내용 자체가 없다. 사건을 지어내는 대신 유저가 보낸 첫 메시지를 그대로 한 줄로 남긴다
      * ([com.nexters.gamss.card.service.CardService]).
      */
     NONSENSE,

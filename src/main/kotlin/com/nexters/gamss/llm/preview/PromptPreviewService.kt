@@ -12,6 +12,7 @@ import com.nexters.gamss.llm.generation.CardMessageGenerator
 import com.nexters.gamss.llm.generation.CommentGenerationOutput
 import com.nexters.gamss.llm.generation.CommentGenerator
 import com.nexters.gamss.llm.parsing.CommentFeedValidator
+import com.nexters.gamss.llm.prompt.CardMessageWindow
 import com.nexters.gamss.llm.prompt.CommentPromptContext
 import com.nexters.gamss.llm.prompt.PastSummaries
 import com.nexters.gamss.llm.prompt.PromptCharacterId
@@ -149,7 +150,7 @@ class PromptPreviewService(
      * 카드 한 줄 생성을 시험한다 - 실제 카드 생성 경로(CARD 단독 프롬프트·유저 콘텐츠·CardSummary
      * 정제)를 그대로 쓴다. 다듬기 전후를 함께 돌려줘 프롬프트의 길이 지시가 지켜지는지 볼 수 있다.
      *
-     * 판정이 NONSENSE면 실제 생성처럼 엉뚱이 소재 목록에서 고른 한 줄을 그대로 쓰고 대표 감정은 QUIRKY로 돌려준다.
+     * 판정이 NONSENSE면 실제 생성처럼 유저가 보낸 첫 메시지를 그대로 한 줄로 쓰고 대표 감정은 QUIRKY로 돌려준다.
      * 이때 LLM을 더 부르지 않으므로 토큰은 판정 호출의 것뿐이다.
      */
     fun previewCard(command: CardPreviewCommand): CardPreviewResult {
@@ -168,7 +169,6 @@ class PromptPreviewService(
                             userContent = userContent,
                             emotion = command.emotion,
                             kind = CardLineKind.EVENT,
-                            eongttungTopic = null,
                             rawLine = judged.summary,
                             generationError = null,
                             usage = usage,
@@ -177,14 +177,15 @@ class PromptPreviewService(
                     }
 
                     CardLineKind.NONSENSE -> {
-                        val topic = eongttungTopicSelector.select()
+                        // 요청 검증(@NotEmpty, 메시지마다 @NotBlank)을 거쳐 들어오므로 고를 메시지는 항상 있다.
+                        val firstMessage =
+                            checkNotNull(CardMessageWindow.first(command.userMessages)) { "카드 미리보기에 유저 메시지가 없습니다." }
                         cardPreviewResult(
                             settings = settings,
                             userContent = userContent,
                             emotion = EmotionType.QUIRKY,
                             kind = CardLineKind.NONSENSE,
-                            eongttungTopic = topic,
-                            rawLine = topic,
+                            rawLine = firstMessage,
                             generationError = null,
                             usage = usage,
                             startedAt = startedAt,
@@ -198,7 +199,6 @@ class PromptPreviewService(
                     userContent = userContent,
                     emotion = command.emotion,
                     kind = null,
-                    eongttungTopic = null,
                     rawLine = null,
                     generationError = e.message,
                     usage = PreviewUsage.of(geminiPricing, settings.model, e),
@@ -215,7 +215,6 @@ class PromptPreviewService(
         userContent: String,
         emotion: EmotionType,
         kind: CardLineKind?,
-        eongttungTopic: String?,
         rawLine: String?,
         generationError: String?,
         usage: PreviewUsage,
@@ -228,7 +227,6 @@ class PromptPreviewService(
             userContent = userContent,
             emotion = emotion,
             kind = kind,
-            eongttungTopic = eongttungTopic,
             line = line,
             rawLine = rawLine,
             rawLength = rawLine?.let { CardSummary.graphemeCount(it) },

@@ -2,6 +2,8 @@ package com.nexters.gamss.llm.prompt
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -55,6 +57,28 @@ class CardMessageWindowTest {
         val recent = CardMessageWindow.recent(listOf("첫 줄\n둘째 줄", "   ", "마지막"))
 
         assertEquals(listOf("첫 줄 둘째 줄", "마지막"), recent)
+    }
+
+    @Test
+    fun `첫 메시지는 구간 안에서 고른다`() {
+        // 구간 밖으로 밀린 메시지는 LLM이 판정할 때 보지 않았다. 그 메시지를 카드에 남기면 판정 규칙을 거치지 않은 말이 찍힌다.
+        val outOfWindow = "힘들어" + "가".repeat(137)
+        val messages = listOf(outOfWindow) + (1..30).map { "$it" + "ㅋ".repeat(139) }
+
+        val first = CardMessageWindow.first(messages)
+
+        assertEquals(CardMessageWindow.recent(messages).first(), first)
+        assertNotEquals(outOfWindow, first)
+    }
+
+    @Test
+    fun `첫 메시지는 공백뿐인 메시지를 건너뛰고 개행을 뭉갠 값이다`() {
+        assertEquals("ㅊㅊ 초쵸", CardMessageWindow.first(listOf("   ", "ㅊㅊ\n초쵸", "ㅁㄴㅇㄹ")))
+    }
+
+    @Test
+    fun `담을 메시지가 없으면 첫 메시지도 null이다`() {
+        assertNull(CardMessageWindow.first(listOf("  ", "\n")))
     }
 
     @Test

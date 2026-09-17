@@ -10,7 +10,7 @@ import com.nexters.gamss.llm.generation.CardLineKind
  * 둘을 함께 보여줘야 프롬프트가 길이 지시를 지키는지, 서버 truncate에 얼마나 기대고 있는지 알 수 있다.
  *
  * [emotion]은 실제 카드에 붙을 대표 감정이다. 판정이 [CardLineKind.NONSENSE]면 요청한 감정이 아니라
- * QUIRKY이고, 한 줄은 LLM이 쓴 문장이 아니라 서버가 고른 [eongttungTopic] 그대로다. [kind]는 판정 호출
+ * QUIRKY이고, 한 줄은 LLM이 쓴 문장이 아니라 유저가 보낸 첫 메시지 그대로다. [kind]는 판정 호출
  * 자체가 실패하면 null이다.
  */
 data class CardPreviewResult(
@@ -19,7 +19,6 @@ data class CardPreviewResult(
     val userContent: String,
     val emotion: EmotionType,
     val kind: CardLineKind?,
-    val eongttungTopic: String?,
     val line: String?,
     val rawLine: String?,
     val rawLength: Int?,

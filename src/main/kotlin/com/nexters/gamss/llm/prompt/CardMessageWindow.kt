@@ -55,4 +55,16 @@ internal object CardMessageWindow {
         }
         return recent
     }
+
+    /**
+     * 구간에서 가장 먼저 보낸 메시지. 알아볼 수 있는 내용이 없는 대화의 카드에는 이 메시지가 그대로 한 줄로
+     * 남는다([com.nexters.gamss.card.service.CardService]).
+     *
+     * 대화 전체가 아니라 구간에서 고르는 이유는 LLM이 판정할 때 본 메시지여야 하기 때문이다. 구간 밖으로 밀린
+     * 메시지는 "힘든 마음이 조금이라도 보이면 NONSENSE로 판정하지 않는다"는 규칙을 거치지 않아, 그런 말이 엉뚱
+     * 카드에 그대로 찍힐 수 있다. 현실의 대화방은 통째로 구간에 들어가므로 사용자에게는 대화방의 첫 발화다.
+     *
+     * 담을 메시지가 없으면 null이다. [recent]와 같이 그 경우를 어떻게 다룰지는 부르는 쪽이 정한다.
+     */
+    fun first(userMessages: List<String>): String? = recent(userMessages).firstOrNull()
 }

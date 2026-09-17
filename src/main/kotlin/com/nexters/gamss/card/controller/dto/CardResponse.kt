@@ -21,7 +21,7 @@ data class CardResponse(
     @field:Schema(
         description =
             "카드에 남는 한 줄(공백 포함 50자 이하). 보통은 그날 있었던 일을 유저 시점으로 적은 문장이고, " +
-                "알아볼 수 있는 내용이 없는 대화면 백오피스 엉뚱이 소재 목록에서 고른 한 줄이다(이때 emotion은 QUIRKY)",
+                "알아볼 수 있는 내용이 없는 대화면 유저가 보낸 첫 메시지를 그대로 옮긴 한 줄이다(이때 emotion은 QUIRKY)",
         example = "우산을 안 챙겨서 옷이 다 젖어버렸어요",
     )
     val summary: String,
