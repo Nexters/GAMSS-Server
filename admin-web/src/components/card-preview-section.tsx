@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useCustomMutation } from '@refinedev/core'
-import { AlertTriangle, CircleDollarSign, Clock, Cpu, Play, Ruler, Scissors, Sparkles } from 'lucide-react'
+import { AlertTriangle, CircleDollarSign, Clock, Cpu, Play, Quote, Ruler, Scissors, Sparkles } from 'lucide-react'
 import type { CardPreviewResult } from '@/types/promptPreview'
 import { ApiError } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
@@ -28,26 +28,54 @@ const MAX_LENGTH = 50
 /** 위쪽 실험의 샘플 일기와 같은 상한(서버 검증과 일치). */
 const SUMMARY_MAX_LENGTH = 2000
 
+/** 서버의 메시지 저장 상한(SaveMessageRequest)과 같다. 실제 채팅방에 이보다 긴 메시지는 없다. */
+const MESSAGE_MAX_LENGTH = 140
+
+/**
+ * 서버 PromptCardPreviewRequest의 메시지 개수 상한과 같다(CardMessageWindow.MAX_MESSAGES). 실제 생성은 개수가 아니라
+ * 4000자 창으로 자르므로, 1자짜리 메시지로 채울 때의 최대 개수까지 받아야 실제 대화를 재현할 수 있다.
+ */
+const MESSAGE_MAX_COUNT = 1000
+
 function errorMessageOf(error: unknown, fallback: string): string {
   return error instanceof ApiError ? error.message : fallback
 }
 
+/** 한 줄에 메시지 하나. 빈 줄은 버린다(서버도 공백뿐인 메시지를 받지 않는다). */
+function messagesOf(text: string): string[] {
+  return text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+}
+
+function emotionLabelOf(value: string): string {
+  return EMOTIONS.find((item) => item.value === value)?.label ?? value
+}
+
 /**
- * 카드 한 줄 미리보기. 댓글·답글과 달리 대화 세션이 없어(입력은 대표 감정과 요약뿐) 별도 실험으로 둔다.
+ * 카드 한 줄 미리보기. 댓글·답글과 달리 대화 세션이 없어(입력은 유저 메시지, 대표 감정, 선택 요약) 별도 실험으로 둔다.
  *
  * 레이아웃·라벨·글자수 표시는 위쪽 실험(PromptPlaygroundPage)과 같은 규칙을 따른다 — 한 화면 안에서
  * 규칙이 갈리면 사용자는 두 도구를 쓰는 것처럼 느낀다. 공통 프롬프트 오버라이드가 없는 것은 카드
  * 프롬프트가 조립되지 않기 때문이다(서버도 CARD를 단독으로 쓴다).
+ *
+ * 서버는 먼저 kind를 판정하고, 알아볼 수 있는 내용이 없는 대화(NONSENSE)면 LLM을 더 부르지 않고 유저가 보낸 첫
+ * 메시지를 그대로 한 줄로 쓴다. 그래서 그 한 줄은 프롬프트로 바뀌지 않는다.
  */
 export function CardPreviewSection() {
   const [emotion, setEmotion] = useState('ANGER')
+  const [messagesText, setMessagesText] = useState('')
   const [summary, setSummary] = useState('')
   const [cardPrompt, setCardPrompt] = useState('')
   const [result, setResult] = useState<CardPreviewResult | null>(null)
   const [requestError, setRequestError] = useState<string | null>(null)
   const { mutate: run, isLoading: running } = useCustomMutation()
 
-  const canRun = summary.trim().length > 0 && !running
+  const messages = messagesOf(messagesText)
+  const tooLongMessage = messages.some((message) => message.length > MESSAGE_MAX_LENGTH)
+  const tooManyMessages = messages.length > MESSAGE_MAX_COUNT
+  const canRun = messages.length > 0 && !tooLongMessage && !tooManyMessages && !running
 
   const preview = () => {
     if (!canRun) {
@@ -61,7 +89,8 @@ export function CardPreviewSection() {
         values: {
           cardPrompt: cardPrompt.trim() ? cardPrompt : null,
           emotion,
-          summary,
+          userMessages: messages,
+          summary: summary.trim() ? summary : null,
         },
       },
       {
@@ -78,17 +107,40 @@ export function CardPreviewSection() {
       <div className="space-y-4">
         <Card className="space-y-4 p-5">
           <div>
+            <label htmlFor="card-preview-messages" className="mb-1.5 block text-sm font-medium">
+              유저가 보낸 메시지 <span className="text-destructive">*</span>{' '}
+              <span className="font-normal text-muted-foreground">(한 줄에 하나, 시간순)</span>
+            </label>
+            <Textarea
+              id="card-preview-messages"
+              value={messagesText}
+              onChange={(e) => setMessagesText(e.target.value)}
+              placeholder={'예)\n오늘 팀장이 자기 할 일을 다 떠넘김\n결국 야근함'}
+              className="min-h-[7rem]"
+            />
+            <p
+              className={cn(
+                'mt-1 text-right text-[11px] tabular-nums text-muted-foreground',
+                (tooLongMessage || tooManyMessages) && 'text-destructive',
+              )}
+            >
+              {tooLongMessage
+                ? `메시지 하나는 ${MESSAGE_MAX_LENGTH}자 이하여야 합니다`
+                : `${messages.length.toLocaleString()} / ${MESSAGE_MAX_COUNT.toLocaleString()}개`}
+            </p>
+          </div>
+
+          <div>
             <label htmlFor="card-preview-summary" className="mb-1.5 block text-sm font-medium">
-              대화 요약 <span className="text-destructive">*</span>{' '}
-              <span className="font-normal text-muted-foreground">(클라이언트가 보내는 값)</span>
+              대화 요약 <span className="font-normal text-muted-foreground">(선택, 클라이언트가 보내는 값)</span>
             </label>
             <Textarea
               id="card-preview-summary"
               value={summary}
               onChange={(e) => setSummary(e.target.value)}
               maxLength={SUMMARY_MAX_LENGTH}
-              placeholder="예) 오늘 팀장이 자기 할 일을 다 떠넘김. 야근함."
-              className="min-h-[7rem]"
+              placeholder="비워두면 요약이 없는 새벽 배치와 같은 조건으로 만듭니다. 요약은 참고로만 쓰입니다."
+              className="min-h-[4.5rem]"
             />
             <p className="mt-1 text-right text-[11px] tabular-nums text-muted-foreground">
               {summary.length.toLocaleString()} / {SUMMARY_MAX_LENGTH.toLocaleString()}
@@ -118,7 +170,8 @@ export function CardPreviewSection() {
               ))}
             </div>
             <p className="text-[11px] text-muted-foreground">
-              실제 서비스는 카드의 대표 감정을 씁니다. 감정은 말투가 아니라 어떤 사건을 고를지의 기준입니다.
+              실제 서비스는 카드의 대표 감정을 씁니다. 감정은 말투가 아니라 어떤 사건을 고를지의 기준입니다. 알아볼 수
+              있는 내용이 없는 대화로 판정되면 실제 저장처럼 엉뚱으로 바뀝니다.
             </p>
           </div>
         </Card>
@@ -156,7 +209,7 @@ export function CardPreviewSection() {
             <div>
               <p className="text-sm font-medium">아직 만들어본 카드가 없습니다</p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                왼쪽에 대화 요약을 입력하고 생성해보세요. 서버가 요약을 {MAX_LENGTH}자 이내 한 줄로 다듬습니다.
+                왼쪽에 유저 메시지를 입력하고 생성해보세요. 서버가 메시지를 보고 {MAX_LENGTH}자 이내 한 줄로 만듭니다.
               </p>
             </div>
           </Card>
@@ -171,6 +224,22 @@ export function CardPreviewSection() {
               <MetricTile icon={Ruler} label="토큰" value={result.usedTokens.toLocaleString()} />
               <MetricTile icon={CircleDollarSign} label="비용" value={`$${result.estimatedCostUsd.toFixed(5)}`} />
             </div>
+
+            {result.kind === 'NONSENSE' && (
+              <Card className="space-y-1.5 border-dashed p-4">
+                <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                  <Quote className="size-3.5" />
+                  알아볼 수 있는 내용이 없는 대화로 판정됨
+                </p>
+                <p className="break-keep text-sm">
+                  사건을 지어내지 않고 유저가 보낸 첫 메시지를 그대로 남깁니다. 대표 감정은 요청과 관계없이{' '}
+                  {emotionLabelOf(result.emotion)}(으)로 저장됩니다.
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  이 한 줄은 LLM이 쓴 문장이 아니라 첫 메시지 그대로라 프롬프트를 고쳐도 바뀌지 않습니다.
+                </p>
+              </Card>
+            )}
 
             {result.generationError && (
               <div className="flex items-start gap-2.5 rounded-lg border border-destructive/30 bg-destructive/5 p-3.5 text-sm">
@@ -187,6 +256,11 @@ export function CardPreviewSection() {
               <Card className="space-y-3 p-5">
                 <div className="flex items-center gap-2">
                   <p className="text-xs font-medium text-muted-foreground">카드에 남을 한 줄</p>
+                  {result.kind === 'NONSENSE' && (
+                    <Badge variant="secondary" className="text-[10px]">
+                      💬 첫 메시지
+                    </Badge>
+                  )}
                   {result.truncated && (
                     <Badge variant="destructive" className="gap-1 text-[10px]">
                       <Scissors className="size-3" />
@@ -209,12 +283,14 @@ export function CardPreviewSection() {
                   자르기 전 원문 ({result.rawLength}자)
                 </p>
                 <p className="break-keep text-sm">{result.rawLine}</p>
+                {/* NONSENSE의 원문은 LLM 출력이 아니라 유저 메시지라, 길이 지시를 고칠 프롬프트가 없다. */}
                 <p className="text-[11px] text-muted-foreground">
-                  프롬프트가 길이 지시를 지키지 못했습니다. 서버 자르기에 기대는 만큼 문장이 어색해질 수 있습니다.
+                  {result.kind === 'NONSENSE'
+                    ? `첫 메시지가 ${MAX_LENGTH}자를 넘어 서버가 잘랐습니다. 실제 카드에도 잘린 채로 남습니다.`
+                    : '프롬프트가 길이 지시를 지키지 못했습니다. 서버 자르기에 기대는 만큼 문장이 어색해질 수 있습니다.'}
                 </p>
               </Card>
             )}
-
           </>
         )}
       </div>

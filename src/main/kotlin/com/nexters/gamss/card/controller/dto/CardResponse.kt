@@ -11,12 +11,17 @@ data class CardResponse(
     val id: Long,
     @field:Schema(description = "카드가 만들어진 채팅방 ID", example = "1")
     val conversationId: Long,
-    @field:Schema(description = "대표 감정", example = "ANGER")
+    @field:Schema(
+        description = "대표 감정. 알아볼 수 있는 내용이 없는 대화의 카드는 생성 요청에 보낸 값과 관계없이 QUIRKY",
+        example = "ANGER",
+    )
     val emotion: String,
     @field:Schema(description = "대표 감정 한글 라벨", example = "분노")
     val emotionLabel: String,
     @field:Schema(
-        description = "카드에 남는 한 줄 — 그날 있었던 일을 서버 LLM이 다듬은 요약(공백 포함 50자 이하)",
+        description =
+            "카드에 남는 한 줄(공백 포함 50자 이하). 보통은 그날 있었던 일을 유저 시점으로 적은 문장이고, " +
+                "알아볼 수 있는 내용이 없는 대화면 유저가 보낸 첫 메시지를 그대로 옮긴 한 줄이다(이때 emotion은 QUIRKY)",
         example = "우산을 안 챙겨서 옷이 다 젖어버렸어요",
     )
     val summary: String,

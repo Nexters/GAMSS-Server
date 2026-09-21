@@ -16,13 +16,20 @@ class FakeCardMessageGeneratorConfig {
         object : CardMessageGenerator {
             override fun generate(
                 emotion: EmotionType,
-                summary: String,
-            ): CardMessageOutput = CardMessageOutput("$emotion 카드 한 줄: $summary", usedTokens = 10, cachedTokens = 0)
+                userMessages: List<String>,
+                summary: String?,
+            ): CardMessageOutput =
+                CardMessageOutput(
+                    "$emotion 카드 한 줄: ${summary ?: userMessages.lastOrNull().orEmpty()}",
+                    usedTokens = 10,
+                    cachedTokens = 0,
+                )
 
             override fun generate(
                 emotion: EmotionType,
-                summary: String,
+                userMessages: List<String>,
+                summary: String?,
                 settings: LlmSettingsView,
-            ): CardMessageOutput = generate(emotion, summary)
+            ): CardMessageOutput = generate(emotion, userMessages, summary)
         }
 }
