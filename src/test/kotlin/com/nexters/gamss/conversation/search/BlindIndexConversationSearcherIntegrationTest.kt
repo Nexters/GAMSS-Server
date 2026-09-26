@@ -147,4 +147,93 @@ class BlindIndexConversationSearcherIntegrationTest {
         assertEquals(mine.id, result.content.first().conversationId)
         assertTrue(result.content.none { it.conversationId == others.id })
     }
+
+    @Test
+    fun `제목을 지정하지 않은 대화방은 클라이언트 표시 문구로 검색된다`() {
+        val untitled = conversationRepository.save(Conversation(memberId = 1L))
+
+        listOf("제목", "없는", "대화", "제목 없는", "없는 대화", "제목 없는 대화").forEach { keyword ->
+            val result = searcher.search(memberId = 1L, keyword = keyword, pageable = PageRequest.of(0, 20))
+
+            assertEquals(1, result.totalElements.toInt(), "\"$keyword\" 로 제목 없는 대화방이 검색돼야 한다")
+            assertEquals(untitled.id, result.content.first().conversationId)
+            assertEquals(null, result.content.first().title, "응답의 제목은 계속 null 이다")
+        }
+    }
+
+    @Test
+    fun `표시 문구와 어긋나는 검색어로는 제목을 지정하지 않은 대화방이 검색되지 않는다`() {
+        conversationRepository.save(Conversation(memberId = 1L))
+
+        // 저장된 제목을 찾을 때와 같은 규칙이라, 붙여 쓴 검색어("제목없는대화")와 원문에서 떨어진
+        // 조합("제목 대화")은 걸리지 않는다. 실제 제목이 "제목 없는 대화" 인 방과 결과가 같아야 한다.
+        listOf("제목없는대화", "제목 대화", "없는 제목", "짜증").forEach { keyword ->
+            val result = searcher.search(memberId = 1L, keyword = keyword, pageable = PageRequest.of(0, 20))
+
+            assertEquals(0, result.totalElements.toInt(), "\"$keyword\" 로는 검색되지 않아야 한다")
+        }
+    }
+
+    @Test
+    fun `모든 어절이 1글자인 검색어로는 제목 없는 대화방도 검색되지 않는다`() {
+        // "제 목" 은 글자만 보면 표시 문구의 일부지만, 1글자 어절에서는 토큰이 나오지 않아 질의 자체를
+        // 하지 않는다. 판정을 토큰이 아니라 문자열로 하면 이 검색어만 실제 제목과 다르게 동작한다.
+        conversationRepository.save(Conversation(memberId = 1L))
+
+        val result = searcher.search(memberId = 1L, keyword = "제 목", pageable = PageRequest.of(0, 20))
+
+        assertEquals(0, result.totalElements.toInt())
+    }
+
+    @Test
+    fun `제목 없는 대화방이 채팅 내용으로도 걸리면 한 번만 나온다`() {
+        val untitled = conversationRepository.save(Conversation(memberId = 1L))
+        messageRepository.save(
+            Message(conversationId = untitled.id, senderType = SenderType.USER, content = "제목을 뭐라고 하지"),
+        )
+
+        val result = searcher.search(memberId = 1L, keyword = "제목", pageable = PageRequest.of(0, 20))
+
+        assertEquals(1, result.totalElements.toInt(), "두 조건이 함께 맞아도 행이 늘어나면 안 된다")
+        assertEquals(untitled.id, result.content.first().conversationId)
+    }
+
+    @Test
+    fun `표시 문구로 검색하면 제목이 맞는 대화방과 제목 없는 대화방이 함께 나온다`() {
+        conversationRepository.save(Conversation(memberId = 1L).apply { rename(ConversationTitle("제목 정하기")) })
+        conversationRepository.save(Conversation(memberId = 1L))
+
+        val result = searcher.search(memberId = 1L, keyword = "제목", pageable = PageRequest.of(0, 20))
+
+        // 페이지 수가 어긋나지 않도록 countQuery 에도 같은 조건이 들어가야 한다.
+        assertEquals(2, result.totalElements.toInt())
+        assertEquals(2, result.content.size)
+    }
+
+    @Test
+    fun `제목이 1글자 어절뿐이라 인덱스가 없는 대화방은 제목 없는 대화방으로 취급하지 않는다`() {
+        // 1글자 어절에서는 토큰이 나오지 않아 title_index 가 null 이다. 화면에는 제목이 보이는 방이므로
+        // 판정 기준을 title_index 로 잡으면 이 방이 섞여 들어온다.
+        val oneLetterTitle = conversationRepository.save(Conversation(memberId = 1L).apply { rename(ConversationTitle("a")) })
+
+        val result = searcher.search(memberId = 1L, keyword = "제목", pageable = PageRequest.of(0, 20))
+
+        assertEquals(0, result.totalElements.toInt())
+        assertTrue(result.content.none { it.conversationId == oneLetterTitle.id })
+    }
+
+    @Test
+    fun `삭제된 방과 다른 회원의 제목 없는 대화방은 표시 문구로 검색되지 않는다`() {
+        // 제목 없는 방을 찾는 조건이 매칭 괄호 밖에 있으면 AND 가 먼저 묶여 회원·삭제 조건을 건너뛴다.
+        // 그 실수는 문법 오류가 아니라 조용히 통과하므로 여기서 막는다.
+        val mine = conversationRepository.save(Conversation(memberId = 1L))
+        val deleted = conversationRepository.save(Conversation(memberId = 1L).apply { delete() })
+        val others = conversationRepository.save(Conversation(memberId = 2L))
+
+        val result = searcher.search(memberId = 1L, keyword = "제목", pageable = PageRequest.of(0, 20))
+
+        assertEquals(1, result.totalElements.toInt())
+        assertEquals(mine.id, result.content.first().conversationId)
+        assertTrue(result.content.none { it.conversationId in setOf(deleted.id, others.id) })
+    }
 }
