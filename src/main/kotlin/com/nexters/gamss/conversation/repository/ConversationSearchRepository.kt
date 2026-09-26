@@ -18,6 +18,10 @@ import org.springframework.data.repository.query.Param
  * ([com.nexters.gamss.conversation.search.BlindIndexConversationSearcher]가 만들어 넘긴다).
  *
  * 삭제된 대화방은 제외한다 — 목록·캘린더 등 다른 조회와 같은 규약이다.
+ *
+ * **제목 없는 방을 함께 찾는 조건은 매칭 괄호 안에 있어야 한다.** `AND` 가 `OR` 보다 먼저 묶이므로
+ * 괄호 밖(WHERE 끝)에 두면 회원·삭제 조건을 건너뛰고 남의 방까지 걸린다(BlindIndexConversationSearcher
+ * 통합 테스트가 다른 회원의 제목 없는 방으로 이 실수를 막는다).
  */
 interface ConversationSearchRepository : JpaRepository<Conversation, Long> {
     @Query(
@@ -33,6 +37,7 @@ interface ConversationSearchRepository : JpaRepository<Conversation, Long> {
                     WHERE m.conversation_id = c.id
                       AND MATCH(m.content_index) AGAINST(:searchTerm IN BOOLEAN MODE)
                 )
+                OR (:includeUntitled AND c.title IS NULL)
               )
             -- created_at 동률이면 페이지 간 순서가 흔들려 중복·누락이 생기므로 id 로 결정론을 준다.
             ORDER BY c.created_at DESC, c.id DESC
@@ -49,6 +54,7 @@ interface ConversationSearchRepository : JpaRepository<Conversation, Long> {
                     WHERE m.conversation_id = c.id
                       AND MATCH(m.content_index) AGAINST(:searchTerm IN BOOLEAN MODE)
                 )
+                OR (:includeUntitled AND c.title IS NULL)
               )
         """,
         nativeQuery = true,
@@ -56,6 +62,9 @@ interface ConversationSearchRepository : JpaRepository<Conversation, Long> {
     fun searchConversationIds(
         @Param("memberId") memberId: Long,
         @Param("searchTerm") searchTerm: String,
+        // 검색어가 클라이언트의 "제목 없는 대화" 표시를 가리키는지. 판정은 검색어만 보면 되므로
+        // 호출 측([com.nexters.gamss.conversation.search.BlindIndexConversationSearcher])에서 한다.
+        @Param("includeUntitled") includeUntitled: Boolean,
         pageable: Pageable,
         // native query라 엔티티의 @Enumerated(STRING) 매핑이 적용되지 않는다 — enum을 그대로 바인딩하면
         // 이 필터가 무력화되므로 String으로 받되, 값의 출처는 ConversationStatus.DELETED로 고정한다.
