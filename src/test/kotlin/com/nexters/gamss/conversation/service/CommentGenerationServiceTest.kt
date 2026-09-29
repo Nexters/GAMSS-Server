@@ -23,7 +23,6 @@ import com.nexters.gamss.llm.prompt.ConversationTranscript
 import com.nexters.gamss.llm.prompt.PastSummaries
 import com.nexters.gamss.llm.prompt.ReplyPromptContext
 import com.nexters.gamss.llm.prompt.TranscriptEntry
-import com.nexters.gamss.llm.selection.Addressees
 import com.nexters.gamss.llm.selection.CharacterSelection
 import com.nexters.gamss.llm.selection.CharacterSelector
 import com.nexters.gamss.llm.selection.EongttungTopicSelector
@@ -116,7 +115,7 @@ class CommentGenerationServiceTest {
         tikitakaCount: Int = this.tikitakaCount,
         eongttungTopic: String? = null,
         transcript: ConversationTranscript = ConversationTranscript.EMPTY,
-        addressees: Addressees = Addressees.NONE,
+        calledCharacters: List<EmotionType> = emptyList(),
     ): CommentPromptContext =
         CommentPromptContext(
             currentConversationSummary,
@@ -126,7 +125,7 @@ class CommentGenerationServiceTest {
             tikitakaCount,
             eongttungTopic,
             transcript,
-            addressees,
+            calledCharacters,
         )
 
     private val transcript =
@@ -572,7 +571,7 @@ class CommentGenerationServiceTest {
                 characters = listOf(EmotionType.JOY),
                 tikitakaCount = 0,
                 transcript = transcript,
-                addressees = Addressees(present = listOf(EmotionType.JOY), absent = emptyList()),
+                calledCharacters = listOf(EmotionType.JOY),
             )
         val joyFeed = CommentFeed(listOf(CommentDraft(EmotionType.JOY, "아 그거 농담이었어!")), emptyList())
         every { commentGenerator.generateComment(expectedContext) } returns CommentGenerationOutput(joyFeed, 50, 0)

@@ -1,7 +1,6 @@
 package com.nexters.gamss.llm.prompt
 
 import com.nexters.gamss.emotion.domain.EmotionType
-import com.nexters.gamss.llm.selection.Addressees
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -259,9 +258,11 @@ class PromptProviderTest {
 
     @Test
     fun `부른 캐릭터와 막아둔 캐릭터를 응답 조건에 싣는다`() {
-        val addressees = Addressees(present = listOf(EmotionType.JOY), absent = listOf(EmotionType.SADNESS))
+        val context =
+            commentContext(ConversationTranscript.EMPTY)
+                .copy(calledCharacters = listOf(EmotionType.JOY), calledAbsentCharacters = listOf(EmotionType.SADNESS))
 
-        val lines = promptProvider.buildUserContent(commentContext(ConversationTranscript.EMPTY, addressees)).lines()
+        val lines = promptProvider.buildUserContent(context).lines()
 
         val conditions = lines.drop(lines.indexOf("[이번 응답 조건]"))
         assertTrue(conditions.any { it.startsWith("- 유저가 부른 캐릭터: gippeum ") })
@@ -276,19 +277,16 @@ class PromptProviderTest {
         assertFalse(content.contains("이 방에 없는 캐릭터"))
     }
 
-    private fun commentContext(
-        transcript: ConversationTranscript,
-        addressees: Addressees = Addressees.NONE,
-    ) = CommentPromptContext(
-        currentConversationSummary = null,
-        pastSummaries = PastSummaries.of(emptyList()),
-        diaryContent = "기쁨아 그게 무슨 소리야",
-        characters = listOf(EmotionType.JOY),
-        tikitakaCount = 0,
-        eongttungTopic = null,
-        transcript = transcript,
-        addressees = addressees,
-    )
+    private fun commentContext(transcript: ConversationTranscript) =
+        CommentPromptContext(
+            currentConversationSummary = null,
+            pastSummaries = PastSummaries.of(emptyList()),
+            diaryContent = "기쁨아 그게 무슨 소리야",
+            characters = listOf(EmotionType.JOY),
+            tikitakaCount = 0,
+            eongttungTopic = null,
+            transcript = transcript,
+        )
 
     private fun assertEqualsSingleRealDiarySection(content: String) {
         val diaryHeaderCount = content.lineSequence().count { it == "[오늘 일기]" }

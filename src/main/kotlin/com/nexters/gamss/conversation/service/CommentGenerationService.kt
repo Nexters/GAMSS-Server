@@ -315,7 +315,8 @@ class CommentGenerationService(
                 tikitakaCount = tikitakaCount,
                 eongttungTopic = eongttungTopic,
                 transcript = conversationTranscriptReader.read(conversationId, messageId, plan.addressees.present),
-                addressees = plan.addressees,
+                calledCharacters = plan.addressees.present,
+                calledAbsentCharacters = plan.addressees.absent,
             )
         val startedAt = System.currentTimeMillis()
         val tokens = TokenUsageAccumulator()
