@@ -44,6 +44,19 @@ class VocativeAddresseeResolverTest {
     }
 
     @Test
+    fun `찾는 말은 호명으로 잡지 않는다`() {
+        // 막아둔 캐릭터를 이렇게 찾는 경우는 프롬프트에 막아둔 캐릭터를 항상 싣는 쪽이 맡는다.
+        assertEquals(emptyList(), resolver.resolve("슬픔이 어디 갔어?"))
+        assertEquals(emptyList(), resolver.resolve("슬픔이는?"))
+    }
+
+    @Test
+    fun `문장 끝 뒤에 새 문장으로 오는 서술어 기쁨이야는 호명으로 본다`() {
+        // 알고 감수하는 오탐이다. 문장 맨 앞의 "기쁨이야 그게 뭐야"와 구분할 수 없다. 이 동작이 바뀌면 KDoc도 고친다.
+        assertEquals(listOf(EmotionType.JOY), resolver.resolve("오늘 좋았다. 기쁨이야"))
+    }
+
+    @Test
     fun `받침 없는 이름은 문장 맨 앞의 야로 부른다`() {
         assertEquals(listOf(EmotionType.ANGER), resolver.resolve("분노야 들어봐"))
     }

@@ -1,6 +1,7 @@
 package com.nexters.gamss.llm.selection
 
 import com.nexters.gamss.emotion.domain.EmotionType
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 
 /**
@@ -11,17 +12,25 @@ import org.springframework.stereotype.Component
  *   다른 캐릭터가 끼어들면 대화가 어색해진다.
  * - 막아둔 캐릭터만 불렀거나 아무도 부르지 않았으면 지금처럼 무작위로 고른다. 막아둔 캐릭터는 여기서도
  *   후보에서 빠지므로 어떤 경우에도 등장하지 않는다.
+ *
+ * 호명이 판정되면 결과를 로그로 남긴다. 판정 규칙이 놓치거나 잘못 잡는 비율을 보고 [AddresseeResolver] 구현을
+ * 바꿀지 정하려는 것이다. 메시지 본문은 남기지 않는다.
  */
 @Component
 class ResponsePlanner(
     private val characterSelector: CharacterSelector,
     private val addresseeResolver: AddresseeResolver,
 ) {
+    private val log = LoggerFactory.getLogger(javaClass)
+
     fun plan(
         message: String,
         excludedCharacters: Set<EmotionType>,
     ): ResponsePlan {
         val addressees = Addressees.of(addresseeResolver.resolve(message), excludedCharacters)
+        if (addressees != Addressees.NONE) {
+            log.info("호명 판정 present={} absent={}", addressees.present, addressees.absent)
+        }
         if (addressees.present.isEmpty()) {
             return ResponsePlan(characterSelector.select(excludedCharacters), addressees)
         }
