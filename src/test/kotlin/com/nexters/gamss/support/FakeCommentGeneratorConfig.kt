@@ -16,7 +16,7 @@ import org.springframework.context.annotation.Primary
 
 /**
  * 통합 테스트에서 실제 Gemini 호출([com.nexters.gamss.llm.generation.GeminiCommentGenerator]) 대신
- * 쓰는 가짜 구현. [CharacterSelector]가 서버에서 무작위로 고른 캐릭터·티키타카 개수를 그대로
+ * 쓰는 가짜 구현. [com.nexters.gamss.llm.selection.ResponsePlanner]가 정한 캐릭터, 티키타카 개수를 그대로
  * 되돌려주므로 [com.nexters.gamss.llm.parsing.CommentFeedValidator] 검증을 항상 통과한다.
  */
 @TestConfiguration(proxyBeanMethods = false)

@@ -87,7 +87,7 @@ class CommentGenerationServiceTest {
             commentStatus = commentStatus,
         )
 
-    // id는 characterMessage(2L)/diaryMessage(3L)에 명시적으로 다르게 부여한다 — 둘 다 기본값(0)이면
+    // id는 characterMessage(2L)/diaryMessage(3L)에 명시적으로 다르게 부여한다 - 둘 다 기본값(0)이면
     // rootMessageId에 잘못된 쪽의 id가 들어가도 테스트가 못 잡아낸다(둘 다 0이라 우연히 통과).
     private fun characterMessage(): Message =
         Message(
@@ -424,7 +424,7 @@ class CommentGenerationServiceTest {
         every { messageRepository.findById(1L) } returns Optional.of(message)
         every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
         stubClaimSuccess()
-        // 검증에 실패한 시도도 호출은 됐으니 과금된다 — 시도 수가 늘어도 전부 더해져야 한다.
+        // 검증에 실패한 시도도 호출은 됐으니 과금된다 - 시도 수가 늘어도 전부 더해져야 한다.
         val attempt1 = CommentGenerationOutput(feed(), usedTokens = 100, cachedTokens = 10, inputTokens = 80, outputTokens = 20)
         val attempt2 = CommentGenerationOutput(feed(), usedTokens = 200, cachedTokens = 30, inputTokens = 150, outputTokens = 50)
         val attempt3 = CommentGenerationOutput(feed(), usedTokens = 400, cachedTokens = 50, inputTokens = 300, outputTokens = 100)
@@ -871,7 +871,7 @@ class CommentGenerationServiceTest {
     }
 
     // generateFor는 저장 직후 호출되는 진입점이라 소유권 조회 없이 message 자체로 라우팅한다
-    // (CommentGenerationService.getOwnedRootMessage를 타지 않음). 선점·재시도·저장 로직 자체는
+    // (CommentGenerationService.getOwnedRootMessage를 타지 않음). 선점, 재시도, 저장 로직 자체는
     // generateComments/generateReplyComment와 같은 내부 메서드를 공유하므로, 여기서는 라우팅이
     // 올바른 쪽으로 가는지만 확인하고 나머지 경로(FAILED, 재시도 등)는 위 테스트들이 이미 커버한다.
 
@@ -945,7 +945,7 @@ class CommentGenerationServiceTest {
         val result = service.generateFor(1L, message, null)
 
         assertEquals(CommentGenerationOutcome.LIMIT_EXCEEDED, result.outcome)
-        // 생성도, 선점(CAS)도 하지 않는다 — 저장(컨트롤러가 이미 함)만 남고 토큰 소비는 없다.
+        // 생성도, 선점(CAS)도 하지 않는다 - 저장(컨트롤러가 이미 함)만 남고 토큰 소비는 없다.
         verify(exactly = 0) { commentGenerator.generateComment(any()) }
         verify(exactly = 0) { messageRepository.updateCommentStatus(any(), any(), any(), any()) }
     }

@@ -28,12 +28,12 @@ import com.nexters.gamss.monitoring.service.GenerationLogRecorder
 import org.springframework.stereotype.Service
 
 /**
- * 백오피스 프롬프트 플레이그라운드: 미저장 프롬프트를 실제 생성 경로(조립 규칙·유저 콘텐츠·
- * LLM 호출·의미 검증) 그대로 시험한다.
+ * 백오피스 프롬프트 플레이그라운드: 미저장 프롬프트를 실제 생성 경로(조립 규칙, 유저 콘텐츠,
+ * LLM 호출, 의미 검증) 그대로 시험한다.
  *
  * 프롬프트는 저장하지 않고, 생성 로그만 [GenerationType.PREVIEW]로 남긴다 - 실험에 쓴 실제
  * 과금을 추적하기 위해서다. PREVIEW는 품질 지표 집계에서 제외되고 memberId가 없어 일일 토큰
- * 상한에도 잡히지 않으므로, 실험이 실사용 지표를 오염시키지 않는다. 생성 실패·검증 실패도
+ * 상한에도 잡히지 않으므로, 실험이 실사용 지표를 오염시키지 않는다. 생성 실패, 검증 실패도
  * 예외 대신 결과에 담아 돌려준다 - 실패를 관찰하는 것이 이 기능의 목적이기 때문이다.
  */
 @Service
@@ -80,7 +80,7 @@ class PromptPreviewService(
                     latencyMs = elapsedMs(startedAt),
                 )
             } catch (e: CommentGenerationFailedException) {
-                // 호출·파싱 실패. 이미 과금된 토큰이 있으면(파싱 실패 등) 그대로 보여준다.
+                // 호출, 파싱 실패. 이미 과금된 토큰이 있으면(파싱 실패 등) 그대로 보여준다.
                 PromptPreviewResult(
                     model = settings.model,
                     systemPrompt = settings.systemPrompt,
@@ -101,7 +101,7 @@ class PromptPreviewService(
 
     /**
      * 유저가 캐릭터 댓글에 답장했을 때 그 캐릭터의 재응답을 시험한다 - 실제 답글 생성 경로
-     * (REPLY 조립·promptId·validateReply)를 그대로 쓴다.
+     * (REPLY 조립, promptId, validateReply)를 그대로 쓴다.
      */
     fun previewReply(command: ReplyPreviewCommand): ReplyPreviewResult {
         val settings = systemPromptResolver.resolveForPreview(PromptType.REPLY, command.commonPrompt, command.replyPrompt)
@@ -142,7 +142,7 @@ class PromptPreviewService(
     }
 
     /**
-     * 카드 한 줄 생성을 시험한다 - 실제 카드 생성 경로(CARD 단독 프롬프트·유저 콘텐츠·CardSummary
+     * 카드 한 줄 생성을 시험한다 - 실제 카드 생성 경로(CARD 단독 프롬프트, 유저 콘텐츠, CardSummary
      * 정제)를 그대로 쓴다. 다듬기 전후를 함께 돌려줘 프롬프트의 길이 지시가 지켜지는지 볼 수 있다.
      *
      * 판정이 NONSENSE면 실제 생성처럼 유저가 보낸 첫 메시지를 그대로 한 줄로 쓰고 대표 감정은 QUIRKY로 돌려준다.
@@ -172,7 +172,7 @@ class PromptPreviewService(
                     }
 
                     CardLineKind.NONSENSE -> {
-                        // 요청 검증만 믿지 않는다 — 공백뿐인 메시지만 들어오면 고를 첫 메시지가 없다. 실제 생성은 이때
+                        // 요청 검증만 믿지 않는다 - 공백뿐인 메시지만 들어오면 고를 첫 메시지가 없다. 실제 생성은 이때
                         // 실패로 끝나므로(CardService) 미리보기도 예외 대신 오류로 돌려준다.
                         val firstMessage = CardMessageWindow.first(command.userMessages)
                         cardPreviewResult(
@@ -233,7 +233,7 @@ class PromptPreviewService(
         )
     }
 
-    // 실험에 쓴 실제 과금을 남긴다. memberId·conversationId가 없어 일일 상한·대화방 집계에는 잡히지 않는다.
+    // 실험에 쓴 실제 과금을 남긴다. memberId, conversationId가 없어 일일 상한, 대화방 집계에는 잡히지 않는다.
     private fun recordUsage(
         usage: PreviewUsage,
         latencyMs: Long,

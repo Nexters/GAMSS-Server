@@ -78,7 +78,7 @@ class PromptProviderTest {
     }
 
     @Test
-    fun `buildReplyUserContent도 diaryContent·characterComment·userReply의 개행을 뭉갠다`() {
+    fun `buildReplyUserContent도 diaryContent, characterComment, userReply의 개행을 뭉갠다`() {
         val content =
             promptProvider.buildReplyUserContent(
                 ReplyPromptContext(

@@ -279,7 +279,7 @@ class PromptPreviewServiceTest {
 
     @Test
     fun `카드 미리보기는 공통 프롬프트 없이 카드 프롬프트만 쓴다`() {
-        // 카드 프롬프트는 조립되지 않으므로 미리보기도 같은 규칙이어야 한다 — 여기서 조립되면
+        // 카드 프롬프트는 조립되지 않으므로 미리보기도 같은 규칙이어야 한다 - 여기서 조립되면
         // 관리자가 시험한 결과와 실제 생성이 서로 다른 프롬프트를 쓰게 된다.
         val messages = listOf("오늘 팀장이 자기 할 일을 다 떠넘김")
         every { systemPromptResolver.resolveStandaloneForPreview(PromptType.CARD, "카드 시험") } returns settings
@@ -337,7 +337,7 @@ class PromptPreviewServiceTest {
         assertNull(result.line)
         assertNull(result.kind)
         assertEquals("카드 한 줄 JSON 파싱에 실패했습니다.", result.generationError)
-        // 검증 실패한 시도도 호출은 됐으니 과금된다 — 토큰이 결과에 실려야 한다.
+        // 검증 실패한 시도도 호출은 됐으니 과금된다 - 토큰이 결과에 실려야 한다.
         assertEquals(7, result.usage.usedTokens)
     }
 

@@ -21,9 +21,9 @@ import org.springframework.stereotype.Component
 
 /**
  * Gemini 공식 SDK(google-genai) 구현체. 이 클래스 밖으로는 SDK 타입이 새어나가지 않는다
- * ([CommentGenerator] 인터페이스 뒤에 숨김 — 프로바이더 교체 시 이 파일만 바꾸면 됨). 프롬프트
+ * ([CommentGenerator] 인터페이스 뒤에 숨김 - 프로바이더 교체 시 이 파일만 바꾸면 됨). 프롬프트
  * 내용([PromptProvider])과 응답 파싱([CommentFeedJsonParser])은 Gemini 고유가 아니라 우리가 정한
- * 출력 계약이므로 별도 컴포넌트로 분리되어 있다 — 이 클래스는 그 계약을 SDK 호출에 실어 나르는
+ * 출력 계약이므로 별도 컴포넌트로 분리되어 있다 - 이 클래스는 그 계약을 SDK 호출에 실어 나르는
  * 역할만 한다.
  */
 @Component
@@ -37,12 +37,12 @@ class GeminiCommentGenerator(
 ) : CommentGenerator {
     override fun generateComment(context: CommentPromptContext): CommentGenerationOutput {
         // 운영 중 백오피스에서 바꾼 값을 매 호출 반영한다(재배포 불필요).
-        // 설정 조회(DB) 실패도 잡아 재시도·FAILED 계약을 유지한다(500·PENDING 고착 방지).
+        // 설정 조회(DB) 실패도 잡아 재시도, FAILED 계약을 유지한다(500, PENDING 고착 방지).
         val settings =
             try {
                 systemPromptResolver.resolve(PromptType.COMMENT)
             } catch (e: Exception) {
-                // 설정 조회(DB) 실패다. 일시적 장애로 보고 쉬었다 다시 부른다 — 기본값(검증 실패)에 맡기면
+                // 설정 조회(DB) 실패다. 일시적 장애로 보고 쉬었다 다시 부른다 - 기본값(검증 실패)에 맡기면
                 // 간격 없이 곧바로 DB를 다시 두드린다.
                 throw CommentGenerationFailedException("LLM 호출에 실패했습니다.", e, kind = LlmFailureKind.CALL)
             }
@@ -62,7 +62,7 @@ class GeminiCommentGenerator(
                 CommentGenerationFailedException("LLM 호출에 실패했습니다.", cause, kind = kind)
             }
 
-        // 토큰은 파싱 전에 뽑는다 — 이후 파싱이 실패해도 이미 과금된 토큰을 실패 로그에 전달할 수 있게 한다.
+        // 토큰은 파싱 전에 뽑는다 - 이후 파싱이 실패해도 이미 과금된 토큰을 실패 로그에 전달할 수 있게 한다.
         val usedTokens = response.usageMetadata().flatMap { it.totalTokenCount() }.orElse(0)
         val cachedTokens = response.usageMetadata().flatMap { it.cachedContentTokenCount() }.orElse(0)
         val inputTokens = response.usageMetadata().flatMap { it.promptTokenCount() }.orElse(0)

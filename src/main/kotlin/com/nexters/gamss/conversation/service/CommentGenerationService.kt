@@ -33,7 +33,7 @@ import java.time.Instant
 
 /**
  * 선점(CAS) -> LLM 호출+검증(트랜잭션 밖, 최대 [LlmRetryPolicy.MAX_ATTEMPTS]회) -> 저장을 오케스트레이션한다.
- * 이 클래스 자체는 @Transactional이 아니다 — 세 단계가 각자 다른 트랜잭션 경계(또는 트랜잭션 밖)에
+ * 이 클래스 자체는 @Transactional이 아니다 - 세 단계가 각자 다른 트랜잭션 경계(또는 트랜잭션 밖)에
  * 있어야 하기 때문이다(락/트랜잭션 안에 LLM 호출을 넣지 않는다).
  */
 @Service
@@ -55,8 +55,8 @@ class CommentGenerationService(
 
     /**
      * 저장 직후 같은 요청 안에서 곧바로 생성까지 처리하는 진입점이다. [message]는 방금 저장돼
-     * memberId 소유·채팅방 활성 상태가 이미 보장된 값이라(같은 요청의 saveUserMessage가 검증함)
-     * [getOwnedRootMessage]의 소유권·삭제 여부 재확인을 생략한다. 답장 여부는 message 스스로 아는
+     * memberId 소유, 채팅방 활성 상태가 이미 보장된 값이라(같은 요청의 saveUserMessage가 검증함)
+     * [getOwnedRootMessage]의 소유권, 삭제 여부 재확인을 생략한다. 답장 여부는 message 스스로 아는
      * 정보([Message.repliesToMessageId])라, 어떤 생성 흐름을 탈지는 호출자(컨트롤러)가 아니라
      * 여기서 정한다.
      */
@@ -99,7 +99,7 @@ class CommentGenerationService(
 
     /**
      * 생성 진입점 공통 상한 가드. 초과면 [CommentGenerationOutcome.LIMIT_EXCEEDED] 결과를, 아니면 null을 돌려준다.
-     * 저장은 이미 끝난 상태라(저장 O, 생성만 차단) 여기선 생성을 건너뛰고 상태만 알린다 —
+     * 저장은 이미 끝난 상태라(저장 O, 생성만 차단) 여기선 생성을 건너뛰고 상태만 알린다 -
      * 새 생성 경로가 늘어도 이 한 곳으로 가드를 강제해 우회를 막는다.
      */
     private fun limitExceededOrNull(memberId: Long): GenerationResult? {
@@ -128,7 +128,7 @@ class CommentGenerationService(
 
         return try {
             // 대화방이 새로 생성될 때 지정한 제외 캐릭터 목록을 읽어오기 위한 조회다(소유권은 이미 검증된
-            // 상태라 재검증 목적이 아니다 — generateFor는 저장 시점에, generateComments는 getOwnedRootMessage에서 확인함).
+            // 상태라 재검증 목적이 아니다 - generateFor는 저장 시점에, generateComments는 getOwnedRootMessage에서 확인함).
             val conversation =
                 conversationRepository
                     .findById(rootMessage.conversationId)
@@ -319,7 +319,7 @@ class CommentGenerationService(
             )
         val startedAt = System.currentTimeMillis()
         val tokens = TokenUsageAccumulator()
-        // 재시도 대상이 아닌 예외로 중단할 때와 시도를 모두 소진했을 때는 남길 것이 같다 —
+        // 재시도 대상이 아닌 예외로 중단할 때와 시도를 모두 소진했을 때는 남길 것이 같다 -
         // 그때까지 누적된 토큰과 마지막 실패 원인.
         val recordFailure: (Int, Exception) -> Unit = { attempt, e ->
             recordGeneration(GenerationType.COMMENT, false, attempt, startedAt, memberId, conversationId, tokens, e)
@@ -355,7 +355,7 @@ class CommentGenerationService(
     }
 
     /**
-     * 생성 로그 한 줄. 성공·실패 모두 [tokens]에 **그때까지 누적된 합계**를 싣는다 — 검증에 실패한
+     * 생성 로그 한 줄. 성공, 실패 모두 [tokens]에 **그때까지 누적된 합계**를 싣는다 - 검증에 실패한
      * 시도도 호출은 됐으니 과금되기 때문에, 마지막 한 시도만 기록하면 비용이 과소 집계된다.
      */
     private fun recordGeneration(
