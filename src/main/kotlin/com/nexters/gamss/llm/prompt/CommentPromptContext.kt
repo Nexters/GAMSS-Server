@@ -13,6 +13,7 @@ import com.nexters.gamss.emotion.domain.EmotionType
  * [pastSummaries]는 서버가 같은 회원의 다른 채팅방에서 저장해둔 요약 중
  * 일부를 무작위로 뽑아 넘기는 값이다
  * ([com.nexters.gamss.conversation.repository.ConversationRepository.findRandomPastSummaries]).
+ * [transcript]는 이번 메시지 직전까지 이 방에서 오간 원문이다([ConversationTranscript]).
  */
 data class CommentPromptContext(
     val currentConversationSummary: String?,
@@ -21,4 +22,5 @@ data class CommentPromptContext(
     val characters: List<EmotionType>,
     val tikitakaCount: Int,
     val eongttungTopic: String?,
+    val transcript: ConversationTranscript = ConversationTranscript.EMPTY,
 )

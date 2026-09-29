@@ -26,6 +26,7 @@ class PromptProvider {
                 appendLine("[과거 대화 요약] (다른 날 다른 채팅방 기록. 오늘과 확실히 관련 있을 때만 참고)")
                 pastSummaryLines.forEach { appendLine("- $it") }
             }
+            appendTranscript(context.transcript)
             appendLine("[오늘 일기]")
             appendLine(context.diaryContent.normalizeForPrompt())
             appendLine("[이번 응답 조건]")
@@ -43,6 +44,7 @@ class PromptProvider {
             appendLine(context.diaryContent.normalizeForPrompt())
             appendLine("[이번 응답 조건]")
             appendLine("- 응답할 캐릭터: ${context.characterId} (반드시 이 캐릭터로만 응답, 다른 캐릭터로 바꾸지 마라)")
+            appendTranscript(context.transcript)
             appendLine("[네가 방금 남긴 댓글]")
             appendLine(context.characterComment.normalizeForPrompt())
             appendLine("[유저의 답글]")
@@ -105,7 +107,26 @@ class PromptProvider {
         }
     }
 
+    /**
+     * 최근 대화를 화자 라벨과 함께 싣는다. 비었으면 헤더도 넣지 않는다(헤더만 남으면 LLM이 "대화가 없다"는 사실
+     * 자체를 근거로 삼는다). 라벨 길이를 바꾸면 [ConversationTranscript]의 한 마디당 여유분도 함께 봐야 한다.
+     */
+    private fun StringBuilder.appendTranscript(transcript: ConversationTranscript) {
+        if (transcript.isEmpty()) {
+            return
+        }
+        appendLine("[최근 대화] (이 방에서 방금까지 오간 말, 시간순)")
+        transcript.entries.forEach { appendLine("- ${speakerLabel(it)}: ${it.content}") }
+    }
+
+    private fun speakerLabel(entry: TranscriptEntry): String {
+        val speaker = entry.speaker ?: return USER_LABEL
+        return PromptCharacterId.of(speaker).promptId
+    }
+
     companion object {
+        private const val USER_LABEL = "유저"
+
         /**
          * [limit]자를 넘으면 **최근 쪽** [limit]자만 남긴다. 앞에서부터 남기면
          * [CardMessageWindow]가 최근을 남긴 것과 반대 방향이 되어, 같은 구간을 보게 한 의미가 없어진다.

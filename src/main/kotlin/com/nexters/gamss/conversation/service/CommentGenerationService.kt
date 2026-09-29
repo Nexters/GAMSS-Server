@@ -48,6 +48,7 @@ class CommentGenerationService(
     private val generationLogRecorder: GenerationLogRecorder,
     private val tokenQuotaRecorder: TokenQuotaRecorder,
     private val dailyTokenLimitService: DailyTokenLimitService,
+    private val conversationTranscriptReader: ConversationTranscriptReader,
     private val llmRetryExecutor: LlmRetryExecutor = LlmRetryExecutor(),
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -143,6 +144,7 @@ class CommentGenerationService(
                 generateWithRetry(
                     memberId,
                     rootMessage.conversationId,
+                    messageId,
                     rootMessage.content,
                     currentConversationSummary,
                     pastSummaries,
@@ -207,9 +209,13 @@ class CommentGenerationService(
                 generateReplyWithRetry(
                     memberId,
                     userReplyMessage.conversationId,
-                    diaryMessage.content,
-                    characterMessage,
-                    userReplyMessage.content,
+                    ReplyPromptContext(
+                        diaryContent = diaryMessage.content,
+                        characterId = PromptCharacterId.of(characterMessage.emotionType!!).promptId,
+                        characterComment = characterMessage.content,
+                        userReply = userReplyMessage.content,
+                        transcript = conversationTranscriptReader.read(userReplyMessage.conversationId, messageId),
+                    ),
                 )
             val saved =
                 commentPersistenceService.saveReply(
@@ -240,9 +246,7 @@ class CommentGenerationService(
     private fun generateReplyWithRetry(
         memberId: Long,
         conversationId: Long,
-        diaryContent: String,
-        characterMessage: Message,
-        userReply: String,
+        context: ReplyPromptContext,
     ): ReplyGenerationOutput {
         val startedAt = System.currentTimeMillis()
         val tokens = TokenUsageAccumulator()
@@ -259,15 +263,7 @@ class CommentGenerationService(
             onNonRetryable = recordFailure,
             onExhausted = recordFailure,
         ) { attempt ->
-            val output =
-                commentGenerator.generateReply(
-                    ReplyPromptContext(
-                        diaryContent = diaryContent,
-                        characterId = PromptCharacterId.of(characterMessage.emotionType!!).promptId,
-                        characterComment = characterMessage.content,
-                        userReply = userReply,
-                    ),
-                )
+            val output = commentGenerator.generateReply(context)
             try {
                 commentFeedValidator.validateReply(output.text)
             } catch (e: CommentGenerationFailedException) {
@@ -299,6 +295,7 @@ class CommentGenerationService(
     private fun generateWithRetry(
         memberId: Long,
         conversationId: Long,
+        messageId: Long,
         diaryContent: String,
         currentConversationSummary: String?,
         pastSummaries: List<String>,
@@ -317,6 +314,7 @@ class CommentGenerationService(
                 characters = characters,
                 tikitakaCount = tikitakaCount,
                 eongttungTopic = eongttungTopic,
+                transcript = conversationTranscriptReader.read(conversationId, messageId),
             )
         val startedAt = System.currentTimeMillis()
         val tokens = TokenUsageAccumulator()

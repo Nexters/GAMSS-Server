@@ -222,6 +222,51 @@ class PromptProviderTest {
         assertEquals(1, content.lines().count { it.startsWith("- ") })
     }
 
+    @Test
+    fun `최근 대화를 화자 라벨과 함께 시간순으로 이번 메시지 앞에 싣는다`() {
+        val transcript =
+            ConversationTranscript.recent(
+                listOf(TranscriptEntry(null, "오늘 좀 이상해"), TranscriptEntry(EmotionType.JOY, "비 오면 우산을 거꾸로 써!")),
+            )
+
+        val lines = promptProvider.buildUserContent(commentContext(transcript)).lines()
+
+        val header = lines.indexOf("[최근 대화] (이 방에서 방금까지 오간 말, 시간순)")
+        assertEquals("- 유저: 오늘 좀 이상해", lines[header + 1])
+        assertEquals("- gippeum: 비 오면 우산을 거꾸로 써!", lines[header + 2])
+        assertTrue(header < lines.indexOf("[오늘 일기]"), "최근 대화는 이번 메시지보다 앞에 와야 시간순으로 읽힌다")
+    }
+
+    @Test
+    fun `최근 대화가 없으면 헤더도 싣지 않는다`() {
+        val content = promptProvider.buildUserContent(commentContext(ConversationTranscript.EMPTY))
+
+        assertFalse(content.contains("[최근 대화]"))
+    }
+
+    @Test
+    fun `답글 프롬프트에도 최근 대화를 싣는다`() {
+        val transcript = ConversationTranscript.recent(listOf(TranscriptEntry(EmotionType.ANGER, "그 사람 뭐야.")))
+
+        val content =
+            promptProvider.buildReplyUserContent(
+                ReplyPromptContext("일기", "bunno", "그 사람 뭐야.", "그치?", transcript),
+            )
+
+        assertTrue(content.lines().contains("- bunno: 그 사람 뭐야."))
+    }
+
+    private fun commentContext(transcript: ConversationTranscript) =
+        CommentPromptContext(
+            currentConversationSummary = null,
+            pastSummaries = PastSummaries.of(emptyList()),
+            diaryContent = "기쁨아 그게 무슨 소리야",
+            characters = listOf(EmotionType.JOY),
+            tikitakaCount = 0,
+            eongttungTopic = null,
+            transcript = transcript,
+        )
+
     private fun assertEqualsSingleRealDiarySection(content: String) {
         val diaryHeaderCount = content.lineSequence().count { it == "[오늘 일기]" }
         assertEquals(1, diaryHeaderCount)

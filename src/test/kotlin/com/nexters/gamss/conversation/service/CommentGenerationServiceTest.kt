@@ -19,8 +19,10 @@ import com.nexters.gamss.llm.parsing.CommentFeed
 import com.nexters.gamss.llm.parsing.CommentFeedValidator
 import com.nexters.gamss.llm.parsing.TikitakaDraft
 import com.nexters.gamss.llm.prompt.CommentPromptContext
+import com.nexters.gamss.llm.prompt.ConversationTranscript
 import com.nexters.gamss.llm.prompt.PastSummaries
 import com.nexters.gamss.llm.prompt.ReplyPromptContext
+import com.nexters.gamss.llm.prompt.TranscriptEntry
 import com.nexters.gamss.llm.selection.CharacterSelection
 import com.nexters.gamss.llm.selection.CharacterSelector
 import com.nexters.gamss.llm.selection.EongttungTopicSelector
@@ -50,6 +52,8 @@ class CommentGenerationServiceTest {
     private val dailyTokenLimitService = mockk<DailyTokenLimitService> { every { isWithinLimit(any()) } returns true }
 
     private val tokenQuotaRecorder = mockk<TokenQuotaRecorder>(relaxed = true)
+    private val conversationTranscriptReader =
+        mockk<ConversationTranscriptReader> { every { read(any(), any(), any()) } returns ConversationTranscript.EMPTY }
 
     private val service =
         CommentGenerationService(
@@ -63,6 +67,7 @@ class CommentGenerationServiceTest {
             generationLogRecorder,
             tokenQuotaRecorder,
             dailyTokenLimitService,
+            conversationTranscriptReader,
         )
 
     private val characters = listOf(EmotionType.JOY, EmotionType.SADNESS, EmotionType.GRUMPY)
@@ -107,6 +112,7 @@ class CommentGenerationServiceTest {
         characters: List<EmotionType> = this.characters,
         tikitakaCount: Int = this.tikitakaCount,
         eongttungTopic: String? = null,
+        transcript: ConversationTranscript = ConversationTranscript.EMPTY,
     ): CommentPromptContext =
         CommentPromptContext(
             currentConversationSummary,
@@ -115,6 +121,12 @@ class CommentGenerationServiceTest {
             characters,
             tikitakaCount,
             eongttungTopic,
+            transcript,
+        )
+
+    private val transcript =
+        ConversationTranscript.recent(
+            listOf(TranscriptEntry(null, "오늘 좀 이상해"), TranscriptEntry(EmotionType.JOY, "비 오면 우산을 거꾸로 써!")),
         )
 
     private fun stubClaimSuccess() {
@@ -154,6 +166,24 @@ class CommentGenerationServiceTest {
         assertEquals(123, result.usedTokens)
         // 적립이 빠지면 생성 토큰이 주체 기반 쿼터에 안 쌓여 한도가 조용히 느슨해진다.
         verify(exactly = 1) { tokenQuotaRecorder.record(GenerationType.COMMENT, 1L, 123) }
+    }
+
+    @Test
+    fun `이번 메시지 직전까지의 대화를 읽어 댓글 프롬프트에 싣는다`() {
+        val message = rootMessage()
+        every { messageRepository.findById(1L) } returns Optional.of(message)
+        stubClaimSuccess()
+        every { conversationTranscriptReader.read(10L, 1L, any()) } returns transcript
+        every {
+            commentGenerator.generateComment(promptContext(diaryContent = message.content, transcript = transcript))
+        } returns CommentGenerationOutput(feed(), 123, 0)
+        every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } returns Unit
+        every { commentPersistenceService.saveFeed(10L, 1L, feed()) } returns emptyList()
+
+        val result = service.generateComments(memberId = 1L, messageId = 1L, currentConversationSummary = null)
+
+        assertEquals(CommentGenerationOutcome.DONE, result.outcome)
+        verify(exactly = 1) { commentGenerator.generateComment(promptContext(diaryContent = message.content, transcript = transcript)) }
     }
 
     @Test
@@ -608,6 +638,29 @@ class CommentGenerationServiceTest {
         assertEquals(CommentGenerationOutcome.DONE, result.outcome)
         assertEquals(listOf(savedReply), result.messages)
         assertEquals(77, result.usedTokens)
+    }
+
+    @Test
+    fun `유저 답글 직전까지의 대화를 읽어 답글 프롬프트에 싣는다`() {
+        every { messageRepository.findById(1L) } returns Optional.of(userReplyMessage())
+        every { messageRepository.findById(2L) } returns Optional.of(characterMessage())
+        every { messageRepository.findById(3L) } returns Optional.of(diaryMessage())
+        every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
+        every {
+            messageRepository.updateCommentStatus(1L, CommentStatus.PENDING, listOf(CommentStatus.NONE, CommentStatus.FAILED), any())
+        } returns 1
+        every { conversationTranscriptReader.read(10L, 1L, any()) } returns transcript
+        val expectedContext =
+            ReplyPromptContext(diaryMessage().content, "gippeum", characterMessage().content, userReplyMessage().content, transcript)
+        every { commentGenerator.generateReply(expectedContext) } returns ReplyGenerationOutput("그치! 잘했어!", 77, 0)
+        every { commentFeedValidator.validateReply("그치! 잘했어!") } returns Unit
+        every { commentPersistenceService.saveReply(10L, 3L, 1L, EmotionType.JOY, "그치! 잘했어!") } returns
+            Message(conversationId = 10L, senderType = SenderType.CHARACTER, emotionType = EmotionType.JOY, content = "그치! 잘했어!")
+
+        val result = service.generateReplyComment(memberId = 1L, messageId = 1L)
+
+        assertEquals(CommentGenerationOutcome.DONE, result.outcome)
+        verify(exactly = 1) { commentGenerator.generateReply(expectedContext) }
     }
 
     @Test
