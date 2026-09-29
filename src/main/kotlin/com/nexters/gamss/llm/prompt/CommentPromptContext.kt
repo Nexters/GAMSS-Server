@@ -14,6 +14,8 @@ import com.nexters.gamss.emotion.domain.EmotionType
  * 일부를 무작위로 뽑아 넘기는 값이다
  * ([com.nexters.gamss.conversation.repository.ConversationRepository.findRandomPastSummaries]).
  * [transcript]는 이번 메시지 직전까지 이 방에서 오간 원문이다([ConversationTranscript]).
+ * [excludedCharacters]는 이 방에서 막아둔 캐릭터다. 불렸는지와 관계없이 항상 싣는다(호명 판정이 놓쳐도 LLM이
+ * 막아둔 캐릭터를 흉내 내지 않게 하려는 것이다).
  * [calledCharacters]는 유저가 이번 메시지에서 부른 캐릭터, [calledAbsentCharacters]는 불렀지만 이 방에서 막아둔
  * 캐릭터다([com.nexters.gamss.llm.selection.ResponsePlanner]). [characters]처럼 원시 목록으로 받아, 선택 결과
  * 타입에 기대지 않는다.
@@ -26,6 +28,7 @@ data class CommentPromptContext(
     val tikitakaCount: Int,
     val eongttungTopic: String?,
     val transcript: ConversationTranscript = ConversationTranscript.EMPTY,
+    val excludedCharacters: List<EmotionType> = emptyList(),
     val calledCharacters: List<EmotionType> = emptyList(),
     val calledAbsentCharacters: List<EmotionType> = emptyList(),
 )

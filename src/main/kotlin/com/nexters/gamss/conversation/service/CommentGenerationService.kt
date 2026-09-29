@@ -315,6 +315,7 @@ class CommentGenerationService(
                 tikitakaCount = tikitakaCount,
                 eongttungTopic = eongttungTopic,
                 transcript = conversationTranscriptReader.read(conversationId, messageId, plan.addressees.present),
+                excludedCharacters = EmotionType.entries.filter { it in excludedCharacters },
                 calledCharacters = plan.addressees.present,
                 calledAbsentCharacters = plan.addressees.absent,
             )

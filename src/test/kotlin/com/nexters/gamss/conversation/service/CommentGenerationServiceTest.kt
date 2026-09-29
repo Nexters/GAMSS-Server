@@ -115,6 +115,7 @@ class CommentGenerationServiceTest {
         tikitakaCount: Int = this.tikitakaCount,
         eongttungTopic: String? = null,
         transcript: ConversationTranscript = ConversationTranscript.EMPTY,
+        excludedCharacters: List<EmotionType> = emptyList(),
         calledCharacters: List<EmotionType> = emptyList(),
     ): CommentPromptContext =
         CommentPromptContext(
@@ -125,6 +126,7 @@ class CommentGenerationServiceTest {
             tikitakaCount,
             eongttungTopic,
             transcript,
+            excludedCharacters,
             calledCharacters,
         )
 
@@ -528,7 +530,7 @@ class CommentGenerationServiceTest {
     }
 
     @Test
-    fun `채팅방에 제외 캐릭터가 저장되어 있으면 CharacterSelector에 그대로 전달한다`() {
+    fun `채팅방에 제외 캐릭터가 저장되어 있으면 선택에서 빼고 프롬프트에도 이 방에 없는 캐릭터로 싣는다`() {
         val message = rootMessage()
         val excluded = setOf(EmotionType.ANGER, EmotionType.ANXIETY)
         every { messageRepository.findById(1L) } returns Optional.of(message)
@@ -548,7 +550,9 @@ class CommentGenerationServiceTest {
             )
         } returns emptyList()
         every {
-            commentGenerator.generateComment(promptContext(diaryContent = message.content))
+            commentGenerator.generateComment(
+                promptContext(diaryContent = message.content, excludedCharacters = listOf(EmotionType.ANGER, EmotionType.ANXIETY)),
+            )
         } returns CommentGenerationOutput(feed(), 123, 0)
         every { commentFeedValidator.validate(feed(), characters, tikitakaCount) } returns Unit
         every { commentPersistenceService.saveFeed(10L, 1L, feed()) } returns emptyList()

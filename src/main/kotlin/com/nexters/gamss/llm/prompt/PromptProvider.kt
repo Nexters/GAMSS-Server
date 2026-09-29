@@ -33,7 +33,7 @@ class PromptProvider {
             appendLine("- 등장 캐릭터(전원 포함, 다른 캐릭터 추가 금지): $characterIds")
             appendLine("- tikitaka 개수: 정확히 ${context.tikitakaCount}개")
             if (eongttungLine.isNotEmpty()) appendLine(eongttungLine)
-            appendCalledCharacters(context)
+            appendCharacterConditions(context)
             append("위 조건대로 코멘트 + 티키타카를 JSON으로 출력해.")
         }
     }
@@ -121,17 +121,26 @@ class PromptProvider {
     }
 
     /**
-     * 유저가 부른 캐릭터를 응답 조건으로 싣는다. 어떻게 반응할지의 세부 규칙은 COMMENT 프롬프트(DB)가 갖고,
-     * 여기는 이번 메시지에 해당하는 사실만 싣는다.
+     * 막아둔 캐릭터와 유저가 부른 캐릭터를 응답 조건으로 싣는다. 어떻게 반응할지의 세부 규칙은 COMMENT
+     * 프롬프트(DB)가 갖고, 여기는 이번 메시지에 해당하는 사실만 싣는다.
+     *
+     * 막아둔 캐릭터는 불렸는지와 관계없이 싣는다. "슬픔이 어디 갔어?"처럼 호명 판정이 놓치는 말로 찾아도
+     * LLM이 그 캐릭터가 없다는 걸 알아야 흉내 내지 않는다.
      */
-    private fun StringBuilder.appendCalledCharacters(context: CommentPromptContext) {
+    private fun StringBuilder.appendCharacterConditions(context: CommentPromptContext) {
+        if (context.excludedCharacters.isNotEmpty()) {
+            appendLine(
+                "- 이 방에 없는 캐릭터: ${promptIds(context.excludedCharacters)} " +
+                    "(등장하지 않는다. 그 캐릭터인 척하거나, 대신 말하거나, 말투를 흉내 내지 마라)",
+            )
+        }
         if (context.calledCharacters.isNotEmpty()) {
             appendLine("- 유저가 부른 캐릭터: ${promptIds(context.calledCharacters)} (유저가 이 캐릭터에게 한 말이다. 그 말에 직접 답해라)")
         }
         if (context.calledAbsentCharacters.isNotEmpty()) {
             appendLine(
                 "- 유저가 불렀지만 이 방에 없는 캐릭터: ${promptIds(context.calledAbsentCharacters)} " +
-                    "(등장하지 않는다. 없다는 걸 자연스럽게 넘기고, 흉내 내거나 대신 말하지 마라)",
+                    "(없다는 걸 자연스럽게 짚고 넘겨라)",
             )
         }
     }

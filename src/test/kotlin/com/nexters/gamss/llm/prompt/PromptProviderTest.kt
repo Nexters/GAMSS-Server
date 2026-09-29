@@ -270,6 +270,17 @@ class PromptProviderTest {
     }
 
     @Test
+    fun `막아둔 캐릭터는 부르지 않았어도 응답 조건에 싣는다`() {
+        // "슬픔이 어디 갔어?"처럼 호명 판정이 놓치는 말로 찾아도 LLM이 없다는 걸 알아야 흉내 내지 않는다.
+        val context = commentContext(ConversationTranscript.EMPTY).copy(excludedCharacters = listOf(EmotionType.SADNESS))
+
+        val lines = promptProvider.buildUserContent(context).lines()
+
+        val conditions = lines.drop(lines.indexOf("[이번 응답 조건]"))
+        assertTrue(conditions.any { it.startsWith("- 이 방에 없는 캐릭터: seulpeum ") })
+    }
+
+    @Test
     fun `아무도 부르지 않았으면 호명 조건을 싣지 않는다`() {
         val content = promptProvider.buildUserContent(commentContext(ConversationTranscript.EMPTY))
 
