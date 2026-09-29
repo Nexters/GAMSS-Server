@@ -6,6 +6,8 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class ResponsePlannerTest {
     private val characterSelector = mockk<CharacterSelector>()
@@ -54,5 +56,23 @@ class ResponsePlannerTest {
 
         assertEquals(CharacterSelection(listOf(EmotionType.JOY), 0), plan.selection)
         assertEquals(Addressees(present = listOf(EmotionType.JOY), absent = listOf(EmotionType.SADNESS)), plan.addressees)
+    }
+
+    @Test
+    fun `엉뚱이가 무작위로 뽑혔으면 소재를 준다`() {
+        every { characterSelector.select(emptySet()) } returns CharacterSelection(listOf(EmotionType.JOY, EmotionType.QUIRKY), 1)
+
+        assertTrue(planner.plan("오늘 좀 피곤했어", emptySet()).needsEongttungTopic())
+    }
+
+    @Test
+    fun `엉뚱이를 불렀으면 소재를 주지 않는다`() {
+        // 소재가 있으면 불렀는데도 못 들은 척 딴소리만 한다.
+        assertFalse(planner.plan("엉뚱아 그게 무슨 소리야", emptySet()).needsEongttungTopic())
+    }
+
+    @Test
+    fun `엉뚱이가 등장하지 않으면 소재를 주지 않는다`() {
+        assertFalse(planner.plan("기쁨아 그게 무슨 소리야", emptySet()).needsEongttungTopic())
     }
 }

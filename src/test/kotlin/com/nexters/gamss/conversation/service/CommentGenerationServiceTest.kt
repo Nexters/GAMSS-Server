@@ -590,6 +590,31 @@ class CommentGenerationServiceTest {
     }
 
     @Test
+    fun `유저가 엉뚱이를 부르면 소재를 주지 않고 유저 말에 답하게 한다`() {
+        val message = Message(conversationId = 10L, senderType = SenderType.USER, content = "엉뚱아 그게 무슨 소리야")
+        every { messageRepository.findById(1L) } returns Optional.of(message)
+        stubClaimSuccess()
+        val expectedContext =
+            promptContext(
+                diaryContent = message.content,
+                characters = listOf(EmotionType.QUIRKY),
+                tikitakaCount = 0,
+                eongttungTopic = null,
+                calledCharacters = listOf(EmotionType.QUIRKY),
+            )
+        val quirkyFeed = CommentFeed(listOf(CommentDraft(EmotionType.QUIRKY, "비둘기 얘기였어. 몰라.")), emptyList())
+        every { commentGenerator.generateComment(expectedContext) } returns CommentGenerationOutput(quirkyFeed, 40, 0)
+        every { commentFeedValidator.validate(quirkyFeed, listOf(EmotionType.QUIRKY), 0) } returns Unit
+        every { commentPersistenceService.saveFeed(10L, 1L, quirkyFeed) } returns emptyList()
+
+        val result = service.generateComments(memberId = 1L, messageId = 1L, currentConversationSummary = null)
+
+        assertEquals(CommentGenerationOutcome.DONE, result.outcome)
+        verify(exactly = 1) { commentGenerator.generateComment(expectedContext) }
+        verify(exactly = 0) { eongttungTopicSelector.select() }
+    }
+
+    @Test
     fun `존재하지 않는 메시지면 MESSAGE_NOT_FOUND`() {
         every { messageRepository.findById(99L) } returns Optional.empty()
 

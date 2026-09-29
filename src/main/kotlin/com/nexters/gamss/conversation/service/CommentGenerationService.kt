@@ -304,7 +304,7 @@ class CommentGenerationService(
         val plan = responsePlanner.plan(diaryContent, excludedCharacters)
         val characters = plan.selection.characters
         val tikitakaCount = plan.selection.tikitakaCount
-        val eongttungTopic = if (EmotionType.QUIRKY in characters) eongttungTopicSelector.select() else null
+        val eongttungTopic = if (plan.needsEongttungTopic()) eongttungTopicSelector.select() else null
 
         val context =
             CommentPromptContext(
