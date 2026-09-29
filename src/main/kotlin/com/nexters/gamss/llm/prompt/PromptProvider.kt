@@ -37,21 +37,16 @@ class PromptProvider {
     }
 
     /** 유저가 [characterId] 캐릭터의 댓글에 단 답글에, 그 캐릭터만 다시 반응하게 하는 유저 콘텐츠. */
-    fun buildReplyUserContent(
-        diaryContent: String,
-        characterId: String,
-        characterComment: String,
-        userReply: String,
-    ): String =
+    fun buildReplyUserContent(context: ReplyPromptContext): String =
         buildString {
             appendLine("[오늘 일기]")
-            appendLine(diaryContent.normalizeForPrompt())
+            appendLine(context.diaryContent.normalizeForPrompt())
             appendLine("[이번 응답 조건]")
-            appendLine("- 응답할 캐릭터: $characterId (반드시 이 캐릭터로만 응답, 다른 캐릭터로 바꾸지 마라)")
+            appendLine("- 응답할 캐릭터: ${context.characterId} (반드시 이 캐릭터로만 응답, 다른 캐릭터로 바꾸지 마라)")
             appendLine("[네가 방금 남긴 댓글]")
-            appendLine(characterComment.normalizeForPrompt())
+            appendLine(context.characterComment.normalizeForPrompt())
             appendLine("[유저의 답글]")
-            appendLine(userReply.normalizeForPrompt())
+            appendLine(context.userReply.normalizeForPrompt())
             append("위 유저 답글에 대해 네 캐릭터 말투로 답글을 JSON으로 출력해.")
         }
 

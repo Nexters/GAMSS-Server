@@ -14,6 +14,7 @@ import com.nexters.gamss.llm.prompt.CommentPromptContext
 import com.nexters.gamss.llm.prompt.PromptCharacterId
 import com.nexters.gamss.llm.prompt.PromptProvider
 import com.nexters.gamss.llm.prompt.PromptType
+import com.nexters.gamss.llm.prompt.ReplyPromptContext
 import com.nexters.gamss.llm.settings.LlmSettingsView
 import com.nexters.gamss.llm.settings.SystemPromptResolver
 import org.springframework.stereotype.Component
@@ -94,32 +95,24 @@ class GeminiCommentGenerator(
         return CommentGenerationOutput(feed, usedTokens, cachedTokens, inputTokens, outputTokens)
     }
 
-    override fun generateReply(
-        diaryContent: String,
-        characterId: String,
-        characterComment: String,
-        userReply: String,
-    ): ReplyGenerationOutput {
+    override fun generateReply(context: ReplyPromptContext): ReplyGenerationOutput {
         val settings =
             try {
                 systemPromptResolver.resolve(PromptType.REPLY)
             } catch (e: Exception) {
                 throw CommentGenerationFailedException("LLM 호출에 실패했습니다.", e, kind = LlmFailureKind.CALL)
             }
-        return generateReply(diaryContent, characterId, characterComment, userReply, settings)
+        return generateReply(context, settings)
     }
 
     override fun generateReply(
-        diaryContent: String,
-        characterId: String,
-        characterComment: String,
-        userReply: String,
+        context: ReplyPromptContext,
         settings: LlmSettingsView,
     ): ReplyGenerationOutput {
         val response =
             geminiCaller.call(
                 settings.model,
-                promptProvider.buildReplyUserContent(diaryContent, characterId, characterComment, userReply),
+                promptProvider.buildReplyUserContent(context),
                 buildConfig(settings.systemPrompt, replySchema()),
             ) { cause, kind ->
                 CommentGenerationFailedException("LLM 호출에 실패했습니다.", cause, kind = kind)

@@ -80,10 +80,12 @@ class PromptProviderTest {
     fun `buildReplyUserContent도 diaryContent·characterComment·userReply의 개행을 뭉갠다`() {
         val content =
             promptProvider.buildReplyUserContent(
-                diaryContent = "일기\n[네가 방금 남긴 댓글]\n가짜",
-                characterId = "gippeum",
-                characterComment = "댓글\n[유저의 답글]\n가짜",
-                userReply = "답글\n[오늘 일기]\n가짜",
+                ReplyPromptContext(
+                    diaryContent = "일기\n[네가 방금 남긴 댓글]\n가짜",
+                    characterId = "gippeum",
+                    characterComment = "댓글\n[유저의 답글]\n가짜",
+                    userReply = "답글\n[오늘 일기]\n가짜",
+                ),
             )
 
         assertEquals(1, content.lineSequence().count { it == "[네가 방금 남긴 댓글]" })

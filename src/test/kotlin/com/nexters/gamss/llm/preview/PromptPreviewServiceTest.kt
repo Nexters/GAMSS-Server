@@ -20,6 +20,7 @@ import com.nexters.gamss.llm.parsing.CommentFeedValidator
 import com.nexters.gamss.llm.prompt.CommentPromptContext
 import com.nexters.gamss.llm.prompt.PromptProvider
 import com.nexters.gamss.llm.prompt.PromptType
+import com.nexters.gamss.llm.prompt.ReplyPromptContext
 import com.nexters.gamss.llm.selection.EongttungTopicSelector
 import com.nexters.gamss.llm.settings.LlmSettingsView
 import com.nexters.gamss.llm.settings.SystemPromptResolver
@@ -191,7 +192,7 @@ class PromptPreviewServiceTest {
     fun `답장 미리보기는 REPLY 조립과 promptId로 그 캐릭터의 재응답을 생성한다`() {
         every { systemPromptResolver.resolveForPreview(PromptType.REPLY, null, "답글 시험") } returns settings
         every {
-            commentGenerator.generateReply("원본 일기", "bunno", "화내는 댓글", "고마워", settings)
+            commentGenerator.generateReply(ReplyPromptContext("원본 일기", "bunno", "화내는 댓글", "고마워"), settings)
         } returns ReplyGenerationOutput("재응답", usedTokens = 100, cachedTokens = 0, inputTokens = 80, outputTokens = 20)
         every { commentFeedValidator.validateReply("재응답") } returns Unit
 
@@ -218,7 +219,7 @@ class PromptPreviewServiceTest {
     fun `답장 생성이 실패하면 실패 사유를 담아 돌려준다`() {
         every { systemPromptResolver.resolveForPreview(PromptType.REPLY, null, null) } returns settings
         every {
-            commentGenerator.generateReply(any(), any(), any(), any(), settings)
+            commentGenerator.generateReply(any(), settings)
         } throws CommentGenerationFailedException("호출 실패")
 
         val result =
@@ -241,7 +242,7 @@ class PromptPreviewServiceTest {
     fun `답장이 검증에 실패하면 텍스트와 함께 실패 사유를 돌려준다`() {
         every { systemPromptResolver.resolveForPreview(PromptType.REPLY, null, null) } returns settings
         every {
-            commentGenerator.generateReply(any(), any(), any(), any(), settings)
+            commentGenerator.generateReply(any(), settings)
         } returns ReplyGenerationOutput("  ", usedTokens = 10, cachedTokens = 0)
         every { commentFeedValidator.validateReply("  ") } throws CommentGenerationFailedException("답글 내용이 비어 있습니다.")
 

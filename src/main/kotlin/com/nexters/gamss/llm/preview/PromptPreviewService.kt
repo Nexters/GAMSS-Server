@@ -18,6 +18,7 @@ import com.nexters.gamss.llm.prompt.PastSummaries
 import com.nexters.gamss.llm.prompt.PromptCharacterId
 import com.nexters.gamss.llm.prompt.PromptProvider
 import com.nexters.gamss.llm.prompt.PromptType
+import com.nexters.gamss.llm.prompt.ReplyPromptContext
 import com.nexters.gamss.llm.selection.CharacterSelection
 import com.nexters.gamss.llm.selection.EongttungTopicSelector
 import com.nexters.gamss.llm.settings.LlmSettingsView
@@ -105,19 +106,13 @@ class PromptPreviewService(
     fun previewReply(command: ReplyPreviewCommand): ReplyPreviewResult {
         val settings = systemPromptResolver.resolveForPreview(PromptType.REPLY, command.commonPrompt, command.replyPrompt)
         val promptId = PromptCharacterId.of(command.character).promptId
-        val userContent = promptProvider.buildReplyUserContent(command.diaryContent, promptId, command.characterComment, command.userReply)
+        val context = ReplyPromptContext(command.diaryContent, promptId, command.characterComment, command.userReply)
+        val userContent = promptProvider.buildReplyUserContent(context)
 
         val startedAt = System.nanoTime()
         val result =
             try {
-                val output =
-                    commentGenerator.generateReply(
-                        command.diaryContent,
-                        promptId,
-                        command.characterComment,
-                        command.userReply,
-                        settings,
-                    )
+                val output = commentGenerator.generateReply(context, settings)
                 ReplyPreviewResult(
                     model = settings.model,
                     systemPrompt = settings.systemPrompt,

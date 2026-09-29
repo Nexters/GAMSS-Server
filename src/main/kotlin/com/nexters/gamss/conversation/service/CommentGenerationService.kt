@@ -19,6 +19,7 @@ import com.nexters.gamss.llm.parsing.CommentFeedValidator
 import com.nexters.gamss.llm.prompt.CommentPromptContext
 import com.nexters.gamss.llm.prompt.PastSummaries
 import com.nexters.gamss.llm.prompt.PromptCharacterId
+import com.nexters.gamss.llm.prompt.ReplyPromptContext
 import com.nexters.gamss.llm.selection.CharacterSelector
 import com.nexters.gamss.llm.selection.EongttungTopicSelector
 import com.nexters.gamss.llm.selection.PastSummaryPolicy
@@ -260,10 +261,12 @@ class CommentGenerationService(
         ) { attempt ->
             val output =
                 commentGenerator.generateReply(
-                    diaryContent,
-                    PromptCharacterId.of(characterMessage.emotionType!!).promptId,
-                    characterMessage.content,
-                    userReply,
+                    ReplyPromptContext(
+                        diaryContent = diaryContent,
+                        characterId = PromptCharacterId.of(characterMessage.emotionType!!).promptId,
+                        characterComment = characterMessage.content,
+                        userReply = userReply,
+                    ),
                 )
             try {
                 commentFeedValidator.validateReply(output.text)

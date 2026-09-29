@@ -8,6 +8,7 @@ import com.nexters.gamss.llm.parsing.CommentDraft
 import com.nexters.gamss.llm.parsing.CommentFeed
 import com.nexters.gamss.llm.parsing.TikitakaDraft
 import com.nexters.gamss.llm.prompt.CommentPromptContext
+import com.nexters.gamss.llm.prompt.ReplyPromptContext
 import com.nexters.gamss.llm.settings.LlmSettingsView
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Bean
@@ -48,19 +49,11 @@ class FakeCommentGenerator : CommentGenerator {
     }
 
     override fun generateReply(
-        diaryContent: String,
-        characterId: String,
-        characterComment: String,
-        userReply: String,
+        context: ReplyPromptContext,
         settings: LlmSettingsView,
-    ): ReplyGenerationOutput = generateReply(diaryContent, characterId, characterComment, userReply)
+    ): ReplyGenerationOutput = generateReply(context)
 
-    override fun generateReply(
-        diaryContent: String,
-        characterId: String,
-        characterComment: String,
-        userReply: String,
-    ): ReplyGenerationOutput {
+    override fun generateReply(context: ReplyPromptContext): ReplyGenerationOutput {
         if (shouldFail) throw CommentGenerationFailedException("테스트 강제 실패")
         return ReplyGenerationOutput("재응답 텍스트", usedTokens = 5, cachedTokens = 0)
     }

@@ -20,6 +20,7 @@ import com.nexters.gamss.llm.parsing.CommentFeedValidator
 import com.nexters.gamss.llm.parsing.TikitakaDraft
 import com.nexters.gamss.llm.prompt.CommentPromptContext
 import com.nexters.gamss.llm.prompt.PastSummaries
+import com.nexters.gamss.llm.prompt.ReplyPromptContext
 import com.nexters.gamss.llm.selection.CharacterSelection
 import com.nexters.gamss.llm.selection.CharacterSelector
 import com.nexters.gamss.llm.selection.EongttungTopicSelector
@@ -593,7 +594,9 @@ class CommentGenerationServiceTest {
             messageRepository.updateCommentStatus(1L, CommentStatus.PENDING, listOf(CommentStatus.NONE, CommentStatus.FAILED), any())
         } returns 1
         every {
-            commentGenerator.generateReply(diaryMessage().content, "gippeum", characterMessage().content, userReplyMessage().content)
+            commentGenerator.generateReply(
+                ReplyPromptContext(diaryMessage().content, "gippeum", characterMessage().content, userReplyMessage().content),
+            )
         } returns ReplyGenerationOutput("그치! 잘했어!", 77, 0)
         every { commentFeedValidator.validateReply("그치! 잘했어!") } returns Unit
         val savedReply =
@@ -620,7 +623,7 @@ class CommentGenerationServiceTest {
         val result = service.generateReplyComment(memberId = 1L, messageId = 1L)
 
         assertEquals(CommentGenerationOutcome.GENERATING, result.outcome)
-        verify(exactly = 0) { commentGenerator.generateReply(any(), any(), any(), any()) }
+        verify(exactly = 0) { commentGenerator.generateReply(any()) }
     }
 
     @Test
@@ -668,13 +671,13 @@ class CommentGenerationServiceTest {
         every {
             messageRepository.updateCommentStatus(1L, CommentStatus.PENDING, listOf(CommentStatus.NONE, CommentStatus.FAILED), any())
         } returns 1
-        every { commentGenerator.generateReply(any(), any(), any(), any()) } throws CommentGenerationFailedException("LLM 호출 실패")
+        every { commentGenerator.generateReply(any()) } throws CommentGenerationFailedException("LLM 호출 실패")
         every { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) } returns 1
 
         val result = service.generateReplyComment(memberId = 1L, messageId = 1L)
 
         assertEquals(CommentGenerationOutcome.FAILED, result.outcome)
-        verify(exactly = 3) { commentGenerator.generateReply(any(), any(), any(), any()) }
+        verify(exactly = 3) { commentGenerator.generateReply(any()) }
         verify(exactly = 1) { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) }
     }
 
@@ -687,13 +690,13 @@ class CommentGenerationServiceTest {
         every {
             messageRepository.updateCommentStatus(1L, CommentStatus.PENDING, listOf(CommentStatus.NONE, CommentStatus.FAILED), any())
         } returns 1
-        every { commentGenerator.generateReply(any(), any(), any(), any()) } throws IllegalStateException("SDK 초기화 실패")
+        every { commentGenerator.generateReply(any()) } throws IllegalStateException("SDK 초기화 실패")
         every { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) } returns 1
 
         val result = service.generateReplyComment(memberId = 1L, messageId = 1L)
 
         assertEquals(CommentGenerationOutcome.FAILED, result.outcome)
-        verify(exactly = 1) { commentGenerator.generateReply(any(), any(), any(), any()) }
+        verify(exactly = 1) { commentGenerator.generateReply(any()) }
         verify(exactly = 1) {
             generationLogRecorder.record(
                 type = GenerationType.REPLY,
@@ -741,7 +744,7 @@ class CommentGenerationServiceTest {
 
         assertEquals(ErrorCode.INVALID_COMMENT_TARGET, exception.errorCode)
         verify(exactly = 0) { messageRepository.findById(3L) }
-        verify(exactly = 0) { commentGenerator.generateReply(any(), any(), any(), any()) }
+        verify(exactly = 0) { commentGenerator.generateReply(any()) }
     }
 
     @Test
@@ -757,7 +760,7 @@ class CommentGenerationServiceTest {
 
         assertEquals(ErrorCode.INVALID_COMMENT_TARGET, exception.errorCode)
         verify(exactly = 0) { messageRepository.updateCommentStatus(any(), any(), any(), any()) }
-        verify(exactly = 0) { commentGenerator.generateReply(any(), any(), any(), any()) }
+        verify(exactly = 0) { commentGenerator.generateReply(any()) }
     }
 
     @Test
@@ -780,7 +783,7 @@ class CommentGenerationServiceTest {
 
         assertEquals(ErrorCode.CONVERSATION_ALREADY_DELETED, exception.errorCode)
         verify(exactly = 0) { messageRepository.updateCommentStatus(any(), any(), any(), any()) }
-        verify(exactly = 0) { commentGenerator.generateReply(any(), any(), any(), any()) }
+        verify(exactly = 0) { commentGenerator.generateReply(any()) }
     }
 
     // generateFor는 저장 직후 호출되는 진입점이라 소유권 조회 없이 message 자체로 라우팅한다
@@ -805,7 +808,7 @@ class CommentGenerationServiceTest {
         assertEquals(CommentGenerationOutcome.DONE, result.outcome)
         assertEquals(savedMessages, result.messages)
         assertEquals(123, result.usedTokens)
-        verify(exactly = 0) { commentGenerator.generateReply(any(), any(), any(), any()) }
+        verify(exactly = 0) { commentGenerator.generateReply(any()) }
     }
 
     @Test
@@ -835,7 +838,7 @@ class CommentGenerationServiceTest {
             messageRepository.updateCommentStatus(1L, CommentStatus.PENDING, listOf(CommentStatus.NONE, CommentStatus.FAILED), any())
         } returns 1
         every {
-            commentGenerator.generateReply(diaryMessage().content, "gippeum", characterMessage().content, reply.content)
+            commentGenerator.generateReply(ReplyPromptContext(diaryMessage().content, "gippeum", characterMessage().content, reply.content))
         } returns ReplyGenerationOutput("그치! 잘했어!", 77, 0)
         every { commentFeedValidator.validateReply("그치! 잘했어!") } returns Unit
         val savedReply =
