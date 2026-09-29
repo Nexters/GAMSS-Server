@@ -3,6 +3,8 @@ package com.nexters.gamss.conversation.repository
 import com.nexters.gamss.conversation.domain.CommentStatus
 import com.nexters.gamss.conversation.domain.Message
 import com.nexters.gamss.conversation.domain.SenderType
+import com.nexters.gamss.emotion.domain.EmotionType
+import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
@@ -12,6 +14,23 @@ import java.time.Instant
 
 interface MessageRepository : JpaRepository<Message, Long> {
     fun findAllByConversationIdOrderByIdAsc(conversationId: Long): List<Message>
+
+    /**
+     * [beforeMessageId] 직전까지의 메시지를 **최신순으로** [pageable] 개수만큼 조회한다(대화 기록 구간용).
+     * (conversation_id) 인덱스에 PK가 붙어 있어 대화방 전체를 읽지 않고 끝에서부터 필요한 만큼만 읽는다.
+     */
+    fun findByConversationIdAndIdLessThanOrderByIdDesc(
+        conversationId: Long,
+        beforeMessageId: Long,
+        pageable: Pageable,
+    ): List<Message>
+
+    /** [beforeMessageId] 직전까지 [emotionType] 캐릭터가 마지막으로 한 말을 조회한다(부른 캐릭터의 발언 붙잡기용). */
+    fun findFirstByConversationIdAndEmotionTypeAndIdLessThanOrderByIdDesc(
+        conversationId: Long,
+        emotionType: EmotionType,
+        beforeMessageId: Long,
+    ): Message?
 
     /** 특정 발신주체의 메시지만 작성순으로 조회한다(카드 감정 분류는 유저 메시지만 입력으로 쓴다). */
     fun findAllByConversationIdAndSenderTypeOrderByIdAsc(

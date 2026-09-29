@@ -44,6 +44,12 @@ class ConversationTranscript private constructor(
          */
         private const val PER_ENTRY_OVERHEAD = 14
 
+        /**
+         * 구간에 담길 수 있는 말 수의 상한. 가장 짧은 말(1자)로 채웠을 때가 최대다. 저장소에서 읽는 쪽은 이 개수만
+         * 읽으면 구간이 볼 수 있는 말을 빠짐없이 가져온다([CardMessageWindow.MAX_MESSAGES]와 같은 역할).
+         */
+        const val MAX_ENTRIES = MAX_CHARS / (1 + PER_ENTRY_OVERHEAD)
+
         val EMPTY = ConversationTranscript(emptyList())
 
         /** [entries](시간순)에서 최근 구간을 **시간순으로** 담는다. [pinned] 캐릭터의 가장 최근 발언은 항상 포함한다. */
