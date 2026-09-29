@@ -62,6 +62,13 @@ class VocativeAddresseeResolverTest {
     }
 
     @Test
+    fun `앞선 부르는 말 바로 뒤의 받침 없는 이름도 부른 것으로 본다`() {
+        // 실제 LLM 테스트에서 "기쁨아 분노야 둘 다 들어봐"에 기쁨이만 답했다. 분노야가 문장 맨 앞이 아니라 놓쳤다.
+        assertEquals(listOf(EmotionType.JOY, EmotionType.ANGER), resolver.resolve("기쁨아 분노야 둘 다 들어봐"))
+        assertEquals(listOf(EmotionType.JOY, EmotionType.ANGER), resolver.resolve("기쁨아, 분노! 들어봐"))
+    }
+
+    @Test
     fun `여러 캐릭터를 부르면 메시지에 처음 나온 순서대로 돌려준다`() {
         assertEquals(listOf(EmotionType.ANGER, EmotionType.JOY), resolver.resolve("분노야 기쁨아 둘 다 들어봐"))
     }
