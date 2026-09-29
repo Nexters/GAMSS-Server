@@ -1,6 +1,7 @@
 package com.nexters.gamss.llm.prompt
 
 import com.nexters.gamss.emotion.domain.EmotionType
+import com.nexters.gamss.llm.selection.Addressees
 
 /**
  * [com.nexters.gamss.llm.generation.CommentGenerator.generateComment]가 필요로 하는 컨텍스트를
@@ -14,6 +15,7 @@ import com.nexters.gamss.emotion.domain.EmotionType
  * 일부를 무작위로 뽑아 넘기는 값이다
  * ([com.nexters.gamss.conversation.repository.ConversationRepository.findRandomPastSummaries]).
  * [transcript]는 이번 메시지 직전까지 이 방에서 오간 원문이다([ConversationTranscript]).
+ * [addressees]는 유저가 이번 메시지에서 부른 캐릭터다([com.nexters.gamss.llm.selection.ResponsePlanner]).
  */
 data class CommentPromptContext(
     val currentConversationSummary: String?,
@@ -23,4 +25,5 @@ data class CommentPromptContext(
     val tikitakaCount: Int,
     val eongttungTopic: String?,
     val transcript: ConversationTranscript = ConversationTranscript.EMPTY,
+    val addressees: Addressees = Addressees.NONE,
 )

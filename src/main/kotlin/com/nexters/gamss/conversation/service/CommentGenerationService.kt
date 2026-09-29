@@ -20,9 +20,9 @@ import com.nexters.gamss.llm.prompt.CommentPromptContext
 import com.nexters.gamss.llm.prompt.PastSummaries
 import com.nexters.gamss.llm.prompt.PromptCharacterId
 import com.nexters.gamss.llm.prompt.ReplyPromptContext
-import com.nexters.gamss.llm.selection.CharacterSelector
 import com.nexters.gamss.llm.selection.EongttungTopicSelector
 import com.nexters.gamss.llm.selection.PastSummaryPolicy
+import com.nexters.gamss.llm.selection.ResponsePlanner
 import com.nexters.gamss.monitoring.domain.GenerationType
 import com.nexters.gamss.monitoring.service.GenerationLogRecorder
 import com.nexters.gamss.tokenlimit.service.DailyTokenLimitService
@@ -40,7 +40,7 @@ import java.time.Instant
 class CommentGenerationService(
     private val messageRepository: MessageRepository,
     private val conversationRepository: ConversationRepository,
-    private val characterSelector: CharacterSelector,
+    private val responsePlanner: ResponsePlanner,
     private val eongttungTopicSelector: EongttungTopicSelector,
     private val commentGenerator: CommentGenerator,
     private val commentFeedValidator: CommentFeedValidator,
@@ -169,8 +169,8 @@ class CommentGenerationService(
     }
 
     /**
-     * 답글은 새로 캐릭터를 뽑지 않고 [characterMessage]가 이미 가진 emotionType을 그대로 재사용한다 —
-     * 그 메시지 자체가 애초에 [CharacterSelector]로 제외 캐릭터를 걸러낸 뒤 뽑힌 결과라, 여기서 다시
+     * 답글은 새로 캐릭터를 뽑지 않고 [characterMessage]가 이미 가진 emotionType을 그대로 재사용한다.
+     * 그 메시지 자체가 애초에 [ResponsePlanner]로 제외 캐릭터를 걸러낸 뒤 뽑힌 결과라, 여기서 다시
      * 제외 목록을 확인할 필요가 없다(제외된 캐릭터가 답글로 되살아날 여지 자체가 없음).
      */
     private fun generateReplyInternal(
@@ -301,9 +301,9 @@ class CommentGenerationService(
         pastSummaries: List<String>,
         excludedCharacters: Set<EmotionType>,
     ): CommentGenerationOutput {
-        val selection = characterSelector.select(excludedCharacters)
-        val characters = selection.characters
-        val tikitakaCount = selection.tikitakaCount
+        val plan = responsePlanner.plan(diaryContent, excludedCharacters)
+        val characters = plan.selection.characters
+        val tikitakaCount = plan.selection.tikitakaCount
         val eongttungTopic = if (EmotionType.QUIRKY in characters) eongttungTopicSelector.select() else null
 
         val context =
@@ -314,7 +314,8 @@ class CommentGenerationService(
                 characters = characters,
                 tikitakaCount = tikitakaCount,
                 eongttungTopic = eongttungTopic,
-                transcript = conversationTranscriptReader.read(conversationId, messageId),
+                transcript = conversationTranscriptReader.read(conversationId, messageId, plan.addressees.present),
+                addressees = plan.addressees,
             )
         val startedAt = System.currentTimeMillis()
         val tokens = TokenUsageAccumulator()

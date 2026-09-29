@@ -23,10 +23,13 @@ import com.nexters.gamss.llm.prompt.ConversationTranscript
 import com.nexters.gamss.llm.prompt.PastSummaries
 import com.nexters.gamss.llm.prompt.ReplyPromptContext
 import com.nexters.gamss.llm.prompt.TranscriptEntry
+import com.nexters.gamss.llm.selection.Addressees
 import com.nexters.gamss.llm.selection.CharacterSelection
 import com.nexters.gamss.llm.selection.CharacterSelector
 import com.nexters.gamss.llm.selection.EongttungTopicSelector
 import com.nexters.gamss.llm.selection.PastSummaryPolicy
+import com.nexters.gamss.llm.selection.ResponsePlanner
+import com.nexters.gamss.llm.selection.VocativeAddresseeResolver
 import com.nexters.gamss.monitoring.domain.GenerationType
 import com.nexters.gamss.monitoring.service.GenerationLogRecorder
 import com.nexters.gamss.tokenlimit.service.DailyTokenLimitService
@@ -59,7 +62,7 @@ class CommentGenerationServiceTest {
         CommentGenerationService(
             messageRepository,
             conversationRepository,
-            characterSelector,
+            ResponsePlanner(characterSelector, VocativeAddresseeResolver()),
             eongttungTopicSelector,
             commentGenerator,
             commentFeedValidator,
@@ -113,6 +116,7 @@ class CommentGenerationServiceTest {
         tikitakaCount: Int = this.tikitakaCount,
         eongttungTopic: String? = null,
         transcript: ConversationTranscript = ConversationTranscript.EMPTY,
+        addressees: Addressees = Addressees.NONE,
     ): CommentPromptContext =
         CommentPromptContext(
             currentConversationSummary,
@@ -122,6 +126,7 @@ class CommentGenerationServiceTest {
             tikitakaCount,
             eongttungTopic,
             transcript,
+            addressees,
         )
 
     private val transcript =
@@ -553,6 +558,32 @@ class CommentGenerationServiceTest {
 
         assertEquals(CommentGenerationOutcome.DONE, result.outcome)
         verify(exactly = 1) { characterSelector.select(excluded) }
+    }
+
+    @Test
+    fun `유저가 캐릭터를 부르면 그 캐릭터 혼자 답하게 하고 그 캐릭터의 최근 발언을 대화 기록에 붙잡아 둔다`() {
+        val message = Message(conversationId = 10L, senderType = SenderType.USER, content = "기쁨아 그게 무슨소리야")
+        every { messageRepository.findById(1L) } returns Optional.of(message)
+        stubClaimSuccess()
+        every { conversationTranscriptReader.read(10L, 1L, listOf(EmotionType.JOY)) } returns transcript
+        val expectedContext =
+            promptContext(
+                diaryContent = message.content,
+                characters = listOf(EmotionType.JOY),
+                tikitakaCount = 0,
+                transcript = transcript,
+                addressees = Addressees(present = listOf(EmotionType.JOY), absent = emptyList()),
+            )
+        val joyFeed = CommentFeed(listOf(CommentDraft(EmotionType.JOY, "아 그거 농담이었어!")), emptyList())
+        every { commentGenerator.generateComment(expectedContext) } returns CommentGenerationOutput(joyFeed, 50, 0)
+        every { commentFeedValidator.validate(joyFeed, listOf(EmotionType.JOY), 0) } returns Unit
+        every { commentPersistenceService.saveFeed(10L, 1L, joyFeed) } returns emptyList()
+
+        val result = service.generateComments(memberId = 1L, messageId = 1L, currentConversationSummary = null)
+
+        assertEquals(CommentGenerationOutcome.DONE, result.outcome)
+        verify(exactly = 1) { commentGenerator.generateComment(expectedContext) }
+        verify(exactly = 0) { characterSelector.select(any()) }
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.nexters.gamss.llm.prompt
 
 import com.nexters.gamss.emotion.domain.EmotionType
+import com.nexters.gamss.llm.selection.Addressees
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -256,16 +257,38 @@ class PromptProviderTest {
         assertTrue(content.lines().contains("- bunno: 그 사람 뭐야."))
     }
 
-    private fun commentContext(transcript: ConversationTranscript) =
-        CommentPromptContext(
-            currentConversationSummary = null,
-            pastSummaries = PastSummaries.of(emptyList()),
-            diaryContent = "기쁨아 그게 무슨 소리야",
-            characters = listOf(EmotionType.JOY),
-            tikitakaCount = 0,
-            eongttungTopic = null,
-            transcript = transcript,
-        )
+    @Test
+    fun `부른 캐릭터와 막아둔 캐릭터를 응답 조건에 싣는다`() {
+        val addressees = Addressees(present = listOf(EmotionType.JOY), absent = listOf(EmotionType.SADNESS))
+
+        val lines = promptProvider.buildUserContent(commentContext(ConversationTranscript.EMPTY, addressees)).lines()
+
+        val conditions = lines.drop(lines.indexOf("[이번 응답 조건]"))
+        assertTrue(conditions.any { it.startsWith("- 유저가 부른 캐릭터: gippeum ") })
+        assertTrue(conditions.any { it.startsWith("- 유저가 불렀지만 이 방에 없는 캐릭터: seulpeum ") })
+    }
+
+    @Test
+    fun `아무도 부르지 않았으면 호명 조건을 싣지 않는다`() {
+        val content = promptProvider.buildUserContent(commentContext(ConversationTranscript.EMPTY))
+
+        assertFalse(content.contains("유저가 부른 캐릭터"))
+        assertFalse(content.contains("이 방에 없는 캐릭터"))
+    }
+
+    private fun commentContext(
+        transcript: ConversationTranscript,
+        addressees: Addressees = Addressees.NONE,
+    ) = CommentPromptContext(
+        currentConversationSummary = null,
+        pastSummaries = PastSummaries.of(emptyList()),
+        diaryContent = "기쁨아 그게 무슨 소리야",
+        characters = listOf(EmotionType.JOY),
+        tikitakaCount = 0,
+        eongttungTopic = null,
+        transcript = transcript,
+        addressees = addressees,
+    )
 
     private fun assertEqualsSingleRealDiarySection(content: String) {
         val diaryHeaderCount = content.lineSequence().count { it == "[오늘 일기]" }

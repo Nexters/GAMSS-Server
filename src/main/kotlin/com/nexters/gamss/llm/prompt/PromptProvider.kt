@@ -1,6 +1,7 @@
 package com.nexters.gamss.llm.prompt
 
 import com.nexters.gamss.emotion.domain.EmotionType
+import com.nexters.gamss.llm.selection.Addressees
 import org.springframework.stereotype.Component
 
 /**
@@ -33,6 +34,7 @@ class PromptProvider {
             appendLine("- 등장 캐릭터(전원 포함, 다른 캐릭터 추가 금지): $characterIds")
             appendLine("- tikitaka 개수: 정확히 ${context.tikitakaCount}개")
             if (eongttungLine.isNotEmpty()) appendLine(eongttungLine)
+            appendAddressees(context.addressees)
             append("위 조건대로 코멘트 + 티키타카를 JSON으로 출력해.")
         }
     }
@@ -118,6 +120,24 @@ class PromptProvider {
         appendLine("[최근 대화] (이 방에서 방금까지 오간 말, 시간순)")
         transcript.entries.forEach { appendLine("- ${speakerLabel(it)}: ${it.content}") }
     }
+
+    /**
+     * 유저가 부른 캐릭터를 응답 조건으로 싣는다. 어떻게 반응할지의 세부 규칙은 COMMENT 프롬프트(DB)가 갖고,
+     * 여기는 이번 메시지에 해당하는 사실만 싣는다.
+     */
+    private fun StringBuilder.appendAddressees(addressees: Addressees) {
+        if (addressees.present.isNotEmpty()) {
+            appendLine("- 유저가 부른 캐릭터: ${promptIds(addressees.present)} (유저가 이 캐릭터에게 한 말이다. 그 말에 직접 답해라)")
+        }
+        if (addressees.absent.isNotEmpty()) {
+            appendLine(
+                "- 유저가 불렀지만 이 방에 없는 캐릭터: ${promptIds(addressees.absent)} " +
+                    "(등장하지 않는다. 없다는 걸 자연스럽게 넘기고, 흉내 내거나 대신 말하지 마라)",
+            )
+        }
+    }
+
+    private fun promptIds(characters: List<EmotionType>): String = characters.joinToString(", ") { PromptCharacterId.of(it).promptId }
 
     private fun speakerLabel(entry: TranscriptEntry): String {
         val speaker = entry.speaker ?: return USER_LABEL
