@@ -238,6 +238,25 @@ class PromptProviderTest {
     }
 
     @Test
+    fun `어느 화자의 말로 꽉 채워도 실제로 실린 최근 대화는 상한을 넘지 않는다`() {
+        // 라벨이 ConversationTranscript가 한 마디당 잡아둔 여유분보다 길어지면, 짧은 말이 많은 방에서 그 차이가 쌓여 상한을 넘는다.
+        val speakers = listOf(null) + EmotionType.entries
+
+        speakers.forEach { speaker ->
+            val transcript = ConversationTranscript.recent(List(ConversationTranscript.MAX_ENTRIES * 2) { TranscriptEntry(speaker, "가") })
+
+            val lines = promptProvider.buildUserContent(commentContext(transcript)).lines()
+
+            val header = lines.indexOf("[최근 대화] (이 방에서 방금까지 오간 말, 시간순)")
+            val renderedChars = lines.subList(header + 1, lines.indexOf("[오늘 일기]")).sumOf { it.length + 1 }
+            assertTrue(
+                renderedChars <= ConversationTranscript.MAX_CHARS,
+                "$speaker 의 말로 채운 최근 대화가 ${renderedChars}자로 상한(${ConversationTranscript.MAX_CHARS}자)을 넘었다",
+            )
+        }
+    }
+
+    @Test
     fun `최근 대화가 없으면 헤더도 싣지 않는다`() {
         val content = promptProvider.buildUserContent(commentContext(ConversationTranscript.EMPTY))
 
