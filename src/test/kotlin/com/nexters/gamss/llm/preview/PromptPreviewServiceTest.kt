@@ -20,6 +20,7 @@ import com.nexters.gamss.llm.parsing.CommentFeedValidator
 import com.nexters.gamss.llm.prompt.CommentPromptContext
 import com.nexters.gamss.llm.prompt.PromptProvider
 import com.nexters.gamss.llm.prompt.PromptType
+import com.nexters.gamss.llm.prompt.ReplyPromptContext
 import com.nexters.gamss.llm.selection.EongttungTopicSelector
 import com.nexters.gamss.llm.settings.LlmSettingsView
 import com.nexters.gamss.llm.settings.SystemPromptResolver
@@ -191,7 +192,7 @@ class PromptPreviewServiceTest {
     fun `답장 미리보기는 REPLY 조립과 promptId로 그 캐릭터의 재응답을 생성한다`() {
         every { systemPromptResolver.resolveForPreview(PromptType.REPLY, null, "답글 시험") } returns settings
         every {
-            commentGenerator.generateReply("원본 일기", "bunno", "화내는 댓글", "고마워", settings)
+            commentGenerator.generateReply(ReplyPromptContext("원본 일기", "bunno", "화내는 댓글", "고마워"), settings)
         } returns ReplyGenerationOutput("재응답", usedTokens = 100, cachedTokens = 0, inputTokens = 80, outputTokens = 20)
         every { commentFeedValidator.validateReply("재응답") } returns Unit
 
@@ -218,7 +219,7 @@ class PromptPreviewServiceTest {
     fun `답장 생성이 실패하면 실패 사유를 담아 돌려준다`() {
         every { systemPromptResolver.resolveForPreview(PromptType.REPLY, null, null) } returns settings
         every {
-            commentGenerator.generateReply(any(), any(), any(), any(), settings)
+            commentGenerator.generateReply(any(), settings)
         } throws CommentGenerationFailedException("호출 실패")
 
         val result =
@@ -241,7 +242,7 @@ class PromptPreviewServiceTest {
     fun `답장이 검증에 실패하면 텍스트와 함께 실패 사유를 돌려준다`() {
         every { systemPromptResolver.resolveForPreview(PromptType.REPLY, null, null) } returns settings
         every {
-            commentGenerator.generateReply(any(), any(), any(), any(), settings)
+            commentGenerator.generateReply(any(), settings)
         } returns ReplyGenerationOutput("  ", usedTokens = 10, cachedTokens = 0)
         every { commentFeedValidator.validateReply("  ") } throws CommentGenerationFailedException("답글 내용이 비어 있습니다.")
 
@@ -278,7 +279,7 @@ class PromptPreviewServiceTest {
 
     @Test
     fun `카드 미리보기는 공통 프롬프트 없이 카드 프롬프트만 쓴다`() {
-        // 카드 프롬프트는 조립되지 않으므로 미리보기도 같은 규칙이어야 한다 — 여기서 조립되면
+        // 카드 프롬프트는 조립되지 않으므로 미리보기도 같은 규칙이어야 한다 - 여기서 조립되면
         // 관리자가 시험한 결과와 실제 생성이 서로 다른 프롬프트를 쓰게 된다.
         val messages = listOf("오늘 팀장이 자기 할 일을 다 떠넘김")
         every { systemPromptResolver.resolveStandaloneForPreview(PromptType.CARD, "카드 시험") } returns settings
@@ -336,7 +337,7 @@ class PromptPreviewServiceTest {
         assertNull(result.line)
         assertNull(result.kind)
         assertEquals("카드 한 줄 JSON 파싱에 실패했습니다.", result.generationError)
-        // 검증 실패한 시도도 호출은 됐으니 과금된다 — 토큰이 결과에 실려야 한다.
+        // 검증 실패한 시도도 호출은 됐으니 과금된다 - 토큰이 결과에 실려야 한다.
         assertEquals(7, result.usage.usedTokens)
     }
 
