@@ -7,6 +7,7 @@ import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Component
+import java.util.Collections
 
 /**
  * 블라인드 인덱스 기반 [ConversationSearcher] 구현.
@@ -28,14 +29,36 @@ class BlindIndexConversationSearcher(
     private val conversationRepository: ConversationRepository,
     private val indexer: BlindIndexer,
 ) : ConversationSearcher {
+    /**
+     * 제목 없는 대화방을 찾기 위한 [UNTITLED_LABEL] 의 토큰열. 검색어 토큰이 이 안에 원문 순서대로
+     * 인접해 들어 있으면 제목이 없는 방도 함께 찾는다.
+     *
+     * **문구를 저장해 두고 맞추는 것이 아니라 검색할 때 판정한다.** 제목이 없는 방은 컬럼이 null 이라
+     * 인덱스도 없고, 인덱스를 채우려면 이미 쌓인 방을 전부 다시 써야 한다. 판정은
+     * [com.nexters.gamss.global.crypto.BlindIndexer.tokenize] 한 번이면 끝나므로 기존 행을 건드릴 이유가 없다.
+     *
+     * **판정에도 저장된 제목을 찾을 때와 같은 토크나이저를 쓴다.** 규칙을 따로 구현하면 "제목없는대화"
+     * 처럼 붙여 쓴 검색어가 실제 제목에서는 안 걸리는데 이 문구에서만 걸리는 식으로 어긋난다.
+     */
+    private val untitledLabelTokens = indexer.tokenize(UNTITLED_LABEL)
+
     override fun search(
         memberId: Long,
         keyword: String,
         pageable: Pageable,
     ): Page<ConversationSearchResult> {
-        val phrase = toTokenPhrase(keyword) ?: return PageImpl(emptyList(), pageable, 0)
+        val tokens = indexer.tokenize(keyword)
+        if (tokens.isEmpty()) {
+            return PageImpl(emptyList(), pageable, 0)
+        }
 
-        val idPage = conversationSearchRepository.searchConversationIds(memberId, phrase, pageable)
+        val idPage =
+            conversationSearchRepository.searchConversationIds(
+                memberId = memberId,
+                searchTerm = toTokenPhrase(tokens),
+                includeUntitled = matchesUntitledLabel(tokens),
+                pageable = pageable,
+            )
         val ids = idPage.content
         val conversations = conversationRepository.findAllById(ids).associateBy { it.id }
 
@@ -52,12 +75,22 @@ class BlindIndexConversationSearcher(
         return PageImpl(results, pageable, idPage.totalElements)
     }
 
+    /** 토큰열을 FULLTEXT 구문 검색 형태로 감싼다. 인접·순서를 요구해야 부분 일치가 재현된다. */
+    private fun toTokenPhrase(tokens: List<String>): String = "\"${tokens.joinToString(" ")}\""
+
     /**
-     * 검색어를 토큰열 구문으로 바꾼다. 토큰이 하나도 안 나오면(모든 어절이 1글자) null 을 돌려
-     * 호출부가 빈 결과로 끝내게 한다 — 어떤 행과도 매칭될 수 없는 검색어라 질의할 이유가 없다.
+     * 검색어가 클라이언트의 "제목 없는 대화" 표시를 가리키는지. 구문 검색과 같은 판정이라 부분 검색어
+     * ("제목")도 걸리고, 원문에서 떨어진 조합("제목 대화")은 걸리지 않는다.
      */
-    private fun toTokenPhrase(keyword: String): String? {
-        val tokens = indexer.tokenize(keyword)
-        return if (tokens.isEmpty()) null else "\"${tokens.joinToString(" ")}\""
+    private fun matchesUntitledLabel(tokens: List<String>): Boolean = Collections.indexOfSubList(untitledLabelTokens, tokens) >= 0
+
+    companion object {
+        /**
+         * 제목이 null 인 방에 클라이언트가 대신 그리는 문구. 서버는 이 문구를 저장하지도 응답에 싣지도
+         * 않지만(응답의 title 은 계속 null 이다), 사용자가 화면에 보이는 글자로 검색하므로 검색만은
+         * 알고 있어야 한다. **클라이언트가 문구를 바꾸면 이 값도 같이 바꿔야 한다** — 두 값이 어긋나면
+         * 화면에 보이는 글자로는 아무 방도 찾지 못한다.
+         */
+        private const val UNTITLED_LABEL = "제목 없는 대화"
     }
 }
