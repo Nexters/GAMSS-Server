@@ -1,8 +1,10 @@
 package com.nexters.gamss.global.crypto
 
 import com.nexters.gamss.card.domain.Card
+import com.nexters.gamss.card.domain.CardCreatedBy
 import com.nexters.gamss.card.repository.CardRepository
 import com.nexters.gamss.conversation.domain.Conversation
+import com.nexters.gamss.conversation.domain.ConversationEndedBy
 import com.nexters.gamss.conversation.domain.ConversationTitle
 import com.nexters.gamss.conversation.domain.SenderType
 import com.nexters.gamss.conversation.repository.ConversationRepository
@@ -53,7 +55,7 @@ class EncryptedColumnIntegrationTest : RepositoryTest() {
     @Test
     fun `카드 요약은 암호문으로 저장되고 엔티티로 읽으면 평문이다`() {
         val summary = "오늘은 회사에서 힘든 일이 있었다"
-        val card = cardRepository.save(Card(1L, 1L, EmotionType.SADNESS, summary, summary, Instant.now()))
+        val card = cardRepository.save(Card(1L, 1L, EmotionType.SADNESS, summary, summary, Instant.now(), CardCreatedBy.USER))
         flushAndClear()
 
         val stored = jdbcTemplate.queryForObject("select summary from cards where id = ?", String::class.java, card.id)
@@ -64,7 +66,7 @@ class EncryptedColumnIntegrationTest : RepositoryTest() {
     @Test
     fun `카드의 message 컬럼도 암호문으로 저장된다`() {
         val summary = "친구와 오래 통화했다"
-        val card = cardRepository.save(Card(1L, 2L, EmotionType.JOY, summary, summary, Instant.now()))
+        val card = cardRepository.save(Card(1L, 2L, EmotionType.JOY, summary, summary, Instant.now(), CardCreatedBy.USER))
         flushAndClear()
 
         val stored = jdbcTemplate.queryForObject("select message from cards where id = ?", String::class.java, card.id)
@@ -74,7 +76,7 @@ class EncryptedColumnIntegrationTest : RepositoryTest() {
     @Test
     fun `같은 값을 두 컬럼에 넣어도 암호문은 서로 다르다`() {
         val summary = "같은 한 줄"
-        val card = cardRepository.save(Card(1L, 3L, EmotionType.ANGER, summary, summary, Instant.now()))
+        val card = cardRepository.save(Card(1L, 3L, EmotionType.ANGER, summary, summary, Instant.now(), CardCreatedBy.USER))
         flushAndClear()
 
         val row = jdbcTemplate.queryForMap("select summary, message from cards where id = ?", card.id)
@@ -159,7 +161,7 @@ class EncryptedColumnIntegrationTest : RepositoryTest() {
     fun `과거 요약 조회는 복호화된 평문을 돌려준다`() {
         // 네이티브 쿼리 경로다. 스칼라로 뽑으면 암호문이 그대로 LLM 프롬프트에 실린다.
         val memberId = 42L
-        val past = conversationRepository.save(Conversation(memberId).apply { end() })
+        val past = conversationRepository.save(Conversation(memberId).apply { end(ConversationEndedBy.USER) })
         val summary = "지난주에 이직 고민을 했다"
         past.updateSummary(summary)
         val current = conversationRepository.save(Conversation(memberId))

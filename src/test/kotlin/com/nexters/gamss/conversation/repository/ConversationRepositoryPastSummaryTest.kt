@@ -1,6 +1,7 @@
 package com.nexters.gamss.conversation.repository
 
 import com.nexters.gamss.conversation.domain.Conversation
+import com.nexters.gamss.conversation.domain.ConversationEndedBy
 import com.nexters.gamss.support.TestcontainersConfig
 import jakarta.persistence.EntityManager
 import jakarta.persistence.PersistenceContext
@@ -34,7 +35,7 @@ class ConversationRepositoryPastSummaryTest {
         memberId: Long,
         summary: String,
     ): Long {
-        val saved = conversationRepository.save(Conversation(memberId).apply { end() })
+        val saved = conversationRepository.save(Conversation(memberId).apply { end(ConversationEndedBy.USER) })
         conversationRepository.updateSummary(saved.id, summary)
         return saved.id
     }
@@ -44,7 +45,7 @@ class ConversationRepositoryPastSummaryTest {
         val memberId = 1L
         val current = conversationRepository.save(Conversation(memberId))
         repeat(3) { saveEndedWithSummary(memberId, "요약-$it") }
-        conversationRepository.save(Conversation(memberId).apply { end() }) // summary 없는 대화방 — 후보에서 제외돼야 함
+        conversationRepository.save(Conversation(memberId).apply { end(ConversationEndedBy.USER) }) // summary 없는 대화방 — 후보에서 제외돼야 함
         saveEndedWithSummary(memberId = 2L, summary = "다른 회원 요약")
 
         val picked = conversationRepository.findRandomPastSummaries(memberId, current.id, poolSize = 5, pickCount = 2)
@@ -138,7 +139,7 @@ class ConversationRepositoryPastSummaryTest {
     fun `현재 대화방 자신의 요약은 후보에서 제외된다`() {
         val memberId = 1L
         // 종료 상태로 둬야 status 필터가 아니라 자기 자신 제외 조건이 걸러낸 것임이 분명해진다.
-        val current = conversationRepository.save(Conversation(memberId).apply { end() })
+        val current = conversationRepository.save(Conversation(memberId).apply { end(ConversationEndedBy.USER) })
         conversationRepository.updateSummary(current.id, "현재 방 요약")
 
         val picked = conversationRepository.findRandomPastSummaries(memberId, current.id, poolSize = 5, pickCount = 2)

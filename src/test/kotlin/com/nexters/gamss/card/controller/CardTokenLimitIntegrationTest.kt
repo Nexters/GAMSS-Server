@@ -1,6 +1,7 @@
 package com.nexters.gamss.card.controller
 
 import com.nexters.gamss.conversation.domain.Conversation
+import com.nexters.gamss.conversation.domain.ConversationEndedBy
 import com.nexters.gamss.conversation.repository.ConversationRepository
 import com.nexters.gamss.global.security.JwtIssuer
 import com.nexters.gamss.member.domain.Member
@@ -117,7 +118,7 @@ class CardTokenLimitIntegrationTest {
     @Test
     fun `일일 토큰을 다 쓴 회원도 카드를 만들 수 있다`() {
         val member = memberWithExhaustedTokens("card-over-limit@test.com")
-        val conversation = conversationRepository.save(Conversation(member.id).apply { end() })
+        val conversation = conversationRepository.save(Conversation(member.id).apply { end(ConversationEndedBy.USER) })
 
         mockMvc
             .post("/api/cards") {
@@ -133,7 +134,7 @@ class CardTokenLimitIntegrationTest {
     @Test
     fun `카드를 만들어도 회원의 사용량은 늘지 않는다`() {
         val member = memberWithExhaustedTokens("card-usage-unchanged@test.com")
-        val conversation = conversationRepository.save(Conversation(member.id).apply { end() })
+        val conversation = conversationRepository.save(Conversation(member.id).apply { end(ConversationEndedBy.USER) })
         val before = dailyTokenLimitService.usageFor(member.id).usedTokens
 
         mockMvc

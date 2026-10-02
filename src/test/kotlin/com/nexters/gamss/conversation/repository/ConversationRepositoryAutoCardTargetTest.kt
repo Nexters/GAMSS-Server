@@ -2,6 +2,7 @@ package com.nexters.gamss.conversation.repository
 
 import com.nexters.gamss.conversation.domain.CardGenerationStatus
 import com.nexters.gamss.conversation.domain.Conversation
+import com.nexters.gamss.conversation.domain.ConversationEndedBy
 import com.nexters.gamss.support.TestcontainersConfig
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
@@ -65,7 +66,7 @@ class ConversationRepositoryAutoCardTargetTest {
         memberId: Long = 1L,
         ended: Boolean = false,
     ): Long {
-        val saved = conversationRepository.save(Conversation(memberId).apply { if (ended) end() })
+        val saved = conversationRepository.save(Conversation(memberId).apply { if (ended) end(ConversationEndedBy.USER) })
         conversationRepository.updateSummary(saved.id, "오늘 있었던 일")
         return saved.id
     }

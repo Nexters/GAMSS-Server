@@ -53,6 +53,10 @@ class Card(
     val message: String,
     @Column(name = "conversation_created_at", nullable = false)
     val conversationCreatedAt: Instant,
+    /** 생성 주체. 과거 카드는 NULL(알 수 없음, 백필 불가). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "created_by", length = 20)
+    val createdBy: CardCreatedBy?,
 ) {
     init {
         require(summary.isNotBlank()) { "카드 요약은 비어 있을 수 없습니다." }

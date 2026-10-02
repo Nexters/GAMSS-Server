@@ -22,6 +22,7 @@ class CardTest {
             summary = summary,
             message = message,
             conversationCreatedAt = Instant.parse("2026-07-23T00:00:00Z"),
+            createdBy = CardCreatedBy.USER,
         )
 
     @Test

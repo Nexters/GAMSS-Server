@@ -22,6 +22,20 @@ data class ConversationUsageResponse(
     val characterMessageCount: Long,
     @field:Schema(description = "이 대화방에서 카드가 생성됐는지", example = "true")
     val cardCreated: Boolean,
+    @field:Schema(
+        description = "종료 주체. 종료되지 않은 방이면 null, 종료됐는데 이 값이 null이면 과거 방이라 알 수 없다는 뜻이다",
+        example = "USER",
+        allowableValues = ["USER", "AUTO_BATCH"],
+        nullable = true,
+    )
+    val endedBy: String?,
+    @field:Schema(
+        description = "카드 생성 주체. 카드가 없으면 null, 카드는 있는데 이 값이 null이면 과거 카드라 알 수 없다는 뜻이다",
+        example = "USER",
+        allowableValues = ["USER", "AUTO_BATCH"],
+        nullable = true,
+    )
+    val cardCreatedBy: String?,
     @field:Schema(description = "이 대화방에서 소비된 총 토큰(used_tokens 합)", example = "13200")
     val totalTokens: Long,
     @field:Schema(description = "그중 캐시로 처리돼 할인 과금된 토큰", example = "8100")
@@ -44,13 +58,6 @@ data class ConversationUsageResponse(
         nullable = true,
     )
     val cardNotification: String?,
-    @field:Schema(
-        description =
-            "04:30 리마인더와 05:00 자동 종료 사이에 만들어져 리마인더 대상일 수 없었던 방인지. " +
-                "true 면 리마인더 기록이 없고 상태가 종료여도 사용자가 직접 종료한 것으로 볼 수 없다",
-        example = "false",
-    )
-    val createdInReminderGap: Boolean,
 ) {
     companion object {
         fun from(usage: ConversationUsage): ConversationUsageResponse =
@@ -63,12 +70,13 @@ data class ConversationUsageResponse(
                 userMessageCount = usage.userMessageCount,
                 characterMessageCount = usage.characterMessageCount,
                 cardCreated = usage.cardCreated,
+                endedBy = usage.endedBy?.name,
+                cardCreatedBy = usage.cardCreatedBy?.name,
                 totalTokens = usage.totalTokens,
                 cachedTokens = usage.cachedTokens,
                 estimatedCostUsd = usage.estimatedCostUsd,
                 reminderNotification = usage.reminderNotification?.name,
                 cardNotification = usage.cardNotification?.name,
-                createdInReminderGap = usage.createdInReminderGap,
             )
     }
 }

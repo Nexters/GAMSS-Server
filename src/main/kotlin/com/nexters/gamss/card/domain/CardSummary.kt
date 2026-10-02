@@ -39,7 +39,7 @@ object CardSummary {
      * 개행이 들어 있을 수 있다).
      */
     fun normalize(raw: String): String {
-        val trimmed = raw.replace(WHITESPACE, " ").trim()
+        val trimmed = collapseWhitespace(raw)
         val graphemes = graphemesOf(trimmed)
         if (graphemes.size <= MAX_LENGTH) {
             return trimmed
@@ -49,6 +49,18 @@ object CardSummary {
         val body = if (lastSpace >= MIN_WORD_BOUNDARY) head.subList(0, lastSpace) else head
         return body.joinToString("").trimEnd() + ELLIPSIS
     }
+
+    /**
+     * [normalize]가 [raw]를 상한에 맞춰 **자르는지**. 공백을 접는 것만으로는 자른 것이 아니다.
+     *
+     * 둘을 구분하는 이유는 백오피스 미리보기가 이 값으로 "서버가 자름"을 표시하기 때문이다
+     * ([com.nexters.gamss.llm.preview.PromptPreviewService]). 정리 전후 문자열이 다른지로 판단하면 상한 이내인데
+     * 공백만 겹친 한 줄도 잘린 것으로 보여, 고칠 필요 없는 프롬프트의 길이 지시를 고치게 된다.
+     */
+    fun exceedsMaxLength(raw: String): Boolean = graphemeCount(collapseWhitespace(raw)) > MAX_LENGTH
+
+    /** 개행과 연속 공백을 한 칸으로 접고 앞뒤 공백을 없앤다. 자를지는 이렇게 접은 뒤의 길이로 판단한다. */
+    private fun collapseWhitespace(raw: String): String = raw.replace(WHITESPACE, " ").trim()
 
     /**
      * 사용자가 보는 글자 수(그래핌 클러스터). [String.length]는 UTF-16 유닛 수라 이모지가 2자로

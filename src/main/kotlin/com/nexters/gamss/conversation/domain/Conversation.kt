@@ -67,6 +67,12 @@ class Conversation(
     var status: ConversationStatus = ConversationStatus.ACTIVE
         protected set
 
+    /** 종료 주체. [end]에서만 채워지고, 과거 방은 NULL(알 수 없음)이다. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "ended_by", length = 20)
+    var endedBy: ConversationEndedBy? = null
+        protected set
+
     /**
      * 이 대화 전체를 프론트가 압축한 요약. 진행 중에는 메시지를 보낼 때마다 최신 임시 요약으로
      * 갱신되고([updateSummary]), 카드 생성 시점에 그때의 확정 요약으로 덮인다
@@ -111,12 +117,13 @@ class Conversation(
     fun isDeleted(): Boolean = status == ConversationStatus.DELETED
 
     /** 채팅방을 종료한다. 삭제된 방이거나 이미 종료된 방을 다시 종료하면 예외를 던진다. */
-    fun end() {
+    fun end(endedBy: ConversationEndedBy) {
         ensureNotDeleted()
         if (status == ConversationStatus.ENDED) {
             throw BusinessException(ErrorCode.CONVERSATION_ALREADY_ENDED)
         }
         status = ConversationStatus.ENDED
+        this.endedBy = endedBy
     }
 
     /** 채팅방을 삭제한다. 이미 삭제된 방을 다시 삭제하면 예외를 던진다. */

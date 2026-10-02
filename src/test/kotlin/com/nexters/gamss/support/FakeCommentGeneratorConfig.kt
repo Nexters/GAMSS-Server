@@ -8,6 +8,7 @@ import com.nexters.gamss.llm.parsing.CommentDraft
 import com.nexters.gamss.llm.parsing.CommentFeed
 import com.nexters.gamss.llm.parsing.TikitakaDraft
 import com.nexters.gamss.llm.prompt.CommentPromptContext
+import com.nexters.gamss.llm.prompt.ReplyPromptContext
 import com.nexters.gamss.llm.settings.LlmSettingsView
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Bean
@@ -15,7 +16,7 @@ import org.springframework.context.annotation.Primary
 
 /**
  * 통합 테스트에서 실제 Gemini 호출([com.nexters.gamss.llm.generation.GeminiCommentGenerator]) 대신
- * 쓰는 가짜 구현. [CharacterSelector]가 서버에서 무작위로 고른 캐릭터·티키타카 개수를 그대로
+ * 쓰는 가짜 구현. [com.nexters.gamss.llm.selection.ResponsePlanner]가 정한 캐릭터, 티키타카 개수를 그대로
  * 되돌려주므로 [com.nexters.gamss.llm.parsing.CommentFeedValidator] 검증을 항상 통과한다.
  */
 @TestConfiguration(proxyBeanMethods = false)
@@ -48,19 +49,11 @@ class FakeCommentGenerator : CommentGenerator {
     }
 
     override fun generateReply(
-        diaryContent: String,
-        characterId: String,
-        characterComment: String,
-        userReply: String,
+        context: ReplyPromptContext,
         settings: LlmSettingsView,
-    ): ReplyGenerationOutput = generateReply(diaryContent, characterId, characterComment, userReply)
+    ): ReplyGenerationOutput = generateReply(context)
 
-    override fun generateReply(
-        diaryContent: String,
-        characterId: String,
-        characterComment: String,
-        userReply: String,
-    ): ReplyGenerationOutput {
+    override fun generateReply(context: ReplyPromptContext): ReplyGenerationOutput {
         if (shouldFail) throw CommentGenerationFailedException("테스트 강제 실패")
         return ReplyGenerationOutput("재응답 텍스트", usedTokens = 5, cachedTokens = 0)
     }

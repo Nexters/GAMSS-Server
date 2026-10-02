@@ -1,9 +1,11 @@
 package com.nexters.gamss.card.controller
 
 import com.nexters.gamss.card.domain.Card
+import com.nexters.gamss.card.domain.CardCreatedBy
 import com.nexters.gamss.card.domain.CardSummary
 import com.nexters.gamss.card.repository.CardRepository
 import com.nexters.gamss.conversation.domain.Conversation
+import com.nexters.gamss.conversation.domain.ConversationEndedBy
 import com.nexters.gamss.conversation.domain.ConversationStatus
 import com.nexters.gamss.conversation.domain.Message
 import com.nexters.gamss.conversation.domain.SenderType
@@ -91,7 +93,7 @@ class CardControllerIntegrationTest {
     @Test
     fun `카드 생성 시 요청한 대화 요약이 Conversation에 저장된다`() {
         val member = memberRepository.save(Member("card-summary@test.com"))
-        val conversation = conversationRepository.save(Conversation(member.id).apply { end() })
+        val conversation = conversationRepository.save(Conversation(member.id).apply { end(ConversationEndedBy.USER) })
         val summary = "오늘은 회사에서 힘든 일이 있었지만 친구와 통화하며 조금 괜찮아졌다."
 
         mockMvc
@@ -118,12 +120,13 @@ class CardControllerIntegrationTest {
         val persistedCard = cardRepository.findAll().single { it.conversationId == conversation.id }
         assertEquals(persistedCard.summary, persistedCard.message)
         assertEquals(1, cardRepository.count())
+        assertEquals(CardCreatedBy.USER, persistedCard.createdBy)
     }
 
     @Test
     fun `emotion 없이 요청하면 서버가 유저 메시지로 감정을 추출해 카드를 생성한다`() {
         val member = memberRepository.save(Member("card-emotion-fallback@test.com"))
-        val conversation = conversationRepository.save(Conversation(member.id).apply { end() })
+        val conversation = conversationRepository.save(Conversation(member.id).apply { end(ConversationEndedBy.USER) })
         messageRepository.save(Message(conversation.id, SenderType.USER, content = "오늘 하루종일 우울했다"))
 
         mockMvc
@@ -142,7 +145,7 @@ class CardControllerIntegrationTest {
     @Test
     fun `summary가 2000자면 카드가 생성된다`() {
         val member = memberRepository.save(Member("summary-2000@test.com"))
-        val conversation = conversationRepository.save(Conversation(member.id).apply { end() })
+        val conversation = conversationRepository.save(Conversation(member.id).apply { end(ConversationEndedBy.USER) })
         val summary = "가".repeat(2000)
 
         mockMvc
@@ -163,7 +166,7 @@ class CardControllerIntegrationTest {
     @Test
     fun `summary가 2000자를 넘으면 400을 반환한다`() {
         val member = memberRepository.save(Member("summary-2001@test.com"))
-        val conversation = conversationRepository.save(Conversation(member.id).apply { end() })
+        val conversation = conversationRepository.save(Conversation(member.id).apply { end(ConversationEndedBy.USER) })
         val summary = "가".repeat(2001)
 
         mockMvc
@@ -557,7 +560,7 @@ class CardControllerIntegrationTest {
         val anger = createCardVia(member, "분노", EmotionType.ANGER)
         val joy = createCardVia(member, "기쁨", EmotionType.JOY)
         // 카드가 없는 대화방은 삭제 대상이 아니다 — 전체 삭제는 어디까지나 '카드' 삭제다.
-        val cardless = conversationRepository.save(Conversation(member.id).apply { end() })
+        val cardless = conversationRepository.save(Conversation(member.id).apply { end(ConversationEndedBy.USER) })
 
         mockMvc
             .delete("/api/cards") {
@@ -948,7 +951,7 @@ class CardControllerIntegrationTest {
         // 그 시절 summary는 클라이언트 원본이라 길고 개행이 섞여 있다. 저장된 값을 백필로 덮는 대신
         // 읽는 쪽에서 흡수하므로, 엔티티 로딩(init 미실행)과 응답 변환이 둘 다 맞아야 통과한다.
         val member = memberRepository.save(Member("legacy-card@test.com"))
-        val conversation = conversationRepository.save(Conversation(member.id).apply { end() })
+        val conversation = conversationRepository.save(Conversation(member.id).apply { end(ConversationEndedBy.USER) })
         val legacySummary = "오늘은 회사에서 정말 힘든 일이 많았다.\n그래도 친구와 통화하며 조금은 괜찮아졌다. " + "가".repeat(100)
         jdbcTemplate.update(
             """
@@ -1135,7 +1138,7 @@ class CardControllerIntegrationTest {
         summary: String,
         emotion: EmotionType = EmotionType.ANGER,
     ): Card {
-        val conversation = conversationRepository.save(Conversation(member.id).apply { end() })
+        val conversation = conversationRepository.save(Conversation(member.id).apply { end(ConversationEndedBy.USER) })
         mockMvc
             .post("/api/cards") {
                 header(HttpHeaders.AUTHORIZATION, bearerFor(member))

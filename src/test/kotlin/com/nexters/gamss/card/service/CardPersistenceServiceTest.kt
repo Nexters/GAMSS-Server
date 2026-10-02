@@ -1,6 +1,7 @@
 package com.nexters.gamss.card.service
 
 import com.nexters.gamss.card.domain.Card
+import com.nexters.gamss.card.domain.CardCreatedBy
 import com.nexters.gamss.card.repository.CardRepository
 import com.nexters.gamss.conversation.domain.CardGenerationStatus
 import com.nexters.gamss.conversation.domain.Conversation
@@ -49,6 +50,7 @@ class CardPersistenceServiceTest {
                 summary = "요약",
                 message = "대사",
                 conversationCreatedAt = Instant.now(),
+                createdBy = CardCreatedBy.USER,
             )
 
         // 존재하지 않는 대화라 updateCardGenerationStatus가 0건 갱신 → 상태 전이 실패로 트랜잭션이 롤백된다.
@@ -76,6 +78,7 @@ class CardPersistenceServiceTest {
                 summary = "요약",
                 message = "대사",
                 conversationCreatedAt = Instant.now(),
+                createdBy = CardCreatedBy.USER,
             )
 
         cardPersistenceService.save(card, conversation.id, "요약")
@@ -104,6 +107,7 @@ class CardPersistenceServiceTest {
                 summary = "요약",
                 message = "대사",
                 conversationCreatedAt = Instant.now(),
+                createdBy = CardCreatedBy.AUTO_BATCH,
             )
 
         cardPersistenceService.save(card, conversation.id, null)

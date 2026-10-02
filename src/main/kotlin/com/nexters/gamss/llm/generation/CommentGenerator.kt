@@ -1,44 +1,37 @@
 package com.nexters.gamss.llm.generation
 
 import com.nexters.gamss.llm.prompt.CommentPromptContext
+import com.nexters.gamss.llm.prompt.ReplyPromptContext
 import com.nexters.gamss.llm.settings.LlmSettingsView
 
 /**
- * 일기 내용과 이번 생성 조건(등장 캐릭터·티키타카 개수·엉뚱이 소재)으로 댓글 피드를 생성하거나,
+ * 일기 내용과 이번 생성 조건(등장 캐릭터, 티키타카 개수, 엉뚱이 소재)으로 댓글 피드를 생성하거나,
  * 유저가 캐릭터 댓글에 단 답글에 그 캐릭터가 재응답한다. 구현(Gemini 등)은 교체 가능하다
  * ([com.nexters.gamss.auth.social.SocialTokenVerifier]와 같은 패턴).
  *
  * 구조적으로 잘못된 응답(JSON 파싱 실패 등)은 이 단계에서 걸러지지만, 의미 검증(캐릭터 중복,
- * 존재하지 않는 참조 등)은 하지 않는다 — [com.nexters.gamss.llm.parsing.CommentFeedValidator]가 별도로 담당한다.
+ * 존재하지 않는 참조 등)은 하지 않는다 - [com.nexters.gamss.llm.parsing.CommentFeedValidator]가 별도로 담당한다.
  */
 interface CommentGenerator {
     fun generateComment(context: CommentPromptContext): CommentGenerationOutput
 
     /**
-     * 저장된 설정 대신 주어진 모델·시스템 프롬프트로 생성한다 - 플레이그라운드가 미저장
-     * 프롬프트를 시험하는 경로. 그 외 로직(유저 콘텐츠·파싱)은 [generateComment]와 같아야 한다.
+     * 저장된 설정 대신 주어진 모델, 시스템 프롬프트로 생성한다 - 플레이그라운드가 미저장
+     * 프롬프트를 시험하는 경로. 그 외 로직(유저 콘텐츠, 파싱)은 [generateComment]와 같아야 한다.
      */
     fun generateComment(
         context: CommentPromptContext,
         settings: LlmSettingsView,
     ): CommentGenerationOutput
 
-    fun generateReply(
-        diaryContent: String,
-        characterId: String,
-        characterComment: String,
-        userReply: String,
-    ): ReplyGenerationOutput
+    fun generateReply(context: ReplyPromptContext): ReplyGenerationOutput
 
     /**
-     * 저장된 설정 대신 주어진 모델·시스템 프롬프트로 답글을 생성한다 - 플레이그라운드가 미저장
+     * 저장된 설정 대신 주어진 모델, 시스템 프롬프트로 답글을 생성한다 - 플레이그라운드가 미저장
      * 프롬프트를 시험하는 경로. 그 외 로직은 [generateReply]와 같아야 한다.
      */
     fun generateReply(
-        diaryContent: String,
-        characterId: String,
-        characterComment: String,
-        userReply: String,
+        context: ReplyPromptContext,
         settings: LlmSettingsView,
     ): ReplyGenerationOutput
 }

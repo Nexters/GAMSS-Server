@@ -2,6 +2,7 @@ package com.nexters.gamss.card.service
 
 import com.nexters.gamss.card.config.CardShareProperties
 import com.nexters.gamss.card.domain.Card
+import com.nexters.gamss.card.domain.CardCreatedBy
 import com.nexters.gamss.card.domain.ShareToken
 import com.nexters.gamss.card.repository.CardRepository
 import com.nexters.gamss.emotion.domain.EmotionType
@@ -34,6 +35,7 @@ class CardShareServiceTest {
             summary = "우산을 안 챙겨서 옷이 다 젖어버렸어요",
             message = "우산을 안 챙겨서 옷이 다 젖어버렸어요",
             conversationCreatedAt = Instant.parse("2026-07-23T01:00:00Z"),
+            createdBy = CardCreatedBy.USER,
         )
 
     @Test

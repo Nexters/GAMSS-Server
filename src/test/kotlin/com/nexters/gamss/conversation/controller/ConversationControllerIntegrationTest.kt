@@ -1,9 +1,11 @@
 package com.nexters.gamss.conversation.controller
 
 import com.nexters.gamss.card.domain.Card
+import com.nexters.gamss.card.domain.CardCreatedBy
 import com.nexters.gamss.card.repository.CardRepository
 import com.nexters.gamss.conversation.controller.dto.DeleteConversationsRequest
 import com.nexters.gamss.conversation.domain.Conversation
+import com.nexters.gamss.conversation.domain.ConversationEndedBy
 import com.nexters.gamss.conversation.domain.ConversationStatus
 import com.nexters.gamss.conversation.domain.ExcludedEmotionTypes
 import com.nexters.gamss.conversation.domain.Message
@@ -654,7 +656,7 @@ class ConversationControllerIntegrationTest {
     @Test
     fun `이미 종료된 채팅방을 다시 종료하면 409를 반환한다`() {
         val member = memberRepository.save(Member("me@a.com"))
-        val conversation = conversationRepository.save(Conversation(member.id).apply { end() })
+        val conversation = conversationRepository.save(Conversation(member.id).apply { end(ConversationEndedBy.USER) })
 
         mockMvc
             .post("/api/conversations/${conversation.id}/end") {
@@ -668,7 +670,7 @@ class ConversationControllerIntegrationTest {
     @Test
     fun `종료된 채팅방에 메시지를 저장하면 409를 반환한다`() {
         val member = memberRepository.save(Member("me@a.com"))
-        val conversation = conversationRepository.save(Conversation(member.id).apply { end() })
+        val conversation = conversationRepository.save(Conversation(member.id).apply { end(ConversationEndedBy.USER) })
 
         mockMvc
             .post("/api/conversations/messages") {
@@ -727,7 +729,7 @@ class ConversationControllerIntegrationTest {
     @Test
     fun `채팅방을 삭제하면 그 방의 카드에도 삭제 시각이 찍힌다`() {
         val member = memberRepository.save(Member("me@a.com"))
-        val ended = conversationRepository.save(Conversation(member.id).apply { end() })
+        val ended = conversationRepository.save(Conversation(member.id).apply { end(ConversationEndedBy.USER) })
         val card =
             cardRepository.save(
                 Card(
@@ -737,6 +739,7 @@ class ConversationControllerIntegrationTest {
                     summary = "지울 방의 카드",
                     message = "얘 오늘 건들면 안 됨.",
                     conversationCreatedAt = ended.createdAt,
+                    createdBy = CardCreatedBy.USER,
                 ),
             )
         entityManager.flush()
@@ -756,7 +759,7 @@ class ConversationControllerIntegrationTest {
     fun `채팅방을 일괄 삭제하면 삭제된 개수를 돌려주고 카드도 함께 지워진다`() {
         val member = memberRepository.save(Member("me@a.com"))
         val active = conversationRepository.save(Conversation(member.id))
-        val ended = conversationRepository.save(Conversation(member.id).apply { end() })
+        val ended = conversationRepository.save(Conversation(member.id).apply { end(ConversationEndedBy.USER) })
         val card =
             cardRepository.save(
                 Card(
@@ -766,6 +769,7 @@ class ConversationControllerIntegrationTest {
                     summary = "지울 방의 카드",
                     message = "얘 오늘 건들면 안 됨.",
                     conversationCreatedAt = ended.createdAt,
+                    createdBy = CardCreatedBy.USER,
                 ),
             )
         entityManager.flush()
@@ -889,7 +893,7 @@ class ConversationControllerIntegrationTest {
     @Test
     fun `종료된 채팅방도 삭제할 수 있다`() {
         val member = memberRepository.save(Member("me@a.com"))
-        val conversation = conversationRepository.save(Conversation(member.id).apply { end() })
+        val conversation = conversationRepository.save(Conversation(member.id).apply { end(ConversationEndedBy.USER) })
 
         mockMvc
             .delete("/api/conversations/${conversation.id}") {
@@ -1273,7 +1277,7 @@ class ConversationControllerIntegrationTest {
         val member = memberRepository.save(Member("inprogress@test.com"))
         val older = conversationRepository.save(Conversation(member.id))
         val newer = conversationRepository.save(Conversation(member.id))
-        conversationRepository.save(Conversation(member.id).apply { end() })
+        conversationRepository.save(Conversation(member.id).apply { end(ConversationEndedBy.USER) })
         conversationRepository.save(Conversation(member.id).apply { delete() })
         entityManager.flush()
         entityManager.clear()
@@ -1296,7 +1300,7 @@ class ConversationControllerIntegrationTest {
         val active = conversationRepository.save(Conversation(member.id))
         // 카드는 종료한 방에만 생긴다 — 카드가 있는 방은 ENDED 라 조회 조건에서 이미 빠진다.
         // 그 전제를 실제 카드 행으로 확인한다(ENDED 만 만들어두면 카드는 검증되지 않는다).
-        val ended = conversationRepository.save(Conversation(member.id).apply { end() })
+        val ended = conversationRepository.save(Conversation(member.id).apply { end(ConversationEndedBy.USER) })
         cardRepository.save(
             Card(
                 memberId = member.id,
@@ -1305,6 +1309,7 @@ class ConversationControllerIntegrationTest {
                 summary = "카드가 있는 방",
                 message = "얘 오늘 건들면 안 됨.",
                 conversationCreatedAt = ended.createdAt,
+                createdBy = CardCreatedBy.USER,
             ),
         )
         entityManager.flush()
@@ -1342,7 +1347,7 @@ class ConversationControllerIntegrationTest {
     @Test
     fun `진행 중인 대화방이 없으면 빈 배열을 돌려준다`() {
         val member = memberRepository.save(Member("noneinprogress@test.com"))
-        conversationRepository.save(Conversation(member.id).apply { end() })
+        conversationRepository.save(Conversation(member.id).apply { end(ConversationEndedBy.USER) })
         entityManager.flush()
         entityManager.clear()
 

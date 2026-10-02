@@ -1,6 +1,7 @@
 package com.nexters.gamss.conversation.repository
 
 import com.nexters.gamss.conversation.domain.Conversation
+import com.nexters.gamss.conversation.domain.ConversationEndedBy
 import com.nexters.gamss.support.RepositoryTest
 import jakarta.persistence.EntityManager
 import jakarta.persistence.PersistenceContext
@@ -27,7 +28,7 @@ class UnfinishedConversationQueryTest : RepositoryTest() {
     @Test
     fun `미종료 방만 그 주인과 함께 돌려준다`() {
         val unfinished = save(memberId = 1L, createdAt = INSIDE)
-        val ended = save(memberId = 2L, createdAt = INSIDE).also { it.end() }
+        val ended = save(memberId = 2L, createdAt = INSIDE).also { it.end(ConversationEndedBy.USER) }
         val deleted = save(memberId = 3L, createdAt = INSIDE).also { it.delete() }
         conversationRepository.saveAll(listOf(ended, deleted))
 

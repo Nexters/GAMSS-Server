@@ -24,6 +24,9 @@ import tools.jackson.databind.json.JsonMapper
  * 앞에 붙어 "말투를 철저히 지켜라"와 "캐릭터 말투를 쓰지 마라"가 한 프롬프트 안에서 충돌한다
  * ([GeminiEmotionExtractor]와 같은 이유·같은 방식). 백오피스에서 편집한 값은 재배포 없이 다음
  * 호출부터 반영된다.
+ *
+ * 응답은 판정([CardLineKind])과 한 줄을 함께 받고, 판정을 먼저 쓰도록 필드 순서를 고정한다
+ * (`propertyOrdering`). 한 줄을 먼저 쓰게 두면 LLM이 문장부터 지어 놓고 거기에 맞는 판정을 고른다.
  */
 @Component
 class GeminiCardMessageGenerator(
@@ -35,7 +38,8 @@ class GeminiCardMessageGenerator(
 ) : CardMessageGenerator {
     override fun generate(
         emotion: EmotionType,
-        summary: String,
+        userMessages: List<String>,
+        summary: String?,
     ): CardMessageOutput {
         // 운영 중 백오피스에서 바꾼 값을 매 호출 반영한다(재배포 불필요).
         // 설정 조회(DB) 실패도 잡아 재시도·FAILED 계약을 유지한다(500·PENDING 고착 방지).
@@ -46,18 +50,19 @@ class GeminiCardMessageGenerator(
                 // 설정 조회(DB) 실패다 — 간격을 두고 재시도해야 한다(GeminiCommentGenerator와 같은 이유).
                 throw CardGenerationFailedException("카드 한 줄 LLM 호출에 실패했습니다.", e, kind = LlmFailureKind.CALL)
             }
-        return generate(emotion, summary, settings)
+        return generate(emotion, userMessages, summary, settings)
     }
 
     override fun generate(
         emotion: EmotionType,
-        summary: String,
+        userMessages: List<String>,
+        summary: String?,
         settings: LlmSettingsView,
     ): CardMessageOutput {
         val response =
             geminiCaller.call(
                 settings.model,
-                promptProvider.buildCardUserContent(emotion, summary),
+                promptProvider.buildCardUserContent(emotion, userMessages, summary),
                 buildConfig(settings.systemPrompt),
             ) { cause, kind ->
                 CardGenerationFailedException("카드 한 줄 LLM 호출에 실패했습니다.", cause, kind = kind)
@@ -79,9 +84,9 @@ class GeminiCardMessageGenerator(
                     outputTokens = outputTokens,
                 )
 
-        val line =
+        val (kind, line) =
             try {
-                parseSummary(text)
+                parseLine(text)
             } catch (e: CardGenerationFailedException) {
                 throw CardGenerationFailedException(
                     e.message ?: "카드 한 줄 파싱 실패",
@@ -93,26 +98,34 @@ class GeminiCardMessageGenerator(
                     e.kind,
                 )
             }
-        return CardMessageOutput(line, usedTokens, cachedTokens, inputTokens, outputTokens)
+        return CardMessageOutput(line, usedTokens, cachedTokens, inputTokens, outputTokens, kind)
     }
 
     /**
-     * 구조만 검증한다 — 비어 있지 않은 한 줄인지까지다. 길이는 여기서 보지 않는다
-     * ([com.nexters.gamss.card.domain.CardSummary]가 자른다) — 길다는 이유로 실패시키면
+     * 구조만 검증한다 — 판정이 지원하는 값인지, EVENT면 비어 있지 않은 한 줄인지까지다. 길이는 여기서
+     * 보지 않는다([com.nexters.gamss.card.domain.CardSummary]가 자른다) — 길다는 이유로 실패시키면
      * 멀쩡한 문장 하나 때문에 그날 카드가 통째로 안 만들어진다.
+     *
+     * NONSENSE면 summary를 보지 않는다. 쓸 한 줄이 없다는 판정이라 무엇이 들어 있든 버린다.
      */
-    private fun parseSummary(text: String): String {
+    private fun parseLine(text: String): Pair<CardLineKind, String?> {
         val dto =
             try {
-                jsonMapper.readValue(text, CardSummaryDto::class.java)
+                jsonMapper.readValue(text, CardLineDto::class.java)
             } catch (e: JacksonException) {
                 throw CardGenerationFailedException("카드 한 줄 JSON 파싱에 실패했습니다.", e)
             }
+        val kind =
+            CardLineKind.entries.firstOrNull { it.name == dto.kind.trim() }
+                ?: throw CardGenerationFailedException("카드 한 줄 판정이 지원하는 값이 아닙니다: ${dto.kind}")
+        if (kind == CardLineKind.NONSENSE) {
+            return kind to null
+        }
         val line = dto.summary.trim()
         if (line.isBlank() || line.contains('\n') || line.contains('\r')) {
             throw CardGenerationFailedException("카드 한 줄은 비어 있지 않은 한 줄이어야 합니다.")
         }
-        return line
+        return kind to line
     }
 
     private fun buildConfig(systemPrompt: String): GenerateContentConfig =
@@ -120,20 +133,31 @@ class GeminiCardMessageGenerator(
             .builder()
             .systemInstruction(Content.fromParts(Part.fromText(systemPrompt)))
             .responseMimeType("application/json")
-            .responseSchema(cardSummarySchema())
+            .responseSchema(cardLineSchema())
             .httpOptions(HttpOptions.builder().timeout(properties.requestTimeoutMillis))
             .build()
 
-    private fun cardSummarySchema(): Schema =
+    // 판정 목록을 하드코딩하지 않고 CardLineKind에서 만든다 — 판정 종류가 바뀌어도 스키마가 따라간다.
+    private fun cardLineSchema(): Schema =
         Schema
             .builder()
             .type("OBJECT")
             .properties(
-                mapOf("summary" to Schema.builder().type("STRING").build()),
-            ).required(listOf("summary"))
+                mapOf(
+                    "kind" to
+                        Schema
+                            .builder()
+                            .type("STRING")
+                            .enum_(CardLineKind.entries.map { it.name })
+                            .build(),
+                    "summary" to Schema.builder().type("STRING").build(),
+                ),
+            ).required(listOf("kind", "summary"))
+            .propertyOrdering(listOf("kind", "summary"))
             .build()
 
-    private data class CardSummaryDto(
+    private data class CardLineDto(
+        val kind: String = "",
         val summary: String = "",
     )
 }

@@ -1,8 +1,10 @@
 package com.nexters.gamss.card.service
 
 import com.nexters.gamss.card.domain.Card
+import com.nexters.gamss.card.domain.CardCreatedBy
 import com.nexters.gamss.card.repository.CardRepository
 import com.nexters.gamss.conversation.domain.Conversation
+import com.nexters.gamss.conversation.domain.ConversationEndedBy
 import com.nexters.gamss.conversation.repository.ConversationRepository
 import com.nexters.gamss.conversation.service.ConversationService
 import com.nexters.gamss.emotion.domain.EmotionType
@@ -57,7 +59,7 @@ class CardDeleteConcurrencyIntegrationTest {
     fun `같은 카드를 동시에 삭제해도 한 번만 성공한다`() {
         val memberId = 1L
         // 카드 삭제가 대화방까지 지우므로(CardService.deleteConversationOf) 실제 대화방이 있어야 한다.
-        val conversation = conversationRepository.save(Conversation(memberId).apply { end() })
+        val conversation = conversationRepository.save(Conversation(memberId).apply { end(ConversationEndedBy.USER) })
         val card =
             cardRepository.save(
                 Card(
@@ -67,6 +69,7 @@ class CardDeleteConcurrencyIntegrationTest {
                     summary = "동시 삭제 대상",
                     message = "얘 오늘 건들면 안 됨.",
                     conversationCreatedAt = Instant.now(),
+                    createdBy = CardCreatedBy.USER,
                 ),
             )
 
@@ -115,7 +118,7 @@ class CardDeleteConcurrencyIntegrationTest {
     @Test
     fun `단건 삭제와 벌크 삭제가 같은 카드에 동시에 들어와도 삭제는 한 번만 집계된다`() {
         val memberId = 1L
-        val conversation = conversationRepository.save(Conversation(memberId).apply { end() })
+        val conversation = conversationRepository.save(Conversation(memberId).apply { end(ConversationEndedBy.USER) })
         val card =
             cardRepository.save(
                 Card(
@@ -125,6 +128,7 @@ class CardDeleteConcurrencyIntegrationTest {
                     summary = "단건·벌크 동시 삭제 대상",
                     message = "오늘은 다들 나만 찾네.",
                     conversationCreatedAt = Instant.now(),
+                    createdBy = CardCreatedBy.USER,
                 ),
             )
         val unexpectedFailures = Collections.synchronizedList(mutableListOf<Throwable>())
@@ -189,7 +193,7 @@ class CardDeleteConcurrencyIntegrationTest {
 
         repeat(ROUNDS) { round ->
             val memberId = 1000L + round
-            val conversation = conversationRepository.save(Conversation(memberId).apply { end() })
+            val conversation = conversationRepository.save(Conversation(memberId).apply { end(ConversationEndedBy.USER) })
             val card =
                 cardRepository.save(
                     Card(
@@ -199,6 +203,7 @@ class CardDeleteConcurrencyIntegrationTest {
                         summary = "잠금 순서 검증 대상",
                         message = "오늘은 다들 나만 찾네.",
                         conversationCreatedAt = Instant.now(),
+                        createdBy = CardCreatedBy.USER,
                     ),
                 )
             val tasks: List<() -> Unit> =

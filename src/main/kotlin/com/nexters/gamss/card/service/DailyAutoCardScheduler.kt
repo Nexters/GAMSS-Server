@@ -1,5 +1,6 @@
 package com.nexters.gamss.card.service
 
+import com.nexters.gamss.card.domain.CardCreatedBy
 import com.nexters.gamss.conversation.service.ConversationCardGenerationService
 import com.nexters.gamss.conversation.service.ConversationService
 import com.nexters.gamss.global.exception.BusinessException
@@ -288,7 +289,13 @@ class DailyAutoCardScheduler(
         }
         return try {
             // 요약이 null이어도 그대로 넘긴다. 카드 생성 경로가 유저 메시지 원문으로 대신 만든다.
-            cardService.createCard(conversation.memberId, conversationId, emotion = null, summary = conversation.summary)
+            cardService.createCard(
+                conversation.memberId,
+                conversationId,
+                emotion = null,
+                summary = conversation.summary,
+                createdBy = CardCreatedBy.AUTO_BATCH,
+            )
             ProcessResult(AutoCardOutcome.CREATED, memberId = conversation.memberId)
         } catch (e: BusinessException) {
             // 실패 종류는 원인 사슬에서 읽는다. 카드 생성 경로가 LLM 실패를 CARD_GENERATION_FAILED 로

@@ -1,6 +1,7 @@
 package com.nexters.gamss.card.controller.dto
 
 import com.nexters.gamss.card.domain.Card
+import com.nexters.gamss.card.domain.CardCreatedBy
 import com.nexters.gamss.emotion.domain.EmotionType
 import java.time.LocalDate
 import java.time.ZoneId
@@ -21,6 +22,7 @@ class CardCalendarResponseTest {
             summary = "요약",
             message = "대사",
             conversationCreatedAt = date.atTime(12, 0).atZone(zone).toInstant(),
+            createdBy = CardCreatedBy.USER,
         )
 
     @Test
@@ -53,6 +55,7 @@ class CardCalendarResponseTest {
                 summary = "요약",
                 message = "대사",
                 conversationCreatedAt = dawnInstant,
+                createdBy = CardCreatedBy.USER,
             )
 
         val result = CardCalendarResponse.listFrom(listOf(dawn))

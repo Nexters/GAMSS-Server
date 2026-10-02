@@ -1,8 +1,10 @@
 package com.nexters.gamss.card.repository
 
 import com.nexters.gamss.card.domain.Card
+import com.nexters.gamss.card.domain.CardCreatedBy
 import com.nexters.gamss.card.domain.ShareToken
 import com.nexters.gamss.conversation.domain.Conversation
+import com.nexters.gamss.conversation.domain.ConversationEndedBy
 import com.nexters.gamss.conversation.repository.ConversationRepository
 import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.support.RepositoryTest
@@ -32,6 +34,7 @@ class CardRepositoryTest : RepositoryTest() {
             summary = "요약",
             message = "대사",
             conversationCreatedAt = createdAt,
+            createdBy = CardCreatedBy.USER,
         )
 
     @Test
@@ -55,7 +58,7 @@ class CardRepositoryTest : RepositoryTest() {
 
     @Test
     fun `종료된(삭제되지 않은) 채팅방의 카드는 정상적으로 조회된다`() {
-        val ended = conversationRepository.save(Conversation(MEMBER_ID).apply { end() })
+        val ended = conversationRepository.save(Conversation(MEMBER_ID).apply { end(ConversationEndedBy.USER) })
         val createdAt = Instant.parse("2026-07-20T00:00:00Z")
         cardRepository.save(card(ended.id, createdAt))
 
@@ -162,7 +165,7 @@ class CardRepositoryTest : RepositoryTest() {
 
     @Test
     fun `공유 토큰으로 카드를 연다`() {
-        val conversation = conversationRepository.save(Conversation(MEMBER_ID).apply { end() })
+        val conversation = conversationRepository.save(Conversation(MEMBER_ID).apply { end(ConversationEndedBy.USER) })
         val saved = cardRepository.save(card(conversation.id, CREATED_AT).apply { share(ShareToken(TOKEN)) })
 
         val found = cardRepository.findVisibleByShareToken(TOKEN)
@@ -176,7 +179,7 @@ class CardRepositoryTest : RepositoryTest() {
      */
     @Test
     fun `지운 카드는 공유 토큰으로도 열리지 않는다`() {
-        val conversation = conversationRepository.save(Conversation(MEMBER_ID).apply { end() })
+        val conversation = conversationRepository.save(Conversation(MEMBER_ID).apply { end(ConversationEndedBy.USER) })
         cardRepository.save(
             card(conversation.id, CREATED_AT).apply {
                 share(ShareToken(TOKEN))
@@ -202,8 +205,8 @@ class CardRepositoryTest : RepositoryTest() {
      */
     @Test
     fun `대소문자만 다른 공유 토큰은 서로 다른 카드다`() {
-        val lower = conversationRepository.save(Conversation(MEMBER_ID).apply { end() })
-        val upper = conversationRepository.save(Conversation(MEMBER_ID).apply { end() })
+        val lower = conversationRepository.save(Conversation(MEMBER_ID).apply { end(ConversationEndedBy.USER) })
+        val upper = conversationRepository.save(Conversation(MEMBER_ID).apply { end(ConversationEndedBy.USER) })
         val lowerCard = cardRepository.save(card(lower.id, CREATED_AT).apply { share(ShareToken(MIXED_CASE_TOKEN)) })
         val upperCard =
             cardRepository.save(card(upper.id, CREATED_AT).apply { share(ShareToken(MIXED_CASE_TOKEN.swapCase())) })
