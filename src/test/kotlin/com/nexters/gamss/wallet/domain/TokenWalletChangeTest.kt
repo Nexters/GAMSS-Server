@@ -21,6 +21,15 @@ class TokenWalletChangeTest {
     }
 
     @Test
+    fun `주체 키는 소문자 hex 64자만 받는다`() {
+        listOf("a".repeat(63), "a".repeat(65), "A".repeat(64), "g".repeat(64)).forEach { key ->
+            assertThrows<IllegalArgumentException>(key) {
+                TokenWalletChange(key, TokenLedgerType.PURCHASE, TokenAmount(1), LedgerRefId("purchase:1"))
+            }
+        }
+    }
+
+    @Test
     fun `토큰 양은 양수만 받는다`() {
         assertThrows<IllegalArgumentException> { TokenAmount(0) }
         assertThrows<IllegalArgumentException> { TokenAmount(-1) }
