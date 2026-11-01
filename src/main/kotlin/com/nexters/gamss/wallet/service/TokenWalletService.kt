@@ -1,7 +1,7 @@
 package com.nexters.gamss.wallet.service
 
+import com.nexters.gamss.wallet.domain.PaidTokenBalance
 import com.nexters.gamss.wallet.domain.TokenLedgerEntry
-import com.nexters.gamss.wallet.domain.TokenWallet
 import com.nexters.gamss.wallet.domain.TokenWalletChange
 import com.nexters.gamss.wallet.repository.TokenLedgerRepository
 import com.nexters.gamss.wallet.repository.TokenWalletRepository
@@ -33,30 +33,32 @@ class TokenWalletService(
     }
 
     private fun applyLocked(change: TokenWalletChange): TokenWalletResult {
-        val wallet = lockedWallet(change) ?: return TokenWalletResult(appliedAmount = 0, balance = 0, replayed = false)
+        val balance = lockedBalance(change) ?: return TokenWalletResult(appliedAmount = 0, balance = 0, replayed = false)
         val existing = change.refId?.let { ledgerRepository.findByRefId(it.value) }
         if (existing != null) {
-            return replay(existing, change, wallet)
+            return replay(existing, change, balance)
         }
-        val entry = wallet.apply(change) ?: return TokenWalletResult(appliedAmount = 0, balance = wallet.balance, replayed = false)
+        val entry = balance.apply(change) ?: return TokenWalletResult(appliedAmount = 0, balance = balance.value, replayed = false)
+        walletRepository.addBalance(change.subjectKey, entry.amount)
         ledgerRepository.saveAndFlush(entry)
-        return TokenWalletResult(appliedAmount = entry.amount, balance = wallet.balance, replayed = false)
+        return TokenWalletResult(appliedAmount = entry.amount, balance = entry.balanceAfter, replayed = false)
     }
 
     // 0에서 멈추는 사용은 지갑이 없으면 깎을 것도 없으므로, 산 적 없는 주체에 빈 지갑을 만들지 않는다.
-    private fun lockedWallet(change: TokenWalletChange): TokenWallet? {
+    private fun lockedBalance(change: TokenWalletChange): PaidTokenBalance? {
         if (!change.type.stopsAtZero) {
             walletRepository.createIfAbsent(change.subjectKey)
         }
-        return walletRepository.findForUpdate(change.subjectKey)
+        val value = walletRepository.findBalanceForUpdate(change.subjectKey) ?: return null
+        return PaidTokenBalance(change.subjectKey, value)
     }
 
     private fun replay(
         existing: TokenLedgerEntry,
         change: TokenWalletChange,
-        wallet: TokenWallet,
+        balance: PaidTokenBalance,
     ): TokenWalletResult {
         check(existing.isReplayOf(change)) { "같은 멱등 키로 다른 변경이 들어왔습니다: refId=${change.refId}" }
-        return TokenWalletResult(appliedAmount = existing.amount, balance = wallet.balance, replayed = true)
+        return TokenWalletResult(appliedAmount = existing.amount, balance = balance.value, replayed = true)
     }
 }

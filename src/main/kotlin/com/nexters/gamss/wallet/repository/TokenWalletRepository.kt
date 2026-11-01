@@ -1,9 +1,7 @@
 package com.nexters.gamss.wallet.repository
 
 import com.nexters.gamss.wallet.domain.TokenWallet
-import jakarta.persistence.LockModeType
 import org.springframework.data.jpa.repository.JpaRepository
-import org.springframework.data.jpa.repository.Lock
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
@@ -35,9 +33,20 @@ interface TokenWalletRepository : JpaRepository<TokenWallet, String> {
         @Param("subjectKey") subjectKey: String,
     )
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select w from TokenWallet w where w.subjectKey = :subjectKey")
-    fun findForUpdate(
+    /** 영속성 컨텍스트에 먼저 읽힌 엔티티가 있어도 낡은 값을 쓰지 않도록 스칼라로 읽는다. */
+    @Query(value = "select balance from token_wallet where subject_key = :subjectKey for update", nativeQuery = true)
+    fun findBalanceForUpdate(
         @Param("subjectKey") subjectKey: String,
-    ): TokenWallet?
+    ): Long?
+
+    @Transactional
+    @Modifying(flushAutomatically = true)
+    @Query(
+        value = "update token_wallet set balance = balance + :delta, updated_at = now(6) where subject_key = :subjectKey",
+        nativeQuery = true,
+    )
+    fun addBalance(
+        @Param("subjectKey") subjectKey: String,
+        @Param("delta") delta: Long,
+    ): Int
 }

@@ -109,6 +109,24 @@ class TokenWalletConcurrencyIntegrationTest {
         assertEquals(1, ledgerRepository.count())
     }
 
+    @Test
+    fun `같은 트랜잭션에서 지갑을 먼저 읽어 둬도 그 사이 커밋된 증감을 덮어쓰지 않는다`() {
+        walletService.apply(change(TokenLedgerType.PURCHASE, 1_000, "purchase:0"))
+        val other = Executors.newSingleThreadExecutor()
+
+        try {
+            transactionTemplate.executeWithoutResult {
+                walletRepository.findById(SUBJECT).get()
+                other.submit { walletService.apply(change(TokenLedgerType.PURCHASE, 100, "purchase:1")) }.get(30, TimeUnit.SECONDS)
+                walletService.apply(change(TokenLedgerType.PURCHASE, 1, "purchase:2"))
+            }
+        } finally {
+            other.shutdownNow()
+        }
+
+        assertEquals(1_101, walletRepository.findById(SUBJECT).get().balance)
+    }
+
     private fun runConcurrently(changes: List<TokenWalletChange>): List<TokenWalletResult> {
         val startLine = CyclicBarrier(changes.size)
         val executor = Executors.newFixedThreadPool(changes.size)
