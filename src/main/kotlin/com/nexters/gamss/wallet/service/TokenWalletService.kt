@@ -44,8 +44,12 @@ class TokenWalletService(
         return TokenWalletResult(appliedAmount = entry.amount, balance = entry.balanceAfter, replayed = false)
     }
 
-    // 0에서 멈추는 사용은 지갑이 없으면 깎을 것도 없으므로, 산 적 없는 주체에 빈 지갑을 만들지 않는다.
+    // 0에서 멈추는 사용은 지갑이 없으면 깎을 것도 없으므로 빈 지갑을 만들지 않는다. 없는 행을
+    // FOR UPDATE 로 읽으면 gap lock 이 걸려 다른 주체의 첫 지갑 생성까지 막으므로 먼저 확인만 한다.
     private fun lockedBalance(change: TokenWalletChange): PaidTokenBalance? {
+        if (change.type.stopsAtZero && !walletRepository.existsById(change.subjectKey)) {
+            return null
+        }
         if (!change.type.stopsAtZero) {
             walletRepository.createIfAbsent(change.subjectKey)
         }

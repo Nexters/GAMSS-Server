@@ -15,6 +15,7 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import org.springframework.transaction.support.TransactionTemplate
 import java.util.Collections
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.CyclicBarrier
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -127,6 +128,32 @@ class TokenWalletConcurrencyIntegrationTest {
         assertEquals(1_101, walletRepository.findById(SUBJECT).get().balance)
     }
 
+    /** 두 키 사이에 다른 키가 올 수 없어야 지워진 행이 남아 있어도 같은 gap 에 들어간다. */
+    @Test
+    fun `산 적 없는 주체의 사용이 열려 있어도 다른 주체의 첫 구매를 막지 않는다`() {
+        val consumed = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val executor = Executors.newFixedThreadPool(2)
+
+        try {
+            executor.submit {
+                transactionTemplate.executeWithoutResult {
+                    walletService.apply(TokenWalletChange(NON_BUYER, TokenLedgerType.CONSUME, TokenAmount(100), null))
+                    consumed.countDown()
+                    release.await(30, TimeUnit.SECONDS)
+                }
+            }
+            assertTrue(consumed.await(30, TimeUnit.SECONDS))
+            val purchase = TokenWalletChange(NEXT_BUYER, TokenLedgerType.PURCHASE, TokenAmount(1_000), LedgerRefId("purchase:1"))
+
+            executor.submit { walletService.apply(purchase) }.get(5, TimeUnit.SECONDS)
+        } finally {
+            release.countDown()
+            executor.shutdown()
+            executor.awaitTermination(30, TimeUnit.SECONDS)
+        }
+    }
+
     private fun runConcurrently(changes: List<TokenWalletChange>): List<TokenWalletResult> {
         val startLine = CyclicBarrier(changes.size)
         val executor = Executors.newFixedThreadPool(changes.size)
@@ -169,5 +196,7 @@ class TokenWalletConcurrencyIntegrationTest {
     private companion object {
         const val THREADS = 12
         val SUBJECT = "a".repeat(64)
+        val NON_BUYER = "c".repeat(63) + "0"
+        val NEXT_BUYER = "c".repeat(63) + "1"
     }
 }
