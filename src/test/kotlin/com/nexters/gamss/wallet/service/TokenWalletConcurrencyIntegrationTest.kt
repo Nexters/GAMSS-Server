@@ -9,7 +9,6 @@ import com.nexters.gamss.wallet.domain.TokenWalletChange
 import com.nexters.gamss.wallet.repository.TokenLedgerRepository
 import com.nexters.gamss.wallet.repository.TokenWalletRepository
 import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.assertThrows
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
@@ -89,24 +88,29 @@ class TokenWalletConcurrencyIntegrationTest {
 
     /** 바깥 트랜잭션이 먼저 읽어 스냅샷이 잡히면, 잠금 뒤 조회로도 앞선 커밋을 보지 못하고 유니크 제약에 걸린다. */
     @Test
-    fun `바깥 트랜잭션이 이미 읽은 뒤 같은 멱등 키가 커밋되면 재시도할 수 있는 충돌로 알린다`() {
+    fun `바깥 트랜잭션이 이미 읽은 뒤 같은 멱등 키가 커밋되면 재시도해서 재요청으로 끝난다`() {
         val purchase = change(TokenLedgerType.PURCHASE, 3_000, "purchase:1")
         val other = Executors.newSingleThreadExecutor()
+        var attempts = 0
 
-        try {
-            assertThrows<TokenLedgerConflictException> {
-                transactionTemplate.executeWithoutResult {
-                    ledgerRepository.count()
-                    other.submit { walletService.apply(purchase) }.get(30, TimeUnit.SECONDS)
-                    walletService.apply(purchase)
+        val result =
+            try {
+                conflictRetry.execute {
+                    attempts++
+                    transactionTemplate.execute {
+                        ledgerRepository.count()
+                        if (attempts == 1) {
+                            other.submit { walletService.apply(purchase) }.get(30, TimeUnit.SECONDS)
+                        }
+                        walletService.apply(purchase)
+                    }!!
                 }
+            } finally {
+                other.shutdownNow()
             }
-        } finally {
-            other.shutdownNow()
-        }
 
-        val retried = conflictRetry.execute { transactionTemplate.execute { walletService.apply(purchase) }!! }
-        assertTrue(retried.replayed)
+        assertEquals(2, attempts)
+        assertTrue(result.replayed)
         assertEquals(1, ledgerRepository.count())
     }
 

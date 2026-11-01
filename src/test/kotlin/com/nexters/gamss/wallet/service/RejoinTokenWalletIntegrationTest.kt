@@ -81,6 +81,7 @@ class RejoinTokenWalletIntegrationTest {
         val newMemberId = currentMemberId()
         assertNotEquals(oldMemberId, newMemberId, "전제가 깨졌다: 재가입은 새 회원이어야 한다")
         assertEquals(3_000, walletReader.balanceOf(newMemberId))
+        assertEquals(subjectKey, ledgerRepository.findByRefId("purchase:1")?.subjectKey, "변동 이력은 탈퇴 후에도 남아야 한다")
     }
 
     private fun currentMemberId(): Long = socialAccountRepository.findAll().single().memberId
