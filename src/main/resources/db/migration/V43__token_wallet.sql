@@ -1,0 +1,21 @@
+-- 구매한 유료 토큰의 잔액과 변동 원장(#238).
+-- 쿼터 주체에 귀속되므로 탈퇴 정리 대상이 아니다. 결제 기록과 함께 보존한다.
+CREATE TABLE token_wallet (
+    subject_key CHAR(64)    NOT NULL PRIMARY KEY,
+    -- 환불 회수로 음수가 될 수 있다.
+    balance     BIGINT      NOT NULL DEFAULT 0,
+    updated_at  DATETIME(6) NOT NULL
+);
+
+CREATE TABLE token_ledger (
+    id            BIGINT       NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    subject_key   CHAR(64)     NOT NULL,
+    type          VARCHAR(32)  NOT NULL,
+    amount        BIGINT       NOT NULL,
+    balance_after BIGINT       NOT NULL,
+    ref_id        VARCHAR(128) NULL,
+    created_at    DATETIME(6)  NOT NULL,
+    CONSTRAINT uk_token_ledger_ref_id UNIQUE (ref_id),
+    -- 같은 주체의 기록은 지갑 행 잠금 아래에서 쌓이므로 id 순서가 곧 반영 순서다.
+    INDEX idx_token_ledger_subject (subject_key, id)
+);
