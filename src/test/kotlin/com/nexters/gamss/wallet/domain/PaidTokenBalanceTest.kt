@@ -65,6 +65,7 @@ class PaidTokenBalanceTest {
         assertTrue(entry.isReplayOf(change(TokenLedgerType.PURCHASE, 3_000, "purchase:1")))
         assertFalse(entry.isReplayOf(change(TokenLedgerType.PURCHASE, 6_000, "purchase:1")))
         assertFalse(entry.isReplayOf(change(TokenLedgerType.ADMIN_GRANT, 3_000, "purchase:1")))
+        assertFalse(entry.isReplayOf(change(TokenLedgerType.PURCHASE, 3_000, "purchase:1", "b".repeat(64))))
     }
 
     private fun balance(value: Long) = PaidTokenBalance(SUBJECT, value)
@@ -73,7 +74,8 @@ class PaidTokenBalanceTest {
         type: TokenLedgerType,
         amount: Long,
         refId: String?,
-    ) = TokenWalletChange(SUBJECT, type, TokenAmount(amount), refId?.let(::LedgerRefId))
+        subjectKey: String = SUBJECT,
+    ) = TokenWalletChange(subjectKey, type, TokenAmount(amount), refId?.let(::LedgerRefId))
 
     private companion object {
         val SUBJECT = "a".repeat(64)
