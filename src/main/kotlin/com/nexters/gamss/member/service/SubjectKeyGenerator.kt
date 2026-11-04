@@ -14,7 +14,8 @@ import javax.crypto.spec.SecretKeySpec
  *
  * [EncryptionProperties.decodedIndexKey] 를 재사용한다 - 인덱스 키는 이미 "암호화 키와 분리해 둔
  * 동등성 비교 전용 keyed hash 키"로 용도가 같다. 대가는 이 키를 교체하면 검색 인덱스와 함께 주체
- * 키도 무효가 되어 이월이 한 구간 끊기는 것이다.
+ * 키도 무효가 되어 이월이 한 구간 끊기는 것이다. 유료 토큰 지갑(`token_wallet`, `token_ledger`)도
+ * 이 키에 붙으므로, 교체 전에 주체 키를 새 값으로 옮기지 않으면 산 토큰이 사라진다.
  *
  * 제공자가 다르면 주체가 다르다. 두 계정이 같은 사람이라는 근거가 서버에 없어서 그렇게 둔다.
  */
