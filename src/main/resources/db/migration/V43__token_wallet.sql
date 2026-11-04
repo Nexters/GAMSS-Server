@@ -13,8 +13,9 @@ CREATE TABLE token_ledger (
     type          VARCHAR(32)  NOT NULL,
     amount        BIGINT       NOT NULL,
     balance_after BIGINT       NOT NULL,
-    -- 서버 기본 collation 은 대소문자와 뒤 공백을 무시해, 다른 키가 같은 키로 묶이지 않게 못 박는다.
-    ref_id        VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL,
+    -- 서버 기본 collation 은 대소문자와 뒤 공백을 무시하고, utf8mb4_bin 도 뒤 공백은 무시한다(PAD SPACE).
+    -- 다른 키가 같은 키로 묶이지 않게 NO PAD 인 utf8mb4_0900_bin 으로 못 박는다.
+    ref_id        VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NULL,
     created_at    DATETIME(6)  NOT NULL,
     CONSTRAINT uk_token_ledger_ref_id UNIQUE (ref_id),
     -- 같은 주체의 기록은 지갑 행 잠금 아래에서 쌓이므로 id 순서가 곧 반영 순서다.

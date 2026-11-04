@@ -76,6 +76,17 @@ class TokenWalletServiceIntegrationTest {
     }
 
     @Test
+    fun `뒤 공백만 다른 멱등 키는 다른 키로 본다`() {
+        walletService.apply(change(TokenLedgerType.PURCHASE, 1_000, "purchase:1"))
+
+        val result = walletService.apply(change(TokenLedgerType.PURCHASE, 1_000, "purchase:1 "))
+
+        assertFalse(result.replayed)
+        assertEquals(2_000, result.balance)
+        assertEquals(2, ledgerRepository.count())
+    }
+
+    @Test
     fun `회수로 음수가 된 잔액은 다음 지급에서 상계된다`() {
         walletService.apply(change(TokenLedgerType.PURCHASE, 1_000, "purchase:1"))
         walletService.apply(change(TokenLedgerType.REFUND, 3_000, "refund:1"))
