@@ -61,6 +61,18 @@ class PaymentTest {
         assertFailsWith<IllegalArgumentException> { LedgerRefId(payment.refundRefId("s".repeat(50))) }
     }
 
+    /**
+     * 출처가 비면 한 결제의 환불이 모두 `refund:{platform}:{key}:` 하나로 묶인다. 첫 환불이 반영된 뒤에는
+     * 다음 변동이 이미 반영한 출처로 보여, 예외 없이 아무것도 하지 않고 끝난다.
+     */
+    @Test
+    fun `환불 출처가 비어 있으면 멱등 키를 만들지 않는다`() {
+        val payment = payment(granted = 3_000)
+
+        assertFailsWith<IllegalArgumentException> { payment.refundRefId("") }
+        assertFailsWith<IllegalArgumentException> { payment.refundRefId(" ") }
+    }
+
     @Test
     fun `같은 거래인지는 주체 상품 수량이 모두 같을 때만 참이다`() {
         val payment = payment(granted = 3_000)
