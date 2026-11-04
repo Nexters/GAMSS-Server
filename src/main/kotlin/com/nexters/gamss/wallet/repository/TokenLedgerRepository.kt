@@ -5,4 +5,6 @@ import org.springframework.data.jpa.repository.JpaRepository
 
 interface TokenLedgerRepository : JpaRepository<TokenLedgerEntry, Long> {
     fun findByRefId(refId: String): TokenLedgerEntry?
+
+    fun existsByRefId(refId: String): Boolean
 }
