@@ -359,11 +359,22 @@ class PurchaseGrantServiceIntegrationTest {
         assertEquals(0, walletReader.balanceOf(BUYER))
     }
 
+    /**
+     * 지급 알림보다 환불 알림이 먼저 오면 결제 기록이 없어 회수가 실패한다. 실패한 회수는 원장에 흔적을
+     * 남기지 않으므로, 호출부가 이 출처를 처리한 것으로 기록하지 않는 한 지급 뒤 같은 출처가 다시 오면
+     * 회수된다([PurchaseGrantService.applyRefund] 의 출처 중복 제거).
+     */
     @Test
-    fun `결제 기록이 없는 거래의 환불은 찾지 못한다`() {
-        val error = assertFailsWith<BusinessException> { grantService.applyRefund(PaymentPlatform.APPLE, KEY, 1, "refund") }
-
+    fun `결제보다 먼저 온 환불은 찾지 못하고 지급 뒤 같은 출처로 다시 오면 회수한다`() {
+        val error = assertFailsWith<BusinessException> { grantService.applyRefund(PaymentPlatform.APPLE, KEY, 300_000, "refund-1") }
         assertEquals(ErrorCode.PAYMENT_NOT_FOUND, error.errorCode)
+        assertEquals(0, ledgerRepository.count())
+
+        grantService.grant(BUYER, purchase())
+        val retried = grantService.applyRefund(PaymentPlatform.APPLE, KEY, 300_000, "refund-1")
+
+        assertEquals(300_000, retried.changedTokens)
+        assertEquals(0, walletReader.balanceOf(BUYER))
     }
 
     private fun purchase(
