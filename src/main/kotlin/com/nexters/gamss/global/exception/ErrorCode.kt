@@ -63,6 +63,9 @@ enum class ErrorCode(
     PAYMENT_NOT_FOUND(ErrorKind.NOT_FOUND, "결제 기록을 찾을 수 없습니다."),
     PAYMENT_STORE_UNAVAILABLE(ErrorKind.UNAVAILABLE, "스토어에서 구매를 확인할 수 없습니다. 잠시 후 다시 시도해주세요."),
     PURCHASE_INVALID(ErrorKind.INVALID_INPUT, "확인할 수 없는 구매입니다."),
+    PURCHASE_CANCELLED(ErrorKind.CONFLICT, "취소되었거나 환불된 구매입니다."),
+    PURCHASE_PRODUCT_MISMATCH(ErrorKind.INVALID_INPUT, "구매한 상품이 요청한 상품과 다릅니다."),
+    PURCHASE_QUANTITY_UNSUPPORTED(ErrorKind.CONFLICT, "여러 개를 한 번에 산 구매는 지급할 수 없습니다. 고객센터로 문의해주세요."),
 
     // 백오피스 관리자
     ADMIN_ACCOUNT_ALREADY_EXISTS(ErrorKind.CONFLICT, "이미 등록된 관리자입니다."),
