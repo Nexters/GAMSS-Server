@@ -61,6 +61,8 @@ enum class ErrorCode(
     PAYMENT_ACCOUNT_NOT_FOUND(ErrorKind.NOT_FOUND, "구매 계정을 찾을 수 없습니다."),
     PAYMENT_PRODUCT_UNAVAILABLE(ErrorKind.CONFLICT, "판매 중인 상품이 아닙니다. 고객센터로 문의해주세요."),
     PAYMENT_NOT_FOUND(ErrorKind.NOT_FOUND, "결제 기록을 찾을 수 없습니다."),
+    PAYMENT_STORE_UNAVAILABLE(ErrorKind.UNAVAILABLE, "스토어에서 구매를 확인할 수 없습니다. 잠시 후 다시 시도해주세요."),
+    PURCHASE_INVALID(ErrorKind.INVALID_INPUT, "확인할 수 없는 구매입니다."),
 
     // 백오피스 관리자
     ADMIN_ACCOUNT_ALREADY_EXISTS(ErrorKind.CONFLICT, "이미 등록된 관리자입니다."),

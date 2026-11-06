@@ -74,6 +74,10 @@ dependencies {
     // 푸시 알림 — FCM 발송(Admin SDK). 소셜 로그인 토큰 검증은 이 SDK가 아니라 nimbus로 직접 한다.
     implementation("com.google.firebase:firebase-admin:9.9.0")
 
+    // Google Play 구매 조회와 consume(#244). 서비스 계정 인증은 auth 라이브러리로 한다.
+    implementation("com.google.apis:google-api-services-androidpublisher:v3-rev20261022-2.0.0")
+    implementation("com.google.auth:google-auth-library-oauth2-http:1.54.0")
+
     // google-genai 내부 구현이 Jackson 2(com.fasterxml.jackson.databind)를 쓰고, 그 jar 안에
     // META-INF/services에 Jackson2용 KotlinModule 등록이 딸려 있어서(google-genai 쪽 잔재 추정),
     // 그 클래스가 클래스패스에 없으면 Hibernate의 Jackson JSON 포맷 매퍼 자동 감지(ObjectMapper.findModules())가
