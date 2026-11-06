@@ -37,8 +37,8 @@ import java.time.Instant
  * 타임아웃(연결 5초·읽기 10초)에 더해, 토큰 갱신이 끼면 라이브러리 기본 타임아웃(최대 약 40초)을 따른다
  * ([com.nexters.gamss.payment.google.GooglePlayConfig]). 결제마다 그만큼 기다리면 Google 장애 동안 도메인
  * 지표 갱신과 PENDING 정리가 함께 멈춘다. 그래서 조회든 consume 이든 Google 과 통신할 수 없다는 오류가
- * 나면 모든 결제가 같은 Google 을 보므로 그 회차를 멈추고, 회차 전체에도 [ROUND_BUDGET] 시간 상한을 둔다.
- * 남은 결제는 다음 회차에 다시 본다. 오래된 결제부터 보므로 48시간 경보 대상은 앞에서 처리된다.
+ * 나면 모든 결제가 같은 Google 을 보므로 그 회차를 멈춘다. 또 새 결제를 시작하기 전에 회차가 [ROUND_BUDGET] 을
+ * 넘겼는지 보고, 넘겼으면 멈춘다. 남은 결제는 다음 회차에 다시 본다. 오래된 결제부터 보므로 48시간 경보 대상은 앞에서 처리된다.
  */
 @Component
 class GoogleConsumeRetryScheduler(
@@ -50,9 +50,11 @@ class GoogleConsumeRetryScheduler(
     private val log = LoggerFactory.getLogger(javaClass)
 
     /**
-     * 구매 후 [STALE_AFTER] 가 지나도 consume 되지 않은 PURCHASED 결제를 본 횟수. 회차마다 남아 있는 건수를
-     * 더하므로 같은 결제가 여러 번 세어진다. 0 보다 커지면 자동 환불 전에 사람이 봐야 한다는 뜻이다.
-     * 처음부터 0 으로 등록해야 처음 생긴 증가도 increase() 가 센다.
+     * 구매 후 [STALE_AFTER] 가 지나도 consume 기록이 없는 결제를 재시도 회차에서 본 횟수. Google 이 PURCHASED 로
+     * 확인한 결제만 세는 것이 아니다. Google 장애나 회차 시간 상한 때문에 상태를 보지 못한 결제, PENDING 처럼
+     * 상태가 예상과 다른 결제, 조회나 consume 이 거부된 결제도 센다. 취소로 확인된 결제와 테스트 구매는 세지 않는다.
+     * 회차마다 남아 있는 건수를 더하므로 같은 결제가 여러 번 세어진다. 늘어나면 자동 환불 전에 사람이 봐야 한다는
+     * 뜻이다. 처음부터 0 으로 등록해야 처음 생긴 증가도 increase() 가 센다.
      */
     private val staleCounter =
         Counter
@@ -195,7 +197,10 @@ class GoogleConsumeRetryScheduler(
 
         val FRESH_ROW_GRACE: Duration = Duration.ofMinutes(5)
 
-        /** 한 회차가 스케줄링 스레드를 붙잡는 시간의 상한. 정상이면 50건이 몇 초 안에 끝난다. */
+        /**
+         * 이 시간이 지나면 새 결제를 시작하지 않는다. 결제를 시작하기 전에만 보므로, 회차는 이보다 결제 한 건(Google
+         * 호출 최대 두 번)만큼 더 걸릴 수 있다. 정상이면 50건이 몇 초 안에 끝난다.
+         */
         val ROUND_BUDGET: Duration = Duration.ofMinutes(2)
     }
 }

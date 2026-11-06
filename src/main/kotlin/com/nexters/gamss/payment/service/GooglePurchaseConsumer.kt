@@ -42,8 +42,10 @@ class GooglePurchaseConsumer(
      * [alreadyConsumed] 면 Google 을 부르지 않고 기록만 한다. 이미 consume 된 구매에 consume 을 다시
      * 부를 때의 응답은 문서화돼 있지 않다.
      *
-     * 실패는 예외로 올리지 않고 [GoogleConsumeOutcome] 으로 돌려준다. 앱 요청 경로는 결과와 관계없이 성공으로
-     * 응답하고, 스케줄러는 Google 과 통신할 수 없을 때 그 회차를 멈춘다.
+     * Google 이 consume 을 거부했거나 Google 과 통신할 수 없거나 consume 뒤 기록하지 못하면, 예외 대신
+     * [GoogleConsumeOutcome] 으로 돌려준다. 그 밖의 예외(트랜잭션 안에서 부른 경우, 기록 트랜잭션을 시작하지 못한
+     * 경우 등)는 그대로 올라오므로, 지급 뒤에 실패로 응답하면 안 되는 쪽은 [GooglePurchaseService] 처럼 직접 막는다.
+     * 앱 요청 경로는 결과와 관계없이 성공으로 응답하고, 스케줄러는 Google 과 통신할 수 없을 때 그 회차를 멈춘다.
      */
     fun consume(
         paymentId: Long,
