@@ -1515,6 +1515,106 @@
               }
             }
           ]
+        },
+        {
+          "uid": "gamss-payment-google-unconsumed",
+          "title": "Google 결제 consume 적체",
+          "condition": "C",
+          "for": "0m",
+          "isPaused": false,
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "labels": {
+            "severity": "critical"
+          },
+          "annotations": {
+            "summary": "{{ $labels.env }} 구매 후 48시간이 지나도 consume 하지 못한 Google 결제가 있다",
+            "description": "consume 재시도 스케줄러가 48시간 넘게 consume 하지 못한 PURCHASED 결제를 봤다. 구매 후 3일이 지나면 Google 이 자동 환불하는데 토큰은 이미 지급돼 있다. 앱 로그에서 \"48시간이 지나도 consume 하지 못했습니다\"를 찾아 paymentId·storeOrderId 를 확인하고, 서비스 계정 권한과 Google 장애 여부를 본다. 구매 후 3일이 지나면 그 결제는 재시도 대상에서 빠져 경보가 해소로 바뀌는데, 이는 consume 에 성공했다는 뜻이 아니라 Google 이 자동 환불했다는 뜻일 수 있다. 해소 알림을 받으면 그 결제가 consume 됐는지(payment.consumed_at) 확인한다."
+          },
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 1800,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "sum by (env) (increase(gamss_payment_google_unconsumed_stale_total[30m]))",
+                "instant": false,
+                "range": true,
+                "editorMode": "code",
+                "intervalMs": 60000,
+                "maxDataPoints": 43200,
+                "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus"
+                }
+              }
+            },
+            {
+              "refId": "B",
+              "relativeTimeRange": {
+                "from": 1800,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "settings": {
+                  "mode": "dropNN"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "B"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ]
         }
       ]
     }
