@@ -15,7 +15,7 @@ import org.springframework.stereotype.Service
  * 생성 1건이 쓴 토큰을 그 회원의 쿼터 주체에 적립한다. [DailyTokenLimitService] 가 읽는 값을
  * 만드는 유일한 경로다.
  *
- * `generation_log` 기록과 같은 자리에서 같은 값으로 불리지만 한 트랜잭션으로 묶지 않는다 -
+ * `generation_log` 기록과 같은 값을 쓰지만 한 트랜잭션으로 묶지 않는다 -
  * 그쪽은 실패를 warn 으로 삼키는 계약이라, 묶으면 관측 기록 실패가 한도 집행을 끌고 내려간다.
  *
  * 적립 실패는 삼키되 ERROR 와 카운터로 올린다. LLM 호출과 과금이 이미 끝난 뒤라 예외를 올리면
