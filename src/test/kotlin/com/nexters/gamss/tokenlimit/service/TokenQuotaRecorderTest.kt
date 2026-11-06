@@ -1,8 +1,11 @@
 package com.nexters.gamss.tokenlimit.service
 
+import com.nexters.gamss.global.retry.ConflictRetry
+import com.nexters.gamss.member.service.MemberSocialIdentityService
 import com.nexters.gamss.monitoring.domain.GenerationType
 import com.nexters.gamss.tokenlimit.domain.TokenPolicy
 import com.nexters.gamss.tokenlimit.repository.TokenQuotaUsageRepository
+import com.nexters.gamss.wallet.service.TokenLedgerConflictException
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.mockk.every
 import io.mockk.mockk
@@ -15,7 +18,12 @@ class TokenQuotaRecorderTest {
     private val tokenPolicyService = mockk<TokenPolicyService>()
     private val repository = mockk<TokenQuotaUsageRepository>()
     private val meterRegistry = SimpleMeterRegistry()
-    private val recorder = TokenQuotaRecorder(tokenPolicyService, repository, meterRegistry)
+    private val identityService = mockk<MemberSocialIdentityService>()
+    private val settlement = mockk<TokenQuotaSettlement>()
+    private val recorder = recorder(enabled = true)
+
+    private fun recorder(enabled: Boolean) =
+        TokenQuotaRecorder(tokenPolicyService, repository, identityService, settlement, ConflictRetry(), enabled, meterRegistry)
 
     @Test
     fun `사용한 토큰을 주체에 적립한다`() {
@@ -94,6 +102,130 @@ class TokenQuotaRecorderTest {
     fun `실패 카운터는 발생 전에도 0 으로 등록돼 있다`() {
         assertEquals(0.0, failureCount("no_mapping"))
         assertEquals(0.0, failureCount("error"))
+        assertEquals(0.0, failureCount("paid_error"))
+    }
+
+    @Test
+    fun `응답을 받은 생성은 정책의 한도로 적립과 차감을 맡긴다`() {
+        givenResetHour(5)
+        givenSubject()
+        every { settlement.settle(any(), any(), any(), any(), any()) } returns true
+
+        recorder.recordDelivered(GenerationType.COMMENT, MEMBER_ID, 1_200)
+
+        verify(exactly = 1) { settlement.settle(MEMBER_ID, SUBJECT, any(), 100_000, 1_200) }
+        verify(exactly = 0) { repository.addUsedTokens(any(), any(), any()) }
+    }
+
+    /** 응답을 받지 못한 생성의 경로다. 여기서 차감하면 돈을 낸 토큰을 결과 없이 잃는다. */
+    @Test
+    fun `record 는 유료 토큰을 깎지 않는다`() {
+        givenResetHour(5)
+        every { repository.addUsedTokens(any(), any(), any()) } returns 1
+
+        recorder.record(GenerationType.COMMENT, MEMBER_ID, 1_200)
+
+        verify(exactly = 0) { settlement.settle(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `상한이 꺼진 환경에서는 적립만 하고 유료 토큰을 깎지 않는다`() {
+        givenResetHour(5)
+        every { repository.addUsedTokens(any(), any(), any()) } returns 1
+
+        recorder(enabled = false).recordDelivered(GenerationType.COMMENT, MEMBER_ID, 1_200)
+
+        verify { repository.addUsedTokens(MEMBER_ID, any(), 1_200L) }
+        verify(exactly = 0) { settlement.settle(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `한도에 합산하지 않는 종류나 쓴 토큰이 없는 생성은 응답을 받아도 처리하지 않는다`() {
+        GenerationType.entries.filterNot { it.countsTowardQuota }.forEach { type ->
+            recorder.recordDelivered(type, MEMBER_ID, 1_000)
+        }
+        recorder.recordDelivered(GenerationType.COMMENT, MEMBER_ID, 0)
+
+        verify(exactly = 0) { settlement.settle(any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { repository.addUsedTokens(any(), any(), any()) }
+    }
+
+    @Test
+    fun `응답을 받은 생성의 주체 매핑이 없으면 실패로 집계한다`() {
+        givenResetHour(5)
+        every { identityService.subjectKeyOf(MEMBER_ID) } returns null
+
+        recorder.recordDelivered(GenerationType.COMMENT, MEMBER_ID, 500)
+
+        assertEquals(1.0, failureCount("no_mapping"))
+        verify(exactly = 0) { settlement.settle(any(), any(), any(), any(), any()) }
+    }
+
+    /** 주체를 찾은 뒤 탈퇴로 매핑이 지워지면 적립이 0 행이 된다. */
+    @Test
+    fun `적립 시점에 매핑이 사라져도 실패로 집계한다`() {
+        givenResetHour(5)
+        givenSubject()
+        every { settlement.settle(any(), any(), any(), any(), any()) } returns false
+
+        recorder.recordDelivered(GenerationType.COMMENT, MEMBER_ID, 500)
+
+        assertEquals(1.0, failureCount("no_mapping"))
+        assertEquals(0.0, failureCount("paid_error"))
+    }
+
+    @Test
+    fun `유료 차감이 실패하면 적립만 다시 하고 paid_error 로 집계한다`() {
+        givenResetHour(5)
+        givenSubject()
+        every { settlement.settle(any(), any(), any(), any(), any()) } throws IllegalStateException("지갑 장애")
+        every { repository.addUsedTokens(any(), any(), any()) } returns 1
+
+        recorder.recordDelivered(GenerationType.COMMENT, MEMBER_ID, 500)
+
+        verify(exactly = 1) { repository.addUsedTokens(MEMBER_ID, any(), 500L) }
+        assertEquals(1.0, failureCount("paid_error"))
+        assertEquals(0.0, failureCount("error"))
+    }
+
+    /** 적립조차 못 했으면 유료만 빠진 상태가 아니라 한도가 샌 상태라 볼 곳이 다르다. */
+    @Test
+    fun `다시 한 적립까지 실패하면 error 로 집계하고 예외를 올리지 않는다`() {
+        givenResetHour(5)
+        givenSubject()
+        every { settlement.settle(any(), any(), any(), any(), any()) } throws IllegalStateException("DB 연결 끊김")
+        every { repository.addUsedTokens(any(), any(), any()) } throws IllegalStateException("DB 연결 끊김")
+
+        recorder.recordDelivered(GenerationType.COMMENT, MEMBER_ID, 500)
+
+        assertEquals(1.0, failureCount("error"))
+        assertEquals(0.0, failureCount("paid_error"))
+    }
+
+    @Test
+    fun `응답을 받은 생성은 정책 조회가 실패해도 예외를 올리지 않는다`() {
+        every { tokenPolicyService.current() } throws IllegalStateException("token_policy 행이 없다")
+
+        recorder.recordDelivered(GenerationType.COMMENT, MEMBER_ID, 500)
+
+        assertEquals(1.0, failureCount("error"))
+    }
+
+    @Test
+    fun `지갑 경합은 트랜잭션 밖에서 다시 실행해 끝낸다`() {
+        givenResetHour(5)
+        givenSubject()
+        every { settlement.settle(any(), any(), any(), any(), any()) } throws
+            TokenLedgerConflictException(null, IllegalStateException("데드락")) andThen true
+
+        recorder.recordDelivered(GenerationType.COMMENT, MEMBER_ID, 500)
+
+        verify(exactly = 2) { settlement.settle(any(), any(), any(), any(), any()) }
+        assertEquals(0.0, failureCount("paid_error"))
+    }
+
+    private fun givenSubject() {
+        every { identityService.subjectKeyOf(MEMBER_ID) } returns SUBJECT
     }
 
     private fun givenResetHour(resetHour: Int) {
@@ -109,5 +241,6 @@ class TokenQuotaRecorderTest {
 
     private companion object {
         const val MEMBER_ID = 42L
+        val SUBJECT = "a".repeat(64)
     }
 }
