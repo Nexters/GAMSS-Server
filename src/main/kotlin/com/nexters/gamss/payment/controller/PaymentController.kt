@@ -2,15 +2,21 @@ package com.nexters.gamss.payment.controller
 
 import com.nexters.gamss.global.response.ApiResponse
 import com.nexters.gamss.global.security.AuthPrincipal
+import com.nexters.gamss.payment.controller.dto.GooglePurchaseRequest
+import com.nexters.gamss.payment.controller.dto.GooglePurchaseResponse
 import com.nexters.gamss.payment.controller.dto.PaymentAccountTokenResponse
 import com.nexters.gamss.payment.controller.dto.TokenProductResponse
+import com.nexters.gamss.payment.service.GooglePurchaseService
 import com.nexters.gamss.payment.service.PaymentAccountService
 import com.nexters.gamss.payment.service.TokenProductService
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.tags.Tag
+import jakarta.validation.Valid
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
@@ -20,6 +26,7 @@ import org.springframework.web.bind.annotation.RestController
 class PaymentController(
     private val tokenProductService: TokenProductService,
     private val paymentAccountService: PaymentAccountService,
+    private val googlePurchaseService: GooglePurchaseService,
 ) {
     @Operation(
         summary = "판매 상품 목록 조회",
@@ -57,4 +64,45 @@ class PaymentController(
         @Parameter(hidden = true) @AuthenticationPrincipal principal: AuthPrincipal,
     ): ApiResponse<PaymentAccountTokenResponse> =
         ApiResponse.success(PaymentAccountTokenResponse.from(paymentAccountService.accountTokenOf(principal.memberId)))
+
+    @Operation(
+        summary = "Google Play 구매 검증과 지급",
+        description =
+            "Google Play 에서 산 토큰 상품을 서버가 Google 에 직접 확인한 뒤 유료 토큰을 지급합니다.\n\n" +
+                "- 구매할 때 `setObfuscatedAccountId` 에 계정 토큰(`GET /api/payments/account-token`)을 넣어야 합니다.\n" +
+                "- 앱은 `consumeAsync`·`acknowledgePurchase` 를 부르지 않습니다. 서버가 지급한 뒤 consume 합니다.\n" +
+                "- 같은 구매를 다시 보내도 추가로 지급하지 않고 같은 `grantedTokens` 로 성공합니다. `paidBalance` 는 " +
+                "응답 시점의 잔액이라 처음 응답과 다를 수 있습니다.\n" +
+                "- 결제가 아직 끝나지 않았으면 200 에 `status: PENDING` 으로 응답하고 지급하지 않습니다. 지급 완료로 " +
+                "표시하지 말고, 결제가 끝난 뒤 다시 보냅니다.\n" +
+                "- 앱을 켤 때(`onResume`) `queryPurchasesAsync` 로 남아 있는 구매를 이 API 로 다시 보냅니다. 403·409 거부는 " +
+                "다시 보내도 결과가 같습니다.\n\n" +
+                "**실패 응답**\n\n" +
+                "| error.code | HTTP | 설명 |\n" +
+                "|---|---|---|\n" +
+                "| INVALID_INPUT | 400 | productId·purchaseToken 누락 또는 길이 초과 |\n" +
+                "| PURCHASE_INVALID | 400 | Google 이 모르는 구매 토큰이거나 상태·상품 구성을 알 수 없는 구매 |\n" +
+                "| PURCHASE_PRODUCT_MISMATCH | 400 | 구매한 상품이 요청한 productId 와 다름 |\n" +
+                "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·무효) |\n" +
+                "| EXPIRED_TOKEN | 401 | accessToken 만료 — 재발급 후 재시도 |\n" +
+                "| WITHDRAWN_MEMBER | 403 | 탈퇴한 회원 |\n" +
+                "| PURCHASE_ACCESS_DENIED | 403 | 구매에 계정 토큰이 없거나 다른 회원의 계정 토큰이 담김 |\n" +
+                "| PURCHASE_CANCELLED | 409 | 취소되었거나 환불된 구매 |\n" +
+                "| PURCHASE_QUANTITY_UNSUPPORTED | 409 | 여러 개를 한 번에 산 구매(다중 수량 미지원) |\n" +
+                "| PAYMENT_PRODUCT_UNAVAILABLE | 409 | 판매 중이 아닌 상품 |\n" +
+                "| PAYMENT_STORE_UNAVAILABLE | 503 | Google 과 통신할 수 없음 — 잠시 후 다시 보냄 |",
+    )
+    @PostMapping("/google")
+    fun purchaseGoogle(
+        @Parameter(hidden = true) @AuthenticationPrincipal principal: AuthPrincipal,
+        @Valid @RequestBody request: GooglePurchaseRequest,
+    ): ApiResponse<GooglePurchaseResponse> {
+        val result =
+            googlePurchaseService.purchase(
+                memberId = principal.memberId,
+                productId = request.productId,
+                purchaseToken = request.purchaseToken,
+            )
+        return ApiResponse.success(GooglePurchaseResponse.from(result))
+    }
 }
