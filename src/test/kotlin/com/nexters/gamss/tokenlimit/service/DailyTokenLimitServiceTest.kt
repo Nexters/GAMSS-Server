@@ -2,6 +2,7 @@ package com.nexters.gamss.tokenlimit.service
 
 import com.nexters.gamss.tokenlimit.domain.TokenPolicy
 import com.nexters.gamss.tokenlimit.repository.TokenQuotaUsageRepository
+import com.nexters.gamss.wallet.service.TokenWalletReader
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -15,8 +16,10 @@ import kotlin.test.assertTrue
 class DailyTokenLimitServiceTest {
     private val tokenPolicyService = mockk<TokenPolicyService>()
     private val tokenQuotaUsageRepository = mockk<TokenQuotaUsageRepository>()
+    private val tokenWalletReader = mockk<TokenWalletReader> { every { balanceOf(any()) } returns 0 }
 
-    private fun service(enabled: Boolean) = DailyTokenLimitService(tokenPolicyService, tokenQuotaUsageRepository, enabled)
+    private fun service(enabled: Boolean) =
+        DailyTokenLimitService(tokenPolicyService, tokenQuotaUsageRepository, tokenWalletReader, enabled)
 
     @Test
     fun `상한이 꺼진 환경(dev)에서는 사용량과 무관하게 항상 통과시킨다`() {
@@ -26,6 +29,7 @@ class DailyTokenLimitServiceTest {
         // 미적용 환경에서는 정책·사용량 조회조차 하지 않는다.
         verify(exactly = 0) { tokenPolicyService.current() }
         verify(exactly = 0) { tokenQuotaUsageRepository.findUsedTokens(any(), any()) }
+        verify(exactly = 0) { tokenWalletReader.balanceOf(any()) }
     }
 
     @Test
@@ -42,6 +46,34 @@ class DailyTokenLimitServiceTest {
         every { tokenQuotaUsageRepository.findUsedTokens(eq(1L), any<Instant>()) } returns 100_000
 
         assertFalse(service(enabled = true).isWithinLimit(1L))
+    }
+
+    @Test
+    fun `일일 토큰을 다 써도 유료 잔액이 있으면 통과시킨다`() {
+        every { tokenPolicyService.current() } returns TokenPolicy(dailyTokenLimit = 100_000, resetHour = 5)
+        every { tokenQuotaUsageRepository.findUsedTokens(eq(1L), any<Instant>()) } returns 100_000
+        every { tokenWalletReader.balanceOf(1L) } returns 1
+
+        assertTrue(service(enabled = true).isWithinLimit(1L))
+    }
+
+    @Test
+    fun `일일 토큰을 다 쓰고 유료 잔액이 음수면 차단한다`() {
+        every { tokenPolicyService.current() } returns TokenPolicy(dailyTokenLimit = 100_000, resetHour = 5)
+        every { tokenQuotaUsageRepository.findUsedTokens(eq(1L), any<Instant>()) } returns 100_000
+        every { tokenWalletReader.balanceOf(1L) } returns -500
+
+        assertFalse(service(enabled = true).isWithinLimit(1L))
+    }
+
+    /** 일일 토큰으로 판정이 끝나면 생성마다 지갑을 조회할 이유가 없다. */
+    @Test
+    fun `일일 토큰이 남아 있으면 유료 잔액을 조회하지 않는다`() {
+        every { tokenPolicyService.current() } returns TokenPolicy(dailyTokenLimit = 100_000, resetHour = 5)
+        every { tokenQuotaUsageRepository.findUsedTokens(eq(1L), any<Instant>()) } returns 99_999
+
+        assertTrue(service(enabled = true).isWithinLimit(1L))
+        verify(exactly = 0) { tokenWalletReader.balanceOf(any()) }
     }
 
     @Test

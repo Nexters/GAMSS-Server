@@ -2,6 +2,7 @@ package com.nexters.gamss.tokenlimit.service
 
 import com.nexters.gamss.tokenlimit.domain.TokenQuotaWindow
 import com.nexters.gamss.tokenlimit.repository.TokenQuotaUsageRepository
+import com.nexters.gamss.wallet.service.TokenWalletReader
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 
@@ -16,20 +17,24 @@ import org.springframework.stereotype.Service
  *
  * 사용량은 회원이 아니라 소셜 신원에서 나온 쿼터 주체에 귀속된다([TokenQuotaRecorder]) - 예전처럼
  * `generation_log` 를 `member_id` 로 합산하면 탈퇴 후 재가입으로 한도가 리셋된다(#222).
+ *
+ * 일일 토큰을 다 쓰면 구매한 유료 토큰으로 이어서 쓴다(#239). 환불 회수로 잔액이 음수여도 일일 토큰이
+ * 남아 있는 동안은 생성할 수 있다.
  */
 @Service
 class DailyTokenLimitService(
     private val tokenPolicyService: TokenPolicyService,
     private val tokenQuotaUsageRepository: TokenQuotaUsageRepository,
+    private val tokenWalletReader: TokenWalletReader,
     @Value("\${gamss.token-limit.enabled:false}") private val enabled: Boolean,
 ) {
-    /** 이 회원이 지금 생성해도 되는지(=상한 미도달). 상한이 꺼진 환경이면 항상 true. */
+    /** 이 회원이 지금 생성해도 되는지(=일일 토큰이나 유료 토큰이 남음). 상한이 꺼진 환경이면 항상 true. */
     fun isWithinLimit(memberId: Long): Boolean {
         if (!enabled) {
             return true
         }
         val policy = tokenPolicyService.current()
-        return usedTokens(memberId, policy.resetHour) < policy.dailyTokenLimit
+        return usedTokens(memberId, policy.resetHour) < policy.dailyTokenLimit || tokenWalletReader.balanceOf(memberId) > 0
     }
 
     /**
