@@ -1,6 +1,7 @@
 package com.nexters.gamss.member.service
 
 import com.nexters.gamss.member.repository.MemberSocialIdentityRepository
+import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
 
 /**
@@ -26,4 +27,7 @@ class MemberSocialIdentityService(
     ) {
         repository.upsert(memberId, subjectKeyGenerator.generate(provider, providerId))
     }
+
+    /** 이 회원의 쿼터 주체 키. 매핑이 없으면(기동 백필 실패 등) null 이고, 다음 로그인에 채워진다. */
+    fun subjectKeyOf(memberId: Long): String? = repository.findByIdOrNull(memberId)?.subjectKey
 }

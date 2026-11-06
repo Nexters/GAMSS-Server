@@ -56,6 +56,12 @@ enum class ErrorCode(
     // 토큰 상한
     DAILY_TOKEN_LIMIT_EXCEEDED(ErrorKind.QUOTA_EXCEEDED, "오늘 사용할 수 있는 토큰을 모두 사용했습니다. 잠시 후 다시 시도해주세요."),
 
+    // 결제
+    PURCHASE_ACCESS_DENIED(ErrorKind.PERMISSION_DENIED, "본인 계정으로 결제한 구매만 지급할 수 있습니다."),
+    PAYMENT_ACCOUNT_NOT_FOUND(ErrorKind.NOT_FOUND, "구매 계정을 찾을 수 없습니다."),
+    PAYMENT_PRODUCT_UNAVAILABLE(ErrorKind.CONFLICT, "판매 중인 상품이 아닙니다. 고객센터로 문의해주세요."),
+    PAYMENT_NOT_FOUND(ErrorKind.NOT_FOUND, "결제 기록을 찾을 수 없습니다."),
+
     // 백오피스 관리자
     ADMIN_ACCOUNT_ALREADY_EXISTS(ErrorKind.CONFLICT, "이미 등록된 관리자입니다."),
     ADMIN_ACCOUNT_NOT_FOUND(ErrorKind.NOT_FOUND, "관리자를 찾을 수 없습니다."),
