@@ -46,6 +46,20 @@ interface TokenQuotaUsageRepository : JpaRepository<TokenQuotaUsage, TokenQuotaU
         @Param("delta") delta: Long,
     ): Int
 
+    /**
+     * 방금 적립한 사용량을 읽는다. 같은 트랜잭션이 [addUsedTokens] 로 고친 행이라 일반 조회로도 최신 커밋에
+     * delta 를 더한 값이 보인다. 앞선 생성의 커밋을 놓치지 않게 하는 것은 upsert 의 잠금이고, 이미 그 잠금을
+     * 쥐고 있어 잠금 읽기의 비용은 거의 없다.
+     */
+    @Query(
+        value = "select used_tokens from token_quota_usage where subject_key = :subjectKey and window_start = :windowStart for update",
+        nativeQuery = true,
+    )
+    fun findUsedTokensForUpdate(
+        @Param("subjectKey") subjectKey: String,
+        @Param("windowStart") windowStart: Instant,
+    ): Long?
+
     /** 보관 기간이 지난 구간을 지운다. */
     @Transactional
     @Modifying

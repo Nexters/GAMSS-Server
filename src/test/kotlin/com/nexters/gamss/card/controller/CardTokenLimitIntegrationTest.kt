@@ -15,6 +15,12 @@ import com.nexters.gamss.support.TestcontainersConfig
 import com.nexters.gamss.tokenlimit.service.DailyTokenLimitService
 import com.nexters.gamss.tokenlimit.service.TokenPolicyService
 import com.nexters.gamss.tokenlimit.service.TokenQuotaRecorder
+import com.nexters.gamss.wallet.domain.LedgerRefId
+import com.nexters.gamss.wallet.domain.TokenAmount
+import com.nexters.gamss.wallet.domain.TokenLedgerType
+import com.nexters.gamss.wallet.domain.TokenWalletChange
+import com.nexters.gamss.wallet.service.TokenWalletReader
+import com.nexters.gamss.wallet.service.TokenWalletService
 import jakarta.persistence.EntityManager
 import jakarta.persistence.PersistenceContext
 import org.junit.jupiter.api.BeforeEach
@@ -73,6 +79,12 @@ class CardTokenLimitIntegrationTest {
 
     @Autowired
     private lateinit var tokenPolicyService: TokenPolicyService
+
+    @Autowired
+    private lateinit var tokenWalletService: TokenWalletService
+
+    @Autowired
+    private lateinit var tokenWalletReader: TokenWalletReader
 
     @Autowired
     private lateinit var jwtIssuer: JwtIssuer
@@ -147,6 +159,28 @@ class CardTokenLimitIntegrationTest {
         entityManager.clear()
 
         assertEquals(before, dailyTokenLimitService.usageFor(member.id).usedTokens)
+    }
+
+    /** 일일 한도에 합산되지 않는 생성이라, 한도를 넘긴 회원이 만들어도 유료 토큰을 깎으면 안 된다(#239). */
+    @Test
+    fun `일일 토큰을 다 쓴 회원이 카드를 만들어도 유료 잔액은 그대로다`() {
+        val member = memberWithExhaustedTokens("card-paid-unchanged@test.com")
+        val purchase = TokenAmount(10_000)
+        tokenWalletService.apply(
+            TokenWalletChange(subjectKeyFor(member), TokenLedgerType.PURCHASE, purchase, LedgerRefId("purchase:card-${member.id}")),
+        )
+        val conversation = conversationRepository.save(Conversation(member.id).apply { end(ConversationEndedBy.USER) })
+
+        mockMvc
+            .post("/api/cards") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"conversationId":${conversation.id},"emotion":"ANGER","summary":"오늘 있었던 일"}"""
+            }.andExpect { status { isOk() } }
+        entityManager.flush()
+        entityManager.clear()
+
+        assertEquals(10_000, tokenWalletReader.balanceOf(member.id))
     }
 
     private fun bearerFor(member: Member): String = "Bearer ${jwtIssuer.issueAccessToken(member.id)}"

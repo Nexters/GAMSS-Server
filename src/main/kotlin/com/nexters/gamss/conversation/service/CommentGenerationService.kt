@@ -126,6 +126,7 @@ class CommentGenerationService(
             return currentStatusResult(messageId)
         }
 
+        val tokens = TokenUsageAccumulator()
         return try {
             // 대화방이 새로 생성될 때 지정한 제외 캐릭터 목록을 읽어오기 위한 조회다(소유권은 이미 검증된
             // 상태라 재검증 목적이 아니다 - generateFor는 저장 시점에, generateComments는 getOwnedRootMessage에서 확인함).
@@ -149,10 +150,13 @@ class CommentGenerationService(
                     currentConversationSummary,
                     pastSummaries,
                     conversation.excludedEmotionTypes.toSet(),
+                    tokens,
                 )
             val saved = commentPersistenceService.saveFeed(rootMessage.conversationId, messageId, output.feed)
+            tokenQuotaRecorder.recordDelivered(GenerationType.COMMENT, memberId, tokens.used)
             GenerationResult(CommentGenerationOutcome.DONE, saved, output.usedTokens)
         } catch (e: Exception) {
+            tokenQuotaRecorder.record(GenerationType.COMMENT, memberId, tokens.used)
             logGenerationFailure("댓글 생성", messageId, e)
 
             messageRepository.updateCommentStatus(
@@ -204,6 +208,7 @@ class CommentGenerationService(
             return currentReplyStatusResult(messageId)
         }
 
+        val tokens = TokenUsageAccumulator()
         return try {
             val output =
                 generateReplyWithRetry(
@@ -216,6 +221,7 @@ class CommentGenerationService(
                         userReply = userReplyMessage.content,
                         transcript = conversationTranscriptReader.read(userReplyMessage.conversationId, messageId),
                     ),
+                    tokens,
                 )
             val saved =
                 commentPersistenceService.saveReply(
@@ -225,8 +231,10 @@ class CommentGenerationService(
                     characterId = characterMessage.emotionType!!,
                     text = output.text,
                 )
+            tokenQuotaRecorder.recordDelivered(GenerationType.REPLY, memberId, tokens.used)
             GenerationResult(CommentGenerationOutcome.DONE, listOf(saved), output.usedTokens)
         } catch (e: Exception) {
+            tokenQuotaRecorder.record(GenerationType.REPLY, memberId, tokens.used)
             logGenerationFailure("답글 생성", messageId, e)
 
             messageRepository.updateCommentStatus(
@@ -247,11 +255,11 @@ class CommentGenerationService(
         memberId: Long,
         conversationId: Long,
         context: ReplyPromptContext,
+        tokens: TokenUsageAccumulator,
     ): ReplyGenerationOutput {
         val startedAt = System.currentTimeMillis()
-        val tokens = TokenUsageAccumulator()
         val recordFailure: (Int, Exception) -> Unit = { attempt, e ->
-            recordGeneration(GenerationType.REPLY, false, attempt, startedAt, memberId, conversationId, tokens, e)
+            logGeneration(GenerationType.REPLY, false, attempt, startedAt, memberId, conversationId, tokens, e)
         }
 
         return llmRetryExecutor.execute(
@@ -278,7 +286,7 @@ class CommentGenerationService(
                 )
             }
             tokens.add(output)
-            recordGeneration(GenerationType.REPLY, true, attempt, startedAt, memberId, conversationId, tokens)
+            logGeneration(GenerationType.REPLY, true, attempt, startedAt, memberId, conversationId, tokens)
             output
         }
     }
@@ -300,6 +308,7 @@ class CommentGenerationService(
         currentConversationSummary: String?,
         pastSummaries: List<String>,
         excludedCharacters: Set<EmotionType>,
+        tokens: TokenUsageAccumulator,
     ): CommentGenerationOutput {
         val plan = responsePlanner.plan(diaryContent, excludedCharacters)
         val characters = plan.selection.characters
@@ -320,11 +329,10 @@ class CommentGenerationService(
                 calledAbsentCharacters = plan.addressees.absent,
             )
         val startedAt = System.currentTimeMillis()
-        val tokens = TokenUsageAccumulator()
         // 재시도 대상이 아닌 예외로 중단할 때와 시도를 모두 소진했을 때는 남길 것이 같다 -
         // 그때까지 누적된 토큰과 마지막 실패 원인.
         val recordFailure: (Int, Exception) -> Unit = { attempt, e ->
-            recordGeneration(GenerationType.COMMENT, false, attempt, startedAt, memberId, conversationId, tokens, e)
+            logGeneration(GenerationType.COMMENT, false, attempt, startedAt, memberId, conversationId, tokens, e)
         }
 
         return llmRetryExecutor.execute(
@@ -351,7 +359,7 @@ class CommentGenerationService(
                 )
             }
             tokens.add(output)
-            recordGeneration(GenerationType.COMMENT, true, attempt, startedAt, memberId, conversationId, tokens)
+            logGeneration(GenerationType.COMMENT, true, attempt, startedAt, memberId, conversationId, tokens)
             output
         }
     }
@@ -359,8 +367,12 @@ class CommentGenerationService(
     /**
      * 생성 로그 한 줄. 성공, 실패 모두 [tokens]에 **그때까지 누적된 합계**를 싣는다 - 검증에 실패한
      * 시도도 호출은 됐으니 과금되기 때문에, 마지막 한 시도만 기록하면 비용이 과소 집계된다.
+     *
+     * 한도 집행용 적립은 여기서 하지 않는다. 값은 같지만 실패 허용도가 달라 묶지 않고, 응답이 저장됐는지를
+     * 알아야 유료 토큰을 깎을지 정할 수 있어 시점도 다르다. 저장까지 끝나면 [TokenQuotaRecorder.recordDelivered]
+     * 로 깎고, 도중에 실패하면 받은 응답이 없으므로 [TokenQuotaRecorder.record] 로 일일 사용량만 쌓는다(#239).
      */
-    private fun recordGeneration(
+    private fun logGeneration(
         type: GenerationType,
         success: Boolean,
         attempt: Int,
@@ -383,9 +395,6 @@ class CommentGenerationService(
             outputTokens = tokens.output,
             failureReason = failureReasonOf(error),
         )
-        // 한도 집행용 적립은 관측 기록과 따로 간다. 값은 같지만 실패 허용도가 달라 묶지 않는다.
-        // 합산 대상인지는 종류가 정한다(GenerationType.countsTowardQuota).
-        tokenQuotaRecorder.record(type, memberId, tokens.used)
     }
 
     private fun currentStatusResult(messageId: Long): GenerationResult {

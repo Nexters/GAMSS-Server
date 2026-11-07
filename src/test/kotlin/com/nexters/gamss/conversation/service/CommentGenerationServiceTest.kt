@@ -36,6 +36,7 @@ import com.nexters.gamss.tokenlimit.service.TokenQuotaRecorder
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import io.mockk.verifyOrder
 import org.springframework.test.util.ReflectionTestUtils
 import java.util.Optional
 import kotlin.test.Test
@@ -171,7 +172,12 @@ class CommentGenerationServiceTest {
         assertEquals(savedMessages, result.messages)
         assertEquals(123, result.usedTokens)
         // 적립이 빠지면 생성 토큰이 주체 기반 쿼터에 안 쌓여 한도가 조용히 느슨해진다.
-        verify(exactly = 1) { tokenQuotaRecorder.record(GenerationType.COMMENT, 1L, 123) }
+        // 응답을 저장한 뒤에 적립해야 저장이 실패한 생성이 유료 토큰을 깎지 않는다.
+        verifyOrder {
+            commentPersistenceService.saveFeed(10L, 1L, feed())
+            tokenQuotaRecorder.recordDelivered(GenerationType.COMMENT, 1L, 123)
+        }
+        verify(exactly = 0) { tokenQuotaRecorder.record(any(), any(), any()) }
     }
 
     @Test
@@ -416,7 +422,7 @@ class CommentGenerationServiceTest {
             )
         }
         // 쿼터도 같은 합산값을 받아야 한다. 마지막 시도만 적립하면 재시도로 쓴 토큰이 한도를 빠져나간다.
-        verify(exactly = 1) { tokenQuotaRecorder.record(GenerationType.COMMENT, 1L, 300) }
+        verify(exactly = 1) { tokenQuotaRecorder.recordDelivered(GenerationType.COMMENT, 1L, 300) }
     }
 
     @Test
@@ -697,6 +703,11 @@ class CommentGenerationServiceTest {
         assertEquals(CommentGenerationOutcome.DONE, result.outcome)
         assertEquals(listOf(savedReply), result.messages)
         assertEquals(77, result.usedTokens)
+        verifyOrder {
+            commentPersistenceService.saveReply(10L, 3L, 1L, EmotionType.JOY, "그치! 잘했어!")
+            tokenQuotaRecorder.recordDelivered(GenerationType.REPLY, 1L, 77)
+        }
+        verify(exactly = 0) { tokenQuotaRecorder.record(any(), any(), any()) }
     }
 
     @Test
@@ -976,5 +987,78 @@ class CommentGenerationServiceTest {
         // 생성도, 선점(CAS)도 하지 않는다 - 저장(컨트롤러가 이미 함)만 남고 토큰 소비는 없다.
         verify(exactly = 0) { commentGenerator.generateComment(any()) }
         verify(exactly = 0) { messageRepository.updateCommentStatus(any(), any(), any(), any()) }
+    }
+
+    /** 응답을 받지 못했으니 유료 토큰은 깎지 않는다. LLM 호출 비용은 나갔으므로 일일 사용량은 쌓는다(#239). */
+    @Test
+    fun `모든 시도가 검증 실패한 댓글은 일일 사용량만 적립한다`() {
+        every { messageRepository.findById(1L) } returns Optional.of(rootMessage())
+        every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
+        stubClaimSuccess()
+        every { commentGenerator.generateComment(any()) } returns CommentGenerationOutput(feed(), 100, 0)
+        every { commentFeedValidator.validate(any(), any(), any()) } throws CommentGenerationFailedException("검증 실패")
+        every { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) } returns 1
+
+        val result = service.generateComments(memberId = 1L, messageId = 1L, currentConversationSummary = null)
+
+        assertEquals(CommentGenerationOutcome.FAILED, result.outcome)
+        verify(exactly = 1) { tokenQuotaRecorder.record(GenerationType.COMMENT, 1L, 300) }
+        verify(exactly = 0) { tokenQuotaRecorder.recordDelivered(any(), any(), any()) }
+    }
+
+    @Test
+    fun `LLM은 성공했지만 저장에 실패한 댓글은 일일 사용량만 적립한다`() {
+        every { messageRepository.findById(1L) } returns Optional.of(rootMessage())
+        every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
+        stubClaimSuccess()
+        every { commentGenerator.generateComment(any()) } returns CommentGenerationOutput(feed(), 123, 0)
+        every { commentFeedValidator.validate(any(), any(), any()) } returns Unit
+        every { commentPersistenceService.saveFeed(10L, 1L, feed()) } throws RuntimeException("DB 장애")
+        every { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) } returns 1
+
+        val result = service.generateComments(memberId = 1L, messageId = 1L, currentConversationSummary = null)
+
+        assertEquals(CommentGenerationOutcome.FAILED, result.outcome)
+        verify(exactly = 1) { tokenQuotaRecorder.record(GenerationType.COMMENT, 1L, 123) }
+        verify(exactly = 0) { tokenQuotaRecorder.recordDelivered(any(), any(), any()) }
+    }
+
+    @Test
+    fun `모든 시도가 검증 실패한 답글은 일일 사용량만 적립한다`() {
+        stubReplyClaimSuccess()
+        every { commentGenerator.generateReply(any()) } returns ReplyGenerationOutput("그치! 잘했어!", 77, 0)
+        every { commentFeedValidator.validateReply(any()) } throws CommentGenerationFailedException("검증 실패")
+        every { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) } returns 1
+
+        val result = service.generateReplyComment(memberId = 1L, messageId = 1L)
+
+        assertEquals(CommentGenerationOutcome.FAILED, result.outcome)
+        verify(exactly = 1) { tokenQuotaRecorder.record(GenerationType.REPLY, 1L, 231) }
+        verify(exactly = 0) { tokenQuotaRecorder.recordDelivered(any(), any(), any()) }
+    }
+
+    @Test
+    fun `LLM은 성공했지만 저장에 실패한 답글은 일일 사용량만 적립한다`() {
+        stubReplyClaimSuccess()
+        every { commentGenerator.generateReply(any()) } returns ReplyGenerationOutput("그치! 잘했어!", 77, 0)
+        every { commentFeedValidator.validateReply(any()) } returns Unit
+        every { commentPersistenceService.saveReply(10L, 3L, 1L, EmotionType.JOY, "그치! 잘했어!") } throws RuntimeException("DB 장애")
+        every { messageRepository.updateCommentStatus(1L, CommentStatus.FAILED, listOf(CommentStatus.PENDING), any()) } returns 1
+
+        val result = service.generateReplyComment(memberId = 1L, messageId = 1L)
+
+        assertEquals(CommentGenerationOutcome.FAILED, result.outcome)
+        verify(exactly = 1) { tokenQuotaRecorder.record(GenerationType.REPLY, 1L, 77) }
+        verify(exactly = 0) { tokenQuotaRecorder.recordDelivered(any(), any(), any()) }
+    }
+
+    private fun stubReplyClaimSuccess() {
+        every { messageRepository.findById(1L) } returns Optional.of(userReplyMessage())
+        every { messageRepository.findById(2L) } returns Optional.of(characterMessage())
+        every { messageRepository.findById(3L) } returns Optional.of(diaryMessage())
+        every { conversationRepository.findById(10L) } returns Optional.of(Conversation(memberId = 1L))
+        every {
+            messageRepository.updateCommentStatus(1L, CommentStatus.PENDING, listOf(CommentStatus.NONE, CommentStatus.FAILED), any())
+        } returns 1
     }
 }
