@@ -2,10 +2,13 @@ package com.nexters.gamss.payment.controller
 
 import com.nexters.gamss.global.response.ApiResponse
 import com.nexters.gamss.global.security.AuthPrincipal
+import com.nexters.gamss.payment.controller.dto.ApplePurchaseRequest
+import com.nexters.gamss.payment.controller.dto.ApplePurchaseResponse
 import com.nexters.gamss.payment.controller.dto.GooglePurchaseRequest
 import com.nexters.gamss.payment.controller.dto.GooglePurchaseResponse
 import com.nexters.gamss.payment.controller.dto.PaymentAccountTokenResponse
 import com.nexters.gamss.payment.controller.dto.TokenProductResponse
+import com.nexters.gamss.payment.service.ApplePurchaseService
 import com.nexters.gamss.payment.service.GooglePurchaseService
 import com.nexters.gamss.payment.service.PaymentAccountService
 import com.nexters.gamss.payment.service.TokenProductService
@@ -27,6 +30,7 @@ class PaymentController(
     private val tokenProductService: TokenProductService,
     private val paymentAccountService: PaymentAccountService,
     private val googlePurchaseService: GooglePurchaseService,
+    private val applePurchaseService: ApplePurchaseService,
 ) {
     @Operation(
         summary = "판매 상품 목록 조회",
@@ -106,4 +110,43 @@ class PaymentController(
             )
         return ApiResponse.success(GooglePurchaseResponse.from(result))
     }
+
+    @Operation(
+        summary = "App Store 구매 검증과 지급",
+        description =
+            "StoreKit 2 거래의 Apple 서명을 서버가 확인한 뒤 유료 토큰을 지급합니다.\n\n" +
+                "- 구매할 때 `.appAccountToken(UUID)` 옵션에 계정 토큰(`GET /api/payments/account-token`)을 넣어야 합니다.\n" +
+                "- 지급량은 상품 지급량 x 거래 수량입니다.\n" +
+                "- 같은 거래를 다시 보내도 추가로 지급하지 않고 같은 `grantedTokens` 로 성공합니다. `paidBalance` 는 " +
+                "응답 시점의 잔액이라 처음 응답과 다를 수 있습니다.\n" +
+                "- 앱을 켤 때 `Transaction.unfinished` 를 순회하며 이 API 로 다시 보냅니다.\n\n" +
+                "**finish 규칙**\n\n" +
+                "Apple 은 finish 하지 않은 거래를 자동 환불하지 않고 다음 실행에 다시 보여 줍니다. 남겨 두는 비용은 없고, " +
+                "잘못 finish 하면 결제만 되고 토큰은 지급되지 않은 채 복구할 수 없습니다. 그래서 아래 표에서 '한다'인 " +
+                "경우에만 `transaction.finish()` 를 부릅니다.\n\n" +
+                "| 응답 | finish |\n" +
+                "|---|---|\n" +
+                "| 200 (재요청 포함) | 한다 |\n" +
+                "| PURCHASE_INVALID | 한다 |\n" +
+                "| PURCHASE_CANCELLED | 한다 |\n" +
+                "| 그 밖의 모든 실패(403, 409 PAYMENT_PRODUCT_UNAVAILABLE, 401, 5xx, 네트워크 오류) | 하지 않는다. 다음 실행에 다시 보낸다 |\n\n" +
+                "**실패 응답**\n\n" +
+                "| error.code | HTTP | 설명 |\n" +
+                "|---|---|---|\n" +
+                "| INVALID_INPUT | 400 | signedTransaction 누락 또는 길이 초과 |\n" +
+                "| PURCHASE_INVALID | 400 | Apple 서명을 확인할 수 없거나, 다른 앱의 거래거나, 소모성 상품이 아니거나, 수량이 범위를 벗어남 |\n" +
+                "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음 또는 무효) |\n" +
+                "| EXPIRED_TOKEN | 401 | accessToken 만료. 재발급 후 재시도 |\n" +
+                "| WITHDRAWN_MEMBER | 403 | 탈퇴한 회원 |\n" +
+                "| PURCHASE_ACCESS_DENIED | 403 | 거래에 계정 토큰이 없거나 다른 회원의 계정 토큰이 담김. 맞는 계정으로 로그인하면 지급될 수 있음 |\n" +
+                "| PURCHASE_CANCELLED | 409 | 환불되었거나 취소된 거래 |\n" +
+                "| PAYMENT_PRODUCT_UNAVAILABLE | 409 | 판매 중이 아닌 상품 |\n" +
+                "| PAYMENT_STORE_UNAVAILABLE | 503 | 지금은 거래를 확인할 수 없음. 다음 실행에 다시 보냄 |",
+    )
+    @PostMapping("/apple")
+    fun purchaseApple(
+        @Parameter(hidden = true) @AuthenticationPrincipal principal: AuthPrincipal,
+        @Valid @RequestBody request: ApplePurchaseRequest,
+    ): ApiResponse<ApplePurchaseResponse> =
+        ApiResponse.success(ApplePurchaseResponse.from(applePurchaseService.purchase(principal.memberId, request.signedTransaction)))
 }
