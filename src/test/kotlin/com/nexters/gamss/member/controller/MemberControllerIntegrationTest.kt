@@ -9,6 +9,11 @@ import com.nexters.gamss.member.repository.MemberSocialIdentityRepository
 import com.nexters.gamss.monitoring.domain.GenerationType
 import com.nexters.gamss.support.TestcontainersConfig
 import com.nexters.gamss.tokenlimit.service.TokenQuotaRecorder
+import com.nexters.gamss.wallet.domain.LedgerRefId
+import com.nexters.gamss.wallet.domain.TokenAmount
+import com.nexters.gamss.wallet.domain.TokenLedgerType
+import com.nexters.gamss.wallet.domain.TokenWalletChange
+import com.nexters.gamss.wallet.service.TokenWalletService
 import org.hamcrest.Matchers.nullValue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -47,6 +52,9 @@ class MemberControllerIntegrationTest {
 
     @Autowired
     private lateinit var tokenQuotaRecorder: TokenQuotaRecorder
+
+    @Autowired
+    private lateinit var tokenWalletService: TokenWalletService
 
     private lateinit var mockMvc: MockMvc
 
@@ -187,6 +195,7 @@ class MemberControllerIntegrationTest {
                 jsonPath("$.data.usedTokens") { value(300) }
                 jsonPath("$.data.dailyLimit", nullValue())
                 jsonPath("$.data.exceeded") { value(false) }
+                jsonPath("$.data.paidBalance") { value(0) }
             }
     }
 
@@ -208,6 +217,36 @@ class MemberControllerIntegrationTest {
     }
 
     @Test
+    fun `토큰 사용량 응답에 지갑의 유료 잔액을 그대로 내려준다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        givenWalletChange(member, TokenLedgerType.PURCHASE, 50_000)
+
+        mockMvc
+            .get("/api/members/me/token-usage") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.paidBalance") { value(50_000) }
+            }
+    }
+
+    /** 환불 회수로 생긴 음수를 0으로 자르지 않는다. 음수를 어떻게 보여줄지는 앱이 정한다(#240). */
+    @Test
+    fun `유료 잔액이 음수여도 0으로 자르지 않고 그대로 내려준다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        givenWalletChange(member, TokenLedgerType.ADMIN_REVOKE, 1_000)
+
+        mockMvc
+            .get("/api/members/me/token-usage") {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.data.paidBalance") { value(-1_000) }
+                jsonPath("$.data.exceeded") { value(false) }
+            }
+    }
+
+    @Test
     fun `인증 없이 토큰 사용량을 조회하면 401을 반환한다`() {
         mockMvc
             .get("/api/members/me/token-usage")
@@ -224,10 +263,26 @@ class MemberControllerIntegrationTest {
         member: Member,
         usedTokens: Int,
     ) {
-        if (!memberSocialIdentityRepository.existsByMemberId(member.id)) {
-            memberSocialIdentityRepository.save(MemberSocialIdentity(member.id, "test-subject-%064d".format(member.id).takeLast(64)))
-        }
+        subjectOf(member)
         tokenQuotaRecorder.record(GenerationType.COMMENT, member.id, usedTokens)
+    }
+
+    /** 지갑도 소셜 주체에 귀속되므로 [givenUsedTokens]와 같은 매핑을 쓴다. */
+    private fun givenWalletChange(
+        member: Member,
+        type: TokenLedgerType,
+        tokens: Long,
+    ) {
+        val refId = LedgerRefId("test:${type.name.lowercase()}:${member.id}")
+        tokenWalletService.apply(TokenWalletChange(subjectOf(member), type, TokenAmount(tokens), refId))
+    }
+
+    private fun subjectOf(member: Member): String {
+        val subject = "test-subject-%064d".format(member.id).takeLast(64)
+        if (!memberSocialIdentityRepository.existsByMemberId(member.id)) {
+            memberSocialIdentityRepository.save(MemberSocialIdentity(member.id, subject))
+        }
+        return subject
     }
 
     private fun bearerFor(member: Member): String = "Bearer ${jwtIssuer.issueAccessToken(member.id)}"
