@@ -58,8 +58,10 @@ class ConversationController(
                 "LLM 생성이 재시도(최대 3회) 끝에 실패해도 저장은 유지됩니다 — 이 경우 commentStatus=FAILED, " +
                 "comments는 빈 리스트로 반환되며, 실패한 메시지는 `/messages/comments`류 엔드포인트로 " +
                 "재시도할 수 있습니다.\n\n" +
-                "유저의 일일 토큰 상한(prod 전용)을 넘긴 경우에도 저장은 유지되고 생성만 건너뜁니다 — " +
-                "이 경우 commentStatus=LIMIT_EXCEEDED, comments는 빈 리스트로 반환됩니다(리셋 이후 재시도 가능).\n\n" +
+                "일일 토큰을 다 쓴 뒤의 생성은 구매한 유료 토큰에서 이어서 차감됩니다. 일일 토큰과 유료 토큰을 모두 쓴 경우" +
+                "(GET /api/members/me/token-usage의 exceeded=true와 같은 조건)에는 저장은 유지되고 생성만 건너뜁니다 — " +
+                "이 경우 commentStatus=LIMIT_EXCEEDED, comments는 빈 리스트로 반환됩니다" +
+                "(리셋 이후, 또는 토큰을 구매해 유료 잔액이 0보다 커진 뒤 재시도 가능).\n\n" +
                 "excludeCharacters로 새 채팅방에서 반응하지 않을 캐릭터를 지정할 수 있습니다(전체 제외는 불가). " +
                 "이 채팅방에 이어서 보내는 이후 요청에 다시 실려 와도 무시되고 최초 설정이 유지됩니다.\n\n" +
                 "**실패 응답**\n\n" +

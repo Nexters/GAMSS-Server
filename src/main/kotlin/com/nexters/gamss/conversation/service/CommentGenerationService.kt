@@ -98,7 +98,8 @@ class CommentGenerationService(
     }
 
     /**
-     * 생성 진입점 공통 상한 가드. 초과면 [CommentGenerationOutcome.LIMIT_EXCEEDED] 결과를, 아니면 null을 돌려준다.
+     * 생성 진입점 공통 상한 가드. 일일 토큰과 유료 토큰이 모두 없으면 [CommentGenerationOutcome.LIMIT_EXCEEDED] 결과를,
+     * 아니면 null을 돌려준다.
      * 저장은 이미 끝난 상태라(저장 O, 생성만 차단) 여기선 생성을 건너뛰고 상태만 알린다 -
      * 새 생성 경로가 늘어도 이 한 곳으로 가드를 강제해 우회를 막는다.
      */
