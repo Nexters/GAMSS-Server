@@ -47,6 +47,8 @@ out/
 deploy/nginx/conf/.htpasswd
 # 모니터링 서버 .env(Grafana 비밀번호·Discord 웹훅). 서버에서 직접 채운다(.env.example 참고).
 deploy/monitor/.env
+# 로컬 실행용 시크릿(Google Play 서비스 계정 키 등). 공개 저장소라 어느 위치의 .env 도 커밋하지 않는다.
+.env
 
 ### macOS ###
 .DS_Store

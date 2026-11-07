@@ -12,9 +12,11 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import org.springframework.http.HttpHeaders
+import org.springframework.http.MediaType
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.get
+import org.springframework.test.web.servlet.post
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.transaction.annotation.Transactional
@@ -113,6 +115,23 @@ class PaymentControllerIntegrationTest {
         }
     }
 
+    /** 테스트 설정에는 Google Play 자격증명이 없다. 앱은 뜨고 Android 구매 검증만 거부해야 한다. */
+    @Test
+    fun `Google Play 자격증명이 없는 환경은 구매 검증을 503 으로 거부한다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        identityRepository.upsert(member.id, SUBJECT)
+
+        mockMvc
+            .post(GOOGLE) {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"productId": "token_300000", "purchaseToken": "token"}"""
+            }.andExpect {
+                status { isServiceUnavailable() }
+                jsonPath("$.error.code") { value("PAYMENT_STORE_UNAVAILABLE") }
+            }
+    }
+
     private fun accountTokenOf(member: Member): String {
         val body =
             mockMvc
@@ -131,6 +150,7 @@ class PaymentControllerIntegrationTest {
     companion object {
         private const val PRODUCTS = "/api/payments/products"
         private const val ACCOUNT_TOKEN = "/api/payments/account-token"
+        private const val GOOGLE = "/api/payments/google"
         private val SUBJECT = "c".repeat(64)
     }
 }

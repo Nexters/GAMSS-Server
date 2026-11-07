@@ -77,6 +77,15 @@ fcm:
   # 비워두면 푸시를 보내지 않는 구현이 선택된다 — 로컬·테스트는 자격증명 없이 기동해야 한다.
   credentials-base64: ${FIREBASE_CREDENTIALS_BASE64:}
 
+google:
+  play:
+    # Play Console 에 연결한 서비스 계정 JSON 을 base64 로 한 줄로 만든 값(배포는 GitHub 시크릿에서 주입).
+    # 비워두면 Android 구매 검증 요청을 503 으로 거부하는 구현이 선택된다 — 로컬·테스트는 자격증명 없이 기동해야 한다.
+    # 기본값을 빈 문자열로 둬야 한다. 기본값이 없으면 환경변수가 없을 때 '${...}' 문자열이 그대로 들어가 '설정됨'으로 판정된다.
+    credentials-base64: ${GOOGLE_PLAY_CREDENTIALS_BASE64:}
+    # Android 앱의 applicationId. 자격증명이 있는데 비어 있으면 기동이 실패한다.
+    package-name: ${GOOGLE_PLAY_PACKAGE_NAME:}
+
 gemini:
   model: gemini-3.1-flash-lite
   request-timeout: PT15S

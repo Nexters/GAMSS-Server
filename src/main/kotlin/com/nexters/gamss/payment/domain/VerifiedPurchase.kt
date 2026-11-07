@@ -24,5 +24,10 @@ class VerifiedPurchase(
     init {
         require(productId.isNotBlank()) { "상품 ID 는 비어 있을 수 없습니다." }
         require(quantity > 0) { "구매 수량은 양수여야 합니다: $quantity" }
+        // Google 거래 키는 해시라 원문 없이는 consume 재시도도 재조회도 할 수 없다. 기본값이 null 이라
+        // 빠뜨려도 컴파일되므로 여기서 막는다.
+        require(platform != PaymentPlatform.GOOGLE || !storePurchaseToken.isNullOrBlank()) {
+            "Google 구매는 purchaseToken 원문이 있어야 합니다."
+        }
     }
 }

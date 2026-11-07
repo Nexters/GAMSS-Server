@@ -115,6 +115,7 @@ class LayerDependencyTest {
             sources().flatMap { file ->
                 file
                     .readLines()
+                    .filterNot { it.isExternalImport() }
                     .filter { HEXAGONAL_NAME.containsMatchIn(it) }
                     .map { "${file.display()}: ${it.trim()}" }
             },
@@ -167,6 +168,13 @@ class LayerDependencyTest {
             .map { it.removePrefix("import ").trim() }
 
     private fun Path.gamssImports(): List<String> = imports().filter { it.startsWith("$PACKAGE_PREFIX.") }
+
+    /**
+     * 외부 라이브러리를 들이는 import 줄인가. 이름 규칙은 우리가 짓는 이름에만 적용한다. 라이브러리 타입
+     * 이름(Google 인증의 `HttpCredentialsAdapter` 등)은 고를 수 없으므로 import 줄에서는 보지 않고,
+     * 본문에서는 `import ... as` 로 우리 어휘의 별칭을 붙여 쓴다.
+     */
+    private fun String.isExternalImport(): Boolean = startsWith("import ") && !startsWith("import $PACKAGE_PREFIX.")
 
     private fun String.module(): String = removePrefix("$PACKAGE_PREFIX.").substringBefore('.')
 
