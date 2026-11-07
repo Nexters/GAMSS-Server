@@ -78,6 +78,9 @@ dependencies {
     implementation("com.google.apis:google-api-services-androidpublisher:v3-rev20261022-2.0.0")
     implementation("com.google.auth:google-auth-library-oauth2-http:1.54.0")
 
+    // App Store 거래 JWS 검증(#243).
+    implementation("com.apple.itunes.storekit:app-store-server-library:5.2.0")
+
     // google-genai 내부 구현이 Jackson 2(com.fasterxml.jackson.databind)를 쓰고, 그 jar 안에
     // META-INF/services에 Jackson2용 KotlinModule 등록이 딸려 있어서(google-genai 쪽 잔재 추정),
     // 그 클래스가 클래스패스에 없으면 Hibernate의 Jackson JSON 포맷 매퍼 자동 감지(ObjectMapper.findModules())가
@@ -94,6 +97,8 @@ dependencies {
     testImplementation("org.testcontainers:junit-jupiter")
     testImplementation("org.testcontainers:mysql")
     testImplementation("io.mockk:mockk:1.13.13")
+    // App Store 검증 테스트에서 Apple 확장을 단 자체 인증서 체인을 만든다. 버전은 라이브러리가 끌어오는 bcprov 와 맞춘다.
+    testImplementation("org.bouncycastle:bcpkix-jdk18on:1.84")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
