@@ -41,7 +41,7 @@ class TokenQuotaRecorder(
         FailureReason.entries.associateWith { reason ->
             Counter
                 .builder("gamss.tokenlimit.quota.record.failure")
-                .description("토큰 쿼터 적립에 실패한 생성 건수(사유별)")
+                .description("토큰 쿼터 적립 또는 정산에 실패한 생성 건수(사유별)")
                 .tag("reason", reason.tag)
                 .register(meterRegistry)
         }
@@ -65,8 +65,8 @@ class TokenQuotaRecorder(
      * 응답이 회원에게 전달된 생성을 적립하고, 일일 한도를 넘긴 만큼 유료 토큰을 깎는다. 상한이 꺼진
      * 환경에서는 한도가 없으므로 깎지 않는다.
      *
-     * 적립과 차감은 한 트랜잭션이라 실패하면 적립까지 롤백된다. 일일 한도가 새지 않도록 적립만 한 번 더
-     * 시도하고, 성공하면 유료 차감만 빠진 상태가 된다.
+     * 적립과 차감은 한 트랜잭션이라 정산이 어디서 실패하든 적립까지 롤백된다. 일일 한도가 새지 않도록 적립만
+     * 한 번 더 시도하고, 성공하면 일일 사용량은 쌓였지만 유료 차감은 빠졌을 수 있는 상태가 된다.
      */
     fun recordDelivered(
         type: GenerationType,
@@ -85,9 +85,9 @@ class TokenQuotaRecorder(
                 countNoMapping(memberId, usedTokens)
             }
         } catch (e: Exception) {
-            log.error("유료 토큰 차감 실패. 적립만 다시 시도한다: memberId={}, usedTokens={}", memberId, usedTokens, e)
+            log.error("토큰 정산 실패. 적립만 다시 시도하며 유료 차감은 빠졌을 수 있다: memberId={}, usedTokens={}", memberId, usedTokens, e)
             if (addUsage(memberId, usedTokens)) {
-                failureCounters.getValue(FailureReason.PAID_ERROR).increment()
+                failureCounters.getValue(FailureReason.SETTLE_ERROR).increment()
             }
         }
     }
@@ -144,14 +144,14 @@ class TokenQuotaRecorder(
     }
 
     /**
-     * 대응이 갈리므로 사유를 나눈다. 매핑 누락은 로그인·백필을, 쓰기 실패는 DB 를 봐야 한다. 유료 차감
-     * 실패는 일일 사용량은 쌓였고 유료 잔액만 덜 깎인 상태라, 쌓이지 못한 [ERROR] 와 구분한다.
+     * 대응이 갈리므로 사유를 나눈다. 매핑 누락은 로그인·백필을, 쓰기 실패는 DB 를 봐야 한다. 정산 실패는
+     * 일일 사용량은 쌓였고 유료 잔액은 덜 깎였을 수 있는 상태라, 쌓이지 못한 [ERROR] 와 구분한다.
      */
     private enum class FailureReason(
         val tag: String,
     ) {
         NO_MAPPING("no_mapping"),
         ERROR("error"),
-        PAID_ERROR("paid_error"),
+        SETTLE_ERROR("settle_error"),
     }
 }

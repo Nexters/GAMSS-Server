@@ -102,7 +102,7 @@ class TokenQuotaRecorderTest {
     fun `실패 카운터는 발생 전에도 0 으로 등록돼 있다`() {
         assertEquals(0.0, failureCount("no_mapping"))
         assertEquals(0.0, failureCount("error"))
-        assertEquals(0.0, failureCount("paid_error"))
+        assertEquals(0.0, failureCount("settle_error"))
     }
 
     @Test
@@ -171,11 +171,11 @@ class TokenQuotaRecorderTest {
         recorder.recordDelivered(GenerationType.COMMENT, MEMBER_ID, 500)
 
         assertEquals(1.0, failureCount("no_mapping"))
-        assertEquals(0.0, failureCount("paid_error"))
+        assertEquals(0.0, failureCount("settle_error"))
     }
 
     @Test
-    fun `유료 차감이 실패하면 적립만 다시 하고 paid_error 로 집계한다`() {
+    fun `정산이 실패하면 적립만 다시 하고 settle_error 로 집계한다`() {
         givenResetHour(5)
         givenSubject()
         every { settlement.settle(any(), any(), any(), any(), any()) } throws IllegalStateException("지갑 장애")
@@ -184,7 +184,7 @@ class TokenQuotaRecorderTest {
         recorder.recordDelivered(GenerationType.COMMENT, MEMBER_ID, 500)
 
         verify(exactly = 1) { repository.addUsedTokens(MEMBER_ID, any(), 500L) }
-        assertEquals(1.0, failureCount("paid_error"))
+        assertEquals(1.0, failureCount("settle_error"))
         assertEquals(0.0, failureCount("error"))
     }
 
@@ -199,7 +199,7 @@ class TokenQuotaRecorderTest {
         recorder.recordDelivered(GenerationType.COMMENT, MEMBER_ID, 500)
 
         assertEquals(1.0, failureCount("error"))
-        assertEquals(0.0, failureCount("paid_error"))
+        assertEquals(0.0, failureCount("settle_error"))
     }
 
     @Test
@@ -221,7 +221,7 @@ class TokenQuotaRecorderTest {
         recorder.recordDelivered(GenerationType.COMMENT, MEMBER_ID, 500)
 
         verify(exactly = 2) { settlement.settle(any(), any(), any(), any(), any()) }
-        assertEquals(0.0, failureCount("paid_error"))
+        assertEquals(0.0, failureCount("settle_error"))
     }
 
     private fun givenSubject() {

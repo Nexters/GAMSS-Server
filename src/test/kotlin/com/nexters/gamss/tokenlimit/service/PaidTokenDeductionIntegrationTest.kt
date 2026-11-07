@@ -187,7 +187,7 @@ class PaidTokenDeductionIntegrationTest {
     fun `같은 회원이 동시에 생성해도 유료 차감 합이 식과 정확히 맞는다`() {
         purchase(1_000_000)
         useDailyTokens(limit - 1_000)
-        val before = paidErrorCount()
+        val before = settleErrorCount()
 
         runConcurrently { recorder.recordDelivered(GenerationType.COMMENT, MEMBER_ID, 500) }
 
@@ -195,7 +195,7 @@ class PaidTokenDeductionIntegrationTest {
         assertEquals(1_000_000 - expected, walletReader.balanceOf(MEMBER_ID))
         assertEquals(-expected, consumed().sum())
         assertEquals(limit - 1_000 + THREADS * 500L, limitService.usageFor(MEMBER_ID).usedTokens)
-        assertEquals(before, paidErrorCount())
+        assertEquals(before, settleErrorCount())
     }
 
     @Test
@@ -236,12 +236,12 @@ class PaidTokenDeductionIntegrationTest {
     fun `유료 차감이 실패해도 일일 사용량은 한 번만 적립되고 카운터가 오른다`() {
         identityRepository.save(MemberSocialIdentity(BROKEN_MEMBER_ID, "z".repeat(64)))
         recorder.record(GenerationType.COMMENT, BROKEN_MEMBER_ID, limit)
-        val before = paidErrorCount()
+        val before = settleErrorCount()
 
         recorder.recordDelivered(GenerationType.COMMENT, BROKEN_MEMBER_ID, 3_000)
 
         assertEquals(limit + 3_000L, limitService.usageFor(BROKEN_MEMBER_ID).usedTokens)
-        assertEquals(before + 1, paidErrorCount())
+        assertEquals(before + 1, settleErrorCount())
     }
 
     private fun useDailyTokens(tokens: Int) = recorder.record(GenerationType.COMMENT, MEMBER_ID, tokens)
@@ -256,10 +256,10 @@ class PaidTokenDeductionIntegrationTest {
 
     private fun consumed(): List<Long> = ledgerRepository.findAll().filter { it.type == TokenLedgerType.CONSUME }.map { it.amount }
 
-    private fun paidErrorCount(): Double =
+    private fun settleErrorCount(): Double =
         meterRegistry
             .get("gamss.tokenlimit.quota.record.failure")
-            .tag("reason", "paid_error")
+            .tag("reason", "settle_error")
             .counter()
             .count()
 
