@@ -54,8 +54,8 @@ class SignedAppleTransactionDecoderTest {
     }
 
     @Test
-    fun `다른 앱의 거래는 거부한다`() {
-        assertRejected(ErrorCode.PURCHASE_INVALID) {
+    fun `bundleId 가 다른 거래는 설정 오류일 수 있어 finish 되지 않도록 일시 장애로 거부한다`() {
+        assertRejected(ErrorCode.PAYMENT_STORE_UNAVAILABLE) {
             decoder.decode(fixture.signedTransaction(payload(bundleId = "com.other.app")))
         }
     }

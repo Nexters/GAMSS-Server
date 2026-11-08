@@ -54,6 +54,12 @@ class SignedAppleTransactionDecoder(
             log.warn("App Store 거래 검증이 일시적으로 실패했습니다: status={}", e.status)
             return BusinessException(ErrorCode.PAYMENT_STORE_UNAVAILABLE)
         }
+        // 서명은 맞는데 bundleId 만 다르면 우리 설정이 틀렸을 수 있다(dev 빌드의 다른 bundleId 등).
+        // PURCHASE_INVALID 면 앱이 finish 해 복구할 수 없으므로 finish 하지 않는 503 으로 둔다.
+        if (e.status == VerificationStatus.INVALID_APP_IDENTIFIER) {
+            log.error("App Store 거래의 bundleId 가 설정과 달라 거부했습니다. apple.iap.bundle-id 를 확인하세요.")
+            return BusinessException(ErrorCode.PAYMENT_STORE_UNAVAILABLE)
+        }
         log.warn("App Store 거래 서명을 확인할 수 없어 거부했습니다: status={}", e.status, e)
         return BusinessException(ErrorCode.PURCHASE_INVALID)
     }
