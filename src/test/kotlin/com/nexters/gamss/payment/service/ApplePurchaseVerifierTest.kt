@@ -58,11 +58,11 @@ class ApplePurchaseVerifierTest {
     }
 
     @Test
-    fun `Apple 상한을 벗어난 수량은 거부한다`() {
+    fun `Apple 상한을 벗어난 수량은 finish 되지 않도록 일시 장애로 거부한다`() {
         listOf(0, -1, 11).forEach { quantity ->
             decoder.stub(JWS, transaction(accountToken = ACCOUNT_TOKEN, quantity = quantity))
 
-            assertRejected(ErrorCode.PURCHASE_INVALID)
+            assertRejected(ErrorCode.PAYMENT_STORE_UNAVAILABLE)
         }
     }
 

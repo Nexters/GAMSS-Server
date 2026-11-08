@@ -62,7 +62,8 @@ class ApplePurchaseVerifier(
 
     /**
      * Apple 은 앱이 넘긴 수량만큼 한 거래로 결제하고 사용자는 실제로 그만큼 냈으므로, Google(#244)과 달리
-     * 여러 개도 지급한다. 없으면 1 이다. Apple 상한(10)을 벗어난 값은 우리가 아는 거래가 아니다.
+     * 여러 개도 지급한다. 없으면 1 이다. Apple 상한(10)을 벗어난 값은 우리가 아는 거래가 아니지만 돈은
+     * 나갔으므로, finish 되지 않도록 503 으로 두고 코드를 고친 뒤 재전송으로 지급되게 한다.
      */
     private fun quantityOf(
         transaction: AppleTransaction,
@@ -78,7 +79,7 @@ class ApplePurchaseVerifier(
             transaction.productId,
             quantity,
         )
-        throw BusinessException(ErrorCode.PURCHASE_INVALID)
+        throw BusinessException(ErrorCode.PAYMENT_STORE_UNAVAILABLE)
     }
 
     /** 서명된 거래에 구매 시각이 없을 수는 없다. 돈이 나갔을 수 있어 finish 시키지 않도록 503 으로 둔다. */
