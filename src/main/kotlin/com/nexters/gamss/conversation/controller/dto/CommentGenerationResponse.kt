@@ -3,7 +3,7 @@ package com.nexters.gamss.conversation.controller.dto
 import io.swagger.v3.oas.annotations.media.Schema
 
 data class CommentGenerationResponse(
-    @field:Schema(description = "댓글 생성 상태. 재요청 시 결과 조회를 겸한다")
+    @field:Schema(description = "댓글 생성 상태. 재요청 시 결과 조회를 겸한다(일일 토큰과 유료 토큰을 모두 쓴 동안에는 결과가 있어도 LIMIT_EXCEEDED)")
     val status: CommentGenerationStatus,
     @field:Schema(description = "생성된 캐릭터 댓글·티키타카 (status=DONE일 때만 채워짐)", nullable = true)
     val comments: List<MessageResponse>? = null,
