@@ -12,7 +12,7 @@ import java.time.Instant
 
 /**
  * 통합 테스트에서 실제 서명 검증([com.nexters.gamss.payment.apple.SignedAppleTransactionDecoder]) 대신 쓰는
- * 가짜 구현. JWS 문자열마다 풀린 거래를 심어 두고, 심지 않은 문자열은 서명 검증 실패로 거부한다.
+ * 가짜 구현. JWS 문자열마다 풀린 거래를 심어 두고, 심지 않은 문자열은 실제 구현처럼 서명 검증 실패(503)로 거부한다.
  * 실제 서명 검증은 `SignedAppleTransactionDecoderTest` 가 맡는다.
  */
 @TestConfiguration(proxyBeanMethods = false)
@@ -25,9 +25,6 @@ class FakeAppleTransactionDecoderConfig {
 class FakeAppleTransactionDecoder : AppleTransactionDecoder {
     private val transactions = mutableMapOf<String, AppleTransaction>()
 
-    /** 검증이 일시적으로 실패하게 한다. */
-    var unavailable = false
-
     fun stub(
         signedTransaction: String,
         transaction: AppleTransaction,
@@ -37,15 +34,10 @@ class FakeAppleTransactionDecoder : AppleTransactionDecoder {
 
     fun reset() {
         transactions.clear()
-        unavailable = false
     }
 
-    override fun decode(signedTransaction: String): AppleTransaction {
-        if (unavailable) {
-            throw BusinessException(ErrorCode.PAYMENT_STORE_UNAVAILABLE)
-        }
-        return transactions[signedTransaction] ?: throw BusinessException(ErrorCode.PURCHASE_INVALID)
-    }
+    override fun decode(signedTransaction: String): AppleTransaction =
+        transactions[signedTransaction] ?: throw BusinessException(ErrorCode.PAYMENT_STORE_UNAVAILABLE)
 
     companion object {
         fun transaction(

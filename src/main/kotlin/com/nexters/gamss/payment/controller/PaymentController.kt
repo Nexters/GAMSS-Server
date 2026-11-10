@@ -134,14 +134,14 @@ class PaymentController(
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +
                 "| INVALID_INPUT | 400 | signedTransaction 누락 또는 길이 초과 |\n" +
-                "| PURCHASE_INVALID | 400 | Apple 서명을 확인할 수 없거나 소모성 상품이 아님 |\n" +
+                "| PURCHASE_INVALID | 400 | 소모성 상품이 아니거나, Production 과 Sandbox 가 아닌 환경(Xcode 등)의 거래 |\n" +
                 "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음 또는 무효) |\n" +
                 "| EXPIRED_TOKEN | 401 | accessToken 만료. 재발급 후 재시도 |\n" +
                 "| WITHDRAWN_MEMBER | 403 | 탈퇴한 회원 |\n" +
                 "| PURCHASE_ACCESS_DENIED | 403 | 거래에 계정 토큰이 없거나 다른 회원의 계정 토큰이 담김. 맞는 계정으로 로그인하면 지급될 수 있음 |\n" +
                 "| PURCHASE_CANCELLED | 409 | 환불되었거나 취소된 거래 |\n" +
                 "| PAYMENT_PRODUCT_UNAVAILABLE | 409 | 판매 중이 아닌 상품 |\n" +
-                "| PAYMENT_STORE_UNAVAILABLE | 503 | 지금은 거래를 확인할 수 없거나 서버 설정 문제로 지급할 수 없음. 다음 실행에 다시 보냄 |",
+                "| PAYMENT_STORE_UNAVAILABLE | 503 | Apple 서명을 확인할 수 없거나(서버 인증서 설정 문제일 수 있음) 지금은 지급할 수 없음. 다음 실행에 다시 보냄 |",
     )
     @PostMapping("/apple")
     fun purchaseApple(

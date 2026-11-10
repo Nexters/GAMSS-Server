@@ -219,13 +219,13 @@ class ApplePurchaseApiIntegrationTest {
     }
 
     @Test
-    fun `서명을 확인할 수 없는 거래는 400, 일시 장애는 503 으로 응답한다`() {
-        purchaseApple(buyer).andExpect {
+    fun `서명을 확인할 수 없는 거래는 finish 되지 않도록 503, 소모성이 아닌 거래는 400 으로 응답한다`() {
+        apple.stub(OTHER_JWS, transaction(accountToken = buyerAccountToken(), type = "Non-Consumable"))
+        purchaseApple(buyer, OTHER_JWS).andExpect {
             status { isBadRequest() }
             jsonPath("$.error.code") { value("PURCHASE_INVALID") }
         }
 
-        apple.unavailable = true
         purchaseApple(buyer).andExpect {
             status { isServiceUnavailable() }
             jsonPath("$.error.code") { value("PAYMENT_STORE_UNAVAILABLE") }

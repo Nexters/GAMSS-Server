@@ -61,33 +61,33 @@ class SignedAppleTransactionDecoderTest {
     }
 
     @Test
-    fun `신뢰 루트가 아닌 체인으로 서명한 거래는 거부한다`() {
+    fun `신뢰 루트가 아닌 체인으로 서명한 거래는 우리 루트 설정 오류일 수 있어 finish 되지 않도록 일시 장애로 거부한다`() {
         val forged = AppleJwsFixture().signedTransaction(payload())
 
-        assertRejected(ErrorCode.PURCHASE_INVALID) { decoder.decode(forged) }
+        assertRejected(ErrorCode.PAYMENT_STORE_UNAVAILABLE) { decoder.decode(forged) }
     }
 
     @Test
-    fun `Apple 서명 인증서 확장이 없는 체인은 거부한다`() {
+    fun `Apple 서명 인증서 확장이 없는 체인은 finish 되지 않도록 일시 장애로 거부한다`() {
         val withoutExtension = AppleJwsFixture(signingOid = "1.2.3.4")
 
-        assertRejected(ErrorCode.PURCHASE_INVALID) {
+        assertRejected(ErrorCode.PAYMENT_STORE_UNAVAILABLE) {
             withoutExtension.decoder().decode(withoutExtension.signedTransaction(payload()))
         }
     }
 
     @Test
-    fun `서명 뒤에 바뀐 페이로드는 거부한다`() {
+    fun `서명 뒤에 바뀐 페이로드는 finish 되지 않도록 일시 장애로 거부한다`() {
         val (header, _, signature) = fixture.signedTransaction(payload()).split(".")
         val tampered = fixture.signedTransaction(payload(quantity = 10)).split(".")[1]
 
-        assertRejected(ErrorCode.PURCHASE_INVALID) { decoder.decode("$header.$tampered.$signature") }
+        assertRejected(ErrorCode.PAYMENT_STORE_UNAVAILABLE) { decoder.decode("$header.$tampered.$signature") }
     }
 
     @Test
-    fun `JWS 형식이 아니면 거부한다`() {
+    fun `JWS 형식이 아니면 finish 되지 않도록 일시 장애로 거부한다`() {
         listOf("", "not-a-jws", "a.b.c").forEach { raw ->
-            assertRejected(ErrorCode.PURCHASE_INVALID) { decoder.decode(raw) }
+            assertRejected(ErrorCode.PAYMENT_STORE_UNAVAILABLE) { decoder.decode(raw) }
         }
     }
 

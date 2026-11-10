@@ -100,9 +100,6 @@ class ApplePurchaseVerifierTest {
 
     @Test
     fun `서명 검증 실패는 그대로 올린다`() {
-        assertRejected(ErrorCode.PURCHASE_INVALID)
-
-        decoder.unavailable = true
         assertRejected(ErrorCode.PAYMENT_STORE_UNAVAILABLE)
     }
 

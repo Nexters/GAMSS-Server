@@ -49,19 +49,18 @@ class SignedAppleTransactionDecoder(
         throw BusinessException(ErrorCode.PURCHASE_INVALID)
     }
 
+    /**
+     * 정상 앱은 Apple 이 서명한 JWS 만 보내므로, 검증 실패는 대개 우리 쪽 문제다(루트 인증서 배포 실수, Apple 체인 변경,
+     * bundleId 설정 오류). PURCHASE_INVALID 면 앱이 finish 해 결제만 되고 복구할 수 없으므로 모두 503 으로 둔다.
+     * 위조 JWS 는 실제 결제가 아니라 finish 되지 않아도 잃는 것이 없다.
+     */
     private fun translate(e: VerificationException): BusinessException {
-        if (e.status == VerificationStatus.RETRYABLE_VERIFICATION_FAILURE) {
-            log.warn("App Store 거래 검증이 일시적으로 실패했습니다: status={}", e.status)
-            return BusinessException(ErrorCode.PAYMENT_STORE_UNAVAILABLE)
-        }
-        // 서명은 맞는데 bundleId 만 다르면 우리 설정이 틀렸을 수 있다(dev 빌드의 다른 bundleId 등).
-        // PURCHASE_INVALID 면 앱이 finish 해 복구할 수 없으므로 finish 하지 않는 503 으로 둔다.
         if (e.status == VerificationStatus.INVALID_APP_IDENTIFIER) {
             log.error("App Store 거래의 bundleId 가 설정과 달라 거부했습니다. apple.iap.bundle-id 를 확인하세요.")
             return BusinessException(ErrorCode.PAYMENT_STORE_UNAVAILABLE)
         }
         log.warn("App Store 거래 서명을 확인할 수 없어 거부했습니다: status={}", e.status, e)
-        return BusinessException(ErrorCode.PURCHASE_INVALID)
+        return BusinessException(ErrorCode.PAYMENT_STORE_UNAVAILABLE)
     }
 
     private fun toTransaction(payload: JWSTransactionDecodedPayload): AppleTransaction =
