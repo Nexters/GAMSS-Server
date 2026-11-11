@@ -86,6 +86,13 @@ google:
     # Android 앱의 applicationId. 자격증명이 있는데 비어 있으면 기동이 실패한다.
     package-name: ${GOOGLE_PLAY_PACKAGE_NAME:}
 
+apple:
+  iap:
+    # 거래 JWS 의 bundleId 를 이 값과 비교한다. 비밀이 아니므로 설정값으로 둔다.
+    bundle-id: com.nexters.gamss
+    # App Store Connect 의 앱 숫자 ID. Production 거래 검증기에 필수다.
+    app-apple-id: 6799644564
+
 gemini:
   model: gemini-3.1-flash-lite
   request-timeout: PT15S
