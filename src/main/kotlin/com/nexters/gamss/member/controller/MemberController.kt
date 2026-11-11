@@ -91,10 +91,16 @@ class MemberController(
     }
 
     @Operation(
-        summary = "내 오늘 토큰 사용량 조회",
+        summary = "내 오늘 토큰 사용량과 유료 잔액 조회",
         description =
-            "로그인한 회원 본인의 오늘(KST, 정책 리셋 시각 기준) 토큰 사용량과 일일 상한을 반환합니다. " +
-                "상한이 적용되지 않는 환경(local 등)에서는 dailyLimit이 null(무제한)로 내려갑니다.\n\n" +
+            "로그인한 회원 본인의 오늘(KST, 정책 리셋 시각 기준) 토큰 사용량, 일일 상한, 남은 유료 토큰(paidBalance)을 반환합니다. " +
+                "일일 토큰을 다 쓴 뒤의 댓글·답글 생성은 유료 토큰에서 차감되고, 그 몫도 usedTokens에 들어가므로 " +
+                "usedTokens가 dailyLimit보다 클 수 있습니다. " +
+                "exceeded는 댓글·답글 생성이 막혔는지를 뜻하며, 일일 토큰과 유료 잔액이 모두 " +
+                "소진(paidBalance <= 0)됐을 때만 true입니다. " +
+                "paidBalance는 리셋과 상관없는 누적 잔액이고, 환불 회수로 음수일 수 있습니다. " +
+                "상한이 적용되지 않는 환경(local 등)에서는 dailyLimit이 null(무제한), exceeded가 false로 내려가고, " +
+                "paidBalance는 그대로 실제 잔액이 내려갑니다.\n\n" +
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +
@@ -111,6 +117,7 @@ class MemberController(
                 usedTokens = usage.usedTokens,
                 dailyLimit = usage.dailyLimit,
                 exceeded = usage.exceeded,
+                paidBalance = usage.paidBalance,
             ),
         )
     }

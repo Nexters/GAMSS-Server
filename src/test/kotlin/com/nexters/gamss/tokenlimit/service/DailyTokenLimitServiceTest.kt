@@ -89,14 +89,65 @@ class DailyTokenLimitServiceTest {
     }
 
     @Test
-    fun `상한이 켜진 환경에서는 사용량이 상한에 닿으면 초과로 표시한다`() {
+    fun `상한이 꺼진 환경에서도 유료 잔액은 실제 값을 내려준다`() {
+        every { tokenPolicyService.current() } returns TokenPolicy(dailyTokenLimit = 100_000, resetHour = 5)
+        every { tokenQuotaUsageRepository.findUsedTokens(eq(1L), any<Instant>()) } returns 200_000
+        every { tokenWalletReader.balanceOf(1L) } returns -300
+
+        val usage = service(enabled = false).usageFor(1L)
+
+        assertEquals(-300, usage.paidBalance)
+        assertFalse(usage.exceeded)
+    }
+
+    @Test
+    fun `일일 토큰을 다 써도 유료 잔액이 있으면 초과가 아니다`() {
         every { tokenPolicyService.current() } returns TokenPolicy(dailyTokenLimit = 100_000, resetHour = 5)
         every { tokenQuotaUsageRepository.findUsedTokens(eq(1L), any<Instant>()) } returns 100_000
+        every { tokenWalletReader.balanceOf(1L) } returns 1
+
+        val usage = service(enabled = true).usageFor(1L)
+
+        assertEquals(1, usage.paidBalance)
+        assertFalse(usage.exceeded)
+    }
+
+    @Test
+    fun `일일 토큰을 다 쓰고 유료 잔액이 음수면 초과이고 잔액은 음수 그대로다`() {
+        every { tokenPolicyService.current() } returns TokenPolicy(dailyTokenLimit = 100_000, resetHour = 5)
+        every { tokenQuotaUsageRepository.findUsedTokens(eq(1L), any<Instant>()) } returns 100_000
+        every { tokenWalletReader.balanceOf(1L) } returns -500
+
+        val usage = service(enabled = true).usageFor(1L)
+
+        assertEquals(-500, usage.paidBalance)
+        assertTrue(usage.exceeded)
+    }
+
+    /** 일일 토큰으로 판정이 끝나도 응답에는 잔액이 실려야 한다. 잔액을 바닥났을 때만 읽도록 바뀌면 여기서 걸린다. */
+    @Test
+    fun `일일 토큰이 남아 있어도 사용량 응답에는 유료 잔액을 그대로 담는다`() {
+        every { tokenPolicyService.current() } returns TokenPolicy(dailyTokenLimit = 100_000, resetHour = 5)
+        every { tokenQuotaUsageRepository.findUsedTokens(eq(1L), any<Instant>()) } returns 99_999
+        every { tokenWalletReader.balanceOf(1L) } returns 50_000
+
+        val usage = service(enabled = true).usageFor(1L)
+
+        assertEquals(50_000, usage.paidBalance)
+        assertFalse(usage.exceeded)
+    }
+
+    @Test
+    fun `상한이 켜진 환경에서 사용량이 상한에 닿고 유료 잔액이 0이면 초과로 표시한다`() {
+        every { tokenPolicyService.current() } returns TokenPolicy(dailyTokenLimit = 100_000, resetHour = 5)
+        every { tokenQuotaUsageRepository.findUsedTokens(eq(1L), any<Instant>()) } returns 100_000
+        every { tokenWalletReader.balanceOf(1L) } returns 0
 
         val usage = service(enabled = true).usageFor(1L)
 
         assertEquals(100_000, usage.usedTokens)
         assertEquals(100_000, usage.dailyLimit)
+        assertEquals(0, usage.paidBalance)
         assertTrue(usage.exceeded)
     }
 

@@ -58,8 +58,11 @@ class ConversationController(
                 "LLM 생성이 재시도(최대 3회) 끝에 실패해도 저장은 유지됩니다 — 이 경우 commentStatus=FAILED, " +
                 "comments는 빈 리스트로 반환되며, 실패한 메시지는 `/messages/comments`류 엔드포인트로 " +
                 "재시도할 수 있습니다.\n\n" +
-                "유저의 일일 토큰 상한(prod 전용)을 넘긴 경우에도 저장은 유지되고 생성만 건너뜁니다 — " +
-                "이 경우 commentStatus=LIMIT_EXCEEDED, comments는 빈 리스트로 반환됩니다(리셋 이후 재시도 가능).\n\n" +
+                "일일 토큰을 다 쓴 뒤의 생성은 구매한 유료 토큰에서 이어서 차감됩니다. 일일 토큰과 유료 토큰을 모두 쓴 경우" +
+                "(GET /api/members/me/token-usage의 exceeded=true와 같은 조건)에는 저장은 유지되고 생성만 건너뜁니다 — " +
+                "이 경우 commentStatus=LIMIT_EXCEEDED, comments는 빈 리스트로 반환됩니다" +
+                "(리셋 이후, 또는 토큰을 구매해 유료 잔액이 0보다 커진 뒤 같은 messageId로 " +
+                "`/messages/comments`류 엔드포인트를 호출해 재시도 가능).\n\n" +
                 "excludeCharacters로 새 채팅방에서 반응하지 않을 캐릭터를 지정할 수 있습니다(전체 제외는 불가). " +
                 "이 채팅방에 이어서 보내는 이후 요청에 다시 실려 와도 무시되고 최초 설정이 유지됩니다.\n\n" +
                 "**실패 응답**\n\n" +
@@ -266,12 +269,15 @@ class ConversationController(
     }
 
     @Operation(
-        summary = "일기(메시지)에 대한 캐릭터 댓글 생성 (실패 후 수동 재시도용)",
+        summary = "일기(메시지)에 대한 캐릭터 댓글 생성 (실패·토큰 소진 후 수동 재시도용)",
         description =
             "`POST /messages`가 저장과 함께 이 생성을 동기로 처리하므로, 평상시에는 이 엔드포인트를 " +
-                "따로 호출할 필요가 없습니다. `POST /messages` 응답이 commentStatus=FAILED였을 때 같은 " +
-                "messageId로 재시도하는 용도로 남아 있습니다. 멱등한 엔드포인트로, " +
-                "재요청이 곧 결과 조회를 겸합니다 — GENERATING이면 잠시 후 같은 요청을 다시 보내면 됩니다.\n\n" +
+                "따로 호출할 필요가 없습니다. `POST /messages` 응답이 commentStatus=FAILED 또는 LIMIT_EXCEEDED였을 때 같은 " +
+                "messageId로 재시도하는 용도로 남아 있습니다. LIMIT_EXCEEDED였다면 리셋 이후, 또는 토큰을 구매해 " +
+                "유료 잔액이 0보다 커진 뒤 호출합니다. 멱등한 엔드포인트로, " +
+                "재요청이 곧 결과 조회를 겸합니다 — GENERATING이면 잠시 후 같은 요청을 다시 보내면 됩니다. " +
+                "다만 일일 토큰과 유료 토큰을 모두 쓴 동안에는 상태와 상관없이 LIMIT_EXCEEDED가 먼저 반환되므로, " +
+                "이미 생성이 끝난 결과도 리셋 이후나 토큰을 구매한 뒤에 다시 요청해야 받을 수 있습니다.\n\n" +
                 "currentConversationSummary를 함께 보내면 재시도 생성에도 그 맥락이 반영됩니다(생략하면 맥락 없이 " +
                 "재생성). 단, 이미 DONE·GENERATING 상태라 선점에 실패해 상태 조회만 하는 경우엔 이 값이 쓰이지 " +
                 "않습니다.\n\n" +
@@ -280,7 +286,9 @@ class ConversationController(
                 "|---|---|\n" +
                 "| GENERATING | 생성 중(직접 트리거했거나 다른 요청이 먼저 선점) |\n" +
                 "| DONE | 생성 완료, comments에 결과 포함 |\n" +
-                "| FAILED | 재시도까지 실패. 다시 요청하면 재시도됨 |\n\n" +
+                "| FAILED | 재시도까지 실패. 다시 요청하면 재시도됨 |\n" +
+                "| LIMIT_EXCEEDED | 일일 토큰과 유료 토큰을 모두 써서 생성을 건너뜀. " +
+                "리셋 이후, 또는 토큰을 구매해 유료 잔액이 0보다 커진 뒤 다시 요청 |\n\n" +
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +
@@ -310,18 +318,23 @@ class ConversationController(
     }
 
     @Operation(
-        summary = "캐릭터 댓글에 대한 답글 생성 (실패 후 수동 재시도용)",
+        summary = "캐릭터 댓글에 대한 답글 생성 (실패·토큰 소진 후 수동 재시도용)",
         description =
             "`POST /messages`가 답글 저장과 함께 이 생성을 동기로 처리하므로, 평상시에는 이 엔드포인트를 " +
-                "따로 호출할 필요가 없습니다. `POST /messages` 응답이 commentStatus=FAILED였을 때 같은 " +
-                "messageId(유저 답글)로 재시도하는 용도로 남아 있습니다. 멱등한 엔드포인트로, " +
-                "재요청이 곧 결과 조회를 겸합니다 — GENERATING이면 잠시 후 같은 요청을 다시 보내면 됩니다.\n\n" +
+                "따로 호출할 필요가 없습니다. `POST /messages` 응답이 commentStatus=FAILED 또는 LIMIT_EXCEEDED였을 때 같은 " +
+                "messageId(유저 답글)로 재시도하는 용도로 남아 있습니다. LIMIT_EXCEEDED였다면 리셋 이후, 또는 토큰을 구매해 " +
+                "유료 잔액이 0보다 커진 뒤 호출합니다. 멱등한 엔드포인트로, " +
+                "재요청이 곧 결과 조회를 겸합니다 — GENERATING이면 잠시 후 같은 요청을 다시 보내면 됩니다. " +
+                "다만 일일 토큰과 유료 토큰을 모두 쓴 동안에는 상태와 상관없이 LIMIT_EXCEEDED가 먼저 반환되므로, " +
+                "이미 생성이 끝난 결과도 리셋 이후나 토큰을 구매한 뒤에 다시 요청해야 받을 수 있습니다.\n\n" +
                 "**status 값**\n\n" +
                 "| status | 의미 |\n" +
                 "|---|---|\n" +
                 "| GENERATING | 생성 중(직접 트리거했거나 다른 요청이 먼저 선점) |\n" +
                 "| DONE | 생성 완료, comment에 결과 포함 |\n" +
-                "| FAILED | 재시도까지 실패. 다시 요청하면 재시도됨 |\n\n" +
+                "| FAILED | 재시도까지 실패. 다시 요청하면 재시도됨 |\n" +
+                "| LIMIT_EXCEEDED | 일일 토큰과 유료 토큰을 모두 써서 생성을 건너뜀. " +
+                "리셋 이후, 또는 토큰을 구매해 유료 잔액이 0보다 커진 뒤 다시 요청 |\n\n" +
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +

@@ -183,6 +183,43 @@ class PaidTokenDeductionIntegrationTest {
         assertEquals(10_000, walletReader.balanceOf(MEMBER_ID))
     }
 
+    /** 사용량 응답의 exceeded는 실제 생성 차단과 같은 조건이어야 한다(#240). */
+    @Test
+    fun `일일 토큰을 다 써도 유료 잔액이 있으면 사용량 응답은 초과가 아니다`() {
+        purchase(10_000)
+        useDailyTokens(limit)
+
+        val usage = limitService.usageFor(MEMBER_ID)
+
+        assertEquals(10_000, usage.paidBalance)
+        assertFalse(usage.exceeded)
+        assertTrue(limitService.isWithinLimit(MEMBER_ID))
+    }
+
+    @Test
+    fun `일일 토큰을 다 쓰고 유료 잔액이 음수면 잔액을 그대로 내려주고 초과로 표시한다`() {
+        revoke(1_000)
+        useDailyTokens(limit)
+
+        val usage = limitService.usageFor(MEMBER_ID)
+
+        assertEquals(-1_000, usage.paidBalance)
+        assertTrue(usage.exceeded)
+        assertFalse(limitService.isWithinLimit(MEMBER_ID))
+    }
+
+    @Test
+    fun `일일 토큰이 남아 있으면 유료 잔액이 음수여도 사용량 응답은 초과가 아니다`() {
+        revoke(1_000)
+        useDailyTokens(limit - 1)
+
+        val usage = limitService.usageFor(MEMBER_ID)
+
+        assertEquals(-1_000, usage.paidBalance)
+        assertFalse(usage.exceeded)
+        assertTrue(limitService.isWithinLimit(MEMBER_ID))
+    }
+
     @Test
     fun `같은 회원이 동시에 생성해도 유료 차감 합이 식과 정확히 맞는다`() {
         purchase(1_000_000)

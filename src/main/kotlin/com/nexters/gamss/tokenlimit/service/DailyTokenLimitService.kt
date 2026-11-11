@@ -34,21 +34,39 @@ class DailyTokenLimitService(
             return true
         }
         val policy = tokenPolicyService.current()
-        return usedTokens(memberId, policy.resetHour) < policy.dailyTokenLimit || tokenWalletReader.balanceOf(memberId) > 0
+        return canGenerate(usedTokens(memberId, policy.resetHour), policy.dailyTokenLimit) { tokenWalletReader.balanceOf(memberId) }
     }
 
     /**
-     * 이 회원의 오늘(정책 리셋 시각 기준) 토큰 사용량. 상한이 꺼진 환경([enabled]=false)이면
+     * 이 회원의 오늘(정책 리셋 시각 기준) 토큰 사용량과 유료 잔액. 상한이 꺼진 환경([enabled]=false)이면
      * [TokenUsage.dailyLimit]이 null(무제한)이고 [TokenUsage.exceeded]는 항상 false다.
+     * [TokenUsage.exceeded]는 [isWithinLimit]과 같은 판정식([canGenerate])의 반대다.
+     * [TokenUsage.paidBalance]는 상한 적용 여부와 상관없이 실제 잔액을 담는다.
      */
     fun usageFor(memberId: Long): TokenUsage {
         val policy = tokenPolicyService.current()
         val used = usedTokens(memberId, policy.resetHour)
+        val paidBalance = tokenWalletReader.balanceOf(memberId)
         if (!enabled) {
-            return TokenUsage(usedTokens = used, dailyLimit = null, exceeded = false)
+            return TokenUsage(usedTokens = used, dailyLimit = null, exceeded = false, paidBalance = paidBalance)
         }
-        return TokenUsage(usedTokens = used, dailyLimit = policy.dailyTokenLimit, exceeded = used >= policy.dailyTokenLimit)
+        return TokenUsage(
+            usedTokens = used,
+            dailyLimit = policy.dailyTokenLimit,
+            exceeded = !canGenerate(used, policy.dailyTokenLimit) { paidBalance },
+            paidBalance = paidBalance,
+        )
     }
+
+    /**
+     * 생성 가능 판정식: 일일 토큰이 남았거나 유료 잔액이 양수다. 생성 차단과 사용량 응답이 이 식 하나를 쓴다.
+     * 잔액은 일일 토큰이 바닥났을 때만 [paidBalance]로 읽는다 - 생성([isWithinLimit])마다 지갑을 조회하지 않기 위해서다.
+     */
+    private inline fun canGenerate(
+        usedTokens: Long,
+        dailyLimit: Long,
+        paidBalance: () -> Long,
+    ): Boolean = usedTokens < dailyLimit || paidBalance() > 0
 
     /** 주체 매핑이 없으면 0 이다 - 적립도 안 되고 있어 한도가 사실상 꺼진 상태다. */
     private fun usedTokens(
