@@ -196,6 +196,8 @@ jobs:
           MYSQL_EXPORTER_PASSWORD=${{ secrets.MYSQL_EXPORTER_PASSWORD }}
           ADMIN_EMAILS=${{ vars.ADMIN_EMAILS }}
           GOOGLE_PLAY_PACKAGE_NAME=${{ vars.GOOGLE_PLAY_PACKAGE_NAME }}
+          GOOGLE_PLAY_RTDN_AUDIENCE=${{ vars.GOOGLE_PLAY_RTDN_AUDIENCE }}
+          GOOGLE_PLAY_RTDN_SERVICE_ACCOUNT_EMAIL=${{ vars.GOOGLE_PLAY_RTDN_SERVICE_ACCOUNT_EMAIL }}
           EOF
           # base64 로 넣는 서비스 계정 키들은 개행을 털어 따로 붙인다. base64 는 구현에 따라 76자마다 줄을 바꾸는데
           # (GNU 기본값. macOS 는 한 줄) .env 는 한 줄 단위라, 개행이 섞이면 compose 가 에러 없이
