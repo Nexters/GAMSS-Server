@@ -85,6 +85,10 @@ google:
     credentials-base64: ${GOOGLE_PLAY_CREDENTIALS_BASE64:}
     # Android 앱의 applicationId. 자격증명이 있는데 비어 있으면 기동이 실패한다.
     package-name: ${GOOGLE_PLAY_PACKAGE_NAME:}
+    # RTDN push 구독(#246). 구독에 설정한 audience 와 push 용 서비스 계정. 비어 있으면 모든 push 를 거부한다.
+    rtdn:
+      audience: ${GOOGLE_PLAY_RTDN_AUDIENCE:}
+      service-account-email: ${GOOGLE_PLAY_RTDN_SERVICE_ACCOUNT_EMAIL:}
 
 apple:
   iap:
