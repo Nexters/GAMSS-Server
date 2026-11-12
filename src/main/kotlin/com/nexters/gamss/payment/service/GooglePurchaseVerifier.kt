@@ -132,6 +132,9 @@ class GooglePurchaseVerifier(
      *
      * 값이 없으면 1 로 본다. v1 은 '없으면 1'이라고 문서화돼 있고 v2 는 아무 말이 없다. 없는 값을
      * 거부하면 모든 Android 구매가 막히고 3일 뒤 자동 환불된다.
+     *
+     * 다중 수량을 켤 때는 부분 환불 회수(RTDN refundType 2, 대사 항목의 voidedQuantity, refundableQuantity 로 계산하는
+     * 목표)도 함께 확인한다. 지금은 수량 1 만 지급하므로 그 경로는 테스트로만 돈다([GoogleRefundReclaimer]).
      */
     private fun quantityOf(
         quantity: Int?,
