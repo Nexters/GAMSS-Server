@@ -41,11 +41,17 @@ export function LabelingMode({ onProgress }: { onProgress: (mine: number, target
   const target = useRef(100)
 
   const current = index >= 0 ? history[index] : undefined
+  const currentId = useRef<number | undefined>(undefined)
+  currentId.current = current?.messageId
   const message = thread?.messages.find((m) => m.id === current?.messageId)
 
   const loadThread = useCallback(async (target: Target) => {
     setLoading(true)
     setError(null)
+    setVerdict(null)
+    setTypes([])
+    setMemo('')
+    setResult(null)
     try {
       const view = await apiFetch<ThreadView>(`/api/admin/conversations/${target.conversationId}/thread?blind=true`)
       setThread(view)
@@ -53,8 +59,8 @@ export function LabelingMode({ onProgress }: { onProgress: (mine: number, target
       setVerdict(mine?.verdict ?? null)
       setTypes(mine?.awkwardTypes ?? [])
       setMemo(mine?.memo ?? '')
-      setResult(null)
     } catch {
+      setThread(null)
       setError('대화를 불러오지 못했습니다.')
     } finally {
       setLoading(false)
@@ -101,6 +107,7 @@ export function LabelingMode({ onProgress }: { onProgress: (mine: number, target
       return
     }
     setError(null)
+    setLoading(true)
     try {
       const saved = await apiFetch<HumanVerdictResult>(`/api/admin/conversation-quality/responses/${current.messageId}/human-verdict`, {
         method: 'PUT',
@@ -109,10 +116,15 @@ export function LabelingMode({ onProgress }: { onProgress: (mine: number, target
       })
       onProgress(saved.mineCount, target.current)
       const view = await apiFetch<ThreadView>(`/api/admin/conversations/${current.conversationId}/thread?blind=true`)
+      if (currentId.current !== current.messageId) {
+        return
+      }
       setThread(view)
       setResult(saved)
     } catch (e) {
       setError(e instanceof ApiError && e.detail ? e.detail : '판정을 저장하지 못했습니다.')
+    } finally {
+      setLoading(false)
     }
   }, [current, memo, onProgress, types, verdict])
 
