@@ -11,6 +11,7 @@ import com.nexters.gamss.global.security.JwtIssuer
 import com.nexters.gamss.member.domain.Member
 import com.nexters.gamss.member.repository.MemberRepository
 import com.nexters.gamss.quality.repository.ConversationViewLogRepository
+import com.nexters.gamss.quality.repository.ResponseHumanVerdictRepository
 import com.nexters.gamss.quality.service.QualityJudgeService
 import com.nexters.gamss.support.FakeResponseJudgeConfig
 import com.nexters.gamss.support.TestcontainersConfig
@@ -58,6 +59,9 @@ class AdminConversationQualityControllerIntegrationTest {
 
     @Autowired
     private lateinit var qualityJudgeService: QualityJudgeService
+
+    @Autowired
+    private lateinit var humanVerdictRepository: ResponseHumanVerdictRepository
 
     @Autowired
     private lateinit var conversationService: ConversationService
@@ -109,6 +113,23 @@ class AdminConversationQualityControllerIntegrationTest {
             .get("/api/admin/conversations/${conversation.id}/thread") {
                 header(HttpHeaders.AUTHORIZATION, adminBearer())
             }.andExpect { status { isConflict() } }
+    }
+
+    @Test
+    fun `삭제된 대화의 응답은 판정하거나 실험실로 열 수 없다`() {
+        conversationService.deleteConversation(conversation.memberId, conversation.id)
+
+        mockMvc
+            .put("/api/admin/conversation-quality/responses/${awkward.id}/human-verdict") {
+                header(HttpHeaders.AUTHORIZATION, adminBearer())
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"verdict":"NATURAL"}"""
+            }.andExpect { status { isConflict() } }
+        mockMvc
+            .get("/api/admin/conversation-quality/responses/${awkward.id}/playground-input") {
+                header(HttpHeaders.AUTHORIZATION, adminBearer())
+            }.andExpect { status { isConflict() } }
+        assertEquals(null, humanVerdictRepository.findByMessageIdAndAdminEmail(awkward.id, "admin@gamss.kr"))
     }
 
     @Test

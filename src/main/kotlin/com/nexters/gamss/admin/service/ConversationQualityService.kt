@@ -1,5 +1,6 @@
 package com.nexters.gamss.admin.service
 
+import com.nexters.gamss.conversation.domain.Conversation
 import com.nexters.gamss.conversation.domain.ResponseKind
 import com.nexters.gamss.conversation.domain.SenderType
 import com.nexters.gamss.conversation.service.ResponseThreadService
@@ -31,11 +32,7 @@ class ConversationQualityService(
         blind: Boolean,
     ): ThreadView {
         val thread = responseThreadService.thread(conversationId)
-        // 삭제나 탈퇴로 판정을 지운 대화는 원문도 열지 않는다.
-        thread.conversation.ensureNotDeleted()
-        if (memberService.getById(thread.conversation.memberId).isWithdrawn()) {
-            throw BusinessException(ErrorCode.WITHDRAWN_MEMBER)
-        }
+        ensureReadable(thread.conversation)
         qualityReviewService.recordView(adminEmail, conversationId, thread.conversation.memberId)
         val ids = thread.responses.keys
         val ai = qualityReviewService.latestAiVerdicts(ids)
@@ -139,6 +136,9 @@ class ConversationQualityService(
         awkwardTypes: Set<AwkwardType>,
         memo: String?,
     ): HumanVerdictResult {
+        val response =
+            responseThreadService.responses(listOf(messageId)).firstOrNull() ?: throw BusinessException(ErrorCode.MESSAGE_NOT_FOUND)
+        ensureReadable(response.conversation)
         val saved = qualityReviewService.saveHumanVerdict(adminEmail, messageId, verdict, awkwardTypes, memo)
         val ai = qualityReviewService.latestAiVerdicts(listOf(messageId))[messageId]
         return HumanVerdictResult(
@@ -153,6 +153,7 @@ class ConversationQualityService(
     fun playgroundInput(messageId: Long): PlaygroundInput {
         val detail =
             responseThreadService.responses(listOf(messageId)).firstOrNull() ?: throw BusinessException(ErrorCode.MESSAGE_NOT_FOUND)
+        ensureReadable(detail.conversation)
         val unit = responseThreadService.generationUnit(detail.ref.triggerMessageId) ?: throw BusinessException(ErrorCode.MESSAGE_NOT_FOUND)
         return when (unit.kind) {
             ResponseKind.COMMENT -> {
@@ -184,6 +185,14 @@ class ConversationQualityService(
                     userReply = unit.trigger.content,
                 )
             }
+        }
+    }
+
+    // 삭제나 탈퇴로 판정을 지운 대화는 원문을 열거나 새로 판정하지 않는다.
+    private fun ensureReadable(conversation: Conversation) {
+        conversation.ensureNotDeleted()
+        if (memberService.getById(conversation.memberId).isWithdrawn()) {
+            throw BusinessException(ErrorCode.WITHDRAWN_MEMBER)
         }
     }
 
