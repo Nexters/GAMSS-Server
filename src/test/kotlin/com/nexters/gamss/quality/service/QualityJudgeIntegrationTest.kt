@@ -119,6 +119,13 @@ class QualityJudgeIntegrationTest : RepositoryTest() {
         assertEquals(ResponseKind.REPLY, verdict.responseKind)
         assertEquals("뭔소리야", judge.contexts.single().nextUserMessage)
         assertEquals(
+            comments[0].content,
+            judge.contexts
+                .single()
+                .repliedTo
+                ?.text,
+        )
+        assertEquals(
             1,
             judge.contexts
                 .single()

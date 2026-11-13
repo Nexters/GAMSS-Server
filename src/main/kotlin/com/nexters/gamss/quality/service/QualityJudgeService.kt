@@ -153,6 +153,7 @@ class QualityJudgeService(
             characterGuide = characterGuide,
             prior = unit.prior.map { JudgeLine(speaker(it), it.content) },
             userMessage = JudgeLine(USER, unit.trigger.content),
+            repliedTo = unit.repliedCharacterMessage?.let { JudgeLine(speaker(it), it.content) },
             responses =
                 unit.responses.map { message ->
                     JudgeResponseLine(

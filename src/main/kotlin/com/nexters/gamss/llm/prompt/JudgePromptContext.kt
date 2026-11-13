@@ -5,6 +5,7 @@ data class JudgePromptContext(
     val characterGuide: String,
     val prior: List<JudgeLine>,
     val userMessage: JudgeLine,
+    val repliedTo: JudgeLine? = null,
     val responses: List<JudgeResponseLine>,
     val nextUserMessage: String?,
 ) {
@@ -20,6 +21,7 @@ data class JudgePromptContext(
             prior.forEach { appendLine("${it.speaker}: ${it.text.normalizeForPrompt()}") }
             appendLine()
             appendLine("[유저 메시지]")
+            repliedTo?.let { appendLine("(${it.speaker}의 말에 답함: ${it.text.normalizeForPrompt()})") }
             appendLine("${userMessage.speaker}: ${userMessage.text.normalizeForPrompt()}")
             appendLine()
             appendLine("[채점할 응답]")
