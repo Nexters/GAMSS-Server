@@ -100,6 +100,9 @@ class ResponseThreadService(
         )
     }
 
+    fun generationsSince(from: Instant): List<ResponseGeneration> =
+        responseGenerationRepository.findByCreatedAtGreaterThanEqualOrderByCreatedAtAsc(from)
+
     fun generations(triggerMessageIds: Collection<Long>): Map<Long, ResponseGeneration> =
         if (triggerMessageIds.isEmpty()) {
             emptyMap()

@@ -1,5 +1,7 @@
 package com.nexters.gamss.admin.controller
 
+import com.nexters.gamss.admin.controller.dto.JudgeSettingRequest
+import com.nexters.gamss.admin.controller.dto.JudgeSettingResponse
 import com.nexters.gamss.admin.controller.dto.ModelSettingResponse
 import com.nexters.gamss.admin.controller.dto.PromptRevisionDetailResponse
 import com.nexters.gamss.admin.controller.dto.PromptRevisionResponse
@@ -13,6 +15,7 @@ import com.nexters.gamss.global.security.AdminPrincipal
 import com.nexters.gamss.llm.prompt.PromptType
 import com.nexters.gamss.llm.settings.LlmSettingsService
 import com.nexters.gamss.llm.settings.PromptRevisionService
+import com.nexters.gamss.quality.service.QualityJudgeSettingService
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.tags.Tag
@@ -47,7 +50,30 @@ class AdminLlmSettingsController(
     private val llmSettingsService: LlmSettingsService,
     private val promptRevisionService: PromptRevisionService,
     private val conflictRetry: ConflictRetry,
+    private val qualityJudgeSettingService: QualityJudgeSettingService,
 ) {
+    @Operation(summary = "채점 설정 조회", description = "응답 품질 채점 모델(앱 모델과 별개), 자동 채점 여부, 채점 횟수.")
+    @GetMapping("/judge")
+    fun getJudge(): ApiResponse<JudgeSettingResponse> = ApiResponse.success(judgeResponse())
+
+    @Operation(
+        summary = "채점 설정 수정",
+        description =
+            "채점 모델, 자동 채점 여부, 채점 횟수를 바꾼다. 채점 모델이 바뀌면 판정 기준도 바뀌므로 이후 판정은 따로 쌓인다.\n\n" +
+                "**실패 응답**\n\n" +
+                "| error.code | HTTP | 설명 |\n" +
+                "|---|---|---|\n" +
+                "| INVALID_INPUT | 400 | 지원하지 않는 모델 또는 채점 횟수 범위 밖 |",
+    )
+    @PutMapping("/judge")
+    fun updateJudge(
+        @Valid @RequestBody request: JudgeSettingRequest,
+    ): ApiResponse<JudgeSettingResponse> {
+        llmSettingsService.updateJudgeModel(checkNotNull(request.model))
+        qualityJudgeSettingService.update(checkNotNull(request.autoEnabled), checkNotNull(request.voteCount))
+        return ApiResponse.success(judgeResponse())
+    }
+
     @Operation(summary = "모델 조회", description = "앱 전체 단일 모델과 선택 가능한 모델 목록을 반환합니다.")
     @GetMapping("/model")
     fun getModel(): ApiResponse<ModelSettingResponse> = ApiResponse.success(modelResponse())
@@ -147,6 +173,21 @@ class AdminLlmSettingsController(
     ): ApiResponse<PromptSettingResponse> {
         val revision = conflictRetry.execute { promptRevisionService.restore(revisionId, principal.email) }
         return ApiResponse.success(promptResponse(revision.promptType))
+    }
+
+    private fun judgeResponse(): JudgeSettingResponse {
+        val judge = llmSettingsService.currentJudgeView()
+        val appModel = llmSettingsService.currentModel()
+        val setting = qualityJudgeSettingService.current()
+        return JudgeSettingResponse(
+            model = judge.model,
+            appModel = appModel,
+            sameAsAppModel = judge.model == appModel,
+            availableModels = llmSettingsService.availableModels(),
+            promptVersion = judge.promptVersions.type,
+            autoEnabled = setting.autoEnabled,
+            voteCount = setting.voteCount,
+        )
     }
 
     private fun modelResponse(): ModelSettingResponse =

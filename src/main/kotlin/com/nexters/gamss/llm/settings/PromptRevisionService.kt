@@ -9,6 +9,7 @@ import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.Instant
 
 /**
  * 프롬프트 편집 이력을 담당한다. 현재값 CRUD([LlmSettingsService])와 분리된 '이력' 책임만 맡는다 —
@@ -68,6 +69,12 @@ class PromptRevisionService(
         promptType: PromptType,
         pageable: Pageable,
     ): Page<PromptRevision> = promptRevisionRepository.findAllByPromptTypeOrderByVersionDesc(promptType, pageable)
+
+    @Transactional(readOnly = true)
+    fun findCreatedSince(
+        promptTypes: Collection<PromptType>,
+        from: Instant,
+    ): List<PromptRevision> = promptRevisionRepository.findByPromptTypeInAndCreatedAtGreaterThanEqualOrderByCreatedAtAsc(promptTypes, from)
 
     @Transactional(readOnly = true)
     fun getRevision(id: Long): PromptRevision =
