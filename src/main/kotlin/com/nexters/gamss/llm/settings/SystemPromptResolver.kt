@@ -23,6 +23,7 @@ class SystemPromptResolver(
         // 조립하면 COMMON의 "보이스 카드 말투를 철저히 지켜라"와 CARD의 "캐릭터 말투를 쓰지 마라"가
         // 한 프롬프트 안에서 정면으로 충돌한다(GeminiCardMessageGenerator가 원본을 직접 읽는다).
         require(promptType != PromptType.CARD) { "CARD는 시스템 프롬프트로 조립할 수 없습니다." }
+        require(promptType != PromptType.QUALITY_JUDGE) { "QUALITY_JUDGE는 시스템 프롬프트로 조립할 수 없습니다." }
         val base = llmSettingsService.currentCommonView()
         if (promptType == PromptType.COMMON) {
             return base
@@ -49,6 +50,7 @@ class SystemPromptResolver(
         require(promptType != PromptType.EONGTTUNG_TOPIC) { "EONGTTUNG_TOPIC은 시스템 프롬프트로 조립할 수 없습니다." }
         require(promptType != PromptType.CARD_EMOTION) { "CARD_EMOTION은 시스템 프롬프트로 조립할 수 없습니다." }
         require(promptType != PromptType.CARD) { "CARD는 시스템 프롬프트로 조립할 수 없습니다." }
+        require(promptType != PromptType.QUALITY_JUDGE) { "QUALITY_JUDGE는 시스템 프롬프트로 조립할 수 없습니다." }
         val base = llmSettingsService.currentCommonView()
         val common = commonPrompt ?: base.systemPrompt
         val type = typePrompt ?: llmSettingsService.currentPrompt(promptType)

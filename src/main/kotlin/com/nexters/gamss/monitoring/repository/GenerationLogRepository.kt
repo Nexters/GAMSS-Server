@@ -1,6 +1,7 @@
 package com.nexters.gamss.monitoring.repository
 
 import com.nexters.gamss.monitoring.domain.GenerationLog
+import com.nexters.gamss.monitoring.domain.GenerationType
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
@@ -13,7 +14,9 @@ interface GenerationLogRepository : JpaRepository<GenerationLog, Long> {
      */
     @Query(
         "select g from GenerationLog g " +
-            "where g.createdAt >= :from and g.generationType <> com.nexters.gamss.monitoring.domain.GenerationType.PREVIEW " +
+            "where g.createdAt >= :from and g.generationType not in (" +
+            "com.nexters.gamss.monitoring.domain.GenerationType.PREVIEW, " +
+            "com.nexters.gamss.monitoring.domain.GenerationType.QUALITY_JUDGE) " +
             "order by g.createdAt asc",
     )
     fun findAllSince(
@@ -48,4 +51,9 @@ interface GenerationLogRepository : JpaRepository<GenerationLog, Long> {
      * 그대로 받아 앱단에서 대화방별 토큰 합·비용(모델별 단가)을 계산한다. conversation_id가 NULL인 과거 로그는 제외된다.
      */
     fun findByConversationIdIn(conversationIds: Collection<Long>): List<GenerationLog>
+
+    fun findByGenerationTypeAndCreatedAtGreaterThanEqual(
+        generationType: GenerationType,
+        from: Instant,
+    ): List<GenerationLog>
 }

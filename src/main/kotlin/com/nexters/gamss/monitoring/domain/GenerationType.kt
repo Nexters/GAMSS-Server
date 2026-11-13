@@ -26,6 +26,9 @@ enum class GenerationType(
 
     /** 관리자 도구다. 비용은 나가지만 특정 회원의 한도를 깎을 이유가 없다. */
     PREVIEW(countsTowardQuota = false),
+
+    /** 응답 품질 채점(#255). 회원이 쓴 것이 아니라 member_id 도 남기지 않는다. */
+    QUALITY_JUDGE(countsTowardQuota = false),
     ;
 
     companion object {
