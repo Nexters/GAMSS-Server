@@ -3,10 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { CheckCircle2, CornerDownRight, FlaskConical, HelpCircle, Loader2, Reply, Sparkles } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
+import { VerdictBadge } from '@/components/verdict-badge'
 import {
   AWKWARD_TYPE_META,
   CHARACTER_META,
-  VERDICT_META,
   orderThread,
   type PlaygroundInput,
   type ResponseInfo,
@@ -85,7 +85,7 @@ function AiMark({ response }: { response: ResponseInfo }) {
       </span>
     )
   }
-  return <Badge variant="destructive" className="px-1.5 py-0 text-[10px]">AI 어색함</Badge>
+  return <VerdictBadge verdict="AWKWARD" prefix="AI" className="px-1.5 py-0 text-[11px]" />
 }
 
 function GenerationDivider({ response }: { response: ResponseInfo }) {
@@ -177,7 +177,7 @@ export function ConversationThread({
                   )}
                   {response && mode === 'review' && <AiMark response={response} />}
                   {response && mode === 'review' && response.myVerdict && (
-                    <span className="rounded border px-1 text-[10px] text-muted-foreground">나: {VERDICT_META[response.myVerdict.verdict].label}</span>
+                    <VerdictBadge verdict={response.myVerdict.verdict} prefix="나" className="px-1.5 py-0 text-[11px]" />
                   )}
                   {response && mode === 'review' && response.humanVerdictCount > (response.myVerdict ? 1 : 0) && (
                     <span className="text-[10px] text-muted-foreground">사람 {response.humanVerdictCount}명 판정</span>

@@ -1,6 +1,7 @@
 import { useCustom } from '@refinedev/core'
 import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { AlertTriangle, ArrowDownRight, ArrowUpRight, Minus, ShieldCheck } from 'lucide-react'
+import { AlertTriangle, ArrowDownRight, ArrowUpRight, Coins, MessageCircleWarning, Minus, ShieldCheck } from 'lucide-react'
+import { MetricCard } from '@/components/metric-card'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatKrw, formatUsd } from '@/lib/currency'
@@ -45,43 +46,34 @@ const MIN_TRUSTED_PAIRS = 30
 
 function Delta({ current, previous }: { current: number | null; previous: number | null }) {
   if (current === null || previous === null) {
-    return <span className="text-xs text-muted-foreground">이전 기간 데이터 없음</span>
+    return <>이전 기간 데이터 없음</>
   }
   const diff = Math.round((current - previous) * 10) / 10
   const Icon = diff > 0 ? ArrowUpRight : diff < 0 ? ArrowDownRight : Minus
   return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-medium',
-        diff > 0 ? 'bg-rose-50 text-rose-700' : diff < 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-muted text-muted-foreground',
-      )}
-    >
-      <Icon className="size-3.5" />
-      {diff === 0 ? '변화 없음' : `${Math.abs(diff)}%p`}
-      <span className="ml-1 font-normal opacity-70">이전 기간 대비</span>
+    <span className="inline-flex items-center gap-1">
+      <span className={cn('inline-flex items-center font-medium', diff > 0 ? 'text-rose-600' : diff < 0 ? 'text-emerald-600' : 'text-muted-foreground')}>
+        <Icon className="size-3.5" />
+        {diff === 0 ? '변화 없음' : `${Math.abs(diff)}%p`}
+      </span>
+      이전 기간 대비
     </span>
   )
 }
 
-function TrustBadge({ agreement, pairs }: { agreement: number | null; pairs: number }) {
+function AgreementHint({ agreement, pairs }: { agreement: number | null; pairs: number }) {
   if (agreement === null) {
+    return <span className="text-amber-700">사람 판정이 없어 아직 모릅니다</span>
+  }
+  if (pairs < MIN_TRUSTED_PAIRS) {
     return (
-      <div className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-        <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-        <span>사람 판정이 없어 AI 채점을 믿을 수 있는지 아직 모릅니다. 판정하기에서 정답 세트를 만들어 주세요.</span>
-      </div>
+      <span className="inline-flex items-center gap-1 text-amber-700">
+        <AlertTriangle className="size-3.5 shrink-0" />
+        {pairs}쌍 비교 · 표본이 적어 참고만
+      </span>
     )
   }
-  const weak = pairs < MIN_TRUSTED_PAIRS || agreement < 70
-  return (
-    <div className={cn('flex items-start gap-2 rounded-lg px-3 py-2 text-xs', weak ? 'bg-amber-50 text-amber-800' : 'bg-emerald-50 text-emerald-800')}>
-      {weak ? <AlertTriangle className="mt-0.5 size-3.5 shrink-0" /> : <ShieldCheck className="mt-0.5 size-3.5 shrink-0" />}
-      <span>
-        AI-사람 일치율 <span className="font-semibold">{agreement}%</span> · {pairs}쌍 비교
-        {pairs < MIN_TRUSTED_PAIRS ? ` · 표본이 ${MIN_TRUSTED_PAIRS}쌍보다 적어 아직 참고만 하세요` : agreement < 70 ? ' · 낮아서 위 숫자를 믿기 어렵습니다' : ''}
-      </span>
-    </div>
-  )
+  return agreement < 70 ? <span className="text-amber-700">{pairs}쌍 비교 · 낮아서 비율을 믿기 어렵습니다</span> : <>{pairs}쌍 비교</>
 }
 
 function RateTooltip(props: { active?: boolean; payload?: { payload: { date: string; rate: number | null; judged: number; awkward: number } }[] }) {
@@ -116,9 +108,13 @@ export function StatsSection({
   }
   if (isLoading || !stats) {
     return (
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Skeleton className="h-[248px] lg:col-span-2" />
-        <Skeleton className="h-[248px]" />
+      <div className="space-y-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-[92px]" />
+          ))}
+        </div>
+        <Skeleton className="h-[260px]" />
       </div>
     )
   }
@@ -136,122 +132,111 @@ export function StatsSection({
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="flex flex-col p-6 lg:col-span-2">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">어색한 응답 비율</p>
-              <div className="flex flex-wrap items-baseline gap-3">
-                <span className={cn('text-5xl font-semibold tracking-tight tabular-nums', stats.awkwardRate !== null && stats.awkwardRate >= 20 && 'text-rose-600')}>
-                  {stats.awkwardRate === null ? '-' : `${stats.awkwardRate}%`}
-                </span>
-                <Delta current={stats.awkwardRate} previous={stats.previousAwkwardRate} />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                최근 {stats.days}일 · AI가 채점한 응답 {stats.judgedCount.toLocaleString()}건 중 {stats.awkwardCount.toLocaleString()}건
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-3 text-xs">
-              {(Object.keys(MARKER_META) as MarkerKind[]).map((kind) => (
-                <span key={kind} className="flex items-center gap-1.5 text-muted-foreground">
-                  <span className="h-3 w-0.5 rounded-full" style={{ background: MARKER_META[kind].color }} />
-                  {MARKER_META[kind].label}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-4 h-[180px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={trend} margin={{ top: 16, right: 8, bottom: 0, left: 0 }}>
-                <defs>
-                  <linearGradient id="rateFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={RATE_COLOR} stopOpacity={0.18} />
-                    <stop offset="100%" stopColor={RATE_COLOR} stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#a1a1aa' }} minTickGap={16} />
-                <YAxis unit="%" tickLine={false} axisLine={false} width={44} tick={{ fontSize: 11, fill: '#a1a1aa' }} allowDecimals={false} />
-                <Tooltip content={<RateTooltip />} cursor={{ stroke: 'hsl(var(--border))' }} />
-                {markersByDate.map(([date, markers]) => {
-                  const kind = markers.some((m) => m.kind === 'JUDGE') ? 'JUDGE' : 'GENERATION'
-                  return (
-                    <ReferenceLine
-                      key={date}
-                      x={shortDate(date)}
-                      stroke={MARKER_META[kind].color}
-                      strokeDasharray={kind === 'JUDGE' ? '4 3' : undefined}
-                      label={{ value: '●', position: 'top', fill: MARKER_META[kind].color, fontSize: 9 }}
-                    />
-                  )
-                })}
-                <Area
-                  type="linear"
-                  dataKey="rate"
-                  stroke={RATE_COLOR}
-                  strokeWidth={2}
-                  fill="url(#rateFill)"
-                  connectNulls
-                  dot={{ r: 2.5, fill: RATE_COLOR, strokeWidth: 0 }}
-                  activeDot={{ r: 4 }}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-
-          {markersByDate.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {markersByDate.map(([date, markers]) => (
-                <span key={date} className="inline-flex items-center gap-1.5 rounded-md border bg-muted/30 px-2 py-1 text-[11px] text-muted-foreground">
-                  <span className="font-medium text-foreground">{shortDate(date)}</span>
-                  {markers.map((m) => (
-                    <span key={m.target} className="inline-flex items-center gap-1">
-                      <span className="size-1.5 rounded-full" style={{ background: MARKER_META[m.kind].color }} />
-                      {TARGET_LABEL[m.target] ?? m.target} {m.value}
-                    </span>
-                  ))}
-                </span>
-              ))}
-            </div>
-          )}
-        </Card>
-
-        <Card className="flex flex-col gap-4 p-6">
-          <div>
-            <p className="text-sm text-muted-foreground">채점이 믿을 만한가</p>
-            <div className="mt-2">
-              <TrustBadge agreement={stats.aiHumanAgreement} pairs={stats.agreementPairs} />
-            </div>
-          </div>
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-            <div>
-              <dt className="text-xs text-muted-foreground">채점 모델</dt>
-              <dd className="mt-0.5 truncate font-medium" title={stats.judgeModel}>
-                {stats.judgeModel}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-xs text-muted-foreground">채점 프롬프트</dt>
-              <dd className="mt-0.5 font-medium">v{stats.judgePromptVersion}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-muted-foreground">채점 비용</dt>
-              <dd className="mt-0.5 font-medium tabular-nums">{formatUsd(stats.judgeCostUsd)}</dd>
-              <dd className="text-[11px] text-muted-foreground">≈ {formatKrw(stats.judgeCostUsd)}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-muted-foreground">채점된 응답</dt>
-              <dd className="mt-0.5 font-medium tabular-nums">{stats.judgedCount.toLocaleString()}건</dd>
-            </div>
-          </dl>
-        </Card>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard
+          label="어색한 응답 비율"
+          value={stats.awkwardRate === null ? '-' : `${stats.awkwardRate}%`}
+          tone={stats.awkwardRate !== null && stats.awkwardRate >= 20 ? 'danger' : 'default'}
+          hint={<Delta current={stats.awkwardRate} previous={stats.previousAwkwardRate} />}
+          icon={<MessageCircleWarning className="size-4" />}
+        />
+        <MetricCard label="어색한 응답" value={stats.awkwardCount.toLocaleString()} hint={`AI가 채점한 ${stats.judgedCount.toLocaleString()}건 중`} />
+        <MetricCard
+          label="AI-사람 일치율"
+          value={stats.aiHumanAgreement === null ? '-' : `${stats.aiHumanAgreement}%`}
+          tone={stats.aiHumanAgreement !== null && stats.agreementPairs >= MIN_TRUSTED_PAIRS && stats.aiHumanAgreement >= 70 ? 'success' : 'default'}
+          hint={<AgreementHint agreement={stats.aiHumanAgreement} pairs={stats.agreementPairs} />}
+          icon={<ShieldCheck className="size-4" />}
+        />
+        <MetricCard
+          label="채점 비용"
+          value={formatUsd(stats.judgeCostUsd)}
+          hint={
+            <span className="block truncate" title={`${stats.judgeModel} · 채점 프롬프트 v${stats.judgePromptVersion}`}>
+              ≈ {formatKrw(stats.judgeCostUsd)} · {stats.judgeModel} · v{stats.judgePromptVersion}
+            </span>
+          }
+          icon={<Coins className="size-4" />}
+        />
       </div>
 
+      <Card className="p-5">
+        <div className="flex items-baseline justify-between">
+          <p className="text-sm font-medium">어색한 응답 비율 추이</p>
+          <p className="text-xs text-muted-foreground">최근 {trend.length}일</p>
+        </div>
+        <div className="mt-2 h-[200px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={trend} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+              <defs>
+                <linearGradient id="rateFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={RATE_COLOR} stopOpacity={0.16} />
+                  <stop offset="100%" stopColor={RATE_COLOR} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+              <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#a1a1aa' }} minTickGap={16} />
+              <YAxis unit="%" tickLine={false} axisLine={false} width={40} tick={{ fontSize: 11, fill: '#a1a1aa' }} allowDecimals={false} />
+              <Tooltip content={<RateTooltip />} cursor={{ stroke: 'hsl(var(--border))' }} />
+              {markersByDate.map(([date, markers]) => {
+                const kind = markers.some((m) => m.kind === 'JUDGE') ? 'JUDGE' : 'GENERATION'
+                return (
+                  <ReferenceLine
+                    key={date}
+                    x={shortDate(date)}
+                    stroke={MARKER_META[kind].color}
+                    strokeOpacity={0.7}
+                    strokeDasharray={kind === 'JUDGE' ? '4 3' : undefined}
+                  />
+                )
+              })}
+              <Area
+                type="linear"
+                dataKey="rate"
+                stroke={RATE_COLOR}
+                strokeWidth={2}
+                fill="url(#rateFill)"
+                connectNulls
+                isAnimationActive={false}
+                dot={{ r: 2.5, fill: RATE_COLOR, strokeWidth: 0 }}
+                activeDot={{ r: 4 }}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="mt-2 flex flex-wrap items-center justify-center gap-4 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1.5">
+            <span className="size-2 rounded-full" style={{ background: RATE_COLOR }} />
+            어색한 응답 비율
+          </span>
+          {(Object.keys(MARKER_META) as MarkerKind[]).map((kind) => (
+            <span key={kind} className="flex items-center gap-1.5">
+              <span className="h-3 w-0.5 rounded-full" style={{ background: MARKER_META[kind].color }} />
+              {MARKER_META[kind].label}
+            </span>
+          ))}
+        </div>
+        {markersByDate.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-2 border-t pt-4">
+            {markersByDate.map(([date, markers]) => (
+              <span key={date} className="inline-flex items-center gap-2 rounded-md border px-2 py-1 text-xs text-muted-foreground">
+                <span className="font-medium tabular-nums text-foreground">{shortDate(date)}</span>
+                {markers.map((m) => (
+                  <span key={m.target} className="inline-flex items-center gap-1">
+                    <span className="size-1.5 rounded-full" style={{ background: MARKER_META[m.kind].color }} />
+                    {TARGET_LABEL[m.target] ?? m.target} {m.value}
+                  </span>
+                ))}
+              </span>
+            ))}
+          </div>
+        )}
+      </Card>
+
       <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <Card className="p-6">
+        <Card className="p-5">
           <div className="flex items-baseline justify-between gap-3">
-            <p className="text-sm font-medium">캐릭터별</p>
+            <p className="text-sm font-medium">캐릭터별 어색한 비율</p>
             <p className="text-xs text-muted-foreground">{selectedCharacter ? '다시 누르면 필터를 해제합니다' : '누르면 아래 목록이 걸러집니다'}</p>
           </div>
           <div className="mt-4 space-y-1">
@@ -271,9 +256,9 @@ export function StatsSection({
                   )}
                 >
                   <span className="flex items-center gap-1.5">
-                    <span>{meta.emoji}</span>
+                    <span className="size-2 rounded-full" style={{ background: meta.color }} />
                     {meta.label}
-                    {worst === c.emotionType && <span className="rounded bg-rose-50 px-1 text-[10px] font-medium text-rose-600">가장 높음</span>}
+                    {worst === c.emotionType && <span className="rounded-full bg-rose-50 px-1.5 py-px text-[10px] font-medium text-rose-700 ring-1 ring-inset ring-rose-600/10">가장 높음</span>}
                   </span>
                   <span className="relative h-2 overflow-hidden rounded-full bg-muted">
                     <span className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${c.rate ?? 0}%`, background: meta.color }} />
@@ -290,8 +275,11 @@ export function StatsSection({
           </div>
         </Card>
 
-        <Card className="p-6">
-          <p className="text-sm font-medium">어색함 유형</p>
+        <Card className="p-5">
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-sm font-medium">어색함 유형</p>
+            <p className="text-xs text-muted-foreground">한 응답에 여러 유형이 붙을 수 있습니다</p>
+          </div>
           <div className="mt-4 space-y-2.5">
             {stats.byType.map((t) => (
               <div key={t.type} className={cn('grid grid-cols-[8.5rem_1fr_2.5rem] items-center gap-3 text-sm', t.count === 0 && 'opacity-40')} title={AWKWARD_TYPE_META[t.type].hint}>

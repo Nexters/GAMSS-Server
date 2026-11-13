@@ -1,10 +1,12 @@
 import { useCallback, useState } from 'react'
 import { useCustom } from '@refinedev/core'
-import { ClipboardCheck } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { ClipboardCheck, SlidersHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Select } from '@/components/ui/select'
 import { PageHeader } from '@/components/page-header'
+import { SectionTitle } from '@/components/section-title'
 import { SegmentedTabs } from '@/components/segmented-tabs'
 import { ConversationThreadPanel } from '@/components/conversation-thread-panel'
 import type { Emotion, LabelingNext, ResponseRow } from '@/lib/quality'
@@ -21,6 +23,7 @@ function kstDate(offsetDays = 0): string {
 }
 
 export function ConversationQualityPage() {
+  const navigate = useNavigate()
   const [mode, setMode] = useState<Mode>('browse')
   const [days, setDays] = useState(14)
   const [filters, setFilters] = useState<ResponseFilters>({
@@ -42,7 +45,7 @@ export function ConversationQualityPage() {
   const onProgress = useCallback((m: number, t: number) => setProgress({ mine: m, target: t }), [])
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader
         title="대화 품질"
         description="캐릭터 응답이 어색했는지 봅니다. 어색한 응답을 대화 흐름 안에서 읽고, 실험실에서 바로 고쳐 볼 수 있습니다."
@@ -106,16 +109,34 @@ export function ConversationQualityPage() {
 
       {mode === 'browse' ? (
         <>
-          <StatsSection
-            days={days}
-            selectedCharacter={filters.emotionType}
-            onSelectCharacter={(emotion: Emotion | '') => setFilters((f) => ({ ...f, emotionType: emotion }))}
-          />
-          <ResponseList filters={filters} onChange={setFilters} selectedMessageId={selected?.messageId ?? null} onSelect={setSelected} />
+          <section className="space-y-4">
+            <SectionTitle
+              title="어색함 지표"
+              description={`매일 06:00에 새로 생긴 응답을 AI가 채점합니다. (최근 ${days}일 기준)`}
+              actions={
+                <Button variant="outline" size="sm" onClick={() => navigate('/llm-settings', { state: { promptType: 'QUALITY_JUDGE' } })}>
+                  <SlidersHorizontal className="size-4" />
+                  채점 모델·프롬프트 설정
+                </Button>
+              }
+            />
+            <StatsSection
+              days={days}
+              selectedCharacter={filters.emotionType}
+              onSelectCharacter={(emotion: Emotion | '') => setFilters((f) => ({ ...f, emotionType: emotion }))}
+            />
+          </section>
+          <section className="space-y-4">
+            <SectionTitle title="응답 살펴보기" description="행을 누르면 대화 흐름 안에서 그 응답을 봅니다. 원문 열람 기록이 남습니다." />
+            <ResponseList filters={filters} onChange={setFilters} selectedMessageId={selected?.messageId ?? null} onSelect={setSelected} />
+          </section>
         </>
       ) : (
         <>
-          <LabelingMode onProgress={onProgress} />
+          <section className="space-y-4">
+            <SectionTitle title="직접 판정하기" description="AI 판정은 제출한 뒤에 보입니다. 숫자 키로 고르고 Enter로 제출합니다." />
+            <LabelingMode onProgress={onProgress} />
+          </section>
           <CalibrationPanel />
         </>
       )}

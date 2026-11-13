@@ -4,6 +4,8 @@ import { Loader2, Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { MetricCard } from '@/components/metric-card'
+import { SectionTitle } from '@/components/section-title'
 import { AWKWARD_TYPE_META, type AwkwardType } from '@/lib/quality'
 
 interface CalibrationStatus {
@@ -54,24 +56,21 @@ export function CalibrationPanel() {
   const report = status?.report
 
   return (
-    <Card className="space-y-4 p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-1">
-          <p className="text-sm font-medium">정답 세트로 AI 채점 확인</p>
-          <p className="text-xs text-muted-foreground">
-            사람 판정이 있는 응답만 지금 채점 설정({report?.judgeModel ?? '-'} · 채점 프롬프트 v{report?.judgePromptVersion ?? '-'})으로 채점하고 사람 판정과
-            비교합니다. 채점 모델이나 채점 프롬프트를 바꾼 뒤 자동 채점을 켜기 전에 돌려 보세요.
-          </p>
-        </div>
-        <Button
-          size="sm"
-          disabled={running || starting || (report?.humanVerdictCount ?? 0) === 0}
-          onClick={() => start({ url: '/api/admin/conversation-quality/calibration', method: 'post', values: {} }, { onSuccess: () => void refetch() })}
-        >
-          {running ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
-          {running ? `채점 중 ${status?.run?.processed ?? 0} / ${status?.run?.total ?? 0}` : '정답 세트로 채점 돌려보기'}
-        </Button>
-      </div>
+    <section className="space-y-4">
+      <SectionTitle
+        title="정답 세트로 AI 채점 확인"
+        description={`사람 판정이 있는 응답을 지금 채점 설정(${report?.judgeModel ?? '-'} · 채점 프롬프트 v${report?.judgePromptVersion ?? '-'})으로 다시 채점해 비교합니다. 채점 설정을 바꾼 뒤 자동 채점을 켜기 전에 돌려 보세요.`}
+        actions={
+          <Button
+            size="sm"
+            disabled={running || starting || (report?.humanVerdictCount ?? 0) === 0}
+            onClick={() => start({ url: '/api/admin/conversation-quality/calibration', method: 'post', values: {} }, { onSuccess: () => void refetch() })}
+          >
+            {running ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
+            {running ? `채점 중 ${status?.run?.processed ?? 0} / ${status?.run?.total ?? 0}` : '정답 세트로 채점 돌려보기'}
+          </Button>
+        }
+      />
 
       {status?.run && !running && status.run.total > 0 && (
         <p className="text-xs text-muted-foreground">
@@ -81,23 +80,16 @@ export function CalibrationPanel() {
 
       {report && (
         <>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-lg border p-3">
-              <p className="text-xs text-muted-foreground">AI-사람 일치율</p>
-              <p className="text-xl font-semibold tabular-nums">{pct(report.aiHumanAgreement)}</p>
-              <p className="text-[11px] text-muted-foreground">{report.comparedPairs}쌍 비교</p>
-            </div>
-            <div className="rounded-lg border p-3">
-              <p className="text-xs text-muted-foreground">사람끼리 일치율</p>
-              <p className="text-xl font-semibold tabular-nums">{pct(report.humanHumanAgreement)}</p>
-              <p className="text-[11px] text-muted-foreground">{report.humanHumanPairs}쌍 · 두 명 이상 판정한 응답만</p>
-            </div>
-            <div className="rounded-lg border p-3">
-              <p className="text-xs text-muted-foreground">사람 판정</p>
-              <p className="text-xl font-semibold tabular-nums">{report.humanVerdictCount}</p>
-              <p className="text-[11px] text-muted-foreground">AI 일치율이 사람끼리 일치율에 가까우면 자동 채점을 켜도 됩니다</p>
-            </div>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <MetricCard label="AI-사람 일치율" value={pct(report.aiHumanAgreement)} hint={`${report.comparedPairs}쌍 비교`} />
+            <MetricCard label="사람끼리 일치율" value={pct(report.humanHumanAgreement)} hint={`${report.humanHumanPairs}쌍 · 두 명 이상 판정한 응답만`} />
+            <MetricCard label="사람 판정" value={report.humanVerdictCount.toLocaleString()} hint="AI 일치율이 사람끼리 일치율에 가까우면 자동 채점을 켜도 됩니다" />
           </div>
+          <Card className="overflow-hidden">
+            <div className="border-b px-4 py-3">
+              <p className="text-sm font-medium">유형별 비교</p>
+              <p className="text-xs text-muted-foreground">놓친 비율은 사람만 어색하다고 본 비율, 과잉 지적 비율은 AI만 어색하다고 본 비율입니다.</p>
+            </div>
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -130,8 +122,9 @@ export function CalibrationPanel() {
               </TableBody>
             </Table>
           </div>
+          </Card>
         </>
       )}
-    </Card>
+    </section>
   )
 }

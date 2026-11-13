@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertTriangle, CheckCircle2, Keyboard, Loader2 } from 'lucide-react'
 import { apiFetch, ApiError } from '@/lib/api'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { TypeChip, VerdictBadge } from '@/components/verdict-badge'
 import { Card } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { ConversationThread, ThreadHeader } from '@/components/conversation-thread'
@@ -285,22 +285,18 @@ export function LabelingMode({ onProgress }: { onProgress: (mine: number, target
             </p>
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="w-8 text-xs text-muted-foreground">나</span>
-              <Badge variant={VERDICT_META[result.myVerdict.verdict].variant}>{VERDICT_META[result.myVerdict.verdict].label}</Badge>
+              <VerdictBadge verdict={result.myVerdict.verdict} />
               {result.myVerdict.awkwardTypes.map((t) => (
-                <Badge key={t} variant="outline">
-                  {AWKWARD_TYPE_META[t].label}
-                </Badge>
+                <TypeChip key={t} label={AWKWARD_TYPE_META[t].label} title={AWKWARD_TYPE_META[t].hint} />
               ))}
             </div>
             {ai && (
               <>
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="w-8 text-xs text-muted-foreground">AI</span>
-                  <Badge variant={VERDICT_META[ai.verdict].variant}>{VERDICT_META[ai.verdict].label}</Badge>
+                  <VerdictBadge verdict={ai.verdict} />
                   {ai.awkwardTypes.map((t) => (
-                    <Badge key={t} variant="outline">
-                      {AWKWARD_TYPE_META[t].label}
-                    </Badge>
+                    <TypeChip key={t} label={AWKWARD_TYPE_META[t].label} title={AWKWARD_TYPE_META[t].hint} />
                   ))}
                 </div>
                 {ai.evidence && <p className="text-xs text-muted-foreground">근거 “{ai.evidence}”</p>}
