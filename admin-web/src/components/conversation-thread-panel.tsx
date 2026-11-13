@@ -4,6 +4,7 @@ import { RotateCcw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ConversationThread, ThreadHeader } from '@/components/conversation-thread'
+import { ApiError } from '@/lib/api'
 import type { ThreadView } from '@/lib/quality'
 
 /** 오른쪽에서 열리는 대화 원문 패널. 토큰 사용량 표와 대화 품질 탭이 같이 쓴다. */
@@ -16,7 +17,7 @@ export function ConversationThreadPanel({
   focusMessageId?: number | null
   onClose: () => void
 }) {
-  const { data, isLoading, isError, refetch } = useCustom<ThreadView>({
+  const { data, isLoading, isError, error, refetch } = useCustom<ThreadView>({
     url: `/api/admin/conversations/${conversationId}/thread`,
     method: 'get',
   })
@@ -39,7 +40,7 @@ export function ConversationThreadPanel({
       <div className="flex-1 overflow-y-auto px-5 py-4">
         {isError && !thread ? (
           <div className="flex items-center gap-3">
-            <p className="text-sm text-muted-foreground">대화를 불러오지 못했습니다.</p>
+            <p className="text-sm text-muted-foreground">{error instanceof ApiError && error.detail ? error.detail : '대화를 불러오지 못했습니다.'}</p>
             <Button variant="outline" size="sm" onClick={() => refetch()}>
               <RotateCcw className="size-4" />
               다시 시도

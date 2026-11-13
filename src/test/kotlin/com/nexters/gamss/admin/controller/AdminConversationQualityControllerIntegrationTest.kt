@@ -5,6 +5,7 @@ import com.nexters.gamss.conversation.domain.Message
 import com.nexters.gamss.conversation.domain.SenderType
 import com.nexters.gamss.conversation.repository.ConversationRepository
 import com.nexters.gamss.conversation.repository.MessageRepository
+import com.nexters.gamss.conversation.service.ConversationService
 import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.global.security.JwtIssuer
 import com.nexters.gamss.member.domain.Member
@@ -58,6 +59,9 @@ class AdminConversationQualityControllerIntegrationTest {
     @Autowired
     private lateinit var qualityJudgeService: QualityJudgeService
 
+    @Autowired
+    private lateinit var conversationService: ConversationService
+
     private lateinit var mockMvc: MockMvc
 
     private lateinit var conversation: Conversation
@@ -95,6 +99,16 @@ class AdminConversationQualityControllerIntegrationTest {
             }
 
         assertEquals(1, viewLogRepository.findAll().count { it.conversationId == conversation.id })
+    }
+
+    @Test
+    fun `삭제된 대화는 원문을 열 수 없다`() {
+        conversationService.deleteConversation(conversation.memberId, conversation.id)
+
+        mockMvc
+            .get("/api/admin/conversations/${conversation.id}/thread") {
+                header(HttpHeaders.AUTHORIZATION, adminBearer())
+            }.andExpect { status { isConflict() } }
     }
 
     @Test

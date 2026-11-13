@@ -5,6 +5,7 @@ import com.nexters.gamss.conversation.domain.SenderType
 import com.nexters.gamss.conversation.service.ResponseThreadService
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
+import com.nexters.gamss.member.service.MemberService
 import com.nexters.gamss.quality.domain.AwkwardType
 import com.nexters.gamss.quality.domain.ResponseAiVerdict
 import com.nexters.gamss.quality.domain.ResponseFilter
@@ -22,6 +23,7 @@ import java.time.Instant
 class ConversationQualityService(
     private val responseThreadService: ResponseThreadService,
     private val qualityReviewService: QualityReviewService,
+    private val memberService: MemberService,
 ) {
     fun thread(
         conversationId: Long,
@@ -29,6 +31,11 @@ class ConversationQualityService(
         blind: Boolean,
     ): ThreadView {
         val thread = responseThreadService.thread(conversationId)
+        // 삭제나 탈퇴로 판정을 지운 대화는 원문도 열지 않는다.
+        thread.conversation.ensureNotDeleted()
+        if (memberService.getById(thread.conversation.memberId).isWithdrawn()) {
+            throw BusinessException(ErrorCode.WITHDRAWN_MEMBER)
+        }
         qualityReviewService.recordView(adminEmail, conversationId, thread.conversation.memberId)
         val ids = thread.responses.keys
         val ai = qualityReviewService.latestAiVerdicts(ids)
