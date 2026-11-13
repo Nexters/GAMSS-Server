@@ -71,6 +71,7 @@ class CommentGenerationServiceTest {
             tokenQuotaRecorder,
             dailyTokenLimitService,
             conversationTranscriptReader,
+            mockk(relaxed = true),
         )
 
     private val characters = listOf(EmotionType.JOY, EmotionType.SADNESS, EmotionType.GRUMPY)

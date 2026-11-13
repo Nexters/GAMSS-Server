@@ -27,8 +27,12 @@ class SystemPromptResolver(
         if (promptType == PromptType.COMMON) {
             return base
         }
-        val typePrompt = llmSettingsService.currentPrompt(promptType)
-        return LlmSettingsView(base.model, assemble(base.systemPrompt, typePrompt))
+        val (typePrompt, typeVersion) = llmSettingsService.currentPromptWithVersion(promptType)
+        return LlmSettingsView(
+            base.model,
+            assemble(base.systemPrompt, typePrompt),
+            PromptVersions(base.promptVersions.common, typeVersion),
+        )
     }
 
     /**

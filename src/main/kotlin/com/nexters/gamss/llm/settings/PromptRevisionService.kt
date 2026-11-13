@@ -94,8 +94,8 @@ class PromptRevisionService(
         restoredFromVersion: Int?,
     ) {
         try {
-            llmSettingsService.updatePrompt(promptType, systemPrompt)
             val nextVersion = (promptRevisionRepository.findMaxVersion(promptType) ?: 0) + 1
+            llmSettingsService.updatePrompt(promptType, systemPrompt, nextVersion)
             promptRevisionRepository.saveAndFlush(PromptRevision(promptType, nextVersion, systemPrompt, savedBy, restoredFromVersion))
         } catch (e: DataIntegrityViolationException) {
             throw PromptRevisionConflictException(promptType, e)

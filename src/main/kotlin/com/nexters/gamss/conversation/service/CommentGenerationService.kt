@@ -2,6 +2,7 @@ package com.nexters.gamss.conversation.service
 
 import com.nexters.gamss.conversation.domain.CommentStatus
 import com.nexters.gamss.conversation.domain.Message
+import com.nexters.gamss.conversation.domain.ResponseKind
 import com.nexters.gamss.conversation.domain.SenderType
 import com.nexters.gamss.conversation.repository.ConversationRepository
 import com.nexters.gamss.conversation.repository.MessageRepository
@@ -49,6 +50,7 @@ class CommentGenerationService(
     private val tokenQuotaRecorder: TokenQuotaRecorder,
     private val dailyTokenLimitService: DailyTokenLimitService,
     private val conversationTranscriptReader: ConversationTranscriptReader,
+    private val responseGenerationRecorder: ResponseGenerationRecorder,
     private val llmRetryExecutor: LlmRetryExecutor = LlmRetryExecutor(),
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -154,6 +156,13 @@ class CommentGenerationService(
                     tokens,
                 )
             val saved = commentPersistenceService.saveFeed(rootMessage.conversationId, messageId, output.feed)
+            responseGenerationRecorder.record(
+                messageId,
+                rootMessage.conversationId,
+                ResponseKind.COMMENT,
+                output.model,
+                output.promptVersions,
+            )
             tokenQuotaRecorder.recordDelivered(GenerationType.COMMENT, memberId, tokens.used)
             GenerationResult(CommentGenerationOutcome.DONE, saved, output.usedTokens)
         } catch (e: Exception) {
@@ -232,6 +241,13 @@ class CommentGenerationService(
                     characterId = characterMessage.emotionType!!,
                     text = output.text,
                 )
+            responseGenerationRecorder.record(
+                messageId,
+                userReplyMessage.conversationId,
+                ResponseKind.REPLY,
+                output.model,
+                output.promptVersions,
+            )
             tokenQuotaRecorder.recordDelivered(GenerationType.REPLY, memberId, tokens.used)
             GenerationResult(CommentGenerationOutcome.DONE, listOf(saved), output.usedTokens)
         } catch (e: Exception) {

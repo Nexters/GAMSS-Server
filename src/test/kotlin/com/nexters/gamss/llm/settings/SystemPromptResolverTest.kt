@@ -14,12 +14,13 @@ class SystemPromptResolverTest {
     @Test
     fun `단일 모델과 공통+타입 조립 프롬프트를 돌려준다`() {
         every { llmSettingsService.currentCommonView() } returns LlmSettingsView("gemini-2.5-flash", "공통규칙")
-        every { llmSettingsService.currentPrompt(PromptType.COMMENT) } returns "댓글규칙"
+        every { llmSettingsService.currentPromptWithVersion(PromptType.COMMENT) } returns ("댓글규칙" to 7)
 
         val result = resolver.resolve(PromptType.COMMENT)
 
         assertEquals("gemini-2.5-flash", result.model)
         assertEquals("공통규칙\n\n댓글규칙", result.systemPrompt)
+        assertEquals(PromptVersions(null, 7), result.promptVersions)
     }
 
     @Test
