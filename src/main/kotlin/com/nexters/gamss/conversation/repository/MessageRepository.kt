@@ -136,4 +136,22 @@ interface MessageRepository : JpaRepository<Message, Long> {
     fun findCreatedAtsSince(
         @Param("from") from: Instant,
     ): List<Instant>
+
+    fun findFirstByConversationIdAndSenderTypeAndIdGreaterThanOrderByIdAsc(
+        conversationId: Long,
+        senderType: SenderType,
+        afterMessageId: Long,
+    ): Message?
+
+    /** [from, to) 사이에 만들어진 캐릭터 응답. 삭제된 대화방은 뺀다. */
+    @Query(
+        "select m from Message m, Conversation c " +
+            "where c.id = m.conversationId and m.senderType = com.nexters.gamss.conversation.domain.SenderType.CHARACTER " +
+            "and c.status <> com.nexters.gamss.conversation.domain.ConversationStatus.DELETED " +
+            "and m.createdAt >= :from and m.createdAt < :to order by m.id",
+    )
+    fun findLiveResponsesCreatedBetween(
+        @Param("from") from: Instant,
+        @Param("to") to: Instant,
+    ): List<Message>
 }
