@@ -1,0 +1,125 @@
+import { useCallback, useState } from 'react'
+import { useCustom } from '@refinedev/core'
+import { ClipboardCheck } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { Select } from '@/components/ui/select'
+import { PageHeader } from '@/components/page-header'
+import { SegmentedTabs } from '@/components/segmented-tabs'
+import { ConversationThreadPanel } from '@/components/conversation-thread-panel'
+import type { Emotion, LabelingNext, ResponseRow } from '@/lib/quality'
+import { CalibrationPanel } from './calibration-panel'
+import { LabelingMode } from './labeling-mode'
+import { ResponseList, type ResponseFilters } from './response-list'
+import { StatsSection } from './stats-section'
+
+type Mode = 'browse' | 'label'
+
+function kstDate(offsetDays = 0): string {
+  const d = new Date(Date.now() + 9 * 3600 * 1000 + offsetDays * 86400 * 1000)
+  return d.toISOString().slice(0, 10)
+}
+
+export function ConversationQualityPage() {
+  const [mode, setMode] = useState<Mode>('browse')
+  const [days, setDays] = useState(14)
+  const [filters, setFilters] = useState<ResponseFilters>({
+    from: kstDate(-6),
+    to: kstDate(),
+    emotionType: '',
+    kind: '',
+    aiVerdict: 'AWKWARD',
+    awkwardType: '',
+    humanState: 'ALL',
+    promptVersion: '',
+  })
+  const [selected, setSelected] = useState<ResponseRow | null>(null)
+  const { data: progressData } = useCustom<LabelingNext>({ url: '/api/admin/conversation-quality/labeling/next', method: 'get' })
+  const [progress, setProgress] = useState<{ mine: number; target: number } | null>(null)
+  const mine = progress?.mine ?? progressData?.data.mineCount ?? 0
+  const target = progress?.target ?? progressData?.data.target ?? 100
+  const onProgress = useCallback((m: number, t: number) => setProgress({ mine: m, target: t }), [])
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="대화 품질"
+        description="캐릭터 응답이 어색했는지 봅니다. 어색한 응답을 대화 흐름 안에서 읽고, 실험실에서 바로 고쳐 볼 수 있습니다."
+        actions={
+          mode === 'browse' && (
+            <Select value={String(days)} onChange={(e) => setDays(Number(e.target.value))} className="w-28">
+              <option value="7">최근 7일</option>
+              <option value="14">최근 14일</option>
+              <option value="30">최근 30일</option>
+            </Select>
+          )
+        }
+      />
+
+      <div className="flex flex-wrap items-center gap-4">
+        <SegmentedTabs
+          value={mode}
+          onChange={setMode}
+          options={[
+            { value: 'browse', label: '살펴보기' },
+            { value: 'label', label: `판정하기 (${mine}/${target})` },
+          ]}
+        />
+        <div className="h-1.5 w-40 overflow-hidden rounded-full bg-muted" title="내 판정 진행률">
+          <div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100, (mine / target) * 100)}%` }} />
+        </div>
+      </div>
+
+      {mode === 'browse' && mine === 0 && (
+        <Card className="flex flex-wrap items-center justify-between gap-3 p-5">
+          <div className="flex items-start gap-3">
+            <ClipboardCheck className="mt-0.5 size-5 text-primary" />
+            <div>
+              <p className="text-sm font-medium">정답 세트 만들기 0 / {target}</p>
+              <p className="text-xs text-muted-foreground">
+                AI 채점을 믿으려면 먼저 사람이 직접 판정한 응답이 필요합니다. {target}건을 판정하면 AI 채점과 얼마나 맞는지 확인할 수 있습니다.
+              </p>
+            </div>
+          </div>
+          <Button size="sm" onClick={() => setMode('label')}>
+            시작하기
+          </Button>
+        </Card>
+      )}
+
+      {mode === 'browse' && mine >= target && (
+        <Card className="flex flex-wrap items-center justify-between gap-3 p-5">
+          <p className="text-sm">정답 세트 {mine}건이 모였습니다. 판정하기 탭에서 AI 채점 일치율을 확인하세요.</p>
+          <Button variant="outline" size="sm" onClick={() => setMode('label')}>
+            일치율 확인
+          </Button>
+        </Card>
+      )}
+
+      {mode === 'browse' ? (
+        <>
+          <StatsSection
+            days={days}
+            selectedCharacter={filters.emotionType}
+            onSelectCharacter={(emotion: Emotion | '') => setFilters((f) => ({ ...f, emotionType: emotion }))}
+          />
+          <ResponseList filters={filters} onChange={setFilters} selectedMessageId={selected?.messageId ?? null} onSelect={setSelected} />
+        </>
+      ) : (
+        <>
+          <LabelingMode onProgress={onProgress} />
+          <CalibrationPanel />
+        </>
+      )}
+
+      {mode === 'browse' && selected && (
+        <ConversationThreadPanel
+          key={selected.conversationId}
+          conversationId={selected.conversationId}
+          focusMessageId={selected.messageId}
+          onClose={() => setSelected(null)}
+        />
+      )}
+    </div>
+  )
+}

@@ -13,6 +13,7 @@ import { AdminAccountList } from '@/pages/admin-accounts/list'
 import { LlmSettingsPage } from '@/pages/llm-settings'
 import { PromptPlaygroundPage } from '@/pages/prompt-playground'
 import { TokenUsagePage } from '@/pages/token-usage'
+import { ConversationQualityPage } from '@/pages/conversation-quality'
 
 // mock(로컬) 모드에서는 Firebase 없이 dev-login 을 쓴다.
 const authProvider = import.meta.env.VITE_AUTH_MODE === 'mock' ? devAuthProvider : firebaseAuthProvider
@@ -47,6 +48,7 @@ export default function App() {
             <Route path="/llm-settings" element={<LlmSettingsPage />} />
             <Route path="/playground" element={<PromptPlaygroundPage />} />
             <Route path="/token-usage" element={<TokenUsagePage />} />
+            <Route path="/conversation-quality" element={<ConversationQualityPage />} />
           </Route>
 
           <Route

@@ -1,6 +1,6 @@
 import { useGetIdentity, useLogout } from '@refinedev/core'
 import { Link, Outlet, useLocation } from 'react-router-dom'
-import { Coins, FlaskConical, LayoutDashboard, LogOut, ShieldCheck, Sparkles, Users } from 'lucide-react'
+import { Coins, FlaskConical, LayoutDashboard, LogOut, MessageSquareText, ShieldCheck, Sparkles, Users } from 'lucide-react'
 import { Avatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -19,6 +19,7 @@ const NAV: NavItem[] = [
   { label: '회원 관리', to: '/members', icon: Users },
   { label: '관리자 관리', to: '/admin-accounts', icon: ShieldCheck },
   { label: '토큰 사용량', to: '/token-usage', icon: Coins },
+  { label: '대화 품질', to: '/conversation-quality', icon: MessageSquareText },
   { label: 'LLM 설정', to: '/llm-settings', icon: Sparkles },
   { label: '프롬프트 실험실', to: '/playground', icon: FlaskConical },
 ]
@@ -44,6 +45,9 @@ function sectionOf(pathname: string): string {
   }
   if (pathname.startsWith('/token-usage')) {
     return '토큰 사용량'
+  }
+  if (pathname.startsWith('/conversation-quality')) {
+    return '대화 품질'
   }
   if (pathname.startsWith('/playground')) {
     return '프롬프트 실험실'
