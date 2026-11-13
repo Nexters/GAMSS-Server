@@ -14,7 +14,7 @@ import java.time.Instant
 class QualityJudgeSetting(
     @Id
     val id: Long = SINGLETON_ID,
-    autoEnabled: Boolean = false,
+    autoEnabled: Boolean = true,
     voteCount: Int = DEFAULT_VOTE_COUNT,
 ) {
     @Column(name = "auto_enabled", nullable = false)

@@ -139,6 +139,7 @@ class QualityJudgeIntegrationTest : RepositoryTest() {
         val (_, _, comments) = seedDiary()
         val now = ZonedDateTime.now(ZoneId.of("Asia/Seoul")).plusDays(1).withHour(6)
 
+        qualityJudgeSettingService.update(autoEnabled = false, voteCount = 1)
         qualityJudgeScheduler.judgeRecentResponses()
         assertEquals(0, judge.calls)
 

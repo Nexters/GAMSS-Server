@@ -62,7 +62,7 @@ CREATE TABLE quality_judge_setting (
     updated_at   DATETIME(6) NOT NULL
 );
 
-INSERT INTO quality_judge_setting (id, auto_enabled, vote_count, updated_at) VALUES (1, FALSE, 3, NOW(6));
+INSERT INTO quality_judge_setting (id, auto_enabled, vote_count, updated_at) VALUES (1, TRUE, 3, NOW(6));
 
 -- 채점 프롬프트. model 은 앱 모델과 별개인 채점 모델이다. 처음에는 앱 모델로 둔다.
 INSERT INTO llm_settings (prompt_type, model, system_prompt, prompt_version, updated_at)
