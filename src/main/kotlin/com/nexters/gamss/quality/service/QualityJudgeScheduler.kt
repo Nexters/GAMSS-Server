@@ -3,11 +3,14 @@ package com.nexters.gamss.quality.service
 import com.nexters.gamss.conversation.service.ResponseThreadService
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
+import jakarta.annotation.PreDestroy
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import java.time.ZoneId
 import java.time.ZonedDateTime
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** 매일 06:00 에 최근 응답을 채점한다. 05:00 자동 카드 배치와 같은 쿼터를 나눠 쓰므로 시간을 뗐다. */
 @Component
@@ -20,6 +23,9 @@ class QualityJudgeScheduler(
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
+    private val executor = Executors.newSingleThreadExecutor { Thread(it, "quality-judge-batch").apply { isDaemon = true } }
+    private val running = AtomicBoolean(false)
+
     private val batchTimer = Timer.builder("gamss.quality.judge.batch").description("응답 채점 배치 1회 소요 시간").register(meterRegistry)
 
     @Scheduled(cron = CRON, zone = ZONE_ID)
@@ -27,7 +33,26 @@ class QualityJudgeScheduler(
         if (!qualityJudgeSettingService.current().autoEnabled) {
             return
         }
-        runFor(ZonedDateTime.now(ZONE))
+        if (!running.compareAndSet(false, true)) {
+            log.warn("응답 채점 배치: 이전 회차가 아직 돌고 있어 건너뛴다")
+            return
+        }
+        val now = ZonedDateTime.now(ZONE)
+        // 스케줄링 스레드는 모든 @Scheduled 작업이 나눠 쓴다. 수백 번의 LLM 호출로 PENDING 정리 같은 작업을 막지 않도록 따로 돌린다.
+        executor.execute {
+            try {
+                runFor(now)
+            } catch (e: Exception) {
+                log.error("응답 채점 배치 실패", e)
+            } finally {
+                running.set(false)
+            }
+        }
+    }
+
+    @PreDestroy
+    fun shutdown() {
+        executor.shutdownNow()
     }
 
     fun runFor(now: ZonedDateTime): JudgeRunTally? {
