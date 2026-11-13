@@ -20,6 +20,7 @@ class FakeResponseJudgeConfig {
 class FakeResponseJudge : ResponseJudge {
     var calls = 0
     val contexts = mutableListOf<JudgePromptContext>()
+    var duringCall: () -> Unit = {}
 
     override fun judge(
         context: JudgePromptContext,
@@ -29,6 +30,7 @@ class FakeResponseJudge : ResponseJudge {
     ): ResponseJudgeOutput {
         calls++
         contexts += context
+        duringCall()
         val results =
             context.responses.map {
                 if (it.text.contains(AWKWARD_MARK)) {

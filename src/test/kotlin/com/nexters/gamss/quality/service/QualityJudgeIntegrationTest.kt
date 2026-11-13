@@ -73,6 +73,7 @@ class QualityJudgeIntegrationTest : RepositoryTest() {
     @BeforeEach
     fun reset() {
         judge.calls = 0
+        judge.duringCall = {}
         judge.contexts.clear()
     }
 
@@ -155,6 +156,17 @@ class QualityJudgeIntegrationTest : RepositoryTest() {
 
         conversationService.deleteConversation(member.id, diary.conversationId)
 
+        assertTrue(aiVerdictRepository.findByMessageIdIn(comments.map { it.id }).isEmpty())
+    }
+
+    @Test
+    fun `채점하는 사이 대화가 삭제되면 판정을 남기지 않는다`() {
+        val (member, diary, comments) = seedDiary()
+        judge.duringCall = { conversationService.deleteConversation(member.id, diary.conversationId) }
+
+        val outcome = qualityJudgeService.judge(diary.id, qualityJudgeService.currentJudge(), 1)
+
+        assertEquals(JudgeOutcome.SKIPPED, outcome)
         assertTrue(aiVerdictRepository.findByMessageIdIn(comments.map { it.id }).isEmpty())
     }
 

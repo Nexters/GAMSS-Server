@@ -45,6 +45,8 @@ class ResponseThreadService(
         }
     }
 
+    fun isDeleted(conversationId: Long): Boolean = conversationRepository.findById(conversationId).map { it.isDeleted() }.orElse(true)
+
     fun responsesCreatedBetween(
         from: Instant,
         to: Instant,

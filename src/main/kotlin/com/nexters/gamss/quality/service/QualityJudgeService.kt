@@ -57,7 +57,7 @@ class QualityJudgeService(
         voteCount: Int,
     ): JudgeOutcome {
         val unit = responseThreadService.generationUnit(triggerMessageId) ?: return JudgeOutcome.SKIPPED
-        if (unit.conversation.isDeleted() || memberService.getById(unit.conversation.memberId).isWithdrawn()) {
+        if (isGone(unit.conversation.id, unit.conversation.memberId)) {
             return JudgeOutcome.SKIPPED
         }
         val judgedIds =
@@ -94,6 +94,10 @@ class QualityJudgeService(
                     judgePromptVersion = judge.version,
                 )
             }
+        // LLM 을 기다리는 사이 삭제나 탈퇴로 판정이 지워졌다면 다시 남기지 않는다.
+        if (isGone(unit.conversation.id, unit.conversation.memberId)) {
+            return JudgeOutcome.SKIPPED
+        }
         try {
             aiVerdictRepository.saveAll(verdicts)
         } catch (e: DataIntegrityViolationException) {
@@ -166,6 +170,11 @@ class QualityJudgeService(
             nextUserMessage = unit.nextUserMessage?.content,
         )
     }
+
+    private fun isGone(
+        conversationId: Long,
+        memberId: Long,
+    ): Boolean = responseThreadService.isDeleted(conversationId) || memberService.getById(memberId).isWithdrawn()
 
     private fun speaker(message: Message): String =
         if (message.senderType == SenderType.USER) USER else PromptCharacterId.of(checkNotNull(message.emotionType)).promptId
