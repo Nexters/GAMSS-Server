@@ -21,12 +21,12 @@ export const VERDICT_META: Record<Verdict, { label: string; variant: 'destructiv
 }
 
 export const AWKWARD_TYPE_META: Record<AwkwardType, { label: string; hint: string }> = {
-  OFF_CONTEXT: { label: '동문서답', hint: '사용자가 한 말과 관련 없는 반응' },
-  BROKEN_FLOW: { label: '흐름 끊김', hint: '캐릭터끼리 주고받는 말이 이어지지 않음' },
+  OFF_CONTEXT: { label: '동문서답', hint: '사용자가 한 말과 맞지 않는 반응. 쓴 적 없는 일을 지어내는 것도 포함' },
+  BROKEN_FLOW: { label: '흐름 끊김', hint: '다른 캐릭터나 사용자 답장에 답하면서 그 말에 반응하지 않음' },
   REPETITIVE: { label: '반복', hint: '다른 캐릭터나 앞선 발화와 거의 같은 말' },
-  UNNATURAL_TONE: { label: '말투 이상', hint: '존댓말 섞임, 번역체, AI 같은 딱딱한 말' },
-  PERSONA_BREAK: { label: '캐릭터 붕괴', hint: '캐릭터 성격과 맞지 않음' },
-  USER_CONFUSED: { label: '사용자가 어색해함', hint: '다음 사용자 발화가 혼란이나 거부' },
+  UNNATURAL_TONE: { label: '말투 이상', hint: '존댓말 섞임, 번역투, 상담사 같은 말, AI 같은 밈' },
+  PERSONA_BREAK: { label: '캐릭터 붕괴', hint: '캐릭터 성격이나 말투와 맞지 않음. 사용자를 캐릭터 이름이나 "우리"로 부르는 것도 포함' },
+  USER_CONFUSED: { label: '사용자가 어색해함', hint: '다음 사용자 말이 이 응답 때문에 혼란이나 거부로 읽힘' },
   OTHER: { label: '기타', hint: '위에 없는 어색함' },
 }
 
