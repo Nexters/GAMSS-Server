@@ -86,17 +86,22 @@ class ResponseQualityStatsService(
         from: Instant,
         verdicts: List<ResponseAiVerdict>,
     ): List<ChangeMarker> {
+        // 시스템이 남긴 리비전(마이그레이션 시딩)은 사람이 바꾼 것이 아니라 표시하지 않는다.
         val prompts =
-            promptRevisionService.findCreatedSince(GENERATION_PROMPTS + PromptType.QUALITY_JUDGE, from).map {
-                val kind = if (it.promptType == PromptType.QUALITY_JUDGE) MarkerKind.JUDGE else MarkerKind.GENERATION
-                ChangeMarker(KstDashboardDates.dateOf(it.createdAt), kind, "${it.promptType} 프롬프트 v${it.version}")
-            }
+            promptRevisionService
+                .findCreatedSince(GENERATION_PROMPTS + PromptType.QUALITY_JUDGE, from)
+                .filter { it.savedBy != null }
+                .groupBy { KstDashboardDates.dateOf(it.createdAt) to it.promptType }
+                .map { (key, revisions) ->
+                    val kind = if (key.second == PromptType.QUALITY_JUDGE) MarkerKind.JUDGE else MarkerKind.GENERATION
+                    ChangeMarker(key.first, kind, key.second.name, "v${revisions.maxOf { it.version }}")
+                }
         val generationModels =
             modelChanges(responseThreadService.generationsSince(from).mapNotNull { g -> g.model?.let { g.createdAt to it } })
-                .map { (date, model) -> ChangeMarker(date, MarkerKind.GENERATION, "앱 모델 $model") }
+                .map { (date, model) -> ChangeMarker(date, MarkerKind.GENERATION, APP_MODEL, model) }
         val judgeModels =
             modelChanges(verdicts.sortedBy { it.createdAt }.map { it.createdAt to it.judgeModel })
-                .map { (date, model) -> ChangeMarker(date, MarkerKind.JUDGE, "채점 모델 $model") }
+                .map { (date, model) -> ChangeMarker(date, MarkerKind.JUDGE, JUDGE_MODEL, model) }
         return (prompts + generationModels + judgeModels).sortedBy { it.date }
     }
 
@@ -113,6 +118,8 @@ class ResponseQualityStatsService(
 
     companion object {
         private val GENERATION_PROMPTS = listOf(PromptType.COMMON, PromptType.COMMENT, PromptType.REPLY)
+        private const val APP_MODEL = "APP_MODEL"
+        private const val JUDGE_MODEL = "JUDGE_MODEL"
     }
 }
 
@@ -157,8 +164,10 @@ enum class MarkerKind {
     JUDGE,
 }
 
+/** [target]은 바뀐 대상(COMMON, COMMENT, REPLY, QUALITY_JUDGE, APP_MODEL, JUDGE_MODEL), [value]는 바뀐 뒤 값. */
 data class ChangeMarker(
     val date: LocalDate,
     val kind: MarkerKind,
-    val label: String,
+    val target: String,
+    val value: String,
 )

@@ -199,6 +199,7 @@ export function PromptPlaygroundPage() {
       return
     }
     prefilled.current = true
+    window.scrollTo({ top: 0 })
     setTab('feed')
     setDiary(prefill.diary)
     setSummary(prefill.summary ?? '')

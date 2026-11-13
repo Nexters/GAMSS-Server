@@ -1,40 +1,40 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CornerDownRight, EyeOff, FlaskConical, Reply } from 'lucide-react'
+import { CheckCircle2, CornerDownRight, FlaskConical, HelpCircle, Loader2, Reply, Sparkles } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import {
   AWKWARD_TYPE_META,
   CHARACTER_META,
-  KIND_LABEL,
   VERDICT_META,
   orderThread,
   type PlaygroundInput,
+  type ResponseInfo,
   type ThreadMessage,
+  type ThreadView,
 } from '@/lib/quality'
 import { formatDateTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
-function characterLabel(message?: ThreadMessage) {
+const STATUS_LABEL: Record<ThreadView['status'], string> = { ACTIVE: '진행 중', ENDED: '종료', DELETED: '삭제됨' }
+
+function speakerOf(message?: ThreadMessage) {
   return message?.emotionType ? CHARACTER_META[message.emotionType].label : '유저'
 }
 
 /** 근거 문장에 밑줄을 긋는다. 공백만 다른 경우까지 찾는다. */
 function Highlighted({ text, evidence }: { text: string; evidence: string | null }) {
   const target = evidence?.trim()
-  if (!target) {
-    return <>{text}</>
-  }
-  const pattern = new RegExp(target.split(/\s+/).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s*'))
-  const match = pattern.exec(text)
+  const match = target
+    ? new RegExp(target.split(/\s+/).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s*')).exec(text)
+    : null
   if (!match) {
     return <>{text}</>
   }
   return (
     <>
       {text.slice(0, match.index)}
-      <span className="underline decoration-red-500 decoration-2 underline-offset-4">{match[0]}</span>
+      <mark className="rounded-sm bg-rose-100/70 px-0.5 text-inherit underline decoration-rose-500 decoration-2 underline-offset-[5px]">{match[0]}</mark>
       {text.slice(match.index + match[0].length)}
     </>
   )
@@ -53,106 +53,162 @@ function OpenInPlayground({ messageId }: { messageId: number }) {
     }
   }
   return (
-    <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={open} disabled={loading}>
-      <FlaskConical className="size-3.5" />
+    <button
+      type="button"
+      onClick={open}
+      disabled={loading}
+      className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/10"
+    >
+      {loading ? <Loader2 className="size-3 animate-spin" /> : <FlaskConical className="size-3" />}
       실험실에서 열기
-    </Button>
+    </button>
+  )
+}
+
+function AiMark({ response }: { response: ResponseInfo }) {
+  const ai = response.aiVerdict
+  if (!ai) {
+    return response.aiHidden ? null : <span className="text-[11px] text-muted-foreground/70">AI 미채점</span>
+  }
+  if (ai.verdict === 'NATURAL') {
+    return (
+      <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600" title={`AI 자연스러움 · ${ai.judgeModel} · 채점 프롬프트 v${ai.judgePromptVersion}`}>
+        <CheckCircle2 className="size-3.5" />
+      </span>
+    )
+  }
+  if (ai.verdict === 'UNSURE') {
+    return (
+      <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground" title={ai.reason ?? 'AI가 판단하지 못했습니다'}>
+        <HelpCircle className="size-3.5" />
+        애매함
+      </span>
+    )
+  }
+  return <Badge variant="destructive" className="px-1.5 py-0 text-[10px]">AI 어색함</Badge>
+}
+
+function GenerationDivider({ response }: { response: ResponseInfo }) {
+  const prompt = response.kind === 'COMMENT' ? '댓글' : '답글'
+  return (
+    <div className="flex items-center gap-2 pt-1 text-[11px] text-muted-foreground/80">
+      <Sparkles className="size-3" />
+      <span>
+        {response.kind === 'COMMENT' ? '캐릭터 댓글 생성' : '답글 재응답 생성'}
+        {response.model ? ` · ${response.model}` : ' · 생성 정보 없음'}
+        {response.typePromptVersion !== null && ` · ${prompt} 프롬프트 v${response.typePromptVersion}`}
+      </span>
+      <span className="h-px flex-1 bg-border" />
+    </div>
   )
 }
 
 export function ConversationThread({
   messages,
   focusMessageId,
-  renderResponseExtra,
+  mode = 'review',
 }: {
   messages: ThreadMessage[]
   focusMessageId?: number | null
-  renderResponseExtra?: (message: ThreadMessage) => ReactNode
+  mode?: 'review' | 'label'
 }) {
   const byId = new Map(messages.map((m) => [m.id, m]))
   const focusRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
-    focusRef.current?.scrollIntoView({ block: 'center' })
-  }, [focusMessageId, messages])
+    focusRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }, [focusMessageId])
+
+  let lastTrigger: number | null = null
 
   return (
     <div className="space-y-3">
       {orderThread(messages).map((message) => {
         const target = message.repliesToMessageId ? byId.get(message.repliesToMessageId) : undefined
         const focused = message.id === focusMessageId
+        const dimmed = mode === 'label' && !focused
+
         if (message.senderType === 'USER') {
+          lastTrigger = null
           return (
-            <div key={message.id} className="flex flex-col items-end gap-1">
+            <div key={message.id} className={cn('flex flex-col items-end gap-1 transition-opacity', dimmed && 'opacity-45')}>
               {target && (
                 <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
                   <Reply className="size-3" />
-                  {characterLabel(target)}에게 답장
+                  {speakerOf(target)}에게 답장
                 </span>
               )}
-              <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-tr-sm bg-foreground px-3.5 py-2 text-sm text-background">
+              <div className="max-w-[80%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-zinc-900 px-3.5 py-2 text-sm leading-relaxed text-white">
                 {message.content}
               </div>
             </div>
           )
         }
+
         const meta = message.emotionType ? CHARACTER_META[message.emotionType] : null
         const response = message.response
         const ai = response?.aiVerdict
         const nested = target?.senderType === 'CHARACTER'
+        const showDivider = mode === 'review' && response && response.triggerMessageId !== lastTrigger
+        lastTrigger = response?.triggerMessageId ?? lastTrigger
+        const awkward = ai?.verdict === 'AWKWARD'
+
         return (
-          <div key={message.id} ref={focused ? focusRef : undefined} className={cn('flex flex-col gap-1', nested && 'pl-6')}>
-            <span className="flex items-center gap-1.5 text-xs font-medium" style={{ color: meta?.color }}>
-              {nested && <CornerDownRight className="size-3 text-muted-foreground" />}
-              {meta?.emoji} {meta?.label}
-              {nested && <span className="font-normal text-muted-foreground">→ {characterLabel(target)}</span>}
-            </span>
-            <div
-              className={cn(
-                'max-w-[90%] whitespace-pre-wrap rounded-2xl rounded-tl-sm border bg-background px-3.5 py-2 text-sm',
-                ai?.verdict === 'AWKWARD' && 'border-red-200 bg-red-50/40',
-                focused && 'ring-2 ring-primary ring-offset-2',
-              )}
-            >
-              <Highlighted text={message.content} evidence={ai?.verdict === 'AWKWARD' ? ai.evidence : null} />
-            </div>
-            {response && (
-              <div className="max-w-[90%] space-y-1 pl-1">
-                <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-                  {ai ? (
-                    <Badge variant={VERDICT_META[ai.verdict].variant} title={`채점 ${ai.judgeModel} · 프롬프트 v${ai.judgePromptVersion}`}>
-                      AI {VERDICT_META[ai.verdict].label}
-                    </Badge>
-                  ) : response.aiHidden ? (
-                    <Badge variant="muted">
-                      <EyeOff className="mr-1 size-3" />
-                      AI 판정 가려짐
-                    </Badge>
-                  ) : (
-                    <Badge variant="muted">AI 미채점</Badge>
-                  )}
-                  {response.myVerdict && <Badge variant="outline">내 판정 {VERDICT_META[response.myVerdict.verdict].label}</Badge>}
-                  {response.humanVerdictCount > 0 && (
-                    <span>
-                      사람 {response.humanVerdictCount}명 중 어색함 {response.humanAwkwardCount}
+          <div key={message.id} className="space-y-3">
+            {showDivider && <GenerationDivider response={response} />}
+            <div ref={focused ? focusRef : undefined} className={cn('group flex gap-2.5 transition-opacity', nested && 'pl-8', dimmed && 'opacity-45')}>
+              <div
+                className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full text-sm"
+                style={{ background: `${meta?.color}1a` }}
+                aria-hidden
+              >
+                {meta?.emoji}
+              </div>
+              <div className="min-w-0 flex-1 space-y-1">
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="font-semibold" style={{ color: meta?.color }}>
+                    {meta?.label}
+                  </span>
+                  {nested && (
+                    <span className="flex items-center gap-0.5 text-muted-foreground">
+                      <CornerDownRight className="size-3" />
+                      {speakerOf(target)}에게
                     </span>
                   )}
-                  <span>
-                    {KIND_LABEL[response.kind]}
-                    {response.model ? ` · ${response.model}` : ' · 생성 정보 없음'}
-                    {response.typePromptVersion !== null && ` · v${response.typePromptVersion}`}
-                  </span>
-                  <OpenInPlayground messageId={message.id} />
+                  {response && mode === 'review' && <AiMark response={response} />}
+                  {response && mode === 'review' && response.myVerdict && (
+                    <span className="rounded border px-1 text-[10px] text-muted-foreground">나: {VERDICT_META[response.myVerdict.verdict].label}</span>
+                  )}
+                  {response && mode === 'review' && response.humanVerdictCount > (response.myVerdict ? 1 : 0) && (
+                    <span className="text-[10px] text-muted-foreground">사람 {response.humanVerdictCount}명 판정</span>
+                  )}
+                  {response && mode === 'review' && (
+                    <span className={cn('ml-auto opacity-0 transition-opacity group-hover:opacity-100', (focused || awkward) && 'opacity-100')}>
+                      <OpenInPlayground messageId={message.id} />
+                    </span>
+                  )}
                 </div>
-                {ai?.verdict === 'AWKWARD' && (
-                  <p className="text-xs text-red-700">
-                    {ai.awkwardTypes.map((t) => AWKWARD_TYPE_META[t].label).join(', ')}
-                    {ai.reason && ` · ${ai.reason}`}
-                  </p>
+                <div
+                  className={cn(
+                    'inline-block max-w-full whitespace-pre-wrap rounded-2xl rounded-tl-md border bg-background px-3.5 py-2 text-sm leading-relaxed',
+                    awkward && 'border-rose-200',
+                    focused && 'shadow-[0_0_0_3px_hsl(var(--primary)/0.15)] ring-1 ring-primary',
+                  )}
+                >
+                  <Highlighted text={message.content} evidence={awkward ? ai.evidence : null} />
+                </div>
+                {awkward && (
+                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                    {ai.awkwardTypes.map((t) => (
+                      <span key={t} className="rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-700" title={AWKWARD_TYPE_META[t].hint}>
+                        {AWKWARD_TYPE_META[t].label}
+                      </span>
+                    ))}
+                    {ai.reason && <span className="text-xs text-muted-foreground">{ai.reason}</span>}
+                  </div>
                 )}
-                {renderResponseExtra?.(message)}
               </div>
-            )}
+            </div>
           </div>
         )
       })}
@@ -160,12 +216,20 @@ export function ConversationThread({
   )
 }
 
-export function ThreadHeader({ title, createdAt, summary }: { title: string | null; createdAt: string; summary: string | null }) {
+export function ThreadHeader({ thread }: { thread: ThreadView }) {
+  const responses = thread.messages.filter((m) => m.response)
+  const awkward = responses.filter((m) => m.response?.aiVerdict?.verdict === 'AWKWARD').length
   return (
-    <div className="space-y-1">
-      <p className="text-sm font-medium">{title ?? '제목 없음'}</p>
-      <p className="text-xs text-muted-foreground">{formatDateTime(createdAt)}</p>
-      {summary && <p className="rounded-md bg-muted/50 px-2.5 py-1.5 text-xs text-muted-foreground">요약: {summary}</p>}
+    <div className="min-w-0 space-y-1.5">
+      <div className="flex items-center gap-2">
+        <p className="truncate text-base font-semibold">{thread.title ?? '제목 없는 대화'}</p>
+        <Badge variant={thread.status === 'ENDED' ? 'success' : 'secondary'}>{STATUS_LABEL[thread.status]}</Badge>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {formatDateTime(thread.createdAt)} · 캐릭터 응답 {responses.length}개
+        {awkward > 0 && <span className="text-rose-600"> · AI 어색함 {awkward}개</span>}
+      </p>
+      {thread.summary && <p className="line-clamp-2 rounded-md bg-muted/60 px-2.5 py-1.5 text-xs text-muted-foreground">{thread.summary}</p>}
     </div>
   )
 }

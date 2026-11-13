@@ -36,6 +36,7 @@ export function ConversationQualityPage() {
   const [selected, setSelected] = useState<ResponseRow | null>(null)
   const { data: progressData } = useCustom<LabelingNext>({ url: '/api/admin/conversation-quality/labeling/next', method: 'get' })
   const [progress, setProgress] = useState<{ mine: number; target: number } | null>(null)
+  const progressLoaded = progress !== null || progressData !== undefined
   const mine = progress?.mine ?? progressData?.data.mineCount ?? 0
   const target = progress?.target ?? progressData?.data.target ?? 100
   const onProgress = useCallback((m: number, t: number) => setProgress({ mine: m, target: t }), [])
@@ -62,15 +63,22 @@ export function ConversationQualityPage() {
           onChange={setMode}
           options={[
             { value: 'browse', label: '살펴보기' },
-            { value: 'label', label: `판정하기 (${mine}/${target})` },
+            { value: 'label', label: '판정하기' },
           ]}
         />
-        <div className="h-1.5 w-40 overflow-hidden rounded-full bg-muted" title="내 판정 진행률">
-          <div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100, (mine / target) * 100)}%` }} />
+        <div className="flex items-center gap-2.5 rounded-lg border bg-background px-3 py-1.5" title="내가 판정한 응답 수. 정답 세트의 목표는 100건입니다.">
+          <span className="text-xs text-muted-foreground">내 정답 세트</span>
+          <div className="h-1.5 w-24 overflow-hidden rounded-full bg-muted">
+            <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${Math.min(100, (mine / target) * 100)}%` }} />
+          </div>
+          <span className="text-xs font-medium tabular-nums">
+            {mine}
+            <span className="text-muted-foreground"> / {target}</span>
+          </span>
         </div>
       </div>
 
-      {mode === 'browse' && mine === 0 && (
+      {mode === 'browse' && progressLoaded && mine === 0 && (
         <Card className="flex flex-wrap items-center justify-between gap-3 p-5">
           <div className="flex items-start gap-3">
             <ClipboardCheck className="mt-0.5 size-5 text-primary" />
@@ -87,7 +95,7 @@ export function ConversationQualityPage() {
         </Card>
       )}
 
-      {mode === 'browse' && mine >= target && (
+      {mode === 'browse' && progressLoaded && mine >= target && (
         <Card className="flex flex-wrap items-center justify-between gap-3 p-5">
           <p className="text-sm">정답 세트 {mine}건이 모였습니다. 판정하기 탭에서 AI 채점 일치율을 확인하세요.</p>
           <Button variant="outline" size="sm" onClick={() => setMode('label')}>

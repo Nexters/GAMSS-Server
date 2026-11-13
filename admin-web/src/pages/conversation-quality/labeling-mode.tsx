@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { CheckCircle2, Keyboard, Loader2 } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Keyboard, Loader2 } from 'lucide-react'
 import { apiFetch, ApiError } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -170,125 +170,166 @@ export function LabelingMode({ onProgress }: { onProgress: (mine: number, target
 
   const ai = result?.aiVerdict
   const meta = message?.emotionType ? CHARACTER_META[message.emotionType] : null
+  const canSubmit = Boolean(verdict) && !(verdict === 'AWKWARD' && types.length === 0) && !loading
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
-      <Card className="max-h-[70vh] overflow-y-auto p-5">
-        {thread ? (
-          <div className="space-y-4">
-            <ThreadHeader title={thread.title} createdAt={thread.createdAt} summary={thread.summary} />
-            <ConversationThread messages={thread.messages} focusMessageId={current?.messageId} />
-          </div>
-        ) : (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" />
-            불러오는 중
-          </div>
-        )}
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_400px]">
+      <Card className="flex max-h-[calc(100vh-15rem)] min-h-[28rem] flex-col overflow-hidden">
+        <div className="border-b px-5 py-4">{thread ? <ThreadHeader thread={thread} /> : <div className="h-10" />}</div>
+        <div className="flex-1 overflow-y-auto bg-muted/20 px-5 py-5">
+          {thread ? (
+            <ConversationThread messages={thread.messages} focusMessageId={current?.messageId} mode="label" />
+          ) : (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" />
+              불러오는 중
+            </div>
+          )}
+        </div>
       </Card>
 
-      <Card className="space-y-4 p-5 lg:sticky lg:top-4 lg:self-start">
-        <div className="space-y-1">
-          <p className="text-xs text-muted-foreground">판정할 응답 (대화에서 테두리로 표시)</p>
-          {message && (
-            <p className="text-sm">
-              <span className="font-medium" style={{ color: meta?.color }}>
+      <Card className="space-y-5 p-5 lg:sticky lg:top-4 lg:self-start">
+        <div className="space-y-2">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">이 응답이 어색한가요?</p>
+          {message ? (
+            <div className="rounded-xl border bg-muted/30 p-3">
+              <p className="mb-1 text-xs font-semibold" style={{ color: meta?.color }}>
                 {meta?.emoji} {meta?.label}
-              </span>{' '}
-              {message.content}
-            </p>
+              </p>
+              <p className="text-sm leading-relaxed">{message.content}</p>
+            </div>
+          ) : (
+            <div className="h-16 animate-pulse rounded-xl bg-muted" />
           )}
         </div>
 
         <div className="grid grid-cols-3 gap-2">
-          {VERDICTS.map((v) => (
-            <Button
-              key={v}
-              variant={verdict === v ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => {
-                setVerdict(v)
-                setTypes([])
-                setResult(null)
-              }}
-            >
-              <kbd className="rounded bg-muted px-1 text-[10px] text-muted-foreground">{VERDICT_META[v].key}</kbd>
-              {VERDICT_META[v].label}
-            </Button>
-          ))}
-        </div>
-
-        {verdict === 'AWKWARD' && (
-          <div className="flex flex-wrap gap-1.5">
-            {AWKWARD_TYPES.map((t, i) => (
+          {VERDICTS.map((v) => {
+            const selected = verdict === v
+            return (
               <button
-                key={t}
+                key={v}
                 type="button"
-                title={AWKWARD_TYPE_META[t].hint}
-                onClick={() => setTypes((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]))}
+                onClick={() => {
+                  setVerdict(v)
+                  setTypes([])
+                  setResult(null)
+                }}
                 className={cn(
-                  'rounded-full border px-2.5 py-1 text-xs',
-                  types.includes(t) ? 'border-red-300 bg-red-50 text-red-700' : 'text-muted-foreground hover:bg-muted',
+                  'flex flex-col items-center gap-1 rounded-xl border px-2 py-3 text-sm font-medium transition-all',
+                  !selected && 'hover:border-foreground/30 hover:bg-muted/50',
+                  selected && v === 'AWKWARD' && 'border-rose-400 bg-rose-50 text-rose-700 ring-2 ring-rose-200',
+                  selected && v === 'NATURAL' && 'border-emerald-400 bg-emerald-50 text-emerald-700 ring-2 ring-emerald-200',
+                  selected && v === 'UNSURE' && 'border-zinc-400 bg-zinc-100 text-zinc-700 ring-2 ring-zinc-200',
                 )}
               >
-                <span className="mr-1 tabular-nums opacity-60">{i + 1}</span>
-                {AWKWARD_TYPE_META[t].label}
+                {VERDICT_META[v].label}
+                <kbd className="rounded border bg-background px-1.5 text-[10px] font-normal text-muted-foreground">{VERDICT_META[v].key}</kbd>
               </button>
-            ))}
+            )
+          })}
+        </div>
+
+        {verdict === 'AWKWARD' && !result && (
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">어디가 어색한가요? 숫자키로 여러 개 고를 수 있습니다</p>
+            <div className="grid grid-cols-2 gap-1.5">
+              {AWKWARD_TYPES.map((t, i) => {
+                const on = types.includes(t)
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    title={AWKWARD_TYPE_META[t].hint}
+                    onClick={() => setTypes((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]))}
+                    className={cn(
+                      'flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left text-xs transition-colors',
+                      on ? 'border-rose-300 bg-rose-50 text-rose-700' : 'text-muted-foreground hover:bg-muted/60',
+                    )}
+                  >
+                    <kbd className={cn('rounded px-1 text-[10px] tabular-nums', on ? 'bg-rose-100' : 'bg-muted')}>{i + 1}</kbd>
+                    {AWKWARD_TYPE_META[t].label}
+                  </button>
+                )
+              })}
+            </div>
           </div>
         )}
 
-        <Textarea value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="메모 (선택)" className="min-h-[3.5rem] text-sm" maxLength={500} />
+        <Textarea value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="메모 (선택) · 기준을 다듬을 때 참고합니다" className="min-h-[3.5rem] resize-none text-sm" maxLength={500} />
 
-        <div className="flex items-center gap-2">
-          <Button size="sm" onClick={() => void submit()} disabled={!verdict || (verdict === 'AWKWARD' && types.length === 0) || loading}>
-            제출 <kbd className="rounded bg-primary-foreground/20 px-1 text-[10px]">Enter</kbd>
+        {!result ? (
+          <Button className="w-full" onClick={() => void submit()} disabled={!canSubmit}>
+            {verdict === 'AWKWARD' && types.length === 0 ? '유형을 하나 이상 고르세요' : '제출하고 AI 판정 보기'}
+            <kbd className="ml-1 rounded bg-primary-foreground/20 px-1.5 text-[10px]">Enter</kbd>
           </Button>
-          <Button variant="outline" size="sm" onClick={() => void previous()} disabled={index <= 0 || loading}>
-            이전 <kbd className="text-[10px] text-muted-foreground">K</kbd>
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => void next()} disabled={loading}>
-            다음 <kbd className="text-[10px] text-muted-foreground">J</kbd>
-          </Button>
-        </div>
-        {error && <p className="text-sm text-destructive">{error}</p>}
-
-        {result && (
+        ) : (
           <div
             className={cn(
-              'space-y-1.5 rounded-lg border p-3 text-sm',
-              result.agreesWithAi === false ? 'border-amber-300 bg-amber-50' : 'border-emerald-200 bg-emerald-50/60',
+              'space-y-2 rounded-xl border p-3.5 text-sm',
+              ai === null ? 'bg-muted/40' : result.agreesWithAi ? 'border-emerald-200 bg-emerald-50/70' : 'border-amber-300 bg-amber-50',
             )}
           >
-            <p className="font-medium">
-              {ai === null
-                ? 'AI가 아직 채점하지 않은 응답입니다'
-                : result.agreesWithAi
-                  ? 'AI와 판정이 같습니다'
-                  : 'AI와 판정이 다릅니다'}
+            <p className="flex items-center gap-1.5 font-semibold">
+              {ai === null ? 'AI가 아직 채점하지 않았습니다' : result.agreesWithAi ? (
+                <>
+                  <CheckCircle2 className="size-4 text-emerald-600" />
+                  AI와 판정이 같습니다
+                </>
+              ) : (
+                <>
+                  <AlertTriangle className="size-4 text-amber-600" />
+                  AI와 판정이 다릅니다
+                </>
+              )}
             </p>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="w-8 text-xs text-muted-foreground">나</span>
+              <Badge variant={VERDICT_META[result.myVerdict.verdict].variant}>{VERDICT_META[result.myVerdict.verdict].label}</Badge>
+              {result.myVerdict.awkwardTypes.map((t) => (
+                <Badge key={t} variant="outline">
+                  {AWKWARD_TYPE_META[t].label}
+                </Badge>
+              ))}
+            </div>
             {ai && (
               <>
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <Badge variant={VERDICT_META[ai.verdict].variant}>AI {VERDICT_META[ai.verdict].label}</Badge>
+                  <span className="w-8 text-xs text-muted-foreground">AI</span>
+                  <Badge variant={VERDICT_META[ai.verdict].variant}>{VERDICT_META[ai.verdict].label}</Badge>
                   {ai.awkwardTypes.map((t) => (
                     <Badge key={t} variant="outline">
                       {AWKWARD_TYPE_META[t].label}
                     </Badge>
                   ))}
                 </div>
-                {ai.evidence && <p className="text-xs text-muted-foreground">근거: “{ai.evidence}”</p>}
-                {ai.reason && <p className="text-xs text-muted-foreground">사유: {ai.reason}</p>}
+                {ai.evidence && <p className="text-xs text-muted-foreground">근거 “{ai.evidence}”</p>}
+                {ai.reason && <p className="text-xs text-muted-foreground">{ai.reason}</p>}
+                {!result.agreesWithAi && <p className="text-xs text-amber-800">다른 판정은 채점 프롬프트를 고칠 때 가장 좋은 재료입니다. 메모를 남겨 두세요.</p>}
               </>
             )}
-            <p className="text-xs text-muted-foreground">J 를 눌러 다음 응답으로 넘어가세요.</p>
+            <Button size="sm" className="w-full" onClick={() => void next()}>
+              다음 응답 <kbd className="ml-1 rounded bg-primary-foreground/20 px-1.5 text-[10px]">J</kbd>
+            </Button>
           </div>
         )}
 
-        <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
-          <Keyboard className="mt-0.5 size-3.5 shrink-0" />
-          1 어색함 · 2 자연스러움 · 3 애매함. 어색함이면 숫자로 유형을 고르고 Esc 로 판정을 지웁니다. AI 판정은 제출한 뒤에 보입니다.
-        </p>
+        {error && <p className="text-sm text-destructive">{error}</p>}
+
+        <div className="space-y-2 border-t pt-3 text-xs text-muted-foreground">
+          <div className="flex items-center justify-between">
+            <button type="button" className="rounded px-1 hover:text-foreground disabled:opacity-40" onClick={() => void previous()} disabled={index <= 0 || loading}>
+              ← 이전 <kbd className="ml-0.5 rounded bg-muted px-1 text-[10px]">K</kbd>
+            </button>
+            <button type="button" className="rounded px-1 hover:text-foreground disabled:opacity-40" onClick={() => void next()} disabled={loading}>
+              건너뛰기 <kbd className="ml-0.5 rounded bg-muted px-1 text-[10px]">J</kbd> →
+            </button>
+          </div>
+          <p className="flex items-center gap-1.5 text-[11px]">
+            <Keyboard className="size-3.5 shrink-0" />
+            Esc 로 판정을 지웁니다. AI 판정은 제출한 뒤에 보입니다.
+          </p>
+        </div>
       </Card>
     </div>
   )

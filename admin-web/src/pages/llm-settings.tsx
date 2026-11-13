@@ -10,6 +10,7 @@ import { ApiError } from '@/lib/api'
 import { PageHeader } from '@/components/page-header'
 import { SegmentedTabs } from '@/components/segmented-tabs'
 import { PromptRevisionHistory } from '@/pages/prompt-revision-history'
+import { cn } from '@/lib/utils'
 
 type PromptType = 'COMMON' | 'COMMENT' | 'REPLY' | 'CARD' | 'CARD_EMOTION' | 'EONGTTUNG_TOPIC' | 'QUALITY_JUDGE'
 
@@ -277,8 +278,9 @@ function JudgeSection() {
         <Skeleton className="h-9 w-full max-w-xs" />
       ) : (
         <>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="w-full max-w-xs">
+          <div className="grid gap-4 sm:grid-cols-[minmax(0,20rem)_auto_minmax(0,1fr)] sm:items-end">
+            <label className="space-y-1.5">
+              <span className="text-xs font-medium text-muted-foreground">채점 모델</span>
               <Select value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })}>
                 {modelOptions.map((m) => (
                   <option key={m} value={m}>
@@ -286,26 +288,38 @@ function JudgeSection() {
                   </option>
                 ))}
               </Select>
-            </div>
-            <div className="w-36">
-              <Select value={String(form.voteCount)} onChange={(e) => setForm({ ...form, voteCount: Number(e.target.value) })}>
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <option key={n} value={n}>
-                    {n}번 채점
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={form.autoEnabled} onChange={(e) => setForm({ ...form, autoEnabled: e.target.checked })} />
-              매일 06:00 자동 채점
             </label>
-            <Button size="sm" onClick={onSave} disabled={!dirty || saving}>
-              <Save className="size-4" />
-              저장
-            </Button>
-            <SavedFlash show={flash} />
-            {error && <span className="text-sm text-destructive">저장에 실패했습니다</span>}
+            <div className="space-y-1.5">
+              <span className="block text-xs font-medium text-muted-foreground">응답 하나당 채점 횟수</span>
+              <div className="inline-flex rounded-md border p-0.5">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setForm({ ...form, voteCount: n })}
+                    aria-pressed={form.voteCount === n}
+                    className={cn(
+                      'h-7 w-8 rounded text-sm tabular-nums transition-colors',
+                      form.voteCount === n ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted',
+                    )}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={form.autoEnabled}
+              onClick={() => setForm({ ...form, autoEnabled: !form.autoEnabled })}
+              className="flex h-9 items-center gap-2.5 justify-self-start rounded-md px-1 text-sm"
+            >
+              <span className={cn('relative h-5 w-9 rounded-full transition-colors', form.autoEnabled ? 'bg-emerald-500' : 'bg-muted-foreground/30')}>
+                <span className={cn('absolute top-0.5 size-4 rounded-full bg-white shadow transition-all', form.autoEnabled ? 'left-[18px]' : 'left-0.5')} />
+              </span>
+              매일 06:00 자동 채점 <span className={cn('text-xs', form.autoEnabled ? 'text-emerald-600' : 'text-muted-foreground')}>{form.autoEnabled ? '켜짐' : '꺼짐'}</span>
+            </button>
           </div>
           {form.model === settings.appModel && (
             <p className="flex items-center gap-1.5 text-xs text-amber-700">
@@ -317,6 +331,14 @@ function JudgeSection() {
             앱 모델과 별개로 응답 자연스러움 채점에만 쓰입니다. 같은 응답을 여러 번 채점해 다수결로 정합니다. 채점 모델이나 채점 프롬프트(v{settings.promptVersion ?? '-'})를
             바꾸면 판정 기준이 바뀌므로, 자동 채점을 켜기 전에 대화 품질 탭에서 정답 세트로 돌려 보세요.
           </p>
+          <div className="flex items-center gap-2 border-t pt-3">
+            <Button size="sm" onClick={onSave} disabled={!dirty || saving}>
+              <Save className="size-4" />
+              저장
+            </Button>
+            <SavedFlash show={flash} />
+            {error && <span className="text-sm text-destructive">저장에 실패했습니다</span>}
+          </div>
         </>
       )}
     </Card>
