@@ -7,6 +7,8 @@ import com.nexters.gamss.payment.google.GooglePlayClient
 import com.nexters.gamss.payment.google.GooglePlayPurchase
 import com.nexters.gamss.payment.google.GooglePurchaseLineItem
 import com.nexters.gamss.payment.google.GooglePurchaseState
+import com.nexters.gamss.payment.google.GoogleVoidedPurchase
+import com.nexters.gamss.payment.google.GoogleVoidedPurchasePage
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Primary
@@ -47,6 +49,15 @@ class FakeGooglePlayClient : GooglePlayClient {
 
     var getPurchaseCalls = 0
 
+    /** 환불 목록 조회가 돌려줄 페이지들. 차례로 돌려주고, 마지막 페이지 뒤에는 다음 토큰이 없다. */
+    var voidedPages: List<List<GoogleVoidedPurchase>> = emptyList()
+
+    /** 환불 목록 조회가 Google 장애로 실패하게 한다. */
+    var listVoidedUnavailable = false
+
+    /** 환불 목록 조회에 넘어온 (startTime, endTime, pageToken). */
+    val listVoidedCalls = mutableListOf<Triple<Instant, Instant, String?>>()
+
     fun stub(
         purchaseToken: String,
         purchase: GooglePlayPurchase,
@@ -63,6 +74,23 @@ class FakeGooglePlayClient : GooglePlayClient {
         afterGetPurchase = null
         getPurchaseUnavailable = false
         getPurchaseCalls = 0
+        voidedPages = emptyList()
+        listVoidedUnavailable = false
+        listVoidedCalls.clear()
+    }
+
+    override fun listVoidedPurchases(
+        startTime: Instant,
+        endTime: Instant,
+        pageToken: String?,
+    ): GoogleVoidedPurchasePage {
+        listVoidedCalls += Triple(startTime, endTime, pageToken)
+        if (listVoidedUnavailable) {
+            throw BusinessException(ErrorCode.PAYMENT_STORE_UNAVAILABLE)
+        }
+        val index = pageToken?.toInt() ?: 0
+        val items = voidedPages.getOrElse(index) { emptyList() }
+        return GoogleVoidedPurchasePage(items, if (index + 1 < voidedPages.size) (index + 1).toString() else null)
     }
 
     override fun getPurchase(purchaseToken: String): GooglePlayPurchase {
@@ -98,13 +126,14 @@ class FakeGooglePlayClient : GooglePlayClient {
             testPurchase: Boolean = false,
             completedAt: Instant? = Instant.parse("2026-11-06T00:00:00Z"),
             orderId: String? = "GPA.0000-0000-0000-00000",
+            refundableQuantity: Int? = null,
         ) = GooglePlayPurchase(
             purchaseState = state,
             orderId = orderId,
             obfuscatedExternalAccountId = accountToken,
             purchaseCompletionTime = if (state == GooglePurchaseState.PENDING) null else completedAt,
             testPurchase = testPurchase,
-            lineItems = listOf(GooglePurchaseLineItem(productId, quantity, consumption)),
+            lineItems = listOf(GooglePurchaseLineItem(productId, quantity, consumption, refundableQuantity)),
         )
     }
 }

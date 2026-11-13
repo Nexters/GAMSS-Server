@@ -8,6 +8,7 @@ import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import org.slf4j.LoggerFactory
 import java.io.IOException
+import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.format.DateTimeParseException
 
@@ -47,6 +48,46 @@ class AndroidPublisherGooglePlayClient(
         }
     }
 
+    override fun listVoidedPurchases(
+        startTime: Instant,
+        endTime: Instant,
+        pageToken: String?,
+    ): GoogleVoidedPurchasePage =
+        call("환불 목록 조회") {
+            publisher
+                .purchases()
+                .voidedpurchases()
+                .list(packageName)
+                .setStartTime(startTime.toEpochMilli())
+                .setEndTime(endTime.toEpochMilli())
+                .setType(IN_APP_PRODUCT_TYPE)
+                .setIncludeQuantityBasedPartialRefund(true)
+                .setMaxResults(MAX_RESULTS)
+                .apply { if (pageToken != null) setToken(pageToken) }
+                .execute()
+        }.let { response ->
+            GoogleVoidedPurchasePage(
+                items =
+                    response.voidedPurchases.orEmpty().mapNotNull { item ->
+                        val token = item.purchaseToken
+                        val voidedAt = item.voidedTimeMillis
+                        if (token.isNullOrBlank() || voidedAt == null) {
+                            log.error("Google 환불 항목에 purchaseToken 이나 취소 시각이 없어 건너뜁니다: orderId={}", item.orderId)
+                            return@mapNotNull null
+                        }
+                        GoogleVoidedPurchase(
+                            purchaseToken = token,
+                            orderId = item.orderId,
+                            voidedTime = Instant.ofEpochMilli(voidedAt),
+                            voidedSource = item.voidedSource,
+                            voidedReason = item.voidedReason,
+                            voidedQuantity = item.voidedQuantity,
+                        )
+                    },
+                nextPageToken = response.tokenPagination?.nextPageToken?.takeIf { it.isNotBlank() },
+            )
+        }
+
     private fun toPurchase(response: ProductPurchaseV2): GooglePlayPurchase =
         GooglePlayPurchase(
             purchaseState = GooglePurchaseState.of(response.purchaseStateContext?.purchaseState),
@@ -60,6 +101,7 @@ class AndroidPublisherGooglePlayClient(
                         productId = item.productId,
                         quantity = item.productOfferDetails?.quantity,
                         consumptionState = GoogleConsumptionState.of(item.productOfferDetails?.consumptionState),
+                        refundableQuantity = item.productOfferDetails?.refundableQuantity,
                     )
                 },
         )
@@ -77,8 +119,9 @@ class AndroidPublisherGooglePlayClient(
      *
      * - 401·403, 404 applicationNotFound: 서비스 계정 권한, API 설정, 패키지명 문제다. 모든 구매가 막히는 상태라
      *   ERROR 로 남기고 503 으로 응답한다. 설정을 고친 뒤 앱이 다시 보내면 지급된다.
-     * - 그 밖의 400·404·410: 토큰이 잘못됐거나 다른 앱의 것이다. 요청이 틀린 것이라 WARN 이다.
-     * - 그 밖(429·5xx·네트워크·타임아웃): 일시적인 장애로 보고 WARN 으로 남긴다. 앱이 다시 보낸다.
+     * - 그 밖의 400·404·410: 토큰이 잘못됐거나 다른 앱의 것이다(환불 목록 조회라면 조회 구간이 틀렸다). 요청이 틀린 것이라
+     *   WARN 이다.
+     * - 그 밖(429·5xx·네트워크·타임아웃): 일시적인 장애로 보고 WARN 으로 남긴다. 앱이나 다음 재시도·대사 회차가 다시 부른다.
      * - 액세스 토큰 발급 거부: 토큰 엔드포인트가 재시도 대상(408·429·500·503)이 아닌 HTTP 오류로 응답한 경우다.
      *   대부분 키 삭제·만료·비활성이나 서버 시계 어긋남(invalid_grant)이라 다시 보내도 같은 결과이므로, 설정 문제와
      *   같이 ERROR 로 남긴다. 502·504 같은 일시 오류도 여기로 오므로 로그의 상태 코드를 먼저 본다. 기동할 때는
@@ -149,5 +192,11 @@ class AndroidPublisherGooglePlayClient(
          * 구매가 '확인할 수 없는 구매'로 WARN 만 남기고 거부되고, 결제 기록이 없어 적체 경보에도 잡히지 않는다.
          */
         const val APPLICATION_NOT_FOUND = "applicationNotFound"
+
+        /** voidedpurchases.list 의 type: 0 은 인앱 상품만이다. */
+        const val IN_APP_PRODUCT_TYPE = 0
+
+        /** 페이지 크기 상한. */
+        const val MAX_RESULTS = 1000L
     }
 }

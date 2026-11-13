@@ -1615,6 +1615,306 @@
               }
             }
           ]
+        },
+        {
+          "uid": "gamss-payment-google-voided-stale",
+          "title": "Google 환불 대사 중단",
+          "condition": "C",
+          "for": "5m",
+          "isPaused": false,
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "labels": {
+            "severity": "warning"
+          },
+          "annotations": {
+            "summary": "{{ $labels.env }} Google 환불 대사가 {{ humanize $values.B.Value }}초째 성공하지 못했다",
+            "description": "매일 04:10(KST) 도는 Google 환불 대사(Voided Purchases API)가 두 회차 넘게 성공하지 못했다(임계 50시간). 앱 로그에서 \"Google 환불 대사 실패\"와 \"Google 환불 대사 항목을 처리하지 못했습니다\"를 찾아 원인을 본다(서비스 계정의 재무 데이터 조회 권한, Google 장애 등). Voided Purchases API 는 최근 30일만 보여 줘, 그 전에 고치지 않으면 RTDN 이 놓친 환불을 회수할 수 없다. 자격증명이 없어 배치가 돌지 않는 환경에는 이 지표가 없어 울리지 않는다."
+          },
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 900,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "time() - gamss_payment_google_voided_reconcile_last_success_timestamp_seconds",
+                "instant": false,
+                "range": true,
+                "editorMode": "code",
+                "intervalMs": 60000,
+                "maxDataPoints": 43200,
+                "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus"
+                }
+              }
+            },
+            {
+              "refId": "B",
+              "relativeTimeRange": {
+                "from": 900,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "settings": {
+                  "mode": "dropNN"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        180000
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "B"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "uid": "gamss-payment-google-voided-failure",
+          "title": "Google 환불 대사 연속 실패",
+          "condition": "C",
+          "for": "0m",
+          "isPaused": false,
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "labels": {
+            "severity": "warning"
+          },
+          "annotations": {
+            "summary": "{{ $labels.env }} Google 환불 대사가 최근 50시간 동안 {{ humanize $values.B.Value }}번 실패했다",
+            "description": "하루 한 번 도는 환불 대사가 두 회차 이상 실패했다. 'Google 환불 대사 중단' 경보는 마지막 성공 시각을 보는데, 한 번도 성공하지 못한 환경에서 배포가 잦으면 그 시각이 기동 시각으로 계속 바뀌어 울리지 않는다. 이 규칙은 그 경우를 잡는다. 원인 확인은 'Google 환불 대사 중단'과 같다. increase() 는 구간 끝을 외삽해 정수보다 조금 큰 값(예: 1.0001)을 내므로 임계를 반 단위로 둔다."
+          },
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 1800,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "sum by (env) (increase(gamss_payment_google_voided_reconcile_failure_total[50h]))",
+                "instant": false,
+                "range": true,
+                "editorMode": "code",
+                "intervalMs": 60000,
+                "maxDataPoints": 43200,
+                "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus"
+                }
+              }
+            },
+            {
+              "refId": "B",
+              "relativeTimeRange": {
+                "from": 1800,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "settings": {
+                  "mode": "dropNN"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        1.5
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "B"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "uid": "gamss-payment-google-rtdn-rejected",
+          "title": "Google RTDN push 거부",
+          "condition": "C",
+          "for": "0m",
+          "isPaused": false,
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "labels": {
+            "severity": "warning"
+          },
+          "annotations": {
+            "summary": "{{ $labels.env }} Google RTDN push 가 30분 동안 {{ humanize $values.B.Value }}번 인증에서 거부됐다",
+            "description": "Pub/Sub push 가 401(Bearer 토큰 없음)이나 403(audience·서비스 계정·발급자 불일치, 서버에 RTDN 설정 없음)으로 거부되고 있다. 거부된 push 는 Pub/Sub 이 다시 보내므로 금방 쌓인다. 앱 로그에서 \"RTDN push\"를 찾아 GOOGLE_PLAY_RTDN_AUDIENCE·GOOGLE_PLAY_RTDN_SERVICE_ACCOUNT_EMAIL 과 push 구독의 인증 설정(서비스 계정, audience)이 맞는지 본다. Pub/Sub 은 보존 기간(기본 7일)이 지나면 메시지를 버리고, 그동안 앱이 지급 요청을 보내지 못한 구매는 RTDN 으로 지급되지 못한다. Google 공개키 조회 장애는 503 이라 여기에 섞이지 않는다. increase() 는 구간 끝을 외삽해 정수보다 조금 큰 값(예: 1.0001)을 내므로 임계를 반 단위로 둔다."
+          },
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 1800,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "sum by (env) (increase(http_server_requests_seconds_count{uri=\"/api/webhooks/google\",status=~\"401|403\"}[30m]))",
+                "instant": false,
+                "range": true,
+                "editorMode": "code",
+                "intervalMs": 60000,
+                "maxDataPoints": 43200,
+                "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus"
+                }
+              }
+            },
+            {
+              "refId": "B",
+              "relativeTimeRange": {
+                "from": 1800,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "settings": {
+                  "mode": "dropNN"
+                }
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        2.5
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    },
+                    "query": {
+                      "params": [
+                        "B"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    }
+                  }
+                ]
+              }
+            }
+          ]
         }
       ]
     }

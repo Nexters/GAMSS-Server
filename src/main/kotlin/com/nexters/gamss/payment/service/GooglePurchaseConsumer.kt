@@ -2,6 +2,7 @@ package com.nexters.gamss.payment.service
 
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
+import com.nexters.gamss.payment.google.GoogleConsumptionState
 import com.nexters.gamss.payment.google.GooglePlayClient
 import com.nexters.gamss.payment.repository.PaymentRepository
 import io.micrometer.core.instrument.Counter
@@ -46,6 +47,10 @@ class GooglePurchaseConsumer(
      * [GoogleConsumeOutcome] 으로 돌려준다. 그 밖의 예외(트랜잭션 안에서 부른 경우, 기록 트랜잭션을 시작하지 못한
      * 경우 등)는 그대로 올라오므로, 지급 뒤에 실패로 응답하면 안 되는 쪽은 [GooglePurchaseService] 처럼 직접 막는다.
      * 앱 요청 경로는 결과와 관계없이 성공으로 응답하고, 스케줄러는 Google 과 통신할 수 없을 때 그 회차를 멈춘다.
+     *
+     * Google 이 요청을 거부하면(PURCHASE_INVALID) 한 번 다시 조회한다. 앱 요청과 RTDN 웹훅은 거의 동시에 같은 구매를
+     * 처리하는 일이 흔해, 상대가 먼저 consume 한 구매에 consume 을 다시 부를 수 있다. 다시 본 상태가 CONSUMED 면 실패로
+     * 세지 않고 기록만 채운다.
      */
     fun consume(
         paymentId: Long,
@@ -60,12 +65,18 @@ class GooglePurchaseConsumer(
             try {
                 client.consume(productId, purchaseToken)
             } catch (e: BusinessException) {
-                failureCounter.increment()
-                log.warn("Google 구매를 consume 하지 못했습니다. 재시도 스케줄러가 다시 시도합니다: paymentId={}, error={}", paymentId, e.errorCode)
-                return if (e.errorCode == ErrorCode.PAYMENT_STORE_UNAVAILABLE) {
-                    GoogleConsumeOutcome.STORE_UNAVAILABLE
+                val recheck = if (e.errorCode == ErrorCode.PURCHASE_INVALID) recheck(paymentId, purchaseToken) else null
+                if (recheck == Recheck.CONSUMED) {
+                    log.info("다른 경로가 먼저 consume 한 구매입니다. 기록만 채웁니다: paymentId={}", paymentId)
                 } else {
-                    GoogleConsumeOutcome.FAILED
+                    failureCounter.increment()
+                    log.warn("Google 구매를 consume 하지 못했습니다. 재시도 스케줄러가 다시 시도합니다: paymentId={}, error={}", paymentId, e.errorCode)
+                    // 다시 조회할 때 Google 과 통신할 수 없었다면 그것도 장애다. 스케줄러가 그 회차를 멈추게 한다.
+                    return if (e.errorCode == ErrorCode.PAYMENT_STORE_UNAVAILABLE || recheck == Recheck.STORE_UNAVAILABLE) {
+                        GoogleConsumeOutcome.STORE_UNAVAILABLE
+                    } else {
+                        GoogleConsumeOutcome.FAILED
+                    }
                 }
             }
         }
@@ -77,6 +88,37 @@ class GooglePurchaseConsumer(
             return GoogleConsumeOutcome.FAILED
         }
         return GoogleConsumeOutcome.CONSUMED
+    }
+
+    /**
+     * consume 이 거부된 구매를 다시 조회한다. 다시 조회하지 못하면 consume 됐는지 모르므로 원래 실패로 처리한다. 그중
+     * Google 과 통신할 수 없는 경우만 따로 돌려줘 스케줄러가 회차를 멈추게 한다. 응답 매핑 오류처럼 예상하지 못한 예외도
+     * 여기서 막는다. 밖으로 나가면 원래 거부(PURCHASE_INVALID)가 묻히고 실패도 세지 않는다.
+     */
+    private fun recheck(
+        paymentId: Long,
+        purchaseToken: String,
+    ): Recheck =
+        try {
+            val consumed =
+                client
+                    .getPurchase(purchaseToken)
+                    .lineItems
+                    .singleOrNull()
+                    ?.consumptionState == GoogleConsumptionState.CONSUMED
+            if (consumed) Recheck.CONSUMED else Recheck.NOT_CONSUMED
+        } catch (e: BusinessException) {
+            if (e.errorCode == ErrorCode.PAYMENT_STORE_UNAVAILABLE) Recheck.STORE_UNAVAILABLE else Recheck.NOT_CONSUMED
+        } catch (e: RuntimeException) {
+            log.warn("consume 이 거부된 구매를 다시 조회하지 못했습니다: paymentId={}, error={}", paymentId, e.javaClass.simpleName)
+            Recheck.NOT_CONSUMED
+        }
+
+    /** consume 이 거부된 뒤 다시 조회한 결과. */
+    private enum class Recheck {
+        CONSUMED,
+        NOT_CONSUMED,
+        STORE_UNAVAILABLE,
     }
 
     companion object {
