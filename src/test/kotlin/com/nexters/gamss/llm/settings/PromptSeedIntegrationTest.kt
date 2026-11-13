@@ -67,5 +67,18 @@ class PromptSeedIntegrationTest : RepositoryTest() {
         }
     }
 
+    @Test
+    fun `모든 타입의 현재 프롬프트 버전은 최신 리비전 버전과 같다`() {
+        // 생성 기록이 이 컬럼을 읽는다. 프롬프트를 바꾸는 마이그레이션이 prompt_version 을 함께 올리지 않으면
+        // 새 프롬프트로 만든 응답이 이전 버전으로 기록된다.
+        PromptType.entries.forEach { type ->
+            assertEquals(
+                promptRevisionRepository.findMaxVersion(type),
+                checkNotNull(llmSettingsRepository.findByPromptType(type)).promptVersion,
+                "$type 의 prompt_version 이 최신 리비전과 다르다. 마이그레이션에서 prompt_version 도 함께 올려야 한다",
+            )
+        }
+    }
+
     private fun golden(type: PromptType): String = checkNotNull(javaClass.getResource("/prompts/${type.name}.default.txt")).readText()
 }

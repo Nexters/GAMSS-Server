@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useCustom, useCustomMutation } from '@refinedev/core'
-import { Check, Cpu, Layers, Plug, RotateCcw, Save } from 'lucide-react'
+import { useLocation } from 'react-router-dom'
+import { AlertTriangle, Check, Cpu, Gavel, Layers, Plug, RotateCcw, Save } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Select } from '@/components/ui/select'
@@ -10,8 +11,9 @@ import { ApiError } from '@/lib/api'
 import { PageHeader } from '@/components/page-header'
 import { SegmentedTabs } from '@/components/segmented-tabs'
 import { PromptRevisionHistory } from '@/pages/prompt-revision-history'
+import { cn } from '@/lib/utils'
 
-type PromptType = 'COMMON' | 'COMMENT' | 'REPLY' | 'CARD' | 'CARD_EMOTION' | 'EONGTTUNG_TOPIC'
+type PromptType = 'COMMON' | 'COMMENT' | 'REPLY' | 'CARD' | 'CARD_EMOTION' | 'EONGTTUNG_TOPIC' | 'QUALITY_JUDGE'
 
 interface PromptTab {
   value: PromptType
@@ -76,6 +78,15 @@ const TABS: Record<PromptType, PromptTab> = {
     hint: '엉뚱이가 꺼낼 소재 목록. 한 줄에 하나씩 적으면 생성 시 서버가 무작위로 한 줄을 고릅니다.',
     editorLabel: '소재 목록 (한 줄에 하나)',
     editorNote: '빈 줄은 무시됩니다. 목록을 전부 비우면 저장할 수 없습니다.',
+    standalone: true,
+  },
+  QUALITY_JUDGE: {
+    value: 'QUALITY_JUDGE',
+    label: '채점',
+    hint: '대화 품질 탭에서 쓰는 응답 자연스러움 채점. 캐릭터 응답마다 어색함, 자연스러움, 애매함과 어색함 유형을 판정합니다.',
+    editorLabel: '채점 프롬프트',
+    editorNote:
+      '공통 프롬프트와 조립하지 않고 단독으로 쓰입니다. 캐릭터 설정은 서버가 공통 프롬프트를 입력에 함께 넣어 줍니다. 바꾸면 판정 기준이 바뀌므로, 저장한 뒤 대화 품질 탭에서 정답 세트로 먼저 돌려 보세요. 출력 JSON 형식은 서버 코드와 맞물려 있으니 바꾸지 마세요.',
     standalone: true,
   },
 }
@@ -193,6 +204,142 @@ function ModelSection() {
           <p className="text-xs text-muted-foreground">
             댓글·답글·카드 생성과 카드 감정 분류가 모두 이 모델을 씁니다. Gemini API에서 사용 가능한 모델을 자동으로 불러옵니다.
           </p>
+        </>
+      )}
+    </Card>
+  )
+}
+
+interface JudgeSetting {
+  model: string
+  appModel: string
+  sameAsAppModel: boolean
+  availableModels: string[]
+  promptVersion: number | null
+  autoEnabled: boolean
+  voteCount: number
+}
+
+function JudgeSection() {
+  const { data, isLoading, isError, refetch } = useCustom<JudgeSetting>({ url: '/api/admin/llm-settings/judge', method: 'get' })
+  const { mutate: save, isLoading: saving } = useCustomMutation()
+  const settings = data?.data
+
+  const [form, setForm] = useState<{ model: string; autoEnabled: boolean; voteCount: number } | null>(null)
+  const [saved, setSaved] = useState<{ model: string; autoEnabled: boolean; voteCount: number } | null>(null)
+  const [flash, setFlash] = useState(false)
+  const [error, setError] = useState(false)
+
+  useEffect(() => {
+    if (settings && !saved) {
+      const initial = { model: settings.model, autoEnabled: settings.autoEnabled, voteCount: settings.voteCount }
+      setForm(initial)
+      setSaved(initial)
+    }
+  }, [settings, saved])
+
+  const dirty = form !== null && saved !== null && JSON.stringify(form) !== JSON.stringify(saved)
+  const modelOptions = settings ? Array.from(new Set([form?.model, settings.model, ...settings.availableModels].filter(Boolean) as string[])) : []
+
+  const onSave = () => {
+    if (!form || !dirty) {
+      return
+    }
+    save(
+      { url: '/api/admin/llm-settings/judge', method: 'put', values: form },
+      {
+        onSuccess: () => {
+          setSaved(form)
+          setError(false)
+          setFlash(true)
+          window.setTimeout(() => setFlash(false), 2500)
+          void refetch()
+        },
+        onError: () => setError(true),
+      },
+    )
+  }
+
+  return (
+    <Card className="space-y-3 p-6">
+      <div className="flex items-center gap-2">
+        <Gavel className="size-4 text-muted-foreground" />
+        <span className="text-sm font-medium">채점 모델</span>
+        <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">대화 품질 전용</span>
+      </div>
+      {isError && !settings ? (
+        <div className="flex items-center gap-3">
+          <p className="text-sm text-muted-foreground">채점 설정을 불러오지 못했습니다.</p>
+          <Button variant="outline" size="sm" onClick={() => refetch()}>
+            <RotateCcw className="size-4" />
+            다시 시도
+          </Button>
+        </div>
+      ) : isLoading || !settings || !form ? (
+        <Skeleton className="h-9 w-full max-w-xs" />
+      ) : (
+        <>
+          <div className="grid gap-4 sm:grid-cols-[minmax(0,20rem)_auto_minmax(0,1fr)] sm:items-end">
+            <label className="space-y-1.5">
+              <span className="text-xs font-medium text-muted-foreground">채점 모델</span>
+              <Select value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })}>
+                {modelOptions.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </Select>
+            </label>
+            <div className="space-y-1.5">
+              <span className="block text-xs font-medium text-muted-foreground">응답 하나당 채점 횟수</span>
+              <div className="inline-flex rounded-md border p-0.5">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setForm({ ...form, voteCount: n })}
+                    aria-pressed={form.voteCount === n}
+                    className={cn(
+                      'h-7 w-8 rounded text-sm tabular-nums transition-colors',
+                      form.voteCount === n ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted',
+                    )}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={form.autoEnabled}
+              onClick={() => setForm({ ...form, autoEnabled: !form.autoEnabled })}
+              className="flex h-9 items-center gap-2.5 justify-self-start rounded-md px-1 text-sm"
+            >
+              <span className={cn('relative h-5 w-9 rounded-full transition-colors', form.autoEnabled ? 'bg-emerald-500' : 'bg-muted-foreground/30')}>
+                <span className={cn('absolute top-0.5 size-4 rounded-full bg-white shadow transition-all', form.autoEnabled ? 'left-[18px]' : 'left-0.5')} />
+              </span>
+              매일 06:00 자동 채점 <span className={cn('text-xs', form.autoEnabled ? 'text-emerald-600' : 'text-muted-foreground')}>{form.autoEnabled ? '켜짐' : '꺼짐'}</span>
+            </button>
+          </div>
+          {form.model === settings.appModel && (
+            <p className="flex items-center gap-1.5 text-xs text-amber-700">
+              <AlertTriangle className="size-3.5" />
+              채점 모델이 앱 모델({settings.appModel})과 같습니다. 같은 모델은 자기 말투에 관대해지는 경향이 있어 상위 모델을 권장합니다.
+            </p>
+          )}
+          <p className="text-xs text-muted-foreground">
+            앱 모델과 별개로 응답 자연스러움 채점에만 쓰입니다. 같은 응답을 여러 번 채점해 다수결로 정합니다. 채점 모델이나 채점 프롬프트(v{settings.promptVersion ?? '-'})를
+            바꾸면 판정 기준이 바뀌므로, 자동 채점을 켜기 전에 대화 품질 탭에서 정답 세트로 돌려 보세요.
+          </p>
+          <div className="flex items-center gap-2 border-t pt-3">
+            <Button size="sm" onClick={onSave} disabled={!dirty || saving}>
+              <Save className="size-4" />
+              저장
+            </Button>
+            <SavedFlash show={flash} />
+            {error && <span className="text-sm text-destructive">저장에 실패했습니다</span>}
+          </div>
         </>
       )}
     </Card>
@@ -325,7 +472,8 @@ interface PromptSetting {
 }
 
 function PromptSection() {
-  const [type, setType] = useState<PromptType>('COMMENT')
+  const requested = (useLocation().state as { promptType?: PromptType } | null)?.promptType
+  const [type, setType] = useState<PromptType>(requested ?? 'COMMENT')
   const { data, isLoading, isError, refetch } = useCustom<PromptSetting>({
     url: `/api/admin/llm-settings/prompt?promptType=${type}`,
     method: 'get',
@@ -450,6 +598,13 @@ function PromptSection() {
 export function LlmSettingsPage() {
   // 경로가 바뀌면 ModelSection을 다시 마운트해 그 경로의 모델 목록을 받는다.
   const [provider, setProvider] = useState<LlmProvider | ''>('')
+  const fromQuality = (useLocation().state as { promptType?: PromptType } | null)?.promptType === 'QUALITY_JUDGE'
+  const judgeRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (fromQuality) {
+      judgeRef.current?.scrollIntoView({ block: 'start' })
+    }
+  }, [fromQuality])
 
   return (
     <div className="space-y-6">
@@ -459,6 +614,9 @@ export function LlmSettingsPage() {
       />
       <ProviderSection onSwitched={setProvider} />
       <ModelSection key={provider} />
+      <div ref={judgeRef} className="scroll-mt-20">
+        <JudgeSection key={`judge-${provider}`} />
+      </div>
       <PromptSection />
     </div>
   )

@@ -75,7 +75,7 @@ class LlmSettingsServiceTest {
         assertFailsWith<IllegalStateException> { service.currentPrompt(PromptType.CARD) }
         assertFailsWith<IllegalStateException> { service.currentModel() }
         assertFailsWith<IllegalStateException> { service.updateModel("gemini-2.5-flash") }
-        assertFailsWith<IllegalStateException> { service.updatePrompt(PromptType.CARD, "새 값") }
+        assertFailsWith<IllegalStateException> { service.updatePrompt(PromptType.CARD, "새 값", 1) }
         assertFailsWith<IllegalStateException> { service.currentCommonView() }
     }
 
@@ -84,9 +84,10 @@ class LlmSettingsServiceTest {
         val row = LlmSettings(PromptType.COMMENT, "gemini-2.5-flash", "old")
         every { repository.findByPromptType(PromptType.COMMENT) } returns row
 
-        service.updatePrompt(PromptType.COMMENT, "new")
+        service.updatePrompt(PromptType.COMMENT, "new", 4)
 
         assertEquals("new", row.systemPrompt)
+        assertEquals(4, row.promptVersion)
         assertEquals("gemini-2.5-flash", row.model)
         verify(exactly = 0) { repository.save(any()) }
     }

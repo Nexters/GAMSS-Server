@@ -10,6 +10,7 @@ import com.nexters.gamss.llm.parsing.TikitakaDraft
 import com.nexters.gamss.llm.prompt.CommentPromptContext
 import com.nexters.gamss.llm.prompt.ReplyPromptContext
 import com.nexters.gamss.llm.settings.LlmSettingsView
+import com.nexters.gamss.llm.settings.PromptVersions
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Primary
@@ -45,7 +46,13 @@ class FakeCommentGenerator : CommentGenerator {
                 val to = characters[(i + 1) % characters.size]
                 TikitakaDraft(from, to, "티키타카-$i")
             }
-        return CommentGenerationOutput(CommentFeed(comments, tikitaka), usedTokens = 10, cachedTokens = 0)
+        return CommentGenerationOutput(
+            CommentFeed(comments, tikitaka),
+            usedTokens = 10,
+            cachedTokens = 0,
+            model = MODEL,
+            promptVersions = PromptVersions(1, 2),
+        )
     }
 
     override fun generateReply(
@@ -55,6 +62,10 @@ class FakeCommentGenerator : CommentGenerator {
 
     override fun generateReply(context: ReplyPromptContext): ReplyGenerationOutput {
         if (shouldFail) throw CommentGenerationFailedException("테스트 강제 실패")
-        return ReplyGenerationOutput("재응답 텍스트", usedTokens = 5, cachedTokens = 0)
+        return ReplyGenerationOutput("재응답 텍스트", usedTokens = 5, cachedTokens = 0, model = MODEL, promptVersions = PromptVersions(1, 3))
+    }
+
+    companion object {
+        const val MODEL = "fake-model"
     }
 }
