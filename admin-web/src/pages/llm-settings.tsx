@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useCustom, useCustomMutation } from '@refinedev/core'
-import { Check, Cpu, Layers, Plug, RotateCcw, Save } from 'lucide-react'
+import { AlertTriangle, Check, Cpu, Gavel, Layers, Plug, RotateCcw, Save } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Select } from '@/components/ui/select'
@@ -11,7 +11,7 @@ import { PageHeader } from '@/components/page-header'
 import { SegmentedTabs } from '@/components/segmented-tabs'
 import { PromptRevisionHistory } from '@/pages/prompt-revision-history'
 
-type PromptType = 'COMMON' | 'COMMENT' | 'REPLY' | 'CARD' | 'CARD_EMOTION' | 'EONGTTUNG_TOPIC'
+type PromptType = 'COMMON' | 'COMMENT' | 'REPLY' | 'CARD' | 'CARD_EMOTION' | 'EONGTTUNG_TOPIC' | 'QUALITY_JUDGE'
 
 interface PromptTab {
   value: PromptType
@@ -76,6 +76,15 @@ const TABS: Record<PromptType, PromptTab> = {
     hint: '엉뚱이가 꺼낼 소재 목록. 한 줄에 하나씩 적으면 생성 시 서버가 무작위로 한 줄을 고릅니다.',
     editorLabel: '소재 목록 (한 줄에 하나)',
     editorNote: '빈 줄은 무시됩니다. 목록을 전부 비우면 저장할 수 없습니다.',
+    standalone: true,
+  },
+  QUALITY_JUDGE: {
+    value: 'QUALITY_JUDGE',
+    label: '채점',
+    hint: '대화 품질 탭에서 쓰는 응답 자연스러움 채점. 캐릭터 응답마다 어색함, 자연스러움, 애매함과 어색함 유형을 판정합니다.',
+    editorLabel: '채점 프롬프트',
+    editorNote:
+      '공통 프롬프트와 조립하지 않고 단독으로 쓰입니다. 캐릭터 설정은 서버가 공통 프롬프트를 입력에 함께 넣어 줍니다. 바꾸면 판정 기준이 바뀌므로, 저장한 뒤 대화 품질 탭에서 정답 세트로 먼저 돌려 보세요. 출력 JSON 형식은 서버 코드와 맞물려 있으니 바꾸지 마세요.',
     standalone: true,
   },
 }
@@ -192,6 +201,121 @@ function ModelSection() {
           </div>
           <p className="text-xs text-muted-foreground">
             댓글·답글·카드 생성과 카드 감정 분류가 모두 이 모델을 씁니다. Gemini API에서 사용 가능한 모델을 자동으로 불러옵니다.
+          </p>
+        </>
+      )}
+    </Card>
+  )
+}
+
+interface JudgeSetting {
+  model: string
+  appModel: string
+  sameAsAppModel: boolean
+  availableModels: string[]
+  promptVersion: number | null
+  autoEnabled: boolean
+  voteCount: number
+}
+
+function JudgeSection() {
+  const { data, isLoading, isError, refetch } = useCustom<JudgeSetting>({ url: '/api/admin/llm-settings/judge', method: 'get' })
+  const { mutate: save, isLoading: saving } = useCustomMutation()
+  const settings = data?.data
+
+  const [form, setForm] = useState<{ model: string; autoEnabled: boolean; voteCount: number } | null>(null)
+  const [saved, setSaved] = useState<{ model: string; autoEnabled: boolean; voteCount: number } | null>(null)
+  const [flash, setFlash] = useState(false)
+  const [error, setError] = useState(false)
+
+  useEffect(() => {
+    if (settings && !saved) {
+      const initial = { model: settings.model, autoEnabled: settings.autoEnabled, voteCount: settings.voteCount }
+      setForm(initial)
+      setSaved(initial)
+    }
+  }, [settings, saved])
+
+  const dirty = form !== null && saved !== null && JSON.stringify(form) !== JSON.stringify(saved)
+  const modelOptions = settings ? Array.from(new Set([form?.model, settings.model, ...settings.availableModels].filter(Boolean) as string[])) : []
+
+  const onSave = () => {
+    if (!form || !dirty) {
+      return
+    }
+    save(
+      { url: '/api/admin/llm-settings/judge', method: 'put', values: form },
+      {
+        onSuccess: () => {
+          setSaved(form)
+          setError(false)
+          setFlash(true)
+          window.setTimeout(() => setFlash(false), 2500)
+          void refetch()
+        },
+        onError: () => setError(true),
+      },
+    )
+  }
+
+  return (
+    <Card className="space-y-3 p-6">
+      <div className="flex items-center gap-2">
+        <Gavel className="size-4 text-muted-foreground" />
+        <span className="text-sm font-medium">채점 모델</span>
+        <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">대화 품질 전용</span>
+      </div>
+      {isError && !settings ? (
+        <div className="flex items-center gap-3">
+          <p className="text-sm text-muted-foreground">채점 설정을 불러오지 못했습니다.</p>
+          <Button variant="outline" size="sm" onClick={() => refetch()}>
+            <RotateCcw className="size-4" />
+            다시 시도
+          </Button>
+        </div>
+      ) : isLoading || !settings || !form ? (
+        <Skeleton className="h-9 w-full max-w-xs" />
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="w-full max-w-xs">
+              <Select value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })}>
+                {modelOptions.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="w-36">
+              <Select value={String(form.voteCount)} onChange={(e) => setForm({ ...form, voteCount: Number(e.target.value) })}>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <option key={n} value={n}>
+                    {n}번 채점
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={form.autoEnabled} onChange={(e) => setForm({ ...form, autoEnabled: e.target.checked })} />
+              매일 06:00 자동 채점
+            </label>
+            <Button size="sm" onClick={onSave} disabled={!dirty || saving}>
+              <Save className="size-4" />
+              저장
+            </Button>
+            <SavedFlash show={flash} />
+            {error && <span className="text-sm text-destructive">저장에 실패했습니다</span>}
+          </div>
+          {form.model === settings.appModel && (
+            <p className="flex items-center gap-1.5 text-xs text-amber-700">
+              <AlertTriangle className="size-3.5" />
+              채점 모델이 앱 모델({settings.appModel})과 같습니다. 같은 모델은 자기 말투에 관대해지는 경향이 있어 상위 모델을 권장합니다.
+            </p>
+          )}
+          <p className="text-xs text-muted-foreground">
+            앱 모델과 별개로 응답 자연스러움 채점에만 쓰입니다. 같은 응답을 여러 번 채점해 다수결로 정합니다. 채점 모델이나 채점 프롬프트(v{settings.promptVersion ?? '-'})를
+            바꾸면 판정 기준이 바뀌므로, 자동 채점을 켜기 전에 대화 품질 탭에서 정답 세트로 돌려 보세요.
           </p>
         </>
       )}
@@ -459,6 +583,7 @@ export function LlmSettingsPage() {
       />
       <ProviderSection onSwitched={setProvider} />
       <ModelSection key={provider} />
+      <JudgeSection key={`judge-${provider}`} />
       <PromptSection />
     </div>
   )
