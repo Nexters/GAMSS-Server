@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useCustom, useCustomMutation } from '@refinedev/core'
+import { useLocation } from 'react-router-dom'
 import { AlertTriangle, Check, Cpu, Gavel, Layers, Plug, RotateCcw, Save } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -471,7 +472,8 @@ interface PromptSetting {
 }
 
 function PromptSection() {
-  const [type, setType] = useState<PromptType>('COMMENT')
+  const requested = (useLocation().state as { promptType?: PromptType } | null)?.promptType
+  const [type, setType] = useState<PromptType>(requested ?? 'COMMENT')
   const { data, isLoading, isError, refetch } = useCustom<PromptSetting>({
     url: `/api/admin/llm-settings/prompt?promptType=${type}`,
     method: 'get',
@@ -596,6 +598,13 @@ function PromptSection() {
 export function LlmSettingsPage() {
   // 경로가 바뀌면 ModelSection을 다시 마운트해 그 경로의 모델 목록을 받는다.
   const [provider, setProvider] = useState<LlmProvider | ''>('')
+  const fromQuality = (useLocation().state as { promptType?: PromptType } | null)?.promptType === 'QUALITY_JUDGE'
+  const judgeRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (fromQuality) {
+      judgeRef.current?.scrollIntoView({ block: 'start' })
+    }
+  }, [fromQuality])
 
   return (
     <div className="space-y-6">
@@ -605,7 +614,9 @@ export function LlmSettingsPage() {
       />
       <ProviderSection onSwitched={setProvider} />
       <ModelSection key={provider} />
-      <JudgeSection key={`judge-${provider}`} />
+      <div ref={judgeRef} className="scroll-mt-20">
+        <JudgeSection key={`judge-${provider}`} />
+      </div>
       <PromptSection />
     </div>
   )
