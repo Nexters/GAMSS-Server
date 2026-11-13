@@ -150,10 +150,14 @@ class ConversationQualityService(
         )
     }
 
-    fun playgroundInput(messageId: Long): PlaygroundInput {
+    fun playgroundInput(
+        messageId: Long,
+        adminEmail: String,
+    ): PlaygroundInput {
         val detail =
             responseThreadService.responses(listOf(messageId)).firstOrNull() ?: throw BusinessException(ErrorCode.MESSAGE_NOT_FOUND)
         ensureReadable(detail.conversation)
+        qualityReviewService.recordView(adminEmail, detail.conversation.id, detail.conversation.memberId)
         val unit = responseThreadService.generationUnit(detail.ref.triggerMessageId) ?: throw BusinessException(ErrorCode.MESSAGE_NOT_FOUND)
         return when (unit.kind) {
             ResponseKind.COMMENT -> {

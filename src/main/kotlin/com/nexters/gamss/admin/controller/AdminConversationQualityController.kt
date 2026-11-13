@@ -128,8 +128,9 @@ class AdminConversationQualityController(
     @Operation(summary = "실험실 입력", description = "이 응답을 만든 입력(일기, 캐릭터, 답장 등)을 프롬프트 실험실에 채울 형태로 돌려준다.")
     @GetMapping("/conversation-quality/responses/{messageId}/playground-input")
     fun playgroundInput(
+        @Parameter(hidden = true) @AuthenticationPrincipal principal: AdminPrincipal,
         @PathVariable messageId: Long,
-    ): ApiResponse<PlaygroundInput> = ApiResponse.success(conversationQualityService.playgroundInput(messageId))
+    ): ApiResponse<PlaygroundInput> = ApiResponse.success(conversationQualityService.playgroundInput(messageId, principal.email))
 
     @Operation(summary = "정답 세트 채점 시작", description = "사람 판정이 있는 응답을 지금 채점 설정으로 채점한다. 백그라운드에서 돌고, 이미 돌고 있으면 그 상태를 돌려준다.")
     @PostMapping("/conversation-quality/calibration")

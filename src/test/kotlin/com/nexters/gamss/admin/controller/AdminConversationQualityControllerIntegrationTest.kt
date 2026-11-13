@@ -221,6 +221,7 @@ class AdminConversationQualityControllerIntegrationTest {
                 jsonPath("$.data.characters.length()") { value(2) }
                 jsonPath("$.data.tikitakaCount") { value(0) }
             }
+        assertEquals(1, viewLogRepository.findAll().count { it.conversationId == conversation.id })
     }
 
     @Test
