@@ -137,7 +137,7 @@ export function ConversationQualityPage() {
             <SectionTitle title="직접 판정하기" description="AI 판정은 제출한 뒤에 보입니다. 숫자 키로 고르고 Enter로 제출합니다." />
             <LabelingMode onProgress={onProgress} />
           </section>
-          <CalibrationPanel />
+          <CalibrationPanel key={mine > 0 ? 'ready' : 'empty'} />
         </>
       )}
 

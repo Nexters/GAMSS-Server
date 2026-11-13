@@ -316,7 +316,7 @@ export function LabelingMode({ onProgress }: { onProgress: (mine: number, target
                 {!result.agreesWithAi && <p className="text-xs text-amber-800">다른 판정은 채점 프롬프트를 고칠 때 가장 좋은 재료입니다. 메모를 남겨 두세요.</p>}
               </>
             )}
-            <Button size="sm" className="w-full" onClick={() => void next()}>
+            <Button size="sm" className="w-full" onClick={() => void next()} disabled={loading}>
               다음 응답 <kbd className="ml-1 rounded bg-primary-foreground/20 px-1.5 text-[10px]">J</kbd>
             </Button>
           </div>
