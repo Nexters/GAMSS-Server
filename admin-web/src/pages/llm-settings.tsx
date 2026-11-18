@@ -293,7 +293,7 @@ function JudgeSection() {
             <div className="space-y-1.5">
               <span className="block text-xs font-medium text-muted-foreground">응답 하나당 채점 횟수</span>
               <div className="inline-flex rounded-md border p-0.5">
-                {[1, 2, 3, 4, 5].map((n) => (
+                {[1, 3, 5].map((n) => (
                   <button
                     key={n}
                     type="button"

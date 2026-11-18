@@ -33,9 +33,7 @@ class QualityJudgeSetting(
         autoEnabled: Boolean,
         voteCount: Int,
     ) {
-        if (voteCount !in MIN_VOTE_COUNT..MAX_VOTE_COUNT) {
-            throw BusinessException(ErrorCode.INVALID_INPUT, "채점 횟수는 $MIN_VOTE_COUNT~$MAX_VOTE_COUNT 사이여야 합니다.")
-        }
+        validateVoteCount(voteCount)
         this.autoEnabled = autoEnabled
         this.voteCount = voteCount
         this.updatedAt = Instant.now()
@@ -44,7 +42,14 @@ class QualityJudgeSetting(
     companion object {
         const val SINGLETON_ID = 1L
         const val DEFAULT_VOTE_COUNT = 3
-        const val MIN_VOTE_COUNT = 1
-        const val MAX_VOTE_COUNT = 5
+
+        /** 다수결이 동률로 애매함이 되지 않도록 홀수만 받는다. */
+        val VOTE_COUNTS = setOf(1, 3, 5)
+
+        fun validateVoteCount(voteCount: Int) {
+            if (voteCount !in VOTE_COUNTS) {
+                throw BusinessException(ErrorCode.INVALID_INPUT, "채점 횟수는 ${VOTE_COUNTS.joinToString()} 중 하나여야 합니다.")
+            }
+        }
     }
 }

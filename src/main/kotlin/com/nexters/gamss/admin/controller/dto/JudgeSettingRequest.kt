@@ -1,8 +1,6 @@
 package com.nexters.gamss.admin.controller.dto
 
 import io.swagger.v3.oas.annotations.media.Schema
-import jakarta.validation.constraints.Max
-import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
 
@@ -14,9 +12,7 @@ data class JudgeSettingRequest(
     @field:Schema(description = "매일 06:00 자동 채점 여부")
     val autoEnabled: Boolean?,
     @field:NotNull(message = "voteCount는 필수입니다.")
-    @field:Min(1, message = "voteCount는 1 이상이어야 합니다.")
-    @field:Max(5, message = "voteCount는 5 이하여야 합니다.")
-    @field:Schema(description = "응답 하나를 몇 번 채점해 다수결로 정할지(1~5)", example = "3")
+    @field:Schema(description = "응답 하나를 몇 번 채점해 다수결로 정할지(1, 3, 5 중 하나)", example = "3")
     val voteCount: Int?,
 )
 

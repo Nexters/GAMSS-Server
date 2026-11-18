@@ -8,6 +8,7 @@ import com.nexters.gamss.conversation.repository.MessageRepository
 import com.nexters.gamss.conversation.service.ConversationService
 import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.global.security.JwtIssuer
+import com.nexters.gamss.llm.settings.LlmSettingsService
 import com.nexters.gamss.member.domain.Member
 import com.nexters.gamss.member.repository.MemberRepository
 import com.nexters.gamss.quality.repository.ConversationViewLogRepository
@@ -60,6 +61,9 @@ class AdminConversationQualityControllerIntegrationTest {
 
     @Autowired
     private lateinit var qualityJudgeService: QualityJudgeService
+
+    @Autowired
+    private lateinit var llmSettingsService: LlmSettingsService
 
     @Autowired
     private lateinit var humanVerdictRepository: ResponseHumanVerdictRepository
@@ -267,6 +271,20 @@ class AdminConversationQualityControllerIntegrationTest {
                 contentType = MediaType.APPLICATION_JSON
                 content = """{"model":"gemini-judge-test","autoEnabled":false,"voteCount":9}"""
             }.andExpect { status { isBadRequest() } }
+    }
+
+    @Test
+    fun `채점 횟수가 짝수면 400이고 채점 모델도 바꾸지 않는다`() {
+        val before = llmSettingsService.currentJudgeView().model
+
+        mockMvc
+            .put("/api/admin/llm-settings/judge") {
+                header(HttpHeaders.AUTHORIZATION, adminBearer())
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"model":"gemini-judge-test","autoEnabled":true,"voteCount":2}"""
+            }.andExpect { status { isBadRequest() } }
+
+        assertEquals(before, llmSettingsService.currentJudgeView().model)
     }
 
     private fun save(

@@ -15,6 +15,7 @@ import com.nexters.gamss.global.security.AdminPrincipal
 import com.nexters.gamss.llm.prompt.PromptType
 import com.nexters.gamss.llm.settings.LlmSettingsService
 import com.nexters.gamss.llm.settings.PromptRevisionService
+import com.nexters.gamss.quality.domain.QualityJudgeSetting
 import com.nexters.gamss.quality.service.QualityJudgeSettingService
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
@@ -63,14 +64,17 @@ class AdminLlmSettingsController(
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +
-                "| INVALID_INPUT | 400 | 지원하지 않는 모델 또는 채점 횟수 범위 밖 |",
+                "| INVALID_INPUT | 400 | 지원하지 않는 모델 또는 채점 횟수가 1, 3, 5가 아님 |",
     )
     @PutMapping("/judge")
     fun updateJudge(
         @Valid @RequestBody request: JudgeSettingRequest,
     ): ApiResponse<JudgeSettingResponse> {
+        val voteCount = checkNotNull(request.voteCount)
+        // 모델과 채점 설정은 따로 저장되므로, 모델만 바뀌고 실패하지 않게 채점 횟수를 먼저 본다.
+        QualityJudgeSetting.validateVoteCount(voteCount)
         llmSettingsService.updateJudgeModel(checkNotNull(request.model))
-        qualityJudgeSettingService.update(checkNotNull(request.autoEnabled), checkNotNull(request.voteCount))
+        qualityJudgeSettingService.update(checkNotNull(request.autoEnabled), voteCount)
         return ApiResponse.success(judgeResponse())
     }
 
