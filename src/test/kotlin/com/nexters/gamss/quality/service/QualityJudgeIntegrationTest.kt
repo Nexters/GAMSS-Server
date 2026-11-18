@@ -82,8 +82,8 @@ class QualityJudgeIntegrationTest : RepositoryTest() {
         val (member, diary, comments) = seedDiary()
 
         val judgeSnapshot = qualityJudgeService.currentJudge()
-        assertEquals(JudgeOutcome.JUDGED, qualityJudgeService.judge(diary.id, judgeSnapshot, 3))
-        assertEquals(JudgeOutcome.ALREADY_JUDGED, qualityJudgeService.judge(diary.id, judgeSnapshot, 3))
+        assertEquals(JudgeOutcome.JUDGED, qualityJudgeService.judge(diary.id, judgeSnapshot, 3, JudgeScope.CURRENT_JUDGE))
+        assertEquals(JudgeOutcome.ALREADY_JUDGED, qualityJudgeService.judge(diary.id, judgeSnapshot, 3, JudgeScope.CURRENT_JUDGE))
 
         assertEquals(3, judge.calls)
         val verdicts = aiVerdictRepository.findByMessageIdIn(comments.map { it.id }).associateBy { it.messageId }
@@ -114,7 +114,7 @@ class QualityJudgeIntegrationTest : RepositoryTest() {
         val response = save(diary.conversationId, SenderType.CHARACTER, EmotionType.JOY, "응응", repliesTo = reply.id, root = diary.id)
         save(diary.conversationId, SenderType.USER, null, "뭔소리야")
 
-        qualityJudgeService.judge(reply.id, qualityJudgeService.currentJudge(), 1)
+        qualityJudgeService.judge(reply.id, qualityJudgeService.currentJudge(), 1, JudgeScope.CURRENT_JUDGE)
 
         val verdict = aiVerdictRepository.findByMessageIdIn(listOf(response.id)).single()
         assertEquals(ResponseKind.REPLY, verdict.responseKind)
@@ -153,7 +153,7 @@ class QualityJudgeIntegrationTest : RepositoryTest() {
     @Test
     fun `대화를 삭제하면 판정도 지운다`() {
         val (member, diary, comments) = seedDiary()
-        qualityJudgeService.judge(diary.id, qualityJudgeService.currentJudge(), 1)
+        qualityJudgeService.judge(diary.id, qualityJudgeService.currentJudge(), 1, JudgeScope.CURRENT_JUDGE)
 
         conversationService.deleteConversation(member.id, diary.conversationId)
 
@@ -165,7 +165,7 @@ class QualityJudgeIntegrationTest : RepositoryTest() {
         val (member, diary, comments) = seedDiary()
         judge.duringCall = { conversationService.deleteConversation(member.id, diary.conversationId) }
 
-        val outcome = qualityJudgeService.judge(diary.id, qualityJudgeService.currentJudge(), 1)
+        val outcome = qualityJudgeService.judge(diary.id, qualityJudgeService.currentJudge(), 1, JudgeScope.CURRENT_JUDGE)
 
         assertEquals(JudgeOutcome.SKIPPED, outcome)
         assertTrue(aiVerdictRepository.findByMessageIdIn(comments.map { it.id }).isEmpty())
@@ -176,9 +176,31 @@ class QualityJudgeIntegrationTest : RepositoryTest() {
         val (_, diary, comments) = seedDiary()
         val judgeSnapshot = qualityJudgeService.currentJudge()
 
-        assertEquals(listOf(diary.id), qualityJudgeRunner.pendingTriggersOfMessages(comments.map { it.id }, judgeSnapshot))
-        qualityJudgeService.judge(diary.id, judgeSnapshot, 1)
-        assertTrue(qualityJudgeRunner.pendingTriggersOfMessages(comments.map { it.id }, judgeSnapshot).isEmpty())
+        assertEquals(
+            listOf(diary.id),
+            qualityJudgeRunner.pendingTriggersOfMessages(
+                comments.map {
+                    it.id
+                },
+                judgeSnapshot,
+                JudgeScope.CURRENT_JUDGE,
+            ),
+        )
+        qualityJudgeService.judge(diary.id, judgeSnapshot, 1, JudgeScope.CURRENT_JUDGE)
+        assertTrue(qualityJudgeRunner.pendingTriggersOfMessages(comments.map { it.id }, judgeSnapshot, JudgeScope.CURRENT_JUDGE).isEmpty())
+    }
+
+    @Test
+    fun `채점 설정이 바뀌어도 자동 배치는 이미 채점한 응답을 다시 고르지 않고 정답 세트 채점만 다시 고른다`() {
+        val (_, diary, comments) = seedDiary()
+        val before = qualityJudgeService.currentJudge()
+        qualityJudgeService.judge(diary.id, before, 1, JudgeScope.UNJUDGED)
+        val after = before.copy(version = before.version + 1)
+        val ids = comments.map { it.id }
+
+        assertTrue(qualityJudgeRunner.pendingTriggersOfMessages(ids, after, JudgeScope.UNJUDGED).isEmpty())
+        assertEquals(JudgeOutcome.ALREADY_JUDGED, qualityJudgeService.judge(diary.id, after, 1, JudgeScope.UNJUDGED))
+        assertEquals(listOf(diary.id), qualityJudgeRunner.pendingTriggersOfMessages(ids, after, JudgeScope.CURRENT_JUDGE))
     }
 
     private fun seedDiary(): Triple<Member, Message, List<Message>> {

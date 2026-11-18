@@ -12,6 +12,7 @@ import com.nexters.gamss.member.domain.Member
 import com.nexters.gamss.member.repository.MemberRepository
 import com.nexters.gamss.quality.repository.ConversationViewLogRepository
 import com.nexters.gamss.quality.repository.ResponseHumanVerdictRepository
+import com.nexters.gamss.quality.service.JudgeScope
 import com.nexters.gamss.quality.service.QualityJudgeService
 import com.nexters.gamss.support.FakeResponseJudgeConfig
 import com.nexters.gamss.support.TestcontainersConfig
@@ -85,7 +86,7 @@ class AdminConversationQualityControllerIntegrationTest {
         diary = save(SenderType.USER, null, "오늘 팀장한테 깨졌어")
         natural = save(SenderType.CHARACTER, EmotionType.JOY, "괜찮아 잘했어", root = diary.id)
         awkward = save(SenderType.CHARACTER, EmotionType.ANXIETY, "혹시 내일 날씨 어때?", root = diary.id)
-        qualityJudgeService.judge(diary.id, qualityJudgeService.currentJudge(), 1)
+        qualityJudgeService.judge(diary.id, qualityJudgeService.currentJudge(), 1, JudgeScope.CURRENT_JUDGE)
     }
 
     @Test

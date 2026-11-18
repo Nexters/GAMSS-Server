@@ -42,12 +42,9 @@ class QualityJudgeService(
     fun pendingTriggers(
         responsesByTrigger: Map<Long, List<Long>>,
         judge: JudgeSnapshot,
+        scope: JudgeScope,
     ): List<Long> {
-        val judged =
-            aiVerdictRepository
-                .findByMessageIdInAndJudgeModelAndJudgePromptVersion(responsesByTrigger.values.flatten(), judge.view.model, judge.version)
-                .map { it.messageId }
-                .toSet()
+        val judged = judgedIds(responsesByTrigger.values.flatten(), judge, scope)
         return responsesByTrigger.filterValues { ids -> ids.any { it !in judged } }.keys.sorted()
     }
 
@@ -55,16 +52,13 @@ class QualityJudgeService(
         triggerMessageId: Long,
         judge: JudgeSnapshot,
         voteCount: Int,
+        scope: JudgeScope,
     ): JudgeOutcome {
         val unit = responseThreadService.generationUnit(triggerMessageId) ?: return JudgeOutcome.SKIPPED
         if (isGone(unit.conversation.id, unit.conversation.memberId)) {
             return JudgeOutcome.SKIPPED
         }
-        val judgedIds =
-            aiVerdictRepository
-                .findByMessageIdInAndJudgeModelAndJudgePromptVersion(unit.responses.map { it.id }, judge.view.model, judge.version)
-                .map { it.messageId }
-                .toSet()
+        val judgedIds = judgedIds(unit.responses.map { it.id }, judge, scope)
         val pending = unit.responses.filter { it.id !in judgedIds }
         if (pending.isEmpty()) {
             return JudgeOutcome.ALREADY_JUDGED
@@ -171,6 +165,24 @@ class QualityJudgeService(
         )
     }
 
+    private fun judgedIds(
+        messageIds: Collection<Long>,
+        judge: JudgeSnapshot,
+        scope: JudgeScope,
+    ): Set<Long> {
+        val verdicts =
+            when (scope) {
+                JudgeScope.UNJUDGED -> {
+                    aiVerdictRepository.findByMessageIdIn(messageIds)
+                }
+
+                JudgeScope.CURRENT_JUDGE -> {
+                    aiVerdictRepository.findByMessageIdInAndJudgeModelAndJudgePromptVersion(messageIds, judge.view.model, judge.version)
+                }
+            }
+        return verdicts.map { it.messageId }.toSet()
+    }
+
     private fun isGone(
         conversationId: Long,
         memberId: Long,
@@ -189,6 +201,14 @@ data class JudgeSnapshot(
     val version: Int,
     val characterGuide: String,
 )
+
+enum class JudgeScope {
+    /** 어떤 설정으로든 판정이 없는 응답. 자동 채점 배치가 쓴다. 채점 설정을 바꿔도 지난 응답을 다시 채점하지 않는다. */
+    UNJUDGED,
+
+    /** 지금 채점 설정으로 판정이 없는 응답. 정답 세트 채점이 새 설정을 확인할 때 쓴다. */
+    CURRENT_JUDGE,
+}
 
 enum class JudgeOutcome {
     JUDGED,

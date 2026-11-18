@@ -29,7 +29,7 @@ class QualityCalibrationService(
         run.get()?.takeIf { it.running }?.let { return it }
         val judge = qualityJudgeService.currentJudge()
         val messageIds = humanVerdictRepository.findAll().map { it.messageId }.toSet()
-        val triggers = qualityJudgeRunner.pendingTriggersOfMessages(messageIds, judge)
+        val triggers = qualityJudgeRunner.pendingTriggersOfMessages(messageIds, judge, JudgeScope.CURRENT_JUDGE)
         val started =
             CalibrationRun(judge.view.model, judge.version, triggers.size, running = triggers.isNotEmpty(), startedAt = Instant.now())
         run.set(started)
@@ -40,6 +40,7 @@ class QualityCalibrationService(
                         qualityJudgeRunner.run(
                             triggers,
                             judge,
+                            JudgeScope.CURRENT_JUDGE,
                         ) { progress -> run.set(started.copy(processed = progress.processed, failed = progress.failed)) }
                     run.set(started.copy(processed = tally.processed, failed = tally.failed, running = false, aborted = tally.aborted))
                 } catch (e: Exception) {

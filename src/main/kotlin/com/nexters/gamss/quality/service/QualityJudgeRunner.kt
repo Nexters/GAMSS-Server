@@ -19,21 +19,25 @@ class QualityJudgeRunner(
     fun pendingTriggersOf(
         responses: List<ResponseRef>,
         judge: JudgeSnapshot,
+        scope: JudgeScope,
     ): List<Long> =
         qualityJudgeService.pendingTriggers(
             responses.groupBy({ it.triggerMessageId }, { it.message.id }),
             judge,
+            scope,
         )
 
     fun pendingTriggersOfMessages(
         messageIds: Collection<Long>,
         judge: JudgeSnapshot,
-    ): List<Long> = pendingTriggersOf(responseThreadService.responses(messageIds).map { it.ref }, judge)
+        scope: JudgeScope,
+    ): List<Long> = pendingTriggersOf(responseThreadService.responses(messageIds).map { it.ref }, judge, scope)
 
     /** 429 나 서킷 오픈이 [UPSTREAM_ABORT_STREAK]번 연달아 나면 남은 것은 두고 멈춘다. */
     fun run(
         triggerIds: List<Long>,
         judge: JudgeSnapshot,
+        scope: JudgeScope,
         onProgress: (JudgeRunTally) -> Unit = {},
     ): JudgeRunTally {
         val voteCount = qualityJudgeSettingService.current().voteCount
@@ -41,7 +45,7 @@ class QualityJudgeRunner(
         var upstreamStreak = 0
         for (triggerId in triggerIds) {
             try {
-                when (qualityJudgeService.judge(triggerId, judge, voteCount)) {
+                when (qualityJudgeService.judge(triggerId, judge, voteCount, scope)) {
                     JudgeOutcome.JUDGED -> tally.judged++
                     JudgeOutcome.ALREADY_JUDGED, JudgeOutcome.SKIPPED -> tally.skipped++
                 }

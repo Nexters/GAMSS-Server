@@ -62,12 +62,12 @@ class QualityJudgeScheduler(
             val from = to.minusDays(LOOKBACK_DAYS)
             val judge = qualityJudgeService.currentJudge()
             val responses = responseThreadService.responsesCreatedBetween(from.toInstant(), to.toInstant())
-            val triggers = qualityJudgeRunner.pendingTriggersOf(responses, judge).take(MAX_TRIGGERS_PER_RUN)
+            val triggers = qualityJudgeRunner.pendingTriggersOf(responses, judge, JudgeScope.UNJUDGED).take(MAX_TRIGGERS_PER_RUN)
             if (triggers.isEmpty()) {
                 log.info("응답 채점 배치: 대상 없음 ({}~{})", from, to)
                 return null
             }
-            val tally = qualityJudgeRunner.run(triggers, judge)
+            val tally = qualityJudgeRunner.run(triggers, judge, JudgeScope.UNJUDGED)
             meterRegistry.counter("gamss.quality.judge.outcome", "outcome", "JUDGED").increment(tally.judged.toDouble())
             meterRegistry.counter("gamss.quality.judge.outcome", "outcome", "FAILED").increment(tally.failed.toDouble())
             log.info(
@@ -95,7 +95,7 @@ class QualityJudgeScheduler(
         private const val CRON = "0 0 6 * * *"
         private const val DAY_BOUNDARY_HOUR = 5
 
-        // 하루를 놓쳐도 다음 실행이 이어서 보도록 며칠을 함께 본다. 이미 채점한 응답은 건너뛴다.
+        // 하루를 놓쳐도 다음 실행이 이어서 보도록 며칠을 함께 본다. 어떤 설정으로든 채점한 응답은 건너뛴다.
         private const val LOOKBACK_DAYS = 3L
         private const val MAX_TRIGGERS_PER_RUN = 500
     }
