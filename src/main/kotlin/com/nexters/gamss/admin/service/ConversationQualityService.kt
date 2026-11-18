@@ -6,6 +6,7 @@ import com.nexters.gamss.conversation.domain.SenderType
 import com.nexters.gamss.conversation.service.ResponseThreadService
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
+import com.nexters.gamss.global.retry.ConflictRetry
 import com.nexters.gamss.member.service.MemberService
 import com.nexters.gamss.quality.domain.AwkwardType
 import com.nexters.gamss.quality.domain.ResponseAiVerdict
@@ -25,6 +26,7 @@ class ConversationQualityService(
     private val responseThreadService: ResponseThreadService,
     private val qualityReviewService: QualityReviewService,
     private val memberService: MemberService,
+    private val conflictRetry: ConflictRetry,
 ) {
     fun thread(
         conversationId: Long,
@@ -139,7 +141,7 @@ class ConversationQualityService(
         val response =
             responseThreadService.responses(listOf(messageId)).firstOrNull() ?: throw BusinessException(ErrorCode.MESSAGE_NOT_FOUND)
         ensureReadable(response.conversation)
-        val saved = qualityReviewService.saveHumanVerdict(adminEmail, messageId, verdict, awkwardTypes, memo)
+        val saved = conflictRetry.execute { qualityReviewService.saveHumanVerdict(adminEmail, messageId, verdict, awkwardTypes, memo) }
         val ai = qualityReviewService.latestAiVerdicts(listOf(messageId))[messageId]
         return HumanVerdictResult(
             messageId = messageId,

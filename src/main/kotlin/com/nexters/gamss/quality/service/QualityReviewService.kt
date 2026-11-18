@@ -14,6 +14,7 @@ import com.nexters.gamss.quality.repository.ConversationViewLogRepository
 import com.nexters.gamss.quality.repository.ResponseAiVerdictRepository
 import com.nexters.gamss.quality.repository.ResponseHumanVerdictRepository
 import com.nexters.gamss.quality.repository.ResponseQualityQueryRepository
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.Pageable
@@ -83,19 +84,23 @@ class QualityReviewService(
         }
         val response =
             responseThreadService.responses(listOf(messageId)).firstOrNull() ?: throw BusinessException(ErrorCode.MESSAGE_NOT_FOUND)
-        return humanVerdictRepository.save(
-            ResponseHumanVerdict(
-                messageId = messageId,
-                conversationId = response.conversation.id,
-                memberId = response.conversation.memberId,
-                emotionType = checkNotNull(response.ref.message.emotionType),
-                responseKind = response.ref.kind,
-                adminEmail = adminEmail,
-                verdict = verdict,
-                awkwardTypes = awkwardTypes,
-                memo = note,
-            ),
-        )
+        try {
+            return humanVerdictRepository.saveAndFlush(
+                ResponseHumanVerdict(
+                    messageId = messageId,
+                    conversationId = response.conversation.id,
+                    memberId = response.conversation.memberId,
+                    emotionType = checkNotNull(response.ref.message.emotionType),
+                    responseKind = response.ref.kind,
+                    adminEmail = adminEmail,
+                    verdict = verdict,
+                    awkwardTypes = awkwardTypes,
+                    memo = note,
+                ),
+            )
+        } catch (e: DataIntegrityViolationException) {
+            throw HumanVerdictConflictException(messageId, e)
+        }
     }
 
     @Transactional(readOnly = true)

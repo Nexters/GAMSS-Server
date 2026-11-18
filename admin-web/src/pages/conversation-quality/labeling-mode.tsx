@@ -39,6 +39,8 @@ export function LabelingMode({ onProgress }: { onProgress: (mine: number, target
   const [error, setError] = useState<string | null>(null)
   const started = useRef(false)
   const target = useRef(100)
+  // loading 은 다시 그려져야 반영되므로, 그 전에 Enter 가 연달아 들어와도 한 번만 저장하도록 따로 막는다.
+  const submitting = useRef(false)
 
   const current = index >= 0 ? history[index] : undefined
   const currentId = useRef<number | undefined>(undefined)
@@ -103,9 +105,10 @@ export function LabelingMode({ onProgress }: { onProgress: (mine: number, target
   }, [history, index, loadThread])
 
   const submit = useCallback(async () => {
-    if (!current || !verdict || (verdict === 'AWKWARD' && types.length === 0)) {
+    if (submitting.current || !current || !verdict || (verdict === 'AWKWARD' && types.length === 0)) {
       return
     }
+    submitting.current = true
     setError(null)
     setLoading(true)
     try {
@@ -124,6 +127,7 @@ export function LabelingMode({ onProgress }: { onProgress: (mine: number, target
     } catch (e) {
       setError(e instanceof ApiError && e.detail ? e.detail : '판정을 저장하지 못했습니다.')
     } finally {
+      submitting.current = false
       setLoading(false)
     }
   }, [current, memo, onProgress, types, verdict])
