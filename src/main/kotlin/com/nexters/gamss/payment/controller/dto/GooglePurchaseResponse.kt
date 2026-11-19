@@ -6,7 +6,7 @@ import io.swagger.v3.oas.annotations.media.Schema
 data class GooglePurchaseResponse(
     @field:Schema(description = "GRANTED: 지급 완료(이미 지급된 구매 포함). PENDING: 결제 대기 중이라 지급하지 않음")
     val status: GooglePurchaseStatus,
-    @field:Schema(description = "구매한 상품 ID", example = "token_300000")
+    @field:Schema(description = "구매한 상품 ID", example = "token_300k")
     val productId: String,
     @field:Schema(description = "이 구매로 지급된 유료 토큰 수. PENDING 이면 null", example = "300000", nullable = true)
     val grantedTokens: Long?,

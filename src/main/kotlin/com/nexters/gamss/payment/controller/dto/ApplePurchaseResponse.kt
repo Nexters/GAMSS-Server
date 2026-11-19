@@ -4,7 +4,7 @@ import com.nexters.gamss.payment.service.ApplePurchaseResult
 import io.swagger.v3.oas.annotations.media.Schema
 
 data class ApplePurchaseResponse(
-    @field:Schema(description = "구매한 상품 ID", example = "token_300000")
+    @field:Schema(description = "구매한 상품 ID", example = "token_300k")
     val productId: String,
     @field:Schema(description = "이 거래로 지급된 유료 토큰 수(상품 지급량 x 수량)", example = "300000")
     val grantedTokens: Long,
