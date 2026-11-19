@@ -410,8 +410,10 @@ class GoogleRefundIntegrationTest {
 
         val last = voided(token = TOKEN_MULTI, orderId = "GPA.MULTI-0001", voidedTime = NOW.minus(Duration.ofHours(1)))
         google.voidedPages = listOf(listOf(first, second, last))
+        val callsBeforeFull = google.getPurchaseCalls
         reconciler.reconcile(NOW.plus(Duration.ofHours(2)))
         assertEquals(3_000_000, payment(TOKEN_MULTI).refundedTokens)
+        assertEquals(callsBeforeFull, google.getPurchaseCalls)
     }
 
     /**
@@ -470,6 +472,46 @@ class GoogleRefundIntegrationTest {
         assertEquals(1, ledgerRepository.findAll().count { it.type == TokenLedgerType.REFUND })
         assertTrue(output.out.lines().any { "to=${NOW.plusSeconds(60)}" in it && "처리=0건" in it })
         assertFalse(output.out.lines().any { "회수량을 줄이지 않았습니다" in it && ("rtdn:m-voided-both" in it || batchSource in it) })
+    }
+
+    /**
+     * Google 의 수량 기반 부분 환불은 다중 수량 구매에만 있다. 수량 1 구매의 대사 항목에 voidedQuantity 가 붙어 와도 부분
+     * 환불로 계산하지 않는다. 계산하면 refundableQuantity 가 1 일 때 목표가 0 이 돼 회수를 놓친다.
+     */
+    @Test
+    fun `수량 1 구매의 환불은 대사 항목에 voidedQuantity 가 있어도 전액 회수한다`() {
+        grant()
+        google.stub(TOKEN, purchase(accountToken = buyerAccountToken(), refundableQuantity = 1))
+        val callsBefore = google.getPurchaseCalls
+        google.voidedPages = listOf(listOf(voided(quantity = 1)))
+
+        reconciler.reconcile(NOW)
+
+        assertEquals(300_000, payment(TOKEN).refundedTokens)
+        assertEquals(0, walletReader.balanceOf(buyer.id))
+        assertEquals(callsBefore, google.getPurchaseCalls)
+    }
+
+    /**
+     * 웹훅이 전액 회수한 수량 1 결제를 배치가 부분 환불로 다시 계산하면, `refundableQuantity` 에 따라 목표가 지금 회수량보다
+     * 낮아질 수 있다. 이를 환불 취소로 처리하면 회수한 토큰을 돌려주게 되므로, 수량 1 결제는 부분 환불로 와도 Google 을 조회하지
+     * 않고 전액으로 본다. 이 순서에서는 회수량을 올리기만 하는 비교가 따로 드러나지 않으므로, 그 비교는 위의 경합 테스트가 고정한다.
+     */
+    @Test
+    fun `웹훅이 전액 회수한 수량 1 구매가 배치에 부분 환불로 와도 토큰을 돌려주지 않는다`() {
+        grant()
+        push("m-voided-qty1", voidedNotification(refundType = 1)).andExpect { status { isNoContent() } }
+        google.stub(TOKEN, purchase(accountToken = buyerAccountToken(), refundableQuantity = 1))
+        val callsBefore = google.getPurchaseCalls
+        google.voidedPages = listOf(listOf(voided(quantity = 1)))
+
+        reconciler.reconcile(NOW)
+
+        assertEquals(300_000, payment(TOKEN).refundedTokens)
+        assertEquals(0, walletReader.balanceOf(buyer.id))
+        assertTrue(ledgerRepository.findAll().none { it.type == TokenLedgerType.REFUND_REVERSED })
+        assertTrue(recordRepository.isVoidedPurchaseHandled(KEY.value, "voided:${voided().voidedTime.toEpochMilli()}"))
+        assertEquals(callsBefore, google.getPurchaseCalls)
     }
 
     @Test
@@ -558,23 +600,25 @@ class GoogleRefundIntegrationTest {
     /** 항목 하나의 예상하지 못한 오류가 같은 회차의 다른 환불을 막지 않는다. 실패한 항목은 다음 회차가 다시 본다. */
     @Test
     fun `항목 하나가 실패해도 나머지를 처리하고, 체크포인트는 갱신하지 않는다`() {
-        grant(token = TOKEN, messageId = "m-grant-1")
+        seedMultiQuantityPayment()
         grant(token = TOKEN_2, messageId = "m-grant-2")
+        // 등록하지 않은 구매를 조회하면 afterGetPurchase 전에 PURCHASE_INVALID 로 끝나므로 미리 등록한다.
+        google.stub(TOKEN_MULTI, purchase(accountToken = buyerAccountToken(), quantity = 10, refundableQuantity = 8))
         google.afterGetPurchase = { throw IllegalStateException("일시 오류") }
-        // 부분 환불 항목만 getPurchase 를 부른다.
-        google.voidedPages = listOf(listOf(voided(token = TOKEN, quantity = 1), voided(token = TOKEN_2)))
+        // 다중 수량 결제의 부분 환불 항목만 getPurchase 를 부른다.
+        val partial = voided(token = TOKEN_MULTI, orderId = "GPA.MULTI-0001", quantity = 2)
+        google.voidedPages = listOf(listOf(partial, voided(token = TOKEN_2)))
 
         assertFailsWith<IllegalStateException> { reconciler.reconcile(NOW) }
 
-        assertEquals(0, payment(TOKEN).refundedTokens)
+        assertEquals(0, payment(TOKEN_MULTI).refundedTokens)
         assertEquals(300_000, payment(TOKEN_2).refundedTokens)
         assertNull(recordRepository.lastSucceededAt(GoogleVoidedPurchaseReconciler.JOB_NAME))
 
         google.afterGetPurchase = null
-        google.stub(TOKEN, purchase(accountToken = buyerAccountToken(), refundableQuantity = 0))
         reconciler.reconcile(NOW.plus(Duration.ofHours(1)))
 
-        assertEquals(300_000, payment(TOKEN).refundedTokens)
+        assertEquals(600_000, payment(TOKEN_MULTI).refundedTokens)
         assertEquals(NOW.plus(Duration.ofHours(1)), recordRepository.lastSucceededAt(GoogleVoidedPurchaseReconciler.JOB_NAME))
     }
 

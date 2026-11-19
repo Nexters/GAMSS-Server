@@ -46,15 +46,41 @@ class GoogleRefundReclaimerTest {
         assertEquals(333, GoogleRefundReclaimer.refundTarget(1_000, 3, 2))
     }
 
+    /** 전액 환불은 수량과 관계없이 Google 을 조회하지 않는다. 수량 1 결제는 부분 환불이어도 조회하지 않으므로 다중 수량 결제로 확인한다. */
     @Test
     fun `전액 환불은 Google 을 조회하지 않고 지급량 전체를 목표로 삼는다`() {
-        givenPayment(quantity = 1, grantedTokens = 300_000)
+        givenPayment(quantity = 10, grantedTokens = 3_000_000)
         givenApplyRefund()
 
         reclaimer.reclaim(TOKEN, partial = false, sourceId = SOURCE)
 
+        verify(exactly = 1) { grantService.applyRefund(PaymentPlatform.GOOGLE, KEY, 3_000_000, SOURCE, allowReversal = false) }
+        assertEquals(0, google.getPurchaseCalls)
+    }
+
+    /** 수량 1 결제는 수량으로 나눠 환불할 수 없다. 부분 환불로 표시돼 와도 조회하지 않고 지급량 전체를 회수한다. */
+    @Test
+    fun `수량 1 결제는 부분 환불로 와도 Google 을 조회하지 않고 지급량 전체를 목표로 삼는다`() {
+        givenPayment(quantity = 1, grantedTokens = 300_000)
+        givenApplyRefund()
+
+        reclaimer.reclaim(TOKEN, partial = true, sourceId = SOURCE)
+
         verify(exactly = 1) { grantService.applyRefund(PaymentPlatform.GOOGLE, KEY, 300_000, SOURCE, allowReversal = false) }
         assertEquals(0, google.getPurchaseCalls)
+    }
+
+    /** 수량 가드의 경계. 수량 2 부터는 수량으로 나눠 환불할 수 있으므로 부분 환불이면 Google 을 다시 조회한다. */
+    @Test
+    fun `수량 2 결제의 부분 환불은 Google 을 다시 조회해 목표를 계산한다`() {
+        givenPayment(quantity = 2, grantedTokens = 600_000)
+        givenApplyRefund()
+        google.stub(TOKEN, purchase(accountToken = null, quantity = 2, refundableQuantity = 1))
+
+        reclaimer.reclaim(TOKEN, partial = true, sourceId = SOURCE)
+
+        verify(exactly = 1) { grantService.applyRefund(PaymentPlatform.GOOGLE, KEY, 300_000, SOURCE, allowReversal = false) }
+        assertEquals(1, google.getPurchaseCalls)
     }
 
     @Test

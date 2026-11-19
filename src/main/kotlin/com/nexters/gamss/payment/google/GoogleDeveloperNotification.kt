@@ -4,9 +4,8 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 
 /**
  * RTDN `DeveloperNotification`. Pub/Sub 메시지의 `data` 를 base64 로 풀면 나온다. 알림 하나에는 아래 알림 필드 중
- * 하나만 들어 있다. 구매 상태는 들어 있지 않다. 구매 알림과 부분 환불 알림은 Google 을 다시 조회해 판단하고, 전액
- * 환불(refundType = 1)은 본문의 purchaseToken 으로 찾은 결제를 조회 없이 전액 회수한다. 그 근거는
- * [com.nexters.gamss.payment.service.GoogleNotificationService] 에 적었다.
+ * 하나만 들어 있다. 구매 상태는 들어 있지 않다. 어떤 알림을 Google 을 다시 조회해 판단하고 어떤 알림을 조회 없이 전액
+ * 회수하는지, 그리고 그 근거는 [com.nexters.gamss.payment.service.GoogleNotificationService] 에 적었다.
  *
  * 모르는 필드(구독 알림 등)는 무시한다. Google 이 알림 종류를 늘려도 읽기가 실패하지 않게 하려는 것이다.
  */

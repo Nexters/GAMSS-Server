@@ -19,11 +19,13 @@ import java.util.Base64
 /**
  * Google Play RTDN 을 처리한다.
  *
- * 구매 알림과 부분 환불 알림은 Google 을 다시 조회한 결과로 판단한다. 전액 환불(refundType = 1)은 이슈와 RTDN
- * 레퍼런스대로 알림의 purchaseToken 으로 찾은 결제를 조회 없이 전액 회수한다. 그 본문이 진짜라는 근거는 push 인증
- * (OIDC 토큰의 aud·email)과 RTDN 토픽의 게시 권한이다. 그래서 토픽 Publisher 는 Google Play 서비스 계정에만 주고,
- * push 서비스 계정의 토큰을 만들 수 있는 주체도 Pub/Sub 서비스 에이전트로 한정해야 한다. 대사 배치는 Google 이 돌려준
- * 환불 목록으로 같은 결제를 다시 맞춘다.
+ * 구매 알림은 Google 을 다시 조회한 결과로 판단한다. 전액 환불(refundType = 1)은 이슈와 RTDN 레퍼런스대로 알림의
+ * purchaseToken 으로 찾은 결제를 조회 없이 전액 회수한다. 부분 환불(refundType = 2)은 다중 수량 결제일 때만 Google 을
+ * 다시 조회해 목표를 계산한다. 레퍼런스상 부분 환불은 다중 수량 구매에만 오지만, 수량 1 결제에 오면 전액 환불과 같이
+ * 조회 없이 전액 회수한다([GoogleRefundReclaimer]). 조회 없이 회수하는 두 경우 모두 본문이 진짜라는 근거는
+ * push 인증(OIDC 토큰의 aud·email)과 RTDN 토픽의 게시 권한이다. 그래서 토픽 Publisher 는 Google Play 서비스 계정에만
+ * 주고, push 서비스 계정의 토큰을 만들 수 있는 주체도 Pub/Sub 서비스 에이전트로 한정해야 한다. 대사 배치는 Google 이
+ * 돌려준 환불 목록으로 같은 결제를 다시 맞춘다.
  *
  * 결과가 [GoogleNotificationOutcome.RETRY] 면 Pub/Sub 이 지수 백오프로 다시 보낸다. Google 과 통신할 수 없을 때만
  * 그렇게 한다. 그 밖의 실패(주인을 모르는 구매, 결제 기록이 없는 환불)는 다시 보내도 같은 결과라 ERROR·WARN 으로
