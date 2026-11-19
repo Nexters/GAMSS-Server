@@ -91,7 +91,7 @@ class AppleJwsFixture(
             environment: String = "Production",
             bundleId: String = BUNDLE_ID,
             transactionId: String = "2000000123456789",
-            productId: String = "token_300000",
+            productId: String = "token_300k",
             type: String = "Consumable",
             quantity: Int = 1,
             appAccountToken: String? = "7f1c2a4e-3b5d-4c6e-8f90-a1b2c3d4e5f6",

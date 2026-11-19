@@ -146,7 +146,7 @@ class PurchaseGrantConcurrencyIntegrationTest {
             platform = PaymentPlatform.APPLE,
             storeTransactionKey = StoreTransactionKey("2000000123456789"),
             accountToken = accountToken,
-            productId = "token_300000",
+            productId = "token_300k",
             quantity = 1,
             environment = PaymentEnvironment.PRODUCTION,
             purchasedAt = Instant.parse("2026-11-04T00:00:00Z"),

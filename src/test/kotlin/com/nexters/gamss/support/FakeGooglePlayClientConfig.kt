@@ -91,7 +91,7 @@ class FakeGooglePlayClient : GooglePlayClient {
     companion object {
         fun purchase(
             accountToken: String?,
-            productId: String = "token_300000",
+            productId: String = "token_300k",
             state: GooglePurchaseState = GooglePurchaseState.PURCHASED,
             quantity: Int? = 1,
             consumption: GoogleConsumptionState = GoogleConsumptionState.YET_TO_BE_CONSUMED,

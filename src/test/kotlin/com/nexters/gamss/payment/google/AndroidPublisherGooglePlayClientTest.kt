@@ -64,7 +64,7 @@ class AndroidPublisherGooglePlayClientTest {
                   "purchaseStateContext": { "purchaseState": "PURCHASED" },
                   "testPurchaseContext": { "fopType": "TEST" },
                   "productLineItem": [
-                    { "productId": "token_300000",
+                    { "productId": "token_300k",
                       "productOfferDetails": { "quantity": 1, "consumptionState": "CONSUMPTION_STATE_YET_TO_BE_CONSUMED" } }
                   ]
                 }
@@ -81,12 +81,12 @@ class AndroidPublisherGooglePlayClientTest {
         assertEquals("acc-token", purchase.obfuscatedExternalAccountId)
         assertEquals(Instant.parse("2026-11-06T01:02:03.456Z"), purchase.purchaseCompletionTime)
         assertTrue(purchase.testPurchase)
-        assertEquals(GooglePurchaseLineItem("token_300000", 1, GoogleConsumptionState.YET_TO_BE_CONSUMED), purchase.lineItems.single())
+        assertEquals(GooglePurchaseLineItem("token_300k", 1, GoogleConsumptionState.YET_TO_BE_CONSUMED), purchase.lineItems.single())
     }
 
     @Test
     fun `비어 있는 필드는 UNSPECIFIED 와 null 로 채운다`() {
-        respond = { json(200, """{ "productLineItem": [ { "productId": "token_300000" } ] }""") }
+        respond = { json(200, """{ "productLineItem": [ { "productId": "token_300k" } ] }""") }
 
         val purchase = client.getPurchase("tok")
 
@@ -94,7 +94,7 @@ class AndroidPublisherGooglePlayClientTest {
         assertNull(purchase.purchaseCompletionTime)
         assertNull(purchase.obfuscatedExternalAccountId)
         assertFalse(purchase.testPurchase)
-        assertEquals(GooglePurchaseLineItem("token_300000", null, GoogleConsumptionState.UNSPECIFIED), purchase.lineItems.single())
+        assertEquals(GooglePurchaseLineItem("token_300k", null, GoogleConsumptionState.UNSPECIFIED), purchase.lineItems.single())
     }
 
     @Test
@@ -110,10 +110,10 @@ class AndroidPublisherGooglePlayClientTest {
     fun `consume 은 v1 경로로 부른다`() {
         respond = { json(204, "") }
 
-        client.consume("token_300000", "tok")
+        client.consume("token_300k", "tok")
 
         assertEquals("POST", requests.single().first)
-        assertTrue(requests.single().second.endsWith("/applications/$PACKAGE_NAME/purchases/products/token_300000/tokens/tok:consume"))
+        assertTrue(requests.single().second.endsWith("/applications/$PACKAGE_NAME/purchases/products/token_300k/tokens/tok:consume"))
     }
 
     @Test
@@ -132,7 +132,7 @@ class AndroidPublisherGooglePlayClientTest {
 
             assertEquals(
                 ErrorCode.PAYMENT_STORE_UNAVAILABLE,
-                assertFailsWith<BusinessException> { client.consume("token_300000", "tok") }.errorCode,
+                assertFailsWith<BusinessException> { client.consume("token_300k", "tok") }.errorCode,
             )
         }
     }
@@ -185,7 +185,7 @@ class AndroidPublisherGooglePlayClientTest {
         responses.forEach { response ->
             respond = response
             assertFailsWith<BusinessException> { client.getPurchase(SECRET_TOKEN) }
-            assertFailsWith<BusinessException> { client.consume("token_300000", SECRET_TOKEN) }
+            assertFailsWith<BusinessException> { client.consume("token_300k", SECRET_TOKEN) }
         }
 
         assertFalse(SECRET_TOKEN in output.out)

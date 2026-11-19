@@ -77,10 +77,10 @@ class PaymentTest {
     fun `같은 거래인지는 주체 상품 수량이 모두 같을 때만 참이다`() {
         val payment = payment(granted = 3_000)
 
-        assertTrue(payment.isSamePurchase(SUBJECT, "token_300000", 1))
-        assertFalse(payment.isSamePurchase("b".repeat(64), "token_300000", 1))
-        assertFalse(payment.isSamePurchase(SUBJECT, "token_500000", 1))
-        assertFalse(payment.isSamePurchase(SUBJECT, "token_300000", 2))
+        assertTrue(payment.isSamePurchase(SUBJECT, "token_300k", 1))
+        assertFalse(payment.isSamePurchase("b".repeat(64), "token_300k", 1))
+        assertFalse(payment.isSamePurchase(SUBJECT, "token_500k", 1))
+        assertFalse(payment.isSamePurchase(SUBJECT, "token_300k", 2))
     }
 
     private fun payment(
@@ -93,7 +93,7 @@ class PaymentTest {
         storePurchaseToken = null,
         storeOrderId = null,
         subjectKey = SUBJECT,
-        productId = "token_300000",
+        productId = "token_300k",
         quantity = 1,
         grantedTokens = granted,
         environment = PaymentEnvironment.PRODUCTION,

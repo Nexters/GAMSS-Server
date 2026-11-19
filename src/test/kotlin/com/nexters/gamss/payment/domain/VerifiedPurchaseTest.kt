@@ -32,7 +32,7 @@ class VerifiedPurchaseTest {
     }
 
     private fun purchase(
-        productId: String = "token_300000",
+        productId: String = "token_300k",
         quantity: Int = 1,
         platform: PaymentPlatform = PaymentPlatform.APPLE,
         storePurchaseToken: String? = null,

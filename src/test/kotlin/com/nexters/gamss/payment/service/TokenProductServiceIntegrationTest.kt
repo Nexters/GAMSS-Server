@@ -22,7 +22,7 @@ class TokenProductServiceIntegrationTest : RepositoryTest() {
 
         val products = productService.activeProducts()
 
-        assertEquals(listOf("token_300000", "token_500000", "token_1000000"), products.map { it.productId })
+        assertEquals(listOf("token_300k", "token_500k", "token_1m"), products.map { it.productId })
         assertEquals(listOf(300_000L, 500_000L, 1_000_000L), products.map { it.tokenAmount })
     }
 }

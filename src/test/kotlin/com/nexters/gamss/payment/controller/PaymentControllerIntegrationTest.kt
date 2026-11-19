@@ -62,9 +62,9 @@ class PaymentControllerIntegrationTest {
                 status { isOk() }
                 jsonPath("$.success") { value(true) }
                 jsonPath("$.data.length()") { value(3) }
-                jsonPath("$.data[0].productId") { value("token_300000") }
+                jsonPath("$.data[0].productId") { value("token_300k") }
                 jsonPath("$.data[0].tokenAmount") { value(300_000) }
-                jsonPath("$.data[2].productId") { value("token_1000000") }
+                jsonPath("$.data[2].productId") { value("token_1m") }
                 jsonPath("$.data[0].price") { doesNotExist() }
             }
     }
@@ -125,7 +125,7 @@ class PaymentControllerIntegrationTest {
             .post(GOOGLE) {
                 header(HttpHeaders.AUTHORIZATION, bearerFor(member))
                 contentType = MediaType.APPLICATION_JSON
-                content = """{"productId": "token_300000", "purchaseToken": "token"}"""
+                content = """{"productId": "token_300k", "purchaseToken": "token"}"""
             }.andExpect {
                 status { isServiceUnavailable() }
                 jsonPath("$.error.code") { value("PAYMENT_STORE_UNAVAILABLE") }
