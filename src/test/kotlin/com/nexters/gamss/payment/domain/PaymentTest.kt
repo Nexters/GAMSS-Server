@@ -45,6 +45,36 @@ class PaymentTest {
     }
 
     @Test
+    fun `올리기만 하는 회수는 목표가 지금 회수량보다 작으면 바꾸지 않는다`() {
+        val payment = payment(granted = 3_000)
+        payment.refundTo(3_000)
+
+        assertEquals(0, payment.raiseRefundTo(1_000))
+        assertEquals(0, payment.raiseRefundTo(3_000))
+        assertEquals(3_000, payment.refundedTokens)
+    }
+
+    @Test
+    fun `올리기만 하는 회수도 목표가 더 크면 차이만큼 회수한다`() {
+        val payment = payment(granted = 3_000)
+        payment.refundTo(1_000)
+
+        assertEquals(2_000, payment.raiseRefundTo(3_000))
+        assertEquals(3_000, payment.refundedTokens)
+    }
+
+    /** 범위 검사를 먼저 한다. 지금 회수량과 먼저 비교하면 잘못된 목표가 차이 0 으로 조용히 넘어간다. */
+    @Test
+    fun `올리기만 하는 회수도 0 미만이거나 지급량을 넘는 목표는 받지 않는다`() {
+        val payment = payment(granted = 3_000)
+        payment.refundTo(3_000)
+
+        assertFailsWith<IllegalArgumentException> { payment.raiseRefundTo(-1) }
+        assertFailsWith<IllegalArgumentException> { payment.raiseRefundTo(3_001) }
+        assertEquals(3_000, payment.refundedTokens)
+    }
+
+    @Test
     fun `가장 긴 거래 키와 알림 ID 로 만든 멱등 키도 원장 길이 안에 들어간다`() {
         val payment = payment(granted = 1, key = "f".repeat(StoreTransactionKey.MAX_LENGTH), platform = PaymentPlatform.GOOGLE)
         val notificationUuid = "3f2b8c1e-7a4d-4e6b-9c0a-1d2e3f4a5b6c"

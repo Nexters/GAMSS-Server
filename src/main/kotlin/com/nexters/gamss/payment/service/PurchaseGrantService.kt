@@ -49,6 +49,12 @@ class PurchaseGrantService(
      * 하나에만 써야 한다 - 이미 반영한 출처가 다시 오면 목표와 관계없이 아무것도 하지 않는다. 멱등 키가
      * 128자 안에 들어가야 하므로, Google 의 64자 거래 키와 함께 쓰면 [sourceId] 는 49자까지다.
      *
+     * [allowReversal] 을 끄면 회수량을 올리기만 하고, 목표가 지금 회수량보다 작으면 아무것도 하지 않는다. 환불 취소
+     * 알림이 없는 스토어(Google)는 끄고, 환불 취소 알림이 있는 스토어(Apple)는 켠다. 비교는 결제 행을 잠근 뒤에 하므로,
+     * 잠그기 전에 계산한 목표가 그 사이 커밋된 더 큰 회수보다 늦게 와도 환불 취소로 바뀌지 않는다. 기본값은 두지 않는다.
+     * 기본값이 있으면 이 값을 빠뜨린 호출부가 컴파일 오류 없이 그 값을 쓴다. true 면 Google 회수가 환불 취소를 허용하고,
+     * false 면 Apple 환불 취소가 오류 없이 무시된다.
+     *
      * 호출부가 맡아야 할 일이 둘 있다.
      * - **출처 중복 제거.** 여기서 기억하는 출처는 잔액을 바꾼 출처뿐이다. 목표가 현재 회수량과 같아
      *   차이 0 으로 끝난 출처는 원장에 아무것도 남지 않는다(원장은 0 인 변동을 받지 않는다). 그런 출처가
@@ -57,19 +63,21 @@ class PurchaseGrantService(
      *   않는다. 지급 알림보다 환불 알림이 먼저 오면 결제 기록이 없어 `PAYMENT_NOT_FOUND` 로 끝나는데, 이
      *   출처를 처리한 것으로 기록하면 나중에 지급된 토큰이 회수되지 않는다. 실패로 응답해 스토어 재전송이나
      *   대사 배치가 다시 가져오게 둔다.
-     * - **도착 순서.** 목표값 방식은 마지막으로 도착한 목표를 사실로 본다. 환불 알림이 환불 취소 알림보다
-     *   늦게 도착하면 다시 회수되고, 여기서는 그 순서를 가려내지 못한다. 알림 본문의 값보다 스토어를 다시
-     *   조회한 현재 상태로 목표를 계산하면 어긋날 여지가 줄어든다.
+     * - **도착 순서.** [allowReversal] 이 켜져 있으면 마지막으로 도착한 목표를 사실로 본다. 환불 알림이 환불
+     *   취소 알림보다 늦게 도착하면 다시 회수되고, 여기서는 그 순서를 가려내지 못한다. 알림 본문의 값보다
+     *   스토어를 다시 조회한 현재 상태로 목표를 계산하면 어긋날 여지가 줄어든다. 다만 조회는 결제 행을 잠그기
+     *   전이라, 그 사이 커밋된 변동보다 늦게 도착할 수 있다.
      */
     fun applyRefund(
         platform: PaymentPlatform,
         storeTransactionKey: StoreTransactionKey,
         targetRefundedTokens: Long,
         sourceId: String,
+        allowReversal: Boolean,
     ): RefundResult {
         ensureOutsideTransaction()
         return conflictRetry.execute {
-            recordService.applyRefund(platform, storeTransactionKey, targetRefundedTokens, sourceId)
+            recordService.applyRefund(platform, storeTransactionKey, targetRefundedTokens, sourceId, allowReversal)
         }
     }
 

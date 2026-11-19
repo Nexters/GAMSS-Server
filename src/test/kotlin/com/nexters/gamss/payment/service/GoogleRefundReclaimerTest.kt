@@ -53,7 +53,7 @@ class GoogleRefundReclaimerTest {
 
         reclaimer.reclaim(TOKEN, partial = false, sourceId = SOURCE)
 
-        verify(exactly = 1) { grantService.applyRefund(PaymentPlatform.GOOGLE, KEY, 300_000, SOURCE) }
+        verify(exactly = 1) { grantService.applyRefund(PaymentPlatform.GOOGLE, KEY, 300_000, SOURCE, allowReversal = false) }
         assertEquals(0, google.getPurchaseCalls)
     }
 
@@ -65,7 +65,7 @@ class GoogleRefundReclaimerTest {
 
         reclaimer.reclaim(TOKEN, partial = true, sourceId = SOURCE)
 
-        verify(exactly = 1) { grantService.applyRefund(PaymentPlatform.GOOGLE, KEY, 600_000, SOURCE) }
+        verify(exactly = 1) { grantService.applyRefund(PaymentPlatform.GOOGLE, KEY, 600_000, SOURCE, allowReversal = false) }
     }
 
     @Test
@@ -88,7 +88,7 @@ class GoogleRefundReclaimerTest {
 
             assertEquals(ErrorCode.PURCHASE_INVALID, error.errorCode)
         }
-        verify(exactly = 0) { grantService.applyRefund(any(), any(), any(), any()) }
+        verify(exactly = 0) { grantService.applyRefund(any(), any(), any(), any(), any()) }
     }
 
     @Test
@@ -98,7 +98,7 @@ class GoogleRefundReclaimerTest {
         val error = assertFailsWith<BusinessException> { reclaimer.reclaim(TOKEN, partial = false, sourceId = SOURCE) }
 
         assertEquals(ErrorCode.PAYMENT_NOT_FOUND, error.errorCode)
-        verify(exactly = 0) { grantService.applyRefund(any(), any(), any(), any()) }
+        verify(exactly = 0) { grantService.applyRefund(any(), any(), any(), any(), any()) }
     }
 
     private fun givenPayment(
@@ -121,7 +121,7 @@ class GoogleRefundReclaimerTest {
     }
 
     private fun givenApplyRefund() {
-        every { grantService.applyRefund(any(), any(), any(), any()) } answers {
+        every { grantService.applyRefund(any(), any(), any(), any(), any()) } answers {
             RefundResult(paymentId = 1, refundedTokens = thirdArg(), changedTokens = thirdArg())
         }
     }

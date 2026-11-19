@@ -68,6 +68,9 @@ class PaymentRecordService(
      * 이미 반영한 출처([sourceId])가 다시 오면 목표와 관계없이 아무것도 하지 않는다. 환불 뒤 환불 취소까지
      * 반영된 상태에서 옛 환불 알림이 다시 오면, 목표만 보고는 다시 회수해야 하는 것처럼 보인다. 그런데
      * 원장은 같은 멱등 키를 재요청으로 보고 잔액을 그대로 두므로, 결제 기록만 바뀌어 둘이 어긋난다.
+     *
+     * [allowReversal] 이 false 면 잠근 결제의 지금 회수량보다 작은 목표는 무시한다([Payment.raiseRefundTo]). 잠근 뒤에
+     * 비교해야, 잠그기 전에 계산한 목표가 그 사이 커밋된 회수보다 늦게 와도 걸러진다.
      */
     @Transactional
     fun applyRefund(
@@ -75,6 +78,7 @@ class PaymentRecordService(
         storeTransactionKey: StoreTransactionKey,
         targetRefundedTokens: Long,
         sourceId: String,
+        allowReversal: Boolean,
     ): RefundResult {
         val payment =
             paymentRepository.findByPlatformAndStoreTransactionKeyForUpdate(platform, storeTransactionKey.value)
@@ -83,7 +87,7 @@ class PaymentRecordService(
         if (walletReader.isApplied(refId)) {
             return RefundResult(paymentId = payment.id, refundedTokens = payment.refundedTokens, changedTokens = 0)
         }
-        val delta = payment.refundTo(targetRefundedTokens)
+        val delta = if (allowReversal) payment.refundTo(targetRefundedTokens) else payment.raiseRefundTo(targetRefundedTokens)
         if (delta != 0L) {
             val result = walletService.apply(refundChange(payment, delta, refId))
             check(!result.replayed) { "반영 이력이 없던 환불 출처가 재요청으로 처리됐습니다: refId=$refId" }

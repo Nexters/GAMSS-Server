@@ -70,8 +70,11 @@ import kotlin.test.assertTrue
  *
  * 캡처한 출력에는 이 테스트가 남긴 것 말고도 다른 출력(컨텍스트 기동 로그 등)이 섞일 수 있다. 그래서 로그를 확인할 때는
  * 테스트마다 고유한 orderId·messageId 로 줄을 고른다.
+ *
+ * open-in-view 는 운영과 같이 끈다. 켜 두면 MockMvc 요청 하나가 끝날 때까지 EntityManager 하나를 같이 써서, 회수기가 잠그기
+ * 전에 읽은 결제와 잠근 뒤에 읽은 결제가 같은 객체가 된다. 그러면 잠근 뒤에 비교하는지를 테스트로 가려낼 수 없다.
  */
-@SpringBootTest(properties = ["google.play.package-name=$PACKAGE"])
+@SpringBootTest(properties = ["google.play.package-name=$PACKAGE", "spring.jpa.open-in-view=false"])
 @Import(TestcontainersConfig::class, FakeGooglePlayClientConfig::class, GoogleRefundIntegrationTest.FakeAuthConfig::class)
 @ExtendWith(OutputCaptureExtension::class)
 class GoogleRefundIntegrationTest {
@@ -411,6 +414,29 @@ class GoogleRefundIntegrationTest {
         assertEquals(3_000_000, payment(TOKEN_MULTI).refundedTokens)
     }
 
+    /**
+     * 부분 환불 목표는 결제 행을 잠그기 전에 Google 을 조회해 계산한다. 조회와 잠금 사이에 다른 출처의 전액 회수가 커밋되면 이
+     * 목표는 이미 회수한 양보다 작아진다. Google 환불은 되돌리는 알림이 없으므로, 이를 환불 취소로 처리해 토큰을 돌려주면 안 된다.
+     */
+    @Test
+    fun `부분 환불 목표를 계산하는 사이 전액 회수가 커밋돼도 회수량을 되돌리지 않는다`(output: CapturedOutput) {
+        seedMultiQuantityPayment()
+        google.stub(TOKEN_MULTI, purchase(accountToken = buyerAccountToken(), quantity = 10, refundableQuantity = 8))
+        val key = StoreTransactionKey.ofGooglePurchaseToken(TOKEN_MULTI)
+        google.afterGetPurchase = {
+            google.afterGetPurchase = null
+            grantService.applyRefund(PaymentPlatform.GOOGLE, key, 3_000_000, "rtdn:m-full", allowReversal = false)
+        }
+
+        push("m-stale-partial", voidedNotification(refundType = 2, token = TOKEN_MULTI)).andExpect { status { isNoContent() } }
+
+        assertEquals(3_000_000, payment(TOKEN_MULTI).refundedTokens)
+        assertEquals(0, walletReader.balanceOf(buyer.id))
+        assertTrue(ledgerRepository.findAll().none { it.type == TokenLedgerType.REFUND_REVERSED })
+        assertTrue(recordRepository.isNotificationHandled("m-stale-partial"))
+        assertTrue(output.out.lines().any { "WARN" in it && "회수량을 줄이지 않았습니다" in it && "rtdn:m-stale-partial" in it })
+    }
+
     // ---- 대사 배치 ----
 
     @Test
@@ -430,16 +456,20 @@ class GoogleRefundIntegrationTest {
     fun `같은 환불이 웹훅과 배치 양쪽에서 와도 한 번만 회수한다`(output: CapturedOutput) {
         grant()
         push("m-voided-both", voidedNotification(refundType = 1)).andExpect { status { isNoContent() } }
-        google.voidedPages = listOf(listOf(voided()))
+        // 캡처한 출력에는 앞서 돈 테스트의 출력도 섞이므로, 다른 테스트와 겹치지 않는 대사 출처를 쓴다.
+        val item = voided(voidedTime = NOW.minus(Duration.ofMinutes(61)))
+        val batchSource = "voided:${item.voidedTime.toEpochMilli()}"
+        google.voidedPages = listOf(listOf(item))
 
         reconciler.reconcile(NOW)
-        assertTrue(recordRepository.isVoidedPurchaseHandled(KEY.value, "voided:${voided().voidedTime.toEpochMilli()}"))
+        assertTrue(recordRepository.isVoidedPurchaseHandled(KEY.value, batchSource))
         reconciler.reconcile(NOW.plusSeconds(60))
 
         assertEquals(300_000, payment(TOKEN).refundedTokens)
         assertEquals(0, walletReader.balanceOf(buyer.id))
         assertEquals(1, ledgerRepository.findAll().count { it.type == TokenLedgerType.REFUND })
         assertTrue(output.out.lines().any { "to=${NOW.plusSeconds(60)}" in it && "처리=0건" in it })
+        assertFalse(output.out.lines().any { "회수량을 줄이지 않았습니다" in it && ("rtdn:m-voided-both" in it || batchSource in it) })
     }
 
     @Test

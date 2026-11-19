@@ -6,6 +6,9 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate
+    # 켜면 요청 하나가 끝날 때까지 영속성 컨텍스트 하나를 함께 쓴다. 환불 회수는 결제 행을 잠근 뒤 읽은 회수량과 목표를
+    # 비교하는데(PaymentRecordService.applyRefund), 같은 요청에서 먼저 읽어 둔 결제가 있으면 잠근 뒤에도 그 낡은 엔티티를
+    # 돌려받는다. 그러면 이미 커밋된 회수를 보지 못하고 이중으로 회수한다.
     open-in-view: false
     properties:
       hibernate:

@@ -99,7 +99,13 @@ class PurchaseGrantConcurrencyIntegrationTest {
 
         val results =
             runConcurrently { i ->
-                grantService.applyRefund(PaymentPlatform.APPLE, purchase.storeTransactionKey, 300_000, "notification-$i")
+                grantService.applyRefund(
+                    PaymentPlatform.APPLE,
+                    purchase.storeTransactionKey,
+                    300_000,
+                    "notification-$i",
+                    allowReversal = true,
+                )
             }
 
         assertEquals(1, results.count { it.changedTokens != 0L })

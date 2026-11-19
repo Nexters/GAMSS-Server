@@ -20,6 +20,10 @@ import org.springframework.stereotype.Component
  * 전액 환불은 Google 을 조회하지 않고 지급량 전체를 목표로 삼는다. 근거는 부르는 쪽에 있다. 대사 배치는 Google 이
  * 돌려준 환불 목록이고, 웹훅은 push 인증과 RTDN 토픽의 게시 권한이다([GoogleNotificationService]).
  *
+ * Google 일회성 상품의 환불은 되돌리는 알림이 없으므로 회수량을 올리기만 한다(`allowReversal = false`). 부분 환불 목표는
+ * 결제 행을 잠그기 전에 Google 을 조회해 계산한다. 그 사이 다른 출처가 더 많이 회수해 커밋하면 이 목표는 이미 회수한 양보다
+ * 작아지고, 이를 환불 취소로 처리하면 회수한 토큰을 돌려주게 된다.
+ *
  * **트랜잭션 밖에서 부른다.** Google 조회가 끼고, 회수 자체도 트랜잭션 밖에서 불러야 한다.
  */
 @Component
@@ -46,7 +50,18 @@ class GoogleRefundReclaimer(
             paymentRepository.findByPlatformAndStoreTransactionKey(PaymentPlatform.GOOGLE, key.value)
                 ?: throw BusinessException(ErrorCode.PAYMENT_NOT_FOUND)
         val target = if (partial) partialTarget(purchaseToken, payment.grantedTokens, key) else payment.grantedTokens
-        val result = grantService.applyRefund(PaymentPlatform.GOOGLE, key, target, sourceId)
+        val result = grantService.applyRefund(PaymentPlatform.GOOGLE, key, target, sourceId, allowReversal = false)
+        if (result.refundedTokens > target) {
+            log.warn(
+                "Google 환불 목표가 이미 회수한 양보다 작아 회수량을 줄이지 않았습니다. Google 을 조회한 뒤 결제를 잠그기 전에 " +
+                    "다른 출처의 회수가 먼저 커밋됐을 수 있습니다: paymentId={}, storeOrderId={}, target={}, refundedTokens={}, sourceId={}",
+                result.paymentId,
+                payment.storeOrderId,
+                target,
+                result.refundedTokens,
+                sourceId,
+            )
+        }
         if (result.changedTokens != 0L) {
             log.info(
                 "Google 환불을 회수했습니다: paymentId={}, storeOrderId={}, changedTokens={}, refundedTokens={}, sourceId={}",
