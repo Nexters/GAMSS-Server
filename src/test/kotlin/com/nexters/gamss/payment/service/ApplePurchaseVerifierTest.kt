@@ -26,7 +26,7 @@ class ApplePurchaseVerifierTest {
         assertEquals(PaymentPlatform.APPLE, purchase.platform)
         assertEquals(StoreTransactionKey("2000000123456789"), purchase.storeTransactionKey)
         assertEquals(ACCOUNT_TOKEN, purchase.accountToken)
-        assertEquals("token_300000", purchase.productId)
+        assertEquals("token_300k", purchase.productId)
         assertEquals(1, purchase.quantity)
         assertEquals(PaymentEnvironment.SANDBOX, purchase.environment)
         assertEquals(Instant.parse("2026-11-06T00:00:00Z"), purchase.purchasedAt)

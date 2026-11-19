@@ -27,7 +27,7 @@ class SignedAppleTransactionDecoderTest {
         assertEquals(
             AppleTransaction(
                 transactionId = "2000000123456789",
-                productId = "token_300000",
+                productId = "token_300k",
                 type = "Consumable",
                 quantity = 3,
                 appAccountToken = "7f1c2a4e-3b5d-4c6e-8f90-a1b2c3d4e5f6",

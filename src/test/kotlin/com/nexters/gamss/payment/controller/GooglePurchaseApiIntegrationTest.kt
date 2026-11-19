@@ -123,7 +123,7 @@ class GooglePurchaseApiIntegrationTest {
         accountRepository.deleteAll()
         identityRepository.deleteAll()
         memberRepository.deleteAllById(listOf(buyer.id, other.id))
-        jdbcTemplate.update("update token_product set active = true where product_id = 'token_300000'")
+        jdbcTemplate.update("update token_product set active = true where product_id = 'token_300k'")
     }
 
     @Test
@@ -133,7 +133,7 @@ class GooglePurchaseApiIntegrationTest {
         purchaseGoogle(buyer).andExpect {
             status { isOk() }
             jsonPath("$.data.status") { value("GRANTED") }
-            jsonPath("$.data.productId") { value("token_300000") }
+            jsonPath("$.data.productId") { value("token_300k") }
             jsonPath("$.data.grantedTokens") { value(300_000) }
             jsonPath("$.data.paidBalance") { value(300_000) }
         }
@@ -144,7 +144,7 @@ class GooglePurchaseApiIntegrationTest {
         assertEquals("GPA.0000-0000-0000-00000", payment.storeOrderId)
         assertEquals(PaymentEnvironment.PRODUCTION, payment.environment)
         assertNotNull(payment.consumedAt)
-        assertEquals(listOf("token_300000" to TOKEN), google.consumeCalls)
+        assertEquals(listOf("token_300k" to TOKEN), google.consumeCalls)
         assertEquals(listOf(false), google.consumeInTransaction)
         assertEquals(300_000, walletReader.balanceOf(buyer.id))
     }
@@ -234,7 +234,7 @@ class GooglePurchaseApiIntegrationTest {
     fun `판매를 멈춘 상품이어도 이미 지급한 구매의 재요청은 성공한다`() {
         google.stub(TOKEN, purchase(accountToken = buyerAccountToken()))
         purchaseGoogle(buyer).andExpect { status { isOk() } }
-        jdbcTemplate.update("update token_product set active = false where product_id = 'token_300000'")
+        jdbcTemplate.update("update token_product set active = false where product_id = 'token_300k'")
 
         purchaseGoogle(buyer).andExpect {
             status { isOk() }
@@ -249,7 +249,7 @@ class GooglePurchaseApiIntegrationTest {
         purchaseGoogle(buyer).andExpect {
             status { isOk() }
             jsonPath("$.data.status") { value("PENDING") }
-            jsonPath("$.data.productId") { value("token_300000") }
+            jsonPath("$.data.productId") { value("token_300k") }
             jsonPath("$.data.grantedTokens") { value(null) }
             jsonPath("$.data.paidBalance") { value(null) }
         }
@@ -311,7 +311,7 @@ class GooglePurchaseApiIntegrationTest {
 
     @Test
     fun `구매한 상품이 요청과 다르면 400 으로 거부한다`() {
-        google.stub(TOKEN, purchase(accountToken = buyerAccountToken(), productId = "token_1000000"))
+        google.stub(TOKEN, purchase(accountToken = buyerAccountToken(), productId = "token_1m"))
 
         purchaseGoogle(buyer).andExpect {
             status { isBadRequest() }
@@ -331,9 +331,9 @@ class GooglePurchaseApiIntegrationTest {
     fun `요청 값이 비었거나 너무 길면 400 으로 거부한다`() {
         listOf(
             """{"productId": "", "purchaseToken": "t"}""",
-            """{"productId": "token_300000", "purchaseToken": " "}""",
-            """{"productId": "token_300000"}""",
-            """{"productId": "token_300000", "purchaseToken": "${"t".repeat(4097)}"}""",
+            """{"productId": "token_300k", "purchaseToken": " "}""",
+            """{"productId": "token_300k"}""",
+            """{"productId": "token_300k", "purchaseToken": "${"t".repeat(4097)}"}""",
         ).forEach { body ->
             mockMvc
                 .post(GOOGLE) {
@@ -352,7 +352,7 @@ class GooglePurchaseApiIntegrationTest {
         mockMvc
             .post(GOOGLE) {
                 contentType = MediaType.APPLICATION_JSON
-                content = """{"productId": "token_300000", "purchaseToken": "$TOKEN"}"""
+                content = """{"productId": "token_300k", "purchaseToken": "$TOKEN"}"""
             }.andExpect { status { isUnauthorized() } }
     }
 
@@ -360,7 +360,7 @@ class GooglePurchaseApiIntegrationTest {
         mockMvc.post(GOOGLE) {
             header(HttpHeaders.AUTHORIZATION, bearerFor(member))
             contentType = MediaType.APPLICATION_JSON
-            content = """{"productId": "token_300000", "purchaseToken": "$TOKEN"}"""
+            content = """{"productId": "token_300k", "purchaseToken": "$TOKEN"}"""
         }
 
     private fun buyerAccountToken(): String = accountService.accountTokenOf(buyer.id).value

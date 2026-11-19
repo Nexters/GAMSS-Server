@@ -31,14 +31,14 @@ class GooglePurchaseVerifierTest {
     fun `PURCHASED 구매는 Google 응답 값으로 지급 입력을 만들고 원문 토큰과 해시 거래 키를 함께 담는다`() {
         client.stub(TOKEN, purchase(accountToken = ACCOUNT_TOKEN))
 
-        val result = assertIs<GooglePurchaseVerification.Verified>(verifier.verify(TOKEN, "token_300000"))
+        val result = assertIs<GooglePurchaseVerification.Verified>(verifier.verify(TOKEN, "token_300k"))
 
         val purchase = result.purchase
         assertEquals(PaymentPlatform.GOOGLE, purchase.platform)
         assertEquals(StoreTransactionKey.ofGooglePurchaseToken(TOKEN), purchase.storeTransactionKey)
         assertEquals(TOKEN, purchase.storePurchaseToken)
         assertEquals(ACCOUNT_TOKEN, purchase.accountToken)
-        assertEquals("token_300000", purchase.productId)
+        assertEquals("token_300k", purchase.productId)
         assertEquals(1, purchase.quantity)
         assertEquals(PaymentEnvironment.PRODUCTION, purchase.environment)
         assertEquals(Instant.parse("2026-11-06T00:00:00Z"), purchase.purchasedAt)
@@ -50,7 +50,7 @@ class GooglePurchaseVerifierTest {
     fun `계정 토큰은 판정하지 않고 없는 값도 그대로 넘긴다`() {
         client.stub(TOKEN, purchase(accountToken = null))
 
-        val result = assertIs<GooglePurchaseVerification.Verified>(verifier.verify(TOKEN, "token_300000"))
+        val result = assertIs<GooglePurchaseVerification.Verified>(verifier.verify(TOKEN, "token_300k"))
 
         assertNull(result.purchase.accountToken)
     }
@@ -59,7 +59,7 @@ class GooglePurchaseVerifierTest {
     fun `테스트 구매는 SANDBOX 로 기록한다`() {
         client.stub(TOKEN, purchase(accountToken = ACCOUNT_TOKEN, testPurchase = true))
 
-        val result = assertIs<GooglePurchaseVerification.Verified>(verifier.verify(TOKEN, "token_300000"))
+        val result = assertIs<GooglePurchaseVerification.Verified>(verifier.verify(TOKEN, "token_300k"))
 
         assertEquals(PaymentEnvironment.SANDBOX, result.purchase.environment)
     }
@@ -68,7 +68,7 @@ class GooglePurchaseVerifierTest {
     fun `이미 consume 된 구매는 그 사실을 함께 돌려준다`() {
         client.stub(TOKEN, purchase(accountToken = ACCOUNT_TOKEN, consumption = GoogleConsumptionState.CONSUMED))
 
-        val result = assertIs<GooglePurchaseVerification.Verified>(verifier.verify(TOKEN, "token_300000"))
+        val result = assertIs<GooglePurchaseVerification.Verified>(verifier.verify(TOKEN, "token_300k"))
 
         assertTrue(result.consumed)
     }
@@ -77,9 +77,9 @@ class GooglePurchaseVerifierTest {
     fun `PENDING 구매는 지급하지 않고 대기로 돌려준다`() {
         client.stub(TOKEN, purchase(accountToken = ACCOUNT_TOKEN, state = GooglePurchaseState.PENDING))
 
-        val result = assertIs<GooglePurchaseVerification.Pending>(verifier.verify(TOKEN, "token_300000"))
+        val result = assertIs<GooglePurchaseVerification.Pending>(verifier.verify(TOKEN, "token_300k"))
 
-        assertEquals("token_300000", result.productId)
+        assertEquals("token_300k", result.productId)
     }
 
     @Test
@@ -98,7 +98,7 @@ class GooglePurchaseVerifierTest {
 
     @Test
     fun `구매한 상품이 요청과 다르면 거부한다`() {
-        client.stub(TOKEN, purchase(accountToken = ACCOUNT_TOKEN, productId = "token_1000000"))
+        client.stub(TOKEN, purchase(accountToken = ACCOUNT_TOKEN, productId = "token_1m"))
 
         assertErrorCode(ErrorCode.PURCHASE_PRODUCT_MISMATCH)
     }
@@ -107,7 +107,7 @@ class GooglePurchaseVerifierTest {
     @Test
     fun `상품이 없거나 여러 개면 확인할 수 없는 구매로 거부하고 ERROR 를 남긴다`(output: CapturedOutput) {
         val base = purchase(accountToken = ACCOUNT_TOKEN)
-        val item = GooglePurchaseLineItem("token_300000", 1, GoogleConsumptionState.YET_TO_BE_CONSUMED)
+        val item = GooglePurchaseLineItem("token_300k", 1, GoogleConsumptionState.YET_TO_BE_CONSUMED)
 
         client.stub(TOKEN, base.copy(lineItems = emptyList()))
         assertErrorCode(ErrorCode.PURCHASE_INVALID)
@@ -123,11 +123,11 @@ class GooglePurchaseVerifierTest {
 
     @Test
     fun `기대 상품이 없으면(웹훅 경로) 응답의 상품을 그대로 쓴다`() {
-        client.stub(TOKEN, purchase(accountToken = ACCOUNT_TOKEN, productId = "token_1000000"))
+        client.stub(TOKEN, purchase(accountToken = ACCOUNT_TOKEN, productId = "token_1m"))
 
         val result = assertIs<GooglePurchaseVerification.Verified>(verifier.verify(TOKEN, null))
 
-        assertEquals("token_1000000", result.purchase.productId)
+        assertEquals("token_1m", result.purchase.productId)
     }
 
     @Test
@@ -143,7 +143,7 @@ class GooglePurchaseVerifierTest {
     fun `응답에 수량이 없으면 1 로 처리한다`() {
         client.stub(TOKEN, purchase(accountToken = ACCOUNT_TOKEN, quantity = null))
 
-        val result = assertIs<GooglePurchaseVerification.Verified>(verifier.verify(TOKEN, "token_300000"))
+        val result = assertIs<GooglePurchaseVerification.Verified>(verifier.verify(TOKEN, "token_300k"))
 
         assertEquals(1, result.purchase.quantity)
     }
@@ -156,7 +156,7 @@ class GooglePurchaseVerifierTest {
     }
 
     private fun assertErrorCode(expected: ErrorCode) {
-        val error = assertFailsWith<BusinessException> { verifier.verify(TOKEN, "token_300000") }
+        val error = assertFailsWith<BusinessException> { verifier.verify(TOKEN, "token_300k") }
         assertEquals(expected, error.errorCode)
     }
 

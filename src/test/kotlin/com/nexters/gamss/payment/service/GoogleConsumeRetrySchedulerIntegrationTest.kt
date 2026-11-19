@@ -74,7 +74,7 @@ class GoogleConsumeRetrySchedulerIntegrationTest {
 
         scheduler.retry(now)
 
-        assertEquals(listOf("token_300000" to "t1"), google.consumeCalls)
+        assertEquals(listOf("token_300k" to "t1"), google.consumeCalls)
         assertEquals(listOf(false), google.consumeInTransaction)
         assertNotNull(consumedAtOf(payment))
     }
@@ -169,7 +169,7 @@ class GoogleConsumeRetrySchedulerIntegrationTest {
 
         scheduler.retry(now)
 
-        assertEquals(listOf("token_300000" to "t1"), google.consumeCalls)
+        assertEquals(listOf("token_300k" to "t1"), google.consumeCalls)
         assertEquals(1, google.getPurchaseCalls)
     }
 
@@ -253,7 +253,7 @@ class GoogleConsumeRetrySchedulerIntegrationTest {
                 storeTransactionKey = StoreTransactionKey.ofGooglePurchaseToken(token).value,
                 storePurchaseToken = token,
                 storeOrderId = "GPA.$token",
-                productId = "token_300000",
+                productId = "token_300k",
                 quantity = 1,
                 grantedTokens = 300_000,
                 environment = environment,

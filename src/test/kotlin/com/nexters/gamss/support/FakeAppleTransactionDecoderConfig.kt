@@ -43,7 +43,7 @@ class FakeAppleTransactionDecoder : AppleTransactionDecoder {
         fun transaction(
             accountToken: String?,
             transactionId: String? = "2000000123456789",
-            productId: String? = "token_300000",
+            productId: String? = "token_300k",
             type: String? = "Consumable",
             quantity: Int? = 1,
             environment: PaymentEnvironment = PaymentEnvironment.PRODUCTION,

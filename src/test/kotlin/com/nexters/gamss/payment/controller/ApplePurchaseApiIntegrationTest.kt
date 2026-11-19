@@ -106,7 +106,7 @@ class ApplePurchaseApiIntegrationTest {
         accountRepository.deleteAll()
         identityRepository.deleteAll()
         memberRepository.deleteAllById(listOf(buyer.id, other.id))
-        jdbcTemplate.update("update token_product set active = true where product_id = 'token_300000'")
+        jdbcTemplate.update("update token_product set active = true where product_id = 'token_300k'")
     }
 
     @Test
@@ -115,7 +115,7 @@ class ApplePurchaseApiIntegrationTest {
 
         purchaseApple(buyer).andExpect {
             status { isOk() }
-            jsonPath("$.data.productId") { value("token_300000") }
+            jsonPath("$.data.productId") { value("token_300k") }
             jsonPath("$.data.grantedTokens") { value(300_000) }
             jsonPath("$.data.paidBalance") { value(300_000) }
         }
@@ -209,7 +209,7 @@ class ApplePurchaseApiIntegrationTest {
         apple.stub(JWS, transaction(accountToken = buyerAccountToken()))
         apple.stub(OTHER_JWS, transaction(accountToken = buyerAccountToken(), transactionId = "2000000999999999"))
         purchaseApple(buyer).andExpect { status { isOk() } }
-        jdbcTemplate.update("update token_product set active = false where product_id = 'token_300000'")
+        jdbcTemplate.update("update token_product set active = false where product_id = 'token_300k'")
 
         purchaseApple(buyer).andExpect { status { isOk() } }
         purchaseApple(buyer, OTHER_JWS).andExpect {

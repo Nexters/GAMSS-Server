@@ -98,7 +98,7 @@ class PurchaseGrantServiceIntegrationTest {
         identityRepository.deleteAll()
         memberRepository.deleteAllById(createdMemberIds)
         jdbcTemplate.update("delete from token_product where product_id = ?", RETIRED_PRODUCT)
-        jdbcTemplate.update("update token_product set active = true where product_id = 'token_300000'")
+        jdbcTemplate.update("update token_product set active = true where product_id = 'token_300k'")
     }
 
     @Test
@@ -152,7 +152,7 @@ class PurchaseGrantServiceIntegrationTest {
     @Test
     fun `지급 뒤 상품 판매를 멈춰도 같은 거래의 재요청은 성공한다`() {
         grantService.grant(BUYER, purchase())
-        jdbcTemplate.update("update token_product set active = false where product_id = 'token_300000'")
+        jdbcTemplate.update("update token_product set active = false where product_id = 'token_300k'")
 
         assertTrue(grantService.grant(BUYER, purchase()).replayed)
     }
@@ -161,7 +161,7 @@ class PurchaseGrantServiceIntegrationTest {
     fun `같은 거래 키로 다른 상품이 오면 키를 만든 쪽의 버그로 보고 거부한다`() {
         grantService.grant(BUYER, purchase())
 
-        assertFailsWith<IllegalStateException> { grantService.grant(BUYER, purchase(productId = "token_500000")) }
+        assertFailsWith<IllegalStateException> { grantService.grant(BUYER, purchase(productId = "token_500k")) }
         assertEquals(300_000, walletReader.balanceOf(BUYER))
     }
 
@@ -194,7 +194,7 @@ class PurchaseGrantServiceIntegrationTest {
             assertTrue(
                 output.all.lines().any {
                     "ERROR" in it && "key=tx-$i," in it && "storeOrderId=GPA.100$i," in it &&
-                        "productId=token_300000," in it && "quantity=2," in it
+                        "productId=token_300k," in it && "quantity=2," in it
                 },
                 "ERROR 로그가 없다: token=$token",
             )
@@ -380,7 +380,7 @@ class PurchaseGrantServiceIntegrationTest {
     private fun purchase(
         key: String = KEY.value,
         accountToken: String? = accountService.accountTokenOf(BUYER).value,
-        productId: String = "token_300000",
+        productId: String = "token_300k",
         quantity: Int = 1,
         storeOrderId: String? = null,
     ) = VerifiedPurchase(

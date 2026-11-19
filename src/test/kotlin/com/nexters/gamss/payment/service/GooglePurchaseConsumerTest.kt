@@ -91,7 +91,7 @@ class GooglePurchaseConsumerTest {
 
     private companion object {
         const val PAYMENT_ID = 7L
-        const val PRODUCT_ID = "token_300000"
+        const val PRODUCT_ID = "token_300k"
         const val TOKEN = "purchase-token"
     }
 }
