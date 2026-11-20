@@ -99,6 +99,13 @@ apple:
     bundle-id: com.nexters.gamss
     # App Store Connect 의 앱 숫자 ID. Production 거래 검증기에 필수다.
     app-apple-id: 6799644564
+    # App Store Server API(In-App Purchase 키, #245). 알림 기록 배치가 쓴다. 키가 비어 있으면 배치가 꺼진다.
+    server-api:
+      signing-key-base64: ${APPLE_IAP_SIGNING_KEY_BASE64:}
+      key-id: ${APPLE_IAP_KEY_ID:}
+      issuer-id: ${APPLE_IAP_ISSUER_ID:}
+      # 이 서버가 알림을 받는 환경. prod 는 PRODUCTION, dev 는 SANDBOX.
+      environment: ${APPLE_IAP_NOTIFICATION_ENVIRONMENT:}
 
 gemini:
   model: gemini-3.1-flash-lite

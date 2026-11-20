@@ -27,4 +27,8 @@ data class AppleTransaction(
     /** 환불되거나 취소된 시각. 없으면 유효한 거래다. */
     val revocationDate: Instant?,
     val environment: PaymentEnvironment,
+    /** 부분 환불 비율(milliunits, 100000 이 100%). 없으면 전액 환불이다. */
+    val revocationPercentage: Int? = null,
+    /** Apple 이 이 거래 정보를 서명한 시각. 같은 거래의 알림이 순서가 바뀌어 와도 최신 상태를 가리는 기준이다. */
+    val signedDate: Instant? = null,
 )
