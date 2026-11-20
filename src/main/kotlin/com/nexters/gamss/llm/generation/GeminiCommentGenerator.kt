@@ -92,7 +92,7 @@ class GeminiCommentGenerator(
                     e.kind,
                 )
             }
-        return CommentGenerationOutput(feed, usedTokens, cachedTokens, inputTokens, outputTokens)
+        return CommentGenerationOutput(feed, usedTokens, cachedTokens, inputTokens, outputTokens, settings.model, settings.promptVersions)
     }
 
     override fun generateReply(context: ReplyPromptContext): ReplyGenerationOutput {
@@ -147,7 +147,15 @@ class GeminiCommentGenerator(
                     e.kind,
                 )
             }
-        return ReplyGenerationOutput(replyText, usedTokens, cachedTokens, inputTokens, outputTokens)
+        return ReplyGenerationOutput(
+            replyText,
+            usedTokens,
+            cachedTokens,
+            inputTokens,
+            outputTokens,
+            settings.model,
+            settings.promptVersions,
+        )
     }
 
     private fun buildConfig(

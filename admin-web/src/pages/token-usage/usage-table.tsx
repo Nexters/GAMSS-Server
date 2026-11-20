@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatKrw, formatUsd, USD_TO_KRW_LABEL } from '@/lib/currency'
 import { formatDateTime } from '@/lib/format'
+import { ConversationThreadPanel } from '@/components/conversation-thread-panel'
 
 interface ConversationUsage {
   conversationId: number
@@ -127,6 +128,7 @@ function NotificationCell({
 
 export function UsageTable() {
   const [current, setCurrent] = useState(1)
+  const [openConversationId, setOpenConversationId] = useState<number | null>(null)
 
   const { data, isLoading } = useList<ConversationUsage>({
     resource: 'conversation-usage',
@@ -144,7 +146,7 @@ export function UsageTable() {
       <div className="border-b px-4 py-3">
         <p className="text-sm font-medium">대화방별 사용량</p>
         <p className="text-xs text-muted-foreground">
-          모든 대화방(prod, dev)의 메시지 수, 카드 생성 여부, 소비 토큰, 예상 비용, 새벽 알림 발송 결과를 최신순으로 봅니다. 비용은 USD 기준이며 환율 {USD_TO_KRW_LABEL}원으로 원화를 함께 표기합니다. 대화방 귀속 정보가 없던 이전 기록의 토큰은 집계되지 않고, 알림 이력을 남기기 이전 회차는 알림 칸이 비어 있습니다.
+          모든 대화방(prod, dev)의 메시지 수, 카드 생성 여부, 소비 토큰, 예상 비용, 새벽 알림 발송 결과를 최신순으로 봅니다. 비용은 USD 기준이며 환율 {USD_TO_KRW_LABEL}원으로 원화를 함께 표기합니다. 대화방 귀속 정보가 없던 이전 기록의 토큰은 집계되지 않고, 알림 이력을 남기기 이전 회차는 알림 칸이 비어 있습니다. 행을 누르면 대화 원문을 볼 수 있습니다(열람 기록이 남습니다).
         </p>
       </div>
 
@@ -196,7 +198,12 @@ export function UsageTable() {
                 const reminderNotTargetMeta = reminderNotTarget(row.status, row.endedBy)
                 const cardNotTargetMeta = cardNotTarget(row.cardCreated, row.cardCreatedBy)
                 return (
-                  <TableRow key={row.conversationId} className="hover:bg-transparent">
+                  <TableRow
+                    key={row.conversationId}
+                    onClick={() => setOpenConversationId(row.conversationId)}
+                    className={openConversationId === row.conversationId ? 'cursor-pointer bg-muted' : 'cursor-pointer'}
+                    title="눌러서 대화 원문 보기"
+                  >
                     <TableCell className="font-mono text-xs text-muted-foreground">{row.conversationId}</TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">{row.memberId}</TableCell>
                     <TableCell className="max-w-64 truncate">
@@ -276,6 +283,13 @@ export function UsageTable() {
           </Button>
         </div>
       </div>
+      {openConversationId !== null && (
+        <ConversationThreadPanel
+          key={openConversationId}
+          conversationId={openConversationId}
+          onClose={() => setOpenConversationId(null)}
+        />
+      )}
     </Card>
   )
 }

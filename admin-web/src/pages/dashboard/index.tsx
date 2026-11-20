@@ -1,19 +1,11 @@
 import { Suspense, lazy } from 'react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PageHeader } from '@/components/page-header'
+import { SectionTitle } from '@/components/section-title'
 
 // 차트(recharts)는 무거워서 지연 로드해 초기·로그인 번들에서 제외한다.
 const UsageSection = lazy(() => import('./usage-section').then((m) => ({ default: m.UsageSection })))
 const QualitySection = lazy(() => import('./quality-section').then((m) => ({ default: m.QualitySection })))
-
-function SectionTitle({ title, description }: { title: string; description: string }) {
-  return (
-    <div className="space-y-0.5">
-      <h2 className="text-sm font-semibold tracking-tight text-foreground">{title}</h2>
-      <p className="text-xs text-muted-foreground">{description}</p>
-    </div>
-  )
-}
 
 export function DashboardPage() {
   return (

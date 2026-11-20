@@ -40,6 +40,7 @@ class GenerationLogRecorder(
         inputTokens: Int? = null,
         outputTokens: Int? = null,
         failureReason: String? = null,
+        model: String? = null,
     ) {
         // 메트릭을 DB 저장보다 먼저 올린다 — DB 가 흔들려 로그 저장이 실패하는 상황이야말로
         // 관측이 가장 필요한 순간이라, 저장 성공 여부에 메트릭을 묶지 않는다.
@@ -49,7 +50,7 @@ class GenerationLogRecorder(
             generationLogRepository.save(
                 GenerationLog(
                     generationType = type,
-                    model = llmSettingsService.currentModel(),
+                    model = model ?: llmSettingsService.currentModel(),
                     memberId = memberId,
                     conversationId = conversationId,
                     success = success,

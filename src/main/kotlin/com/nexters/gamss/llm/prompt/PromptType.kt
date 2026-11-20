@@ -35,4 +35,7 @@ enum class PromptType {
      * ([com.nexters.gamss.llm.generation.GeminiEmotionExtractor]).
      */
     CARD_EMOTION,
+
+    /** 캐릭터 응답의 자연스러움 채점(#255). 단독으로 쓰고, 이 행의 model 이 채점 모델이다. */
+    QUALITY_JUDGE,
 }

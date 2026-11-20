@@ -1,4 +1,5 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useCustomMutation } from '@refinedev/core'
 import {
   AlertTriangle,
@@ -14,6 +15,7 @@ import {
   X,
 } from 'lucide-react'
 import type { PreviewResult, ReplyPreviewResult } from '@/types/promptPreview'
+import type { PlaygroundInput } from '@/lib/quality'
 import { ApiError } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -180,6 +182,9 @@ export function PromptPlaygroundPage() {
   const [requestError, setRequestError] = useState<string | null>(null)
 
   const { mutate: run, isLoading: running } = useCustomMutation()
+  const location = useLocation()
+  const prefill = (location.state as { prefill?: PlaygroundInput } | null)?.prefill
+  const prefilled = useRef(false)
 
   // 말풍선 id는 단조 증가 카운터로 발급한다 - 세션 길이 기반 오프셋은 길어지면 충돌한다.
   const idRef = useRef(0)
@@ -187,6 +192,35 @@ export function PromptPlaygroundPage() {
     idRef.current += 1
     return idRef.current
   }
+
+  // 대화 품질 화면의 [실험실에서 열기]로 들어오면 그 응답을 만든 입력으로 채운다.
+  useEffect(() => {
+    if (!prefill || prefilled.current) {
+      return
+    }
+    prefilled.current = true
+    window.scrollTo({ top: 0 })
+    setTab('feed')
+    setDiary(prefill.diary)
+    setSummary(prefill.summary ?? '')
+    setSelected(prefill.characters)
+    setTikitaka(prefill.characters.length >= 2 ? prefill.tikitakaCount : 0)
+    if (prefill.kind === 'REPLY' && prefill.character && prefill.characterComment) {
+      const diaryItem: SessionItem = { id: nextId(), kind: 'user', text: prefill.diary }
+      const commentItem: SessionItem = {
+        id: nextId(),
+        kind: 'character',
+        text: prefill.characterComment,
+        characterId: prefill.character,
+        diary: prefill.diary,
+      }
+      setSession([diaryItem, commentItem])
+      setReplyTarget(commentItem)
+      setComposer(prefill.userReply ?? '')
+    }
+    // nextId 는 ref 기반이라 의존성에 넣지 않는다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill])
 
   // updater는 순수해야 하므로(StrictMode 이중 호출) setTikitaka는 updater 밖에서 부른다.
   const toggleCharacter = (value: Emotion) => {
@@ -402,6 +436,14 @@ export function PromptPlaygroundPage() {
         title="프롬프트 실험실"
         description="저장하기 전에 프롬프트를 실제 LLM으로 시험합니다. 프롬프트는 저장되지 않으며, 호출마다 소액의 비용이 발생합니다(비용은 생성 로그에 PREVIEW로 기록)."
       />
+
+      {prefill && (
+        <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs text-muted-foreground">
+          대화 품질에서 가져온 {prefill.kind === 'REPLY' ? '답글' : '댓글'} 입력으로 채웠습니다.
+          {prefill.kind === 'REPLY' ? ' 아래 대화에서 답장을 보내면 그 캐릭터가 다시 응답합니다.' : ' 실험 시작을 누르면 같은 일기로 다시 생성합니다.'}{' '}
+          과거 대화 요약과 엉뚱이 소재는 생성 때마다 무작위로 골라서, 같은 입력이어도 같은 결과가 나오지 않을 수 있습니다.
+        </div>
+      )}
 
       <div className="space-y-2">
         <SegmentedTabs value={tab} onChange={setTab} options={EXPERIMENTS} />

@@ -33,6 +33,11 @@ class LlmSettings(
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long = 0L
 
+    /** 현재 프롬프트의 리비전 버전. 생성마다 max 조회를 하지 않으려고 저장 시 함께 적는다. */
+    @Column(name = "prompt_version")
+    var promptVersion: Int? = null
+        protected set
+
     @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     var updatedAt: Instant = Instant.now()
@@ -44,5 +49,13 @@ class LlmSettings(
     ) {
         this.model = model
         this.systemPrompt = systemPrompt
+    }
+
+    fun updatePrompt(
+        systemPrompt: String,
+        version: Int,
+    ) {
+        this.systemPrompt = systemPrompt
+        this.promptVersion = version
     }
 }

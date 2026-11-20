@@ -48,7 +48,12 @@ class PromptRevisionConcurrencyIntegrationTest {
 
     @BeforeEach
     fun snapshot() {
-        settingsSnapshot = llmSettingsRepository.findAll().map { LlmSettings(it.promptType, it.model, it.systemPrompt) }
+        settingsSnapshot =
+            llmSettingsRepository.findAll().map { row ->
+                LlmSettings(row.promptType, row.model, row.systemPrompt).also { copy ->
+                    row.promptVersion?.let { copy.updatePrompt(row.systemPrompt, it) }
+                }
+            }
         revisionSnapshot =
             promptRevisionRepository.findAll().map {
                 PromptRevision(it.promptType, it.version, it.systemPrompt, it.savedBy, it.restoredFromVersion)

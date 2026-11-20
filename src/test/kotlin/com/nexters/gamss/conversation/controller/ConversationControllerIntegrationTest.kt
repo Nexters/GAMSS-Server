@@ -9,9 +9,11 @@ import com.nexters.gamss.conversation.domain.ConversationEndedBy
 import com.nexters.gamss.conversation.domain.ConversationStatus
 import com.nexters.gamss.conversation.domain.ExcludedEmotionTypes
 import com.nexters.gamss.conversation.domain.Message
+import com.nexters.gamss.conversation.domain.ResponseKind
 import com.nexters.gamss.conversation.domain.SenderType
 import com.nexters.gamss.conversation.repository.ConversationRepository
 import com.nexters.gamss.conversation.repository.MessageRepository
+import com.nexters.gamss.conversation.repository.ResponseGenerationRepository
 import com.nexters.gamss.emotion.domain.EmotionType
 import com.nexters.gamss.global.security.JwtIssuer
 import com.nexters.gamss.llm.generation.CommentGenerator
@@ -65,6 +67,9 @@ class ConversationControllerIntegrationTest {
 
     @Autowired
     private lateinit var cardRepository: CardRepository
+
+    @Autowired
+    private lateinit var responseGenerationRepository: ResponseGenerationRepository
 
     @Autowired
     private lateinit var jwtIssuer: JwtIssuer
@@ -293,6 +298,38 @@ class ConversationControllerIntegrationTest {
                 jsonPath("$.data.comments.length()") { value(greaterThan(0)) }
                 jsonPath("$.data.usedTokens") { value(10) }
             }
+    }
+
+    @Test
+    fun `댓글과 재응답을 생성하면 트리거 메시지별로 모델과 프롬프트 버전이 남는다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val conversation = conversationRepository.save(Conversation(member.id))
+
+        mockMvc.post("/api/conversations/messages") {
+            header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"conversationId":${conversation.id},"content":"오늘 억울한 일이 있었어"}"""
+        }
+        val messages = messageRepository.findAllByConversationIdOrderByIdAsc(conversation.id)
+        val diary = messages.first { it.senderType == SenderType.USER }
+        val comment = messages.first { it.senderType == SenderType.CHARACTER }
+        mockMvc.post("/api/conversations/messages") {
+            header(HttpHeaders.AUTHORIZATION, bearerFor(member))
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"conversationId":${conversation.id},"content":"고마워","repliesToMessageId":${comment.id}}"""
+        }
+        val reply = messageRepository.findAllByConversationIdOrderByIdAsc(conversation.id).last { it.senderType == SenderType.USER }
+
+        val generations =
+            responseGenerationRepository
+                .findByTriggerMessageIdIn(
+                    listOf(diary.id, reply.id),
+                ).associateBy { it.triggerMessageId }
+        assertEquals(ResponseKind.COMMENT, generations.getValue(diary.id).kind)
+        assertEquals(2, generations.getValue(diary.id).typePromptVersion)
+        assertEquals(ResponseKind.REPLY, generations.getValue(reply.id).kind)
+        assertEquals(3, generations.getValue(reply.id).typePromptVersion)
+        assertEquals(FakeCommentGenerator.MODEL, generations.getValue(reply.id).model)
     }
 
     @Test
