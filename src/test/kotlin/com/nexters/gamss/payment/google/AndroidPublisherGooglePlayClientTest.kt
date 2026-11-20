@@ -1,5 +1,6 @@
 package com.nexters.gamss.payment.google
 
+import com.google.api.client.http.GenericUrl
 import com.google.api.client.http.LowLevelHttpRequest
 import com.google.api.client.http.LowLevelHttpResponse
 import com.google.api.client.json.gson.GsonFactory
@@ -104,6 +105,114 @@ class AndroidPublisherGooglePlayClientTest {
 
         respond = { json(200, """{ "purchaseStateContext": { "purchaseState": "CANCELLED" } }""") }
         assertEquals(GooglePurchaseState.CANCELLED, client.getPurchase("tok").purchaseState)
+    }
+
+    /** 두 필드를 바꿔 읽으면 실패하도록 수량과 환불 가능 수량을 다른 값으로 둔다. */
+    @Test
+    fun `구매 조회의 환불 가능 수량을 옮긴다`() {
+        respond = {
+            json(
+                200,
+                """
+                { "productLineItem": [
+                    { "productId": "token_300000",
+                      "productOfferDetails": { "quantity": 3, "refundableQuantity": 1, "consumptionState": "CONSUMPTION_STATE_CONSUMED" } }
+                ] }
+                """.trimIndent(),
+            )
+        }
+
+        assertEquals(
+            GooglePurchaseLineItem("token_300000", 3, GoogleConsumptionState.CONSUMED, 1),
+            client.getPurchase("tok").lineItems.single(),
+        )
+    }
+
+    @Test
+    fun `환불 목록은 인앱 상품만, 부분 환불까지 한 페이지씩 조회한다`() {
+        respond = { json(200, "{}") }
+
+        client.listVoidedPurchases(Instant.ofEpochMilli(1_111), Instant.ofEpochMilli(2_222), null)
+        client.listVoidedPurchases(Instant.ofEpochMilli(1_111), Instant.ofEpochMilli(2_222), "next-page")
+
+        val (first, second) = requests.map { GenericUrl(it.second) }
+        assertEquals(listOf("GET", "GET"), requests.map { it.first })
+        assertTrue(first.rawPath.endsWith("/applications/$PACKAGE_NAME/purchases/voidedpurchases"))
+        assertEquals("1111", first.getFirst("startTime"))
+        assertEquals("2222", first.getFirst("endTime"))
+        assertEquals("0", first.getFirst("type"))
+        assertEquals("true", first.getFirst("includeQuantityBasedPartialRefund"))
+        assertEquals("1000", first.getFirst("maxResults"))
+        assertNull(first.getFirst("token"))
+        assertEquals("next-page", second.getFirst("token"))
+    }
+
+    /** 구매 시각과 취소 시각을 다른 값으로 둬야 둘을 바꿔 읽는 실수가 잡힌다. */
+    @Test
+    fun `환불 목록 응답을 옮기고, 토큰이나 취소 시각이 없는 항목은 ERROR 를 남기고 건너뛴다`(output: CapturedOutput) {
+        respond = {
+            json(
+                200,
+                """
+                {
+                  "tokenPagination": { "nextPageToken": "next-page" },
+                  "voidedPurchases": [
+                    { "purchaseToken": "tok", "orderId": "GPA.1", "purchaseTimeMillis": "1000", "voidedTimeMillis": "2000",
+                      "voidedSource": 0, "voidedReason": 8, "voidedQuantity": 2 },
+                    { "orderId": "GPA.DROPPED-0001", "voidedTimeMillis": "3000" },
+                    { "purchaseToken": "tok-no-time", "orderId": "GPA.DROPPED-0002" }
+                  ]
+                }
+                """.trimIndent(),
+            )
+        }
+
+        val page = client.listVoidedPurchases(Instant.ofEpochMilli(1), Instant.ofEpochMilli(2), null)
+
+        assertEquals(GoogleVoidedPurchase("tok", "GPA.1", Instant.ofEpochMilli(2_000), 0, 8, 2), page.items.single())
+        assertEquals("next-page", page.nextPageToken)
+        assertTrue(output.out.lines().any { "ERROR" in it && "GPA.DROPPED-0001" in it })
+        assertTrue(output.out.lines().any { "ERROR" in it && "GPA.DROPPED-0002" in it })
+    }
+
+    @Test
+    fun `다음 페이지 토큰이 없거나 비어 있으면 마지막 페이지다`() {
+        respond = { json(200, """{ "tokenPagination": { "nextPageToken": "" } }""") }
+        val blank = client.listVoidedPurchases(Instant.ofEpochMilli(1), Instant.ofEpochMilli(2), null)
+
+        respond = { json(200, "{}") }
+        val missing = client.listVoidedPurchases(Instant.ofEpochMilli(1), Instant.ofEpochMilli(2), null)
+
+        assertTrue(blank.items.isEmpty())
+        assertNull(blank.nextPageToken)
+        assertNull(missing.nextPageToken)
+    }
+
+    @Test
+    fun `환불 목록 조회의 오류도 같은 규칙으로 바꾼다`() {
+        respond = { json(400, ERROR_BODY) }
+        assertEquals(
+            ErrorCode.PURCHASE_INVALID,
+            assertFailsWith<BusinessException> {
+                client.listVoidedPurchases(
+                    Instant.ofEpochMilli(1),
+                    Instant.ofEpochMilli(2),
+                    null,
+                )
+            }.errorCode,
+        )
+
+        respond = { json(403, ERROR_BODY) }
+        assertEquals(
+            ErrorCode.PAYMENT_STORE_UNAVAILABLE,
+            assertFailsWith<BusinessException> {
+                client.listVoidedPurchases(
+                    Instant.ofEpochMilli(1),
+                    Instant.ofEpochMilli(2),
+                    null,
+                )
+            }.errorCode,
+        )
     }
 
     @Test

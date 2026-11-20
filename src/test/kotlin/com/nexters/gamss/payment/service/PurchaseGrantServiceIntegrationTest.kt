@@ -263,7 +263,7 @@ class PurchaseGrantServiceIntegrationTest {
             listOf(
                 { grantService.grant(BUYER, tx2) },
                 { grantService.grantFromStoreNotification(tx3) },
-                { grantService.applyRefund(PaymentPlatform.APPLE, KEY, 300_000, "refund") },
+                { grantService.applyRefund(PaymentPlatform.APPLE, KEY, 300_000, "refund", allowReversal = true) },
             ).forEach { call ->
                 val error = assertFailsWith<IllegalStateException> { call() }
                 assertTrue("트랜잭션 안에서 부를 수 없습니다" in error.message.orEmpty(), error.message)
@@ -279,8 +279,8 @@ class PurchaseGrantServiceIntegrationTest {
     fun `같은 회수 목표로 두 번 불러도 한 번만 회수한다`() {
         grantService.grant(BUYER, purchase())
 
-        val first = grantService.applyRefund(PaymentPlatform.APPLE, KEY, 300_000, "notification-1")
-        val second = grantService.applyRefund(PaymentPlatform.APPLE, KEY, 300_000, "notification-2")
+        val first = grantService.applyRefund(PaymentPlatform.APPLE, KEY, 300_000, "notification-1", allowReversal = true)
+        val second = grantService.applyRefund(PaymentPlatform.APPLE, KEY, 300_000, "notification-2", allowReversal = true)
 
         assertEquals(300_000, first.changedTokens)
         assertEquals(0, second.changedTokens)
@@ -292,14 +292,34 @@ class PurchaseGrantServiceIntegrationTest {
     fun `전액 환불 후 환불 취소를 하면 원래 잔액으로 돌아온다`() {
         grantService.grant(BUYER, purchase())
 
-        grantService.applyRefund(PaymentPlatform.APPLE, KEY, 300_000, "refund")
-        val reversed = grantService.applyRefund(PaymentPlatform.APPLE, KEY, 0, "reversal")
+        grantService.applyRefund(PaymentPlatform.APPLE, KEY, 300_000, "refund", allowReversal = true)
+        val reversed = grantService.applyRefund(PaymentPlatform.APPLE, KEY, 0, "reversal", allowReversal = true)
 
         assertEquals(-300_000, reversed.changedTokens)
         assertEquals(0, reversed.refundedTokens)
         assertEquals(300_000, walletReader.balanceOf(BUYER))
         assertEquals(TokenLedgerType.REFUND, ledgerRepository.findByRefId("refund:APPLE:tx-1:refund")?.type)
         assertEquals(TokenLedgerType.REFUND_REVERSED, ledgerRepository.findByRefId("refund:APPLE:tx-1:reversal")?.type)
+    }
+
+    /**
+     * 환불 취소 알림이 없는 스토어(Google)는 [PurchaseGrantService.applyRefund] 의 `allowReversal` 을 끄고 부른다. 그러면
+     * 지금 회수량보다 작은 목표는 환불 취소가 아니라 늦게 도착한 목표로 보고 아무것도 바꾸지 않는다. 동작은 플랫폼이 아니라
+     * 이 값으로 정해지므로 Apple 결제로 확인한다.
+     */
+    @Test
+    fun `환불 취소를 허용하지 않으면 지금 회수량보다 작은 목표는 아무것도 바꾸지 않는다`() {
+        grantService.grant(BUYER, purchase())
+        val first = grantService.applyRefund(PaymentPlatform.APPLE, KEY, 300_000, "refund", allowReversal = false)
+
+        val stale = grantService.applyRefund(PaymentPlatform.APPLE, KEY, 100_000, "stale", allowReversal = false)
+
+        assertEquals(300_000, first.changedTokens)
+        assertEquals(0, stale.changedTokens)
+        assertEquals(300_000, stale.refundedTokens)
+        assertEquals(0, walletReader.balanceOf(BUYER))
+        assertNull(ledgerRepository.findByRefId("refund:APPLE:tx-1:stale"))
+        assertTrue(ledgerRepository.findAll().none { it.type == TokenLedgerType.REFUND_REVERSED })
     }
 
     @Test
@@ -309,7 +329,7 @@ class PurchaseGrantServiceIntegrationTest {
             TokenWalletChange(subjectKey = BUYER_SUBJECT, type = TokenLedgerType.CONSUME, amount = TokenAmount(200_000), refId = null),
         )
 
-        grantService.applyRefund(PaymentPlatform.APPLE, KEY, 300_000, "refund")
+        grantService.applyRefund(PaymentPlatform.APPLE, KEY, 300_000, "refund", allowReversal = true)
 
         assertEquals(-200_000, walletReader.balanceOf(BUYER))
     }
@@ -317,10 +337,10 @@ class PurchaseGrantServiceIntegrationTest {
     @Test
     fun `잔액을 바꾼 환불 출처는 환불 취소 뒤 다시 와도 결제 기록과 잔액을 바꾸지 않는다`() {
         grantService.grant(BUYER, purchase())
-        grantService.applyRefund(PaymentPlatform.APPLE, KEY, 300_000, "n1")
-        grantService.applyRefund(PaymentPlatform.APPLE, KEY, 0, "n2")
+        grantService.applyRefund(PaymentPlatform.APPLE, KEY, 300_000, "n1", allowReversal = true)
+        grantService.applyRefund(PaymentPlatform.APPLE, KEY, 0, "n2", allowReversal = true)
 
-        val replayed = grantService.applyRefund(PaymentPlatform.APPLE, KEY, 300_000, "n1")
+        val replayed = grantService.applyRefund(PaymentPlatform.APPLE, KEY, 300_000, "n1", allowReversal = true)
 
         assertEquals(0, replayed.changedTokens)
         assertEquals(0, replayed.refundedTokens)
@@ -336,11 +356,11 @@ class PurchaseGrantServiceIntegrationTest {
     @Test
     fun `차이 0 으로 끝난 환불 출처는 기억하지 않아 환불 취소 뒤 다시 오면 다시 회수한다`() {
         grantService.grant(BUYER, purchase())
-        grantService.applyRefund(PaymentPlatform.APPLE, KEY, 300_000, "batch-1")
-        assertEquals(0, grantService.applyRefund(PaymentPlatform.APPLE, KEY, 300_000, "n1").changedTokens)
-        grantService.applyRefund(PaymentPlatform.APPLE, KEY, 0, "n2")
+        grantService.applyRefund(PaymentPlatform.APPLE, KEY, 300_000, "batch-1", allowReversal = true)
+        assertEquals(0, grantService.applyRefund(PaymentPlatform.APPLE, KEY, 300_000, "n1", allowReversal = true).changedTokens)
+        grantService.applyRefund(PaymentPlatform.APPLE, KEY, 0, "n2", allowReversal = true)
 
-        val again = grantService.applyRefund(PaymentPlatform.APPLE, KEY, 300_000, "n1")
+        val again = grantService.applyRefund(PaymentPlatform.APPLE, KEY, 300_000, "n1", allowReversal = true)
 
         assertEquals(300_000, again.changedTokens)
         assertEquals(0, walletReader.balanceOf(BUYER))
@@ -349,10 +369,10 @@ class PurchaseGrantServiceIntegrationTest {
     @Test
     fun `전액 환불 뒤 옛 부분 환불 알림이 다시 와도 실패하지 않고 아무것도 바꾸지 않는다`() {
         grantService.grant(BUYER, purchase())
-        grantService.applyRefund(PaymentPlatform.APPLE, KEY, 100_000, "partial")
-        grantService.applyRefund(PaymentPlatform.APPLE, KEY, 300_000, "full")
+        grantService.applyRefund(PaymentPlatform.APPLE, KEY, 100_000, "partial", allowReversal = true)
+        grantService.applyRefund(PaymentPlatform.APPLE, KEY, 300_000, "full", allowReversal = true)
 
-        val replayed = grantService.applyRefund(PaymentPlatform.APPLE, KEY, 100_000, "partial")
+        val replayed = grantService.applyRefund(PaymentPlatform.APPLE, KEY, 100_000, "partial", allowReversal = true)
 
         assertEquals(0, replayed.changedTokens)
         assertEquals(300_000, replayed.refundedTokens)
@@ -366,12 +386,15 @@ class PurchaseGrantServiceIntegrationTest {
      */
     @Test
     fun `결제보다 먼저 온 환불은 찾지 못하고 지급 뒤 같은 출처로 다시 오면 회수한다`() {
-        val error = assertFailsWith<BusinessException> { grantService.applyRefund(PaymentPlatform.APPLE, KEY, 300_000, "refund-1") }
+        val error =
+            assertFailsWith<BusinessException> {
+                grantService.applyRefund(PaymentPlatform.APPLE, KEY, 300_000, "refund-1", allowReversal = true)
+            }
         assertEquals(ErrorCode.PAYMENT_NOT_FOUND, error.errorCode)
         assertEquals(0, ledgerRepository.count())
 
         grantService.grant(BUYER, purchase())
-        val retried = grantService.applyRefund(PaymentPlatform.APPLE, KEY, 300_000, "refund-1")
+        val retried = grantService.applyRefund(PaymentPlatform.APPLE, KEY, 300_000, "refund-1", allowReversal = true)
 
         assertEquals(300_000, retried.changedTokens)
         assertEquals(0, walletReader.balanceOf(BUYER))

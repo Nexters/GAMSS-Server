@@ -48,8 +48,8 @@ interface PaymentRepository : JpaRepository<Payment, Long> {
      * consume 재시도 대상. 오래된 것부터 [pageable] 크기만큼 가져온다.
      *
      * [purchasedAfter] 보다 오래된 구매는 Google 이 이미 자동 환불했을 것이라 consume 할 수 없다. 이
-     * 조건이 없으면 그런 행이 영원히 대상으로 남는다. [createdBefore] 는 막 지급돼 앱 요청 경로가 아직
-     * consume 하고 있을 행을 건너뛰려는 것이다.
+     * 조건이 없으면 그런 행이 영원히 대상으로 남는다. [createdBefore] 는 막 지급돼 앱 요청 경로나 RTDN
+     * 웹훅(#246)이 아직 consume 하고 있을 행을 건너뛰려는 것이다.
      */
     @Query(
         "select p from Payment p where p.platform = :platform and p.consumedAt is null " +

@@ -82,12 +82,32 @@ class Payment(
      * 아무것도 하지 않는다. 그래서 웹훅과 대사 배치가 같은 환불을 겹쳐 들고 와도 한 번만 반영된다.
      */
     fun refundTo(targetRefundedTokens: Long): Long {
-        require(targetRefundedTokens in 0..grantedTokens) {
-            "회수 목표는 0 이상 지급량($grantedTokens) 이하여야 합니다: $targetRefundedTokens"
-        }
+        requireRefundTarget(targetRefundedTokens)
         val delta = targetRefundedTokens - refundedTokens
         refundedTokens = targetRefundedTokens
         return delta
+    }
+
+    /**
+     * 회수량을 [targetRefundedTokens] 까지 올리기만 하고, 바뀐 양을 돌려준다. 이미 그만큼 회수했거나 더 회수했으면
+     * 아무것도 하지 않고 0 을 돌려준다.
+     *
+     * 환불을 되돌리는 알림이 없는 스토어(Google)가 쓴다. 목표를 결제 행을 잠그기 전에 계산하면, 그 사이 다른 출처가 더
+     * 많이 회수해 커밋한 뒤에 작은 목표가 도착할 수 있다. 이 목표를 [refundTo] 에 넘기면 음수 차이가 나오고, 부르는 쪽이
+     * 이를 환불 취소로 반영해 회수한 토큰을 돌려주게 된다.
+     */
+    fun raiseRefundTo(targetRefundedTokens: Long): Long {
+        requireRefundTarget(targetRefundedTokens)
+        if (targetRefundedTokens <= refundedTokens) {
+            return 0
+        }
+        return refundTo(targetRefundedTokens)
+    }
+
+    private fun requireRefundTarget(targetRefundedTokens: Long) {
+        require(targetRefundedTokens in 0..grantedTokens) {
+            "회수 목표는 0 이상 지급량($grantedTokens) 이하여야 합니다: $targetRefundedTokens"
+        }
     }
 
     fun purchaseRefId(): String = "$PURCHASE_REF_PREFIX:$platform:$storeTransactionKey"

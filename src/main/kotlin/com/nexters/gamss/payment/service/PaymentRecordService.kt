@@ -3,6 +3,8 @@ package com.nexters.gamss.payment.service
 import com.nexters.gamss.global.exception.BusinessException
 import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.payment.domain.Payment
+import com.nexters.gamss.payment.domain.PaymentAccountToken
+import com.nexters.gamss.payment.domain.PaymentEnvironment
 import com.nexters.gamss.payment.domain.PaymentPlatform
 import com.nexters.gamss.payment.domain.StoreTransactionKey
 import com.nexters.gamss.payment.domain.VerifiedPurchase
@@ -66,6 +68,9 @@ class PaymentRecordService(
      * 이미 반영한 출처([sourceId])가 다시 오면 목표와 관계없이 아무것도 하지 않는다. 환불 뒤 환불 취소까지
      * 반영된 상태에서 옛 환불 알림이 다시 오면, 목표만 보고는 다시 회수해야 하는 것처럼 보인다. 그런데
      * 원장은 같은 멱등 키를 재요청으로 보고 잔액을 그대로 두므로, 결제 기록만 바뀌어 둘이 어긋난다.
+     *
+     * [allowReversal] 이 false 면 잠근 결제의 지금 회수량보다 작은 목표는 무시한다([Payment.raiseRefundTo]). 잠근 뒤에
+     * 비교해야, 잠그기 전에 계산한 목표가 그 사이 커밋된 회수보다 늦게 와도 걸러진다.
      */
     @Transactional
     fun applyRefund(
@@ -73,6 +78,7 @@ class PaymentRecordService(
         storeTransactionKey: StoreTransactionKey,
         targetRefundedTokens: Long,
         sourceId: String,
+        allowReversal: Boolean,
     ): RefundResult {
         val payment =
             paymentRepository.findByPlatformAndStoreTransactionKeyForUpdate(platform, storeTransactionKey.value)
@@ -81,7 +87,7 @@ class PaymentRecordService(
         if (walletReader.isApplied(refId)) {
             return RefundResult(paymentId = payment.id, refundedTokens = payment.refundedTokens, changedTokens = 0)
         }
-        val delta = payment.refundTo(targetRefundedTokens)
+        val delta = if (allowReversal) payment.refundTo(targetRefundedTokens) else payment.raiseRefundTo(targetRefundedTokens)
         if (delta != 0L) {
             val result = walletService.apply(refundChange(payment, delta, refId))
             check(!result.replayed) { "반영 이력이 없던 환불 출처가 재요청으로 처리됐습니다: refId=$refId" }
@@ -96,6 +102,11 @@ class PaymentRecordService(
      *
      * 요청한 회원의 주체 매핑이 없으면 그보다 먼저 [PaymentAccountService.requesterSubjectKey] 가
      * 거부한다. 탈퇴 회원이거나 서버 쪽 문제라 이 구매의 주인 판단과는 별개다.
+     *
+     * Google RTDN 으로 온 테스트 구매(SANDBOX)인데 계정 토큰이 형식은 맞고 주인만 모르면 WARN 으로 낮춘다. RTDN 토픽은
+     * 패키지당 하나라 prod 구독도 dev 빌드에서 한 라이선스 테스터 구매를 받는데, 계정 토큰은 환경마다 따로 발급되므로
+     * prod 에서는 주인을 찾지 못한다. 실제 돈이 오가지 않는 이 구매가 ERROR 에 섞이면 진짜 수동 처리 건을 가린다.
+     * Apple 은 환경마다 알림 URL 이 따로라 사정이 달라 넣지 않았다. 필요하면 Apple 알림(#245)에서 정한다.
      */
     private fun ownerOf(
         purchase: VerifiedPurchase,
@@ -104,17 +115,31 @@ class PaymentRecordService(
         val owner = accountService.ownerOf(purchase.accountToken)
         val requester = requesterMemberId?.let { accountService.requesterSubjectKey(it) }
         if (owner == null) {
-            log.error(
-                "계정 토큰으로 주인을 찾지 못해 지급하지 않았습니다. 수동 처리가 필요합니다: " +
-                    "platform={}, key={}, storeOrderId={}, productId={}, quantity={}, accountTokenPresent={}, requesterMemberId={}",
-                purchase.platform,
-                purchase.storeTransactionKey,
-                purchase.storeOrderId,
-                purchase.productId,
-                purchase.quantity,
-                purchase.accountToken != null,
-                requesterMemberId,
-            )
+            if (isOtherEnvironmentTestPurchase(purchase, requesterMemberId)) {
+                log.warn(
+                    "주인을 모르는 테스트 구매라 지급하지 않았습니다. 같은 RTDN 토픽을 쓰는 다른 환경(dev 빌드)의 구매일 수 있습니다: " +
+                        "platform={}, key={}, storeOrderId={}, productId={}, environment={}",
+                    purchase.platform,
+                    purchase.storeTransactionKey,
+                    purchase.storeOrderId,
+                    purchase.productId,
+                    purchase.environment,
+                )
+            } else {
+                log.error(
+                    "계정 토큰으로 주인을 찾지 못해 지급하지 않았습니다. 수동 처리가 필요합니다: " +
+                        "platform={}, key={}, storeOrderId={}, productId={}, quantity={}, environment={}, accountTokenPresent={}, " +
+                        "requesterMemberId={}",
+                    purchase.platform,
+                    purchase.storeTransactionKey,
+                    purchase.storeOrderId,
+                    purchase.productId,
+                    purchase.quantity,
+                    purchase.environment,
+                    purchase.accountToken != null,
+                    requesterMemberId,
+                )
+            }
             throw BusinessException(if (requester == null) ErrorCode.PAYMENT_ACCOUNT_NOT_FOUND else ErrorCode.PURCHASE_ACCESS_DENIED)
         }
         if (requester != null && owner != requester) {
@@ -129,6 +154,16 @@ class PaymentRecordService(
         }
         return owner
     }
+
+    /** Google 스토어 알림 경로이고, 테스트 구매이고, 어느 GAMSS 환경이 발급한 형식의 계정 토큰이다. */
+    private fun isOtherEnvironmentTestPurchase(
+        purchase: VerifiedPurchase,
+        requesterMemberId: Long?,
+    ): Boolean =
+        requesterMemberId == null &&
+            purchase.platform == PaymentPlatform.GOOGLE &&
+            purchase.environment == PaymentEnvironment.SANDBOX &&
+            PaymentAccountToken.parseOrNull(purchase.accountToken) != null
 
     private fun replay(
         existing: Payment,

@@ -29,7 +29,7 @@ import java.time.Instant
  *
  * **대상은 구매 후 [CONSUME_WINDOW] 안의 결제로 한정한다.** 그보다 오래된 구매는 이미 자동 환불돼 consume
  * 할 수 없고, 상태를 남길 컬럼도 없어서 조건이 없으면 같은 행을 영원히 다시 조회한다. 막 만든 행은
- * 앱 요청 경로가 consume 하고 있을 수 있어 [FRESH_ROW_GRACE] 만큼 건너뛴다.
+ * 앱 요청 경로나 RTDN 웹훅(#246)이 consume 하고 있을 수 있어 [FRESH_ROW_GRACE] 만큼 건너뛴다.
  *
  * 결제 한 건의 실패가 나머지를 막지 않도록 건마다 예외를 삼킨다. 한 회차에 [BATCH_SIZE] 건까지만 본다.
  *
@@ -199,7 +199,8 @@ class GoogleConsumeRetryScheduler(
 
         /**
          * 이 시간이 지나면 새 결제를 시작하지 않는다. 결제를 시작하기 전에만 보므로, 회차는 이보다 결제 한 건(Google
-         * 호출 최대 두 번)만큼 더 걸릴 수 있다. 정상이면 50건이 몇 초 안에 끝난다.
+         * 호출 최대 세 번: 조회, consume, consume 이 거부됐을 때의 재조회)만큼 더 걸릴 수 있다. 정상이면 50건이 몇 초
+         * 안에 끝난다.
          */
         val ROUND_BUDGET: Duration = Duration.ofMinutes(2)
     }

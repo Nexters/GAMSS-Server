@@ -6,6 +6,7 @@ import com.nexters.gamss.global.security.JwtIssuer
 import com.nexters.gamss.member.domain.Member
 import com.nexters.gamss.member.repository.MemberRepository
 import com.nexters.gamss.member.repository.MemberSocialIdentityRepository
+import com.nexters.gamss.payment.domain.PaymentAccountToken
 import com.nexters.gamss.payment.domain.PaymentEnvironment
 import com.nexters.gamss.payment.domain.PaymentPlatform
 import com.nexters.gamss.payment.domain.StoreTransactionKey
@@ -42,6 +43,7 @@ import org.springframework.test.web.servlet.post
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
+import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
@@ -285,6 +287,24 @@ class GooglePurchaseApiIntegrationTest {
         assertEquals(0, paymentRepository.count())
         assertTrue(output.out.lines().any { "ERROR" in it && "계정 토큰으로 주인을 찾지 못해" in it })
         assertFalse(output.out.contains(TOKEN))
+    }
+
+    /** 앱이 직접 보낸 구매는 다른 환경의 구매일 수 없다. 테스트 구매라도 주인을 모르면 ERROR 다. */
+    @Test
+    fun `앱이 보낸 테스트 구매도 계정 토큰의 주인을 모르면 ERROR 로 남긴다`(output: CapturedOutput) {
+        google.stub(
+            TOKEN,
+            purchase(accountToken = PaymentAccountToken.of(UUID.randomUUID()).value, testPurchase = true, orderId = "GPA.APP-SANDBOX-0001"),
+        )
+
+        purchaseGoogle(buyer).andExpect {
+            status { isForbidden() }
+            jsonPath("$.error.code") { value("PURCHASE_ACCESS_DENIED") }
+        }
+
+        assertEquals(0, paymentRepository.count())
+        assertTrue(output.out.lines().any { "ERROR" in it && "계정 토큰으로 주인을 찾지 못해" in it && "GPA.APP-SANDBOX-0001" in it })
+        assertFalse(output.out.lines().any { "주인을 모르는 테스트 구매" in it })
     }
 
     @Test
