@@ -121,6 +121,25 @@ class GameRecordControllerIntegrationTest {
     }
 
     @Test
+    fun `탈퇴한 회원은 남은 토큰으로 저장할 수 없다`() {
+        val member = memberRepository.save(Member("me@a.com"))
+        val bearer = bearerFor(member)
+        memberService.withdraw(member.id)
+
+        mockMvc
+            .post(PATH) {
+                header(HttpHeaders.AUTHORIZATION, bearer)
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"score":10}"""
+            }.andExpect {
+                status { isForbidden() }
+                jsonPath("$.error.code") { value("WITHDRAWN_MEMBER") }
+            }
+
+        assertEquals(0, gameRecordRepository.count())
+    }
+
+    @Test
     fun `인증 없이 저장하면 401을 반환한다`() {
         mockMvc
             .post(PATH) {

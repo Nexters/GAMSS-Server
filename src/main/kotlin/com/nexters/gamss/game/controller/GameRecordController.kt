@@ -44,7 +44,8 @@ class GameRecordController(
                 "| UNAUTHORIZED | 401 | 인증 필요(토큰 없음·무효) |\n" +
                 "| EXPIRED_TOKEN | 401 | accessToken 만료 - 재발급 후 재시도 |\n" +
                 "| INVALID_INPUT | 400 | 지원하지 않는 게임 또는 score 누락 |\n" +
-                "| INVALID_GAME_SCORE | 400 | 음수이거나 상한(클리커 99,999)을 넘는 점수 |",
+                "| INVALID_GAME_SCORE | 400 | 음수이거나 상한(클리커 99,999)을 넘는 점수 |\n" +
+                "| WITHDRAWN_MEMBER | 403 | 탈퇴한 회원 |",
     )
     @PostMapping
     fun record(
