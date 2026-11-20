@@ -20,6 +20,6 @@ class QualityJudgeSettingService(
 
     private fun requireRow(): QualityJudgeSetting =
         repository.findById(QualityJudgeSetting.SINGLETON_ID).orElseThrow {
-            IllegalStateException("quality_judge_setting 행이 없습니다. V46 마이그레이션을 확인하세요.")
+            IllegalStateException("quality_judge_setting 행이 없습니다. V51 마이그레이션을 확인하세요.")
         }
 }
