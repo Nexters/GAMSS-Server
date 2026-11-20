@@ -19,6 +19,7 @@ import com.nexters.gamss.wallet.repository.TokenLedgerRepository
 import com.nexters.gamss.wallet.repository.TokenWalletRepository
 import com.nexters.gamss.wallet.service.TokenWalletReader
 import com.nexters.gamss.wallet.service.TokenWalletService
+import jakarta.persistence.EntityManagerFactory
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.extension.ExtendWith
@@ -28,6 +29,8 @@ import org.springframework.boot.test.system.CapturedOutput
 import org.springframework.boot.test.system.OutputCaptureExtension
 import org.springframework.context.annotation.Import
 import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.orm.jpa.EntityManagerHolder
+import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.transaction.support.TransactionTemplate
 import java.time.Instant
 import kotlin.test.Test
@@ -80,6 +83,9 @@ class PurchaseGrantServiceIntegrationTest {
 
     @Autowired
     private lateinit var transactionTemplate: TransactionTemplate
+
+    @Autowired
+    private lateinit var entityManagerFactory: EntityManagerFactory
 
     private val createdMemberIds = mutableListOf<Long>()
 
@@ -268,6 +274,35 @@ class PurchaseGrantServiceIntegrationTest {
                 val error = assertFailsWith<IllegalStateException> { call() }
                 assertTrue("트랜잭션 안에서 부를 수 없습니다" in error.message.orEmpty(), error.message)
             }
+        }
+
+        assertEquals(1, paymentRepository.count())
+        assertEquals(300_000, walletReader.balanceOf(BUYER))
+        assertEquals(1, ledgerRepository.count())
+    }
+
+    /** open-in-view 가 요청마다 하는 일을 그대로 한다(OpenEntityManagerInViewInterceptor). 트랜잭션은 열지 않는다. */
+    @Test
+    fun `EntityManager 가 묶인 스레드에서 부르면 트랜잭션이 없어도 지급과 회수를 모두 거부한다`() {
+        grantService.grant(BUYER, purchase())
+        val tx2 = purchase(key = "tx-2")
+        val tx3 = purchase(key = "tx-3")
+
+        val entityManager = entityManagerFactory.createEntityManager()
+        TransactionSynchronizationManager.bindResource(entityManagerFactory, EntityManagerHolder(entityManager))
+        try {
+            assertFalse(TransactionSynchronizationManager.isActualTransactionActive())
+            listOf(
+                { grantService.grant(BUYER, tx2) },
+                { grantService.grantFromStoreNotification(tx3) },
+                { grantService.applyRefund(PaymentPlatform.APPLE, KEY, 300_000, "refund", allowReversal = true) },
+            ).forEach { call ->
+                val error = assertFailsWith<IllegalStateException> { call() }
+                assertTrue("EntityManager 가 묶인 스레드에서 부를 수 없습니다" in error.message.orEmpty(), error.message)
+            }
+        } finally {
+            TransactionSynchronizationManager.unbindResource(entityManagerFactory)
+            entityManager.close()
         }
 
         assertEquals(1, paymentRepository.count())

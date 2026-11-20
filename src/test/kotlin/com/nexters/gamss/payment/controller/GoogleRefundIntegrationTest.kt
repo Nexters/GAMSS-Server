@@ -71,10 +71,12 @@ import kotlin.test.assertTrue
  * 캡처한 출력에는 이 테스트가 남긴 것 말고도 다른 출력(컨텍스트 기동 로그 등)이 섞일 수 있다. 그래서 로그를 확인할 때는
  * 테스트마다 고유한 orderId·messageId 로 줄을 고른다.
  *
- * open-in-view 는 운영과 같이 끈다. 켜 두면 MockMvc 요청 하나가 끝날 때까지 EntityManager 하나를 같이 써서, 회수기가 잠그기
- * 전에 읽은 결제와 잠근 뒤에 읽은 결제가 같은 객체가 된다. 그러면 잠근 뒤에 비교하는지를 테스트로 가려낼 수 없다.
+ * open-in-view 는 테스트 설정(`src/test/resources/application.yml`)이 운영과 같이 끈다. 켜 두면 MockMvc 요청 하나가 끝날 때까지
+ * EntityManager 하나를 같이 써서, 회수기가 잠그기 전에 읽은 결제와 잠근 뒤에 읽은 결제가 같은 객체가 된다. 그러면 잠근 뒤에
+ * 비교하는지를 테스트로 가려낼 수 없다. 지금은 켜지면 [com.nexters.gamss.payment.service.PurchaseGrantService] 가 지급과 회수를
+ * 거부하므로 이 테스트가 먼저 깨진다.
  */
-@SpringBootTest(properties = ["google.play.package-name=$PACKAGE", "spring.jpa.open-in-view=false"])
+@SpringBootTest(properties = ["google.play.package-name=$PACKAGE"])
 @Import(TestcontainersConfig::class, FakeGooglePlayClientConfig::class, GoogleRefundIntegrationTest.FakeAuthConfig::class)
 @ExtendWith(OutputCaptureExtension::class)
 class GoogleRefundIntegrationTest {
