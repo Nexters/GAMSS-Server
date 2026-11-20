@@ -19,7 +19,12 @@ class SignedAppleTransactionDecoderTest {
         val revokedAt = Instant.parse("2026-11-07T00:00:00Z")
         val signed =
             fixture.signedTransaction(
-                payload(quantity = 3, appAccountToken = "7F1C2A4E-3B5D-4C6E-8F90-A1B2C3D4E5F6", revocationDate = revokedAt),
+                payload(
+                    quantity = 3,
+                    appAccountToken = "7F1C2A4E-3B5D-4C6E-8F90-A1B2C3D4E5F6",
+                    revocationDate = revokedAt,
+                    revocationPercentage = 50_000,
+                ),
             )
 
         val transaction = decoder.decode(signed)
@@ -34,6 +39,8 @@ class SignedAppleTransactionDecoderTest {
                 purchaseDate = AppleJwsFixture.SIGNED_AT.minusSeconds(5),
                 revocationDate = revokedAt,
                 environment = PaymentEnvironment.PRODUCTION,
+                revocationPercentage = 50_000,
+                signedDate = AppleJwsFixture.SIGNED_AT,
             ),
             transaction,
         )
