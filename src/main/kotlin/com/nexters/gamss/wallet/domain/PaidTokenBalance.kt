@@ -11,7 +11,15 @@ class PaidTokenBalance(
         if (delta == 0L) {
             return null
         }
-        return TokenLedgerEntry(subjectKey, change.type, delta, Math.addExact(value, delta), change.refId?.value)
+        return TokenLedgerEntry(
+            subjectKey,
+            change.type,
+            delta,
+            Math.addExact(value, delta),
+            change.refId?.value,
+            change.adminNote?.adminEmail,
+            change.adminNote?.reason,
+        )
     }
 
     private fun deltaOf(change: TokenWalletChange): Long {
