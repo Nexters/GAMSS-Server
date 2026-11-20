@@ -77,6 +77,9 @@ enum class ErrorCode(
 
     // 알림
     INVALID_DEVICE_TOKEN(ErrorKind.INVALID_INPUT, "사용할 수 없는 디바이스 토큰입니다."),
+
+    // 게임
+    INVALID_GAME_SCORE(ErrorKind.INVALID_INPUT, "저장할 수 없는 게임 점수입니다."),
     ;
 
     val code: String get() = name

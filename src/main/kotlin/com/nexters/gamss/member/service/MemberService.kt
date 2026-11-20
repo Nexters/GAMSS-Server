@@ -25,6 +25,11 @@ class MemberService(
             .findById(id)
             .orElseThrow { BusinessException(ErrorCode.MEMBER_NOT_FOUND) }
 
+    /** 회원 id 별 닉네임. 없는 회원은 결과에서 빠진다. */
+    @Transactional(readOnly = true)
+    fun getNicknames(ids: Collection<Long>): Map<Long, String?> =
+        memberRepository.findAllById(ids).associate { it.id to it.nickname?.value }
+
     /** 백오피스 회원 목록. 빈 검색어는 전체 조회로, [status] null 은 모든 상태로 취급한다. */
     @Transactional(readOnly = true)
     fun search(
