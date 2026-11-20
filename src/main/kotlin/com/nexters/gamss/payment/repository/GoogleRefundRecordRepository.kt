@@ -8,7 +8,8 @@ import java.time.LocalDateTime
 import java.time.ZoneOffset
 
 /**
- * Google 환불 회수(#246)의 처리 기록 세 가지: RTDN 메시지, 대사 배치 항목, 배치의 마지막 성공 시각.
+ * Google 환불 회수(#246)의 처리 기록 두 가지: RTDN 메시지, 대사 배치 항목. 배치의 마지막 성공 시각은
+ * [PaymentJobCheckpointRepository] 가 맡는다.
  *
  * 모두 "이미 했는가"만 묻는 작은 테이블이라 엔티티 없이 SQL 로 다룬다. 기록은 같은 키가 겹쳐 와도 예외 없이
  * 끝나야 한다(같은 메시지를 두 요청이 동시에 처리한 경우 등). 처리 자체가 멱등이라 두 번째 기록은 버려도 되므로,
@@ -65,25 +66,6 @@ class GoogleRefundRecordRepository(
             voidedSource,
             voidedReason,
             utc(now),
-        )
-    }
-
-    fun lastSucceededAt(jobName: String): Instant? =
-        jdbc
-            .query("SELECT last_succeeded_at FROM payment_job_checkpoint WHERE job_name = ?", { rs, _ ->
-                rs.getObject(1, LocalDateTime::class.java).toInstant(ZoneOffset.UTC)
-            }, jobName)
-            .firstOrNull()
-
-    fun saveLastSucceededAt(
-        jobName: String,
-        succeededAt: Instant,
-    ) {
-        jdbc.update(
-            "INSERT INTO payment_job_checkpoint (job_name, last_succeeded_at) VALUES (?, ?) " +
-                "ON DUPLICATE KEY UPDATE last_succeeded_at = VALUES(last_succeeded_at)",
-            jobName,
-            utc(succeededAt),
         )
     }
 

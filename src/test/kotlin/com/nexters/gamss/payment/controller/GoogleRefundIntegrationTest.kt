@@ -14,6 +14,7 @@ import com.nexters.gamss.payment.google.GooglePushAuthenticator
 import com.nexters.gamss.payment.google.GoogleVoidedPurchase
 import com.nexters.gamss.payment.repository.GoogleRefundRecordRepository
 import com.nexters.gamss.payment.repository.PaymentAccountRepository
+import com.nexters.gamss.payment.repository.PaymentJobCheckpointRepository
 import com.nexters.gamss.payment.repository.PaymentRepository
 import com.nexters.gamss.payment.service.GoogleVoidedPurchaseReconciler
 import com.nexters.gamss.payment.service.PaymentAccountService
@@ -101,6 +102,8 @@ class GoogleRefundIntegrationTest {
     @Autowired private lateinit var reconciler: GoogleVoidedPurchaseReconciler
 
     @Autowired private lateinit var recordRepository: GoogleRefundRecordRepository
+
+    @Autowired private lateinit var checkpointRepository: PaymentJobCheckpointRepository
 
     @Autowired private lateinit var grantService: PurchaseGrantService
 
@@ -450,7 +453,7 @@ class GoogleRefundIntegrationTest {
 
         assertEquals(300_000, payment(TOKEN).refundedTokens)
         assertEquals(0, walletReader.balanceOf(buyer.id))
-        assertEquals(NOW, recordRepository.lastSucceededAt(GoogleVoidedPurchaseReconciler.JOB_NAME))
+        assertEquals(NOW, checkpointRepository.lastSucceededAt(GoogleVoidedPurchaseReconciler.JOB_NAME))
         assertEquals(NOW.epochSecond.toDouble(), lastSuccessGauge())
     }
 
@@ -613,13 +616,13 @@ class GoogleRefundIntegrationTest {
 
         assertEquals(0, payment(TOKEN_MULTI).refundedTokens)
         assertEquals(300_000, payment(TOKEN_2).refundedTokens)
-        assertNull(recordRepository.lastSucceededAt(GoogleVoidedPurchaseReconciler.JOB_NAME))
+        assertNull(checkpointRepository.lastSucceededAt(GoogleVoidedPurchaseReconciler.JOB_NAME))
 
         google.afterGetPurchase = null
         reconciler.reconcile(NOW.plus(Duration.ofHours(1)))
 
         assertEquals(600_000, payment(TOKEN_MULTI).refundedTokens)
-        assertEquals(NOW.plus(Duration.ofHours(1)), recordRepository.lastSucceededAt(GoogleVoidedPurchaseReconciler.JOB_NAME))
+        assertEquals(NOW.plus(Duration.ofHours(1)), checkpointRepository.lastSucceededAt(GoogleVoidedPurchaseReconciler.JOB_NAME))
     }
 
     @Test
@@ -629,7 +632,7 @@ class GoogleRefundIntegrationTest {
         google.listVoidedUnavailable = true
 
         assertFailsWith<RuntimeException> { reconciler.reconcile(NOW.minus(Duration.ofDays(2))) }
-        assertEquals(firstRun, recordRepository.lastSucceededAt(GoogleVoidedPurchaseReconciler.JOB_NAME))
+        assertEquals(firstRun, checkpointRepository.lastSucceededAt(GoogleVoidedPurchaseReconciler.JOB_NAME))
         assertEquals(firstRun.epochSecond.toDouble(), lastSuccessGauge())
 
         google.listVoidedUnavailable = false
@@ -659,19 +662,19 @@ class GoogleRefundIntegrationTest {
     @Test
     fun `마지막 성공이 조회 가능 범위보다 오래되면 최대 범위부터 보고 ERROR 를 남긴다`(output: CapturedOutput) {
         val stale = NOW.minus(Duration.ofDays(40))
-        recordRepository.saveLastSucceededAt(GoogleVoidedPurchaseReconciler.JOB_NAME, stale)
+        checkpointRepository.saveLastSucceededAt(GoogleVoidedPurchaseReconciler.JOB_NAME, stale)
 
         reconciler.reconcile(NOW)
 
         assertEquals(NOW.minus(GoogleVoidedPurchaseReconciler.MAX_LOOKBACK), google.listVoidedCalls.single().first)
         assertTrue(output.out.lines().any { "ERROR" in it && "조회 가능 범위보다 오래돼" in it && stale.toString() in it })
-        assertEquals(NOW, recordRepository.lastSucceededAt(GoogleVoidedPurchaseReconciler.JOB_NAME))
+        assertEquals(NOW, checkpointRepository.lastSucceededAt(GoogleVoidedPurchaseReconciler.JOB_NAME))
     }
 
     /** Hibernate 는 Instant 를 UTC 로 저장한다. 처리 기록도 같은 기준이어야 같은 순간이 같은 값으로 남는다. */
     @Test
     fun `마지막 성공 시각은 UTC 로 저장한다`() {
-        recordRepository.saveLastSucceededAt(GoogleVoidedPurchaseReconciler.JOB_NAME, Instant.parse("2026-11-12T00:00:00Z"))
+        checkpointRepository.saveLastSucceededAt(GoogleVoidedPurchaseReconciler.JOB_NAME, Instant.parse("2026-11-12T00:00:00Z"))
 
         assertEquals(
             "2026-11-12 00:00:00",
