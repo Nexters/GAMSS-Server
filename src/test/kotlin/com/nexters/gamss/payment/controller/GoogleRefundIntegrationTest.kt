@@ -208,7 +208,7 @@ class GoogleRefundIntegrationTest {
 
         val payment = assertNotNull(paymentOrNull(TOKEN))
         assertNotNull(payment.consumedAt)
-        assertEquals(listOf("token_300000" to TOKEN), google.consumeCalls)
+        assertEquals(listOf("token_300k" to TOKEN), google.consumeCalls)
         assertEquals(300_000, walletReader.balanceOf(buyer.id))
     }
 
@@ -701,7 +701,7 @@ class GoogleRefundIntegrationTest {
                 platform = PaymentPlatform.GOOGLE,
                 storeTransactionKey = StoreTransactionKey.ofGooglePurchaseToken(TOKEN_MULTI),
                 accountToken = buyerAccountToken(),
-                productId = "token_300000",
+                productId = "token_300k",
                 quantity = 10,
                 environment = PaymentEnvironment.PRODUCTION,
                 purchasedAt = NOW,
@@ -764,7 +764,7 @@ class GoogleRefundIntegrationTest {
         token: String = TOKEN,
         packageName: String = PACKAGE,
     ) = """{"version": "1.0", "packageName": "$packageName", "eventTimeMillis": "1",
-           "oneTimeProductNotification": {"version": "1.0", "notificationType": 1, "purchaseToken": "$token", "sku": "token_300000"}}"""
+           "oneTimeProductNotification": {"version": "1.0", "notificationType": 1, "purchaseToken": "$token", "sku": "token_300k"}}"""
 
     private fun voidedNotification(
         refundType: Int,
