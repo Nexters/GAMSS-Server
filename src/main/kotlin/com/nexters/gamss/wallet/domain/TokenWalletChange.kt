@@ -5,10 +5,12 @@ class TokenWalletChange(
     val type: TokenLedgerType,
     val amount: TokenAmount,
     val refId: LedgerRefId?,
+    val adminNote: AdminNote? = null,
 ) {
     init {
         require(SUBJECT_KEY.matches(subjectKey)) { "주체 키 형식이 아닙니다: length=${subjectKey.length}" }
         require(type.requiresRefId == (refId != null)) { "$type 의 멱등 키 여부가 맞지 않습니다: refId=$refId" }
+        require(adminNote == null || type.byAdmin) { "$type 은 관리자 변동이 아닙니다." }
     }
 
     private companion object {

@@ -28,6 +28,10 @@ class TokenLedgerEntry(
     val balanceAfter: Long,
     @Column(name = "ref_id", length = LedgerRefId.MAX_LENGTH, updatable = false)
     val refId: String?,
+    @Column(name = "admin_email", length = AdminNote.MAX_EMAIL_LENGTH, updatable = false)
+    val adminEmail: String? = null,
+    @Column(name = "reason", length = AdminNote.MAX_REASON_LENGTH, updatable = false)
+    val reason: String? = null,
 ) {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

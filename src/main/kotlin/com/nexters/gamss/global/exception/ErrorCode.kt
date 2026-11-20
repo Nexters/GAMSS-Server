@@ -67,6 +67,10 @@ enum class ErrorCode(
     PURCHASE_PRODUCT_MISMATCH(ErrorKind.INVALID_INPUT, "구매한 상품이 요청한 상품과 다릅니다."),
     PURCHASE_QUANTITY_UNSUPPORTED(ErrorKind.CONFLICT, "여러 개를 한 번에 산 구매는 지급할 수 없습니다. 고객센터로 문의해주세요."),
 
+    // 유료 토큰 수동 지급·회수
+    PAID_TOKEN_SUBJECT_NOT_FOUND(ErrorKind.CONFLICT, "토큰 지갑을 찾을 수 없는 회원입니다. 탈퇴했거나 매핑이 아직 없는 회원입니다."),
+    IDEMPOTENCY_KEY_REUSED(ErrorKind.CONFLICT, "이미 다른 요청에 쓴 멱등 키입니다."),
+
     // 백오피스 관리자
     ADMIN_ACCOUNT_ALREADY_EXISTS(ErrorKind.CONFLICT, "이미 등록된 관리자입니다."),
     ADMIN_ACCOUNT_NOT_FOUND(ErrorKind.NOT_FOUND, "관리자를 찾을 수 없습니다."),
