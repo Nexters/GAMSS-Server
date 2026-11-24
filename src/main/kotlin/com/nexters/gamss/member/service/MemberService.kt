@@ -25,6 +25,13 @@ class MemberService(
             .findById(id)
             .orElseThrow { BusinessException(ErrorCode.MEMBER_NOT_FOUND) }
 
+    /** 회원 행을 잠가 읽는다. 탈퇴와 겹치면 탈퇴 커밋을 기다린 뒤의 상태를 본다. */
+    @Transactional
+    fun getByIdForUpdate(id: Long): Member =
+        memberRepository
+            .findByIdForUpdate(id)
+            .orElseThrow { BusinessException(ErrorCode.MEMBER_NOT_FOUND) }
+
     /** 회원 id 별 닉네임. 없는 회원은 결과에서 빠진다. */
     @Transactional(readOnly = true)
     fun getNicknames(ids: Collection<Long>): Map<Long, String?> =

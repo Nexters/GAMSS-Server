@@ -18,13 +18,14 @@ class GameRecordService(
     private val memberService: MemberService,
 ) {
     // 탈퇴 후에도 accessToken 은 만료 전까지 유효하다. 막지 않으면 탈퇴 정리 이후의 기록이 랭킹에 남는다.
+    // 회원 행을 잠가 확인과 저장 사이에 탈퇴가 끼어들지 못하게 한다.
     @Transactional
     fun record(
         memberId: Long,
         gameType: GameType,
         score: Int,
     ): GameRecord {
-        if (memberService.getById(memberId).isWithdrawn()) {
+        if (memberService.getByIdForUpdate(memberId).isWithdrawn()) {
             throw BusinessException(ErrorCode.WITHDRAWN_MEMBER)
         }
         return gameRecordRepository.save(GameRecord(memberId, gameType, score))

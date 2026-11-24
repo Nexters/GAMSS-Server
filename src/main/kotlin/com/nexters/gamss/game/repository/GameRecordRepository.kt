@@ -5,6 +5,7 @@ import com.nexters.gamss.game.domain.GameType
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 
@@ -31,5 +32,10 @@ interface GameRecordRepository : JpaRepository<GameRecord, Long> {
         pageable: Pageable,
     ): Page<GameRecord>
 
-    fun deleteByMemberId(memberId: Long)
+    // 파생 삭제는 트랜잭션 시작 시점 스냅샷으로 행을 찾아, 그 사이 커밋된 기록을 놓친다.
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("delete from GameRecord r where r.memberId = :memberId")
+    fun deleteByMemberId(
+        @Param("memberId") memberId: Long,
+    ): Int
 }
