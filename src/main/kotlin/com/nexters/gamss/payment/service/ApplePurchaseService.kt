@@ -1,5 +1,6 @@
 package com.nexters.gamss.payment.service
 
+import com.nexters.gamss.wallet.service.TokenWalletReader
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
@@ -16,6 +17,7 @@ class ApplePurchaseService(
     private val verifier: ApplePurchaseVerifier,
     private val grantService: PurchaseGrantService,
     private val refundSynchronizer: AppleRefundSynchronizer,
+    private val walletReader: TokenWalletReader,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -38,7 +40,8 @@ class ApplePurchaseService(
         return ApplePurchaseResult(
             productId = purchase.productId,
             grantedTokens = grant.grantedTokens,
-            paidBalance = grant.balance - changed,
+            // 다른 요청(환불 알림)이 지급 직후 먼저 회수했을 수 있어 지급 결과가 아니라 지금 잔액을 읽는다.
+            paidBalance = walletReader.balanceOf(memberId),
         )
     }
 }

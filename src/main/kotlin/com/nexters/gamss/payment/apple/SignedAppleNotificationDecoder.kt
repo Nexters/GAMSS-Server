@@ -32,7 +32,7 @@ class SignedAppleNotificationDecoder(
         }
 
     override fun decode(signedPayload: String): AppleNotification {
-        var lastStatus: VerificationStatus? = null
+        val statuses = mutableListOf<VerificationStatus>()
         for ((environment, verifier) in verifiers) {
             try {
                 return toNotification(verifier.verifyAndDecodeNotification(signedPayload), environment)
@@ -40,13 +40,14 @@ class SignedAppleNotificationDecoder(
                 if (e.status !in RETRYABLE_STATUSES) {
                     throw InvalidAppleNotificationException("App Store 알림 검증 실패: status=${e.status}", e)
                 }
-                lastStatus = e.status
+                statuses += e.status
             } catch (e: RuntimeException) {
                 // 인증 없이 열린 경로라 아무 문자열이나 온다. 라이브러리가 파싱 단계에서 던지는 예외도 검증 실패로 본다.
                 throw InvalidAppleNotificationException("App Store 알림을 읽을 수 없습니다: ${e.javaClass.simpleName}", e)
             }
         }
-        throw InvalidAppleNotificationException("Production 과 Sandbox 어느 검증기도 통과하지 못했습니다: status=$lastStatus")
+        // 검증기마다 사유가 다르다(설정 오류면 앱 식별자, Xcode 알림이면 환경). 하나만 남기면 원인을 가린다.
+        throw InvalidAppleNotificationException("Production 과 Sandbox 어느 검증기도 통과하지 못했습니다: statuses=$statuses")
     }
 
     private fun toNotification(
