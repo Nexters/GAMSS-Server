@@ -72,10 +72,14 @@ class AppleNotificationRecordRepository(
         )
     }
 
-    fun findRefundState(transactionId: StoreTransactionKey): RecordedAppleRefund? =
+    /**
+     * 잠금 읽기라 트랜잭션 안에서도 스냅샷이 아니라 커밋된 최신 상태를 본다. 공유 잠금이 상태 저장을 이 트랜잭션이 끝날
+     * 때까지 기다리게 해, 읽은 상태로 회수하는 동안 더 최신 상태가 끼어들지 못한다.
+     */
+    fun findRefundStateForShare(transactionId: StoreTransactionKey): RecordedAppleRefund? =
         jdbc
             .query(
-                "SELECT refunded, revocation_percentage, source_id FROM apple_refund_state WHERE transaction_id = ?",
+                "SELECT refunded, revocation_percentage, source_id FROM apple_refund_state WHERE transaction_id = ? FOR SHARE",
                 { rs, _ ->
                     RecordedAppleRefund(
                         state = AppleRefundState(rs.getBoolean(1), rs.getObject(2, Integer::class.java)?.toInt()),

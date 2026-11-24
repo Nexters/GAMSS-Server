@@ -79,10 +79,23 @@ class PaymentRecordService(
         targetRefundedTokens: Long,
         sourceId: String,
         allowReversal: Boolean,
-    ): RefundResult {
+    ): RefundResult = applyRefund(platform, storeTransactionKey, allowReversal) { RefundGoal(targetRefundedTokens, sourceId) }!!
+
+    /**
+     * 목표와 출처를 결제 행을 잠근 뒤 [goalOf] 로 정한다. 잠그기 전에 읽은 상태로 목표를 정하면 그 사이 커밋된 더 최신 상태를
+     * 낡은 목표가 덮어쓸 수 있다. [goalOf] 가 null 이면 아무것도 하지 않고 null 이다.
+     */
+    @Transactional
+    fun applyRefund(
+        platform: PaymentPlatform,
+        storeTransactionKey: StoreTransactionKey,
+        allowReversal: Boolean,
+        goalOf: (Payment) -> RefundGoal?,
+    ): RefundResult? {
         val payment =
             paymentRepository.findByPlatformAndStoreTransactionKeyForUpdate(platform, storeTransactionKey.value)
                 ?: throw BusinessException(ErrorCode.PAYMENT_NOT_FOUND)
+        val (targetRefundedTokens, sourceId) = goalOf(payment) ?: return null
         val refId = LedgerRefId(payment.refundRefId(sourceId))
         if (walletReader.isApplied(refId)) {
             return RefundResult(paymentId = payment.id, refundedTokens = payment.refundedTokens, changedTokens = 0)

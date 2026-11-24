@@ -16,7 +16,7 @@ import java.time.Instant
  * 커밋한 뒤 [applyRecorded] 로 바로 회수한다. 지급하지 않고 거부하면 결제 기록이 없어 나중에 환불 취소가 와도 돌려줄 수 없다.
  *
  * 두 쪽이 동시에 와도 놓치지 않는다. 환불 쪽은 상태를 커밋한 뒤 결제를 보고, 지급 쪽은 결제를 커밋한 뒤 상태를 본다.
- * 그래서 적어도 한쪽은 둘 다 본다. 둘 다 회수해도 같은 출처, 같은 목표라 한 번만 깎인다.
+ * 그래서 적어도 한쪽은 둘 다 본다. 상태는 결제 행 잠금 안에서 읽으므로 둘 다 회수해도 나중 쪽이 최신 상태로 맞춘다.
  *
  * [PurchaseGrantService] 를 부르므로 트랜잭션 밖에서 불러야 한다.
  */
@@ -41,16 +41,14 @@ class AppleRefundSynchronizer(
      * 저장된 최신 상태로 회수량을 맞춘다. 상태나 결제 기록이 없으면 null 이다.
      *
      * 알림 본문이 아니라 저장된 상태를 쓰므로, 늦게 도착한 옛 알림도 최신 상태와 그 출처로 맞춰 아무것도 바꾸지 않는다.
+     * 상태는 결제 행을 잠근 뒤 읽는다. 그래야 두 쪽이 겹쳐도 나중에 잠근 쪽이 더 최신 상태를 본다.
      */
     fun applyRecorded(transactionId: StoreTransactionKey): RefundResult? {
-        val recorded = recordRepository.findRefundState(transactionId) ?: return null
-        val payment = paymentRepository.findByPlatformAndStoreTransactionKey(PaymentPlatform.APPLE, transactionId.value) ?: return null
-        return grantService.applyRefund(
-            platform = PaymentPlatform.APPLE,
-            storeTransactionKey = transactionId,
-            targetRefundedTokens = recorded.state.targetFor(payment.grantedTokens),
-            sourceId = recorded.sourceId,
-            allowReversal = true,
-        )
+        paymentRepository.findByPlatformAndStoreTransactionKey(PaymentPlatform.APPLE, transactionId.value) ?: return null
+        return grantService.applyRefund(PaymentPlatform.APPLE, transactionId, allowReversal = true) { payment ->
+            recordRepository.findRefundStateForShare(transactionId)?.let {
+                RefundGoal(it.state.targetFor(payment.grantedTokens), it.sourceId)
+            }
+        }
     }
 }
