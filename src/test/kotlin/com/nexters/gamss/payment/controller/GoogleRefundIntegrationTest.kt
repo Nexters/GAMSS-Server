@@ -591,7 +591,8 @@ class GoogleRefundIntegrationTest {
 
         assertEquals(300_000, payment(TOKEN).refundedTokens)
         assertEquals(0, walletReader.balanceOf(buyer.id))
-        // 겹쳐 조회하는 구간(OVERLAP)이 없으면 둘째 회차가 이 항목의 시각보다 뒤부터 조회해 실제 Google 은 돌려주지 않는다.
+        // 둘째 회차가 첫 회차 구간과 겹쳐 조회하는지만 본다. 실제 Google 은 환불 시각이 아니라 환불이 기록된 시각으로 거르므로
+        // 이 가짜는 그 재조회까지 재현하지 않는다.
         assertFalse(
             google.listVoidedCalls
                 .last()
