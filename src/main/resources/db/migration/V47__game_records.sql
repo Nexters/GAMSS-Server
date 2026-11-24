@@ -11,7 +11,8 @@ CREATE TABLE game_records (
 
 -- 내 기록(최신순·점수순)
 CREATE INDEX idx_game_records_member_type_created ON game_records (member_id, game_type, created_at);
-CREATE INDEX idx_game_records_member_type_score ON game_records (member_id, game_type, score);
+-- 랭킹의 not exists 가 더 나은 기록을 먼저 만나 바로 멈추도록 점수 높은 순, id 순으로 둔다.
+CREATE INDEX idx_game_records_member_type_score ON game_records (member_id, game_type, score DESC, id);
 -- 전체 랭킹(최신순·점수순)
 CREATE INDEX idx_game_records_type_created ON game_records (game_type, created_at);
 CREATE INDEX idx_game_records_type_score ON game_records (game_type, score);
