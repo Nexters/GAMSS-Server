@@ -1,6 +1,7 @@
 package com.nexters.gamss.monitoring.service
 
 import com.nexters.gamss.monitoring.domain.GenerationLog
+import com.nexters.gamss.monitoring.domain.GenerationType
 import com.nexters.gamss.monitoring.repository.GenerationLogRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -19,12 +20,17 @@ import java.time.Instant
 class GenerationLogStatsService(
     private val generationLogRepository: GenerationLogRepository,
 ) {
-    /** [from] 이후의 생성 로그(미리보기 제외). 집계는 받는 쪽이 한다. */
+    /** [from] 이후의 생성 로그(미리보기와 채점 제외). 집계는 받는 쪽이 한다. */
     fun findAllSince(from: Instant): List<GenerationLog> = generationLogRepository.findAllSince(from)
 
     /** [conversationIds] 에 속한 생성 로그. conversation_id 가 없는 과거 로그는 빠진다. */
     fun findByConversationIds(conversationIds: Collection<Long>): List<GenerationLog> =
         generationLogRepository.findByConversationIdIn(conversationIds)
+
+    fun findByTypeSince(
+        type: GenerationType,
+        from: Instant,
+    ): List<GenerationLog> = generationLogRepository.findByGenerationTypeAndCreatedAtGreaterThanEqual(type, from)
 
     /** 이 회원이 [from] 이후 소비한 토큰 합. */
     fun sumUsedTokensByMemberSince(

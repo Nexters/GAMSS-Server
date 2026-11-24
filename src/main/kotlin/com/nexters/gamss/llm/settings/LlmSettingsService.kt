@@ -40,6 +40,21 @@ class LlmSettingsService(
         row.update(model, row.systemPrompt)
     }
 
+    // ── 채점(QUALITY_JUDGE 행). 앱 모델과 별개다. ──
+
+    @Transactional(readOnly = true)
+    fun currentJudgeView(): LlmSettingsView {
+        val row = requireRow(PromptType.QUALITY_JUDGE)
+        return LlmSettingsView(row.model, row.systemPrompt, PromptVersions(null, row.promptVersion))
+    }
+
+    @Transactional
+    fun updateJudgeModel(model: String) {
+        validateModel(model)
+        val row = requireRow(PromptType.QUALITY_JUDGE)
+        row.update(model, row.systemPrompt)
+    }
+
     // ── 프롬프트(타입별 원본). ──
 
     @Transactional(readOnly = true)
@@ -60,16 +75,22 @@ class LlmSettingsService(
     @Transactional(readOnly = true)
     fun currentCommonView(): LlmSettingsView {
         val common = requireRow(PromptType.COMMON)
-        return LlmSettingsView(common.model, common.systemPrompt)
+        return LlmSettingsView(common.model, common.systemPrompt, PromptVersions(common.promptVersion, null))
+    }
+
+    @Transactional(readOnly = true)
+    fun currentPromptWithVersion(promptType: PromptType): Pair<String, Int?> {
+        val row = requireRow(promptType)
+        return row.systemPrompt to row.promptVersion
     }
 
     @Transactional
     fun updatePrompt(
         promptType: PromptType,
         systemPrompt: String,
+        version: Int,
     ) {
-        val row = requireRow(promptType)
-        row.update(row.model, systemPrompt)
+        requireRow(promptType).updatePrompt(systemPrompt, version)
     }
 
     // 기본 형식은 항상 검증하고, 카탈로그 조회가 성공한 경우엔 목록 소속까지 강제한다.
