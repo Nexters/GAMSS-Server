@@ -292,6 +292,28 @@ class GameRecordControllerIntegrationTest {
     }
 
     @Test
+    fun `랭킹 전체 수는 기록 수가 아니라 회원 수로 센다`() {
+        val first = memberRepository.save(Member("first@a.com"))
+        val second = memberRepository.save(Member("second@a.com"))
+        val third = memberRepository.save(Member("third@a.com"))
+        saveRecords(first, 90, 10)
+        saveRecords(second, 70, 20)
+        saveRecords(third, 50)
+
+        mockMvc
+            .get(PATH) {
+                header(HttpHeaders.AUTHORIZATION, bearerFor(first))
+                param("size", "1")
+                param("page", "1")
+            }.andExpect {
+                jsonPath("$.data.totalElements") { value(3) }
+                jsonPath("$.data.totalPages") { value(3) }
+                jsonPath("$.data.content.length()") { value(1) }
+                jsonPath("$.data.content[0].score") { value(70) }
+            }
+    }
+
+    @Test
     fun `탈퇴한 회원의 기록은 랭킹에서 사라진다`() {
         val me = memberRepository.save(Member("me@a.com"))
         val leaver = memberRepository.save(Member("leaver@a.com"))
