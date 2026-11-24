@@ -11,6 +11,7 @@ import com.nexters.gamss.payment.domain.PaymentEnvironment
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Primary
+import java.time.Duration
 import java.time.Instant
 
 /**
@@ -67,6 +68,8 @@ class FakeAppleNotificationDecoder : AppleNotificationDecoder {
 
 class FakeAppleServerApiClient : AppleServerApiClient {
     override var configured = true
+
+    override val maxLookback: Duration = Duration.ofDays(180).minusHours(1)
 
     /** 페이지마다 돌려줄 `signedPayload`. */
     var pages: List<List<String>> = emptyList()

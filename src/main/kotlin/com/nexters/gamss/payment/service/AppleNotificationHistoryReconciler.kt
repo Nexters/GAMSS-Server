@@ -1,7 +1,5 @@
 package com.nexters.gamss.payment.service
 
-import com.nexters.gamss.global.exception.BusinessException
-import com.nexters.gamss.global.exception.ErrorCode
 import com.nexters.gamss.payment.apple.AppleServerApiClient
 import com.nexters.gamss.payment.repository.PaymentJobCheckpointRepository
 import io.micrometer.core.instrument.Counter
@@ -24,8 +22,8 @@ import java.util.concurrent.atomic.AtomicLong
  * 200 으로 답했어도 처리 기록을 남기지 않은 알림(처리 도중 서버 종료 등)이 있을 수 있고, 소모성 상품이라 양이 적다.
  * [GoogleVoidedPurchaseReconciler] 와 같은 방식으로 [OVERLAP] 만큼 겹쳐 조회하고, 실패한 회차는 마지막 성공 시각을 갱신하지 않는다.
  *
- * 항목마다 [AppleNotificationService] 에 그대로 넘긴다. Apple 과 통신할 수 없으면 그 자리에서 멈추고, 다른 실패는 끝까지
- * 처리한 뒤 회차를 실패로 끝낸다. 실패는 지표로 드러내 경보가 울리게 한다([LAST_SUCCESS_METRIC], [FAILURE_METRIC]).
+ * 항목마다 [AppleNotificationService] 에 그대로 넘긴다. 알림 기록을 조회하지 못하면 그 자리에서 멈춘다. 항목 처리는 Apple 을
+ * 부르지 않으므로 다시 받아야 하는 실패(RETRY)도 항목 하나의 실패로 세고, 끝까지 처리한 뒤 회차를 실패로 끝낸다. 실패는 지표로 드러내 경보가 울리게 한다([LAST_SUCCESS_METRIC], [FAILURE_METRIC]).
  */
 @Component
 class AppleNotificationHistoryReconciler(
@@ -75,7 +73,7 @@ class AppleNotificationHistoryReconciler(
         if (!client.configured) {
             return
         }
-        val earliest = now.minus(MAX_LOOKBACK)
+        val earliest = now.minus(client.maxLookback)
         val lastSucceededAt = checkpointRepository.lastSucceededAt(JOB_NAME)
         val start = lastSucceededAt?.minus(OVERLAP)?.coerceAtLeast(earliest) ?: earliest
         if (lastSucceededAt != null && lastSucceededAt.minus(OVERLAP).isBefore(earliest)) {
@@ -100,7 +98,7 @@ class AppleNotificationHistoryReconciler(
         log.info("App Store 알림 기록 대사 완료: from={}, to={}, 조회={}건", start, now, seen)
     }
 
-    /** 처리했으면 true. 다시 받아야 하는 실패면 회차를 멈추고, 그 밖의 실패는 false 로 넘어간다. */
+    /** 처리했으면 true, 실패면 false 다. 실패한 항목이 뒤 항목을 막지 않는다. */
     private fun handle(signedPayload: String): Boolean =
         try {
             when (notificationService.handle(signedPayload)) {
@@ -108,8 +106,9 @@ class AppleNotificationHistoryReconciler(
                     true
                 }
 
+                // 거래 서명 검증 실패, 수동 처리가 필요한 거래 등 로컬 원인이다. 멈추면 뒤 알림까지 고칠 때까지 처리되지 않는다.
                 AppleNotificationOutcome.RETRY -> {
-                    throw BusinessException(ErrorCode.PAYMENT_STORE_UNAVAILABLE)
+                    false
                 }
 
                 AppleNotificationOutcome.REJECTED -> {
@@ -118,8 +117,6 @@ class AppleNotificationHistoryReconciler(
                     false
                 }
             }
-        } catch (e: BusinessException) {
-            throw e
         } catch (e: RuntimeException) {
             log.error("App Store 알림 기록 항목을 처리하지 못했습니다. 다음 회차에 다시 봅니다", e)
             false
@@ -133,9 +130,6 @@ class AppleNotificationHistoryReconciler(
 
         /** Google 환불 대사(04:10)와 겹치지 않게 둔다. */
         private const val CRON = "0 20 4 * * *"
-
-        /** Get Notification History 가 허용하는 범위(180일). 경계에서 거부되지 않게 조금 줄인다. */
-        val MAX_LOOKBACK: Duration = Duration.ofDays(180).minusHours(1)
 
         val OVERLAP: Duration = Duration.ofDays(1)
     }

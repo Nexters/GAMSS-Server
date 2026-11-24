@@ -1,5 +1,6 @@
 package com.nexters.gamss.payment.apple
 
+import java.time.Duration
 import java.time.Instant
 
 /**
@@ -10,6 +11,9 @@ import java.time.Instant
  */
 interface AppleServerApiClient {
     val configured: Boolean
+
+    /** 알림 기록을 조회할 수 있는 가장 먼 과거. Apple 은 Production 180일, Sandbox 30일까지만 허용한다. */
+    val maxLookback: Duration
 
     /** [start] 부터 [end] 사이에 Apple 이 보낸 알림. 다음 페이지가 있으면 [AppleNotificationHistoryPage.nextPaginationToken] 이 있다. */
     fun notificationHistory(

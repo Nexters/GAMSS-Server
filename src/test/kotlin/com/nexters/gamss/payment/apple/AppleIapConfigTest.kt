@@ -2,10 +2,12 @@ package com.nexters.gamss.payment.apple
 
 import java.security.KeyPairGenerator
 import java.security.spec.ECGenParameterSpec
+import java.time.Duration
 import java.util.Base64
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 class AppleIapConfigTest {
     private val config = AppleIapConfig()
@@ -34,6 +36,15 @@ class AppleIapConfigTest {
         val client = config.appleServerApiClient(iap, serverApi())
 
         assertIs<LibraryAppleServerApiClient>(client)
+    }
+
+    @Test
+    fun `알림 기록 조회 범위는 Sandbox 30일, Production 180일 안이다`() {
+        val sandbox = config.appleServerApiClient(iap, serverApi(environment = "SANDBOX")).maxLookback
+        val production = config.appleServerApiClient(iap, serverApi(environment = "PRODUCTION")).maxLookback
+
+        assertTrue(sandbox < Duration.ofDays(30) && sandbox > Duration.ofDays(29))
+        assertTrue(production < Duration.ofDays(180) && production > Duration.ofDays(179))
     }
 
     /** 그대로 뜨면 배치가 매일 실패하는데, 그 상태는 놓친 알림이 생겨야 드러난다. */

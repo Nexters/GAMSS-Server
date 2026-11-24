@@ -48,7 +48,10 @@ class AppleIapConfig {
                 else -> error("App Store Server API 환경(apple.iap.server-api.environment)은 PRODUCTION 이나 SANDBOX 여야 합니다: ${api.environment}")
             }
         val signingKey = String(Base64.getDecoder().decode(api.signingKeyBase64.filterNot { it.isWhitespace() }))
-        return LibraryAppleServerApiClient(AppStoreServerAPIClient(signingKey, api.keyId, api.issuerId, iap.bundleId, environment))
+        return LibraryAppleServerApiClient(
+            AppStoreServerAPIClient(signingKey, api.keyId, api.issuerId, iap.bundleId, environment),
+            environment,
+        )
     }
 
     private fun validate(properties: AppleIapProperties) {

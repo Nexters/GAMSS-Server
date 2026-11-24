@@ -314,7 +314,7 @@ class AppleNotificationIntegrationTest {
         assertEquals(300_000, payment().refundedTokens)
         assertTrue(recordRepository.isNotificationHandled("n-refund-missed"))
         assertEquals(NOW, checkpointRepository.lastSucceededAt(AppleNotificationHistoryReconciler.JOB_NAME))
-        assertEquals(NOW.minus(AppleNotificationHistoryReconciler.MAX_LOOKBACK), serverApi.requests.first().first)
+        assertEquals(NOW.minus(serverApi.maxLookback), serverApi.requests.first().first)
     }
 
     @Test
@@ -344,6 +344,19 @@ class AppleNotificationIntegrationTest {
         assertThrows<IllegalStateException> { reconciler.reconcile(NOW) }
 
         assertNotNull(paymentOrNull())
+        assertNull(checkpointRepository.lastSucceededAt(AppleNotificationHistoryReconciler.JOB_NAME))
+    }
+
+    @Test
+    fun `다시 받아야 하는 항목이 있어도 뒤 항목을 처리하고 회차를 실패로 끝낸다`() {
+        stubNotification("n-bad-tx", "ONE_TIME_CHARGE", "unknown-transaction-jws")
+        stubNotification("n-charge", "ONE_TIME_CHARGE", PURCHASE_JWS)
+        serverApi.pages = listOf(listOf(payload("n-bad-tx"), payload("n-charge")))
+
+        assertThrows<IllegalStateException> { reconciler.reconcile(NOW) }
+
+        assertNotNull(paymentOrNull())
+        assertFalse(recordRepository.isNotificationHandled("n-bad-tx"))
         assertNull(checkpointRepository.lastSucceededAt(AppleNotificationHistoryReconciler.JOB_NAME))
     }
 
