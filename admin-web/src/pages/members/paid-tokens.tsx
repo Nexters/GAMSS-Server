@@ -156,13 +156,13 @@ function AdjustForm({ memberId, balance, onDone }: { memberId: number; balance: 
   )
 }
 
-// 탈퇴 회원은 토큰 주체 매핑이 지워져 지급·회수할 수 없으므로 폼을 숨기고 이력만 보여준다.
+// 탈퇴 회원은 주체 매핑이 지워져 서버가 잔액 0으로 답한다. 실제 잔액으로 오해하지 않게 조회하지 않고 안내만 한다.
 export function MemberPaidTokens({ memberId, canAdjust }: { memberId: number; canAdjust: boolean }) {
   const [page, setPage] = useState(0)
   const { data, isLoading, isError, refetch } = useCustom<PaidTokens>({
     url: `/api/admin/members/${memberId}/paid-tokens?page=${page}&size=${PAGE_SIZE}`,
     method: 'get',
-    queryOptions: { queryKey: ['member-paid-tokens', memberId, page] },
+    queryOptions: { queryKey: ['member-paid-tokens', memberId, page], enabled: canAdjust },
   })
   const paidTokens = data?.data
   const entries = paidTokens?.ledger.content ?? []
@@ -193,7 +193,11 @@ export function MemberPaidTokens({ memberId, canAdjust }: { memberId: number; ca
         )}
       </div>
 
-      {isError && !paidTokens ? (
+      {!canAdjust ? (
+        <p className="p-6 text-center text-sm text-muted-foreground break-keep">
+          탈퇴 회원은 토큰 지갑과의 연결이 끊겨 잔액과 이력을 볼 수 없습니다. 같은 계정으로 다시 가입하면 이어서 보입니다.
+        </p>
+      ) : isError && !paidTokens ? (
         <div className="flex items-center gap-3 p-6">
           <p className="text-sm text-muted-foreground">유료 토큰을 불러오지 못했습니다.</p>
           <Button variant="outline" size="sm" onClick={() => refetch()}>
