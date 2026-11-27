@@ -2,6 +2,9 @@ spring:
   flyway:
     enabled: true
   jpa:
+    # 운영과 같이 끈다. main 설정을 통째로 대체하므로 여기에도 적어야 하고, 켜진 채로 두면 지급·회수 가드(#261)가
+    # 웹 요청에서 부르는 지급과 회수를 모두 거부한다.
+    open-in-view: false
     hibernate:
       ddl-auto: validate
     properties:

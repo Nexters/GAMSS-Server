@@ -4,6 +4,7 @@ import com.nexters.gamss.global.retry.ConflictRetry
 import com.nexters.gamss.payment.domain.PaymentPlatform
 import com.nexters.gamss.payment.domain.StoreTransactionKey
 import com.nexters.gamss.payment.domain.VerifiedPurchase
+import jakarta.persistence.EntityManagerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.support.TransactionSynchronizationManager
 
@@ -21,11 +22,16 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * 쪽이 결제를 먼저 읽어 두면 회수의 잠금 조회가 행은 잠그지만 영속성 컨텍스트에 남은 낡은 회수량을
  * 돌려준다. 그 사이 다른 요청이 회수를 커밋했다면 같은 양을 한 번 더 회수하는데, 이쪽은 예외 없이
  * 끝나 테스트로도 드러나지 않는다. 그래서 시작할 때 직접 확인하고 거부한다.
+ *
+ * 트랜잭션이 없어도 스레드에 EntityManager 가 묶여 있으면 같은 이유로 거부한다. open-in-view 가 켜지면 요청 하나가
+ * 영속성 컨텍스트 하나를 같이 쓰므로, 같은 요청에서 먼저 읽어 둔 결제가 잠근 뒤에도 그대로 돌아온다. 지금은 설정에서
+ * 꺼 두었지만, 켜졌을 때 조용히 이중 회수하는 대신 바로 드러나게 한다(#261).
  */
 @Service
 class PurchaseGrantService(
     private val recordService: PaymentRecordService,
     private val conflictRetry: ConflictRetry,
+    private val entityManagerFactory: EntityManagerFactory,
 ) {
     /** 앱이 보낸 구매. 구매에 실린 계정 토큰이 [memberId] 의 것이 아니면 지급하지 않는다. */
     fun grant(
@@ -84,6 +90,9 @@ class PurchaseGrantService(
     private fun ensureOutsideTransaction() {
         check(!TransactionSynchronizationManager.isActualTransactionActive()) {
             "지급과 회수는 트랜잭션 안에서 부를 수 없습니다 - 경합 재시도가 무력화되고 낡은 회수량으로 이중 회수할 수 있습니다."
+        }
+        check(!TransactionSynchronizationManager.hasResource(entityManagerFactory)) {
+            "지급과 회수는 EntityManager 가 묶인 스레드에서 부를 수 없습니다 - open-in-view 가 켜져 있으면 낡은 회수량으로 이중 회수할 수 있습니다."
         }
     }
 }
