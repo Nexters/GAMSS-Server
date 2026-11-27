@@ -90,7 +90,8 @@ function AdjustForm({ memberId, balance, onDone }: { memberId: number; balance: 
             type="button"
             size="sm"
             variant={action === value ? 'default' : 'outline'}
-            onClick={() => edit(() => setAction(value))}
+            // 이미 고른 작업을 다시 눌러도 키를 바꾸지 않는다. 응답을 못 받은 요청을 재시도할 때 두 번 반영되지 않게 한다.
+            onClick={() => value !== action && edit(() => setAction(value))}
           >
             {ACTION_LABELS[value]}
           </Button>
