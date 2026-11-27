@@ -73,6 +73,8 @@ class SignedAppleTransactionDecoder(
             purchaseDate = payload.purchaseDate?.let { Instant.ofEpochMilli(it) },
             revocationDate = payload.revocationDate?.let { Instant.ofEpochMilli(it) },
             environment = environmentOf(payload.environment),
+            revocationPercentage = payload.revocationPercentage,
+            signedDate = payload.signedDate?.let { Instant.ofEpochMilli(it) },
         )
 
     private fun environmentOf(environment: Environment): PaymentEnvironment {

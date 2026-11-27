@@ -57,6 +57,8 @@ class SecurityConfig(
                 // Google Play RTDN(Pub/Sub push, #246). 우리 JWT 대신 Google OIDC 토큰을 컨트롤러가 직접 검증한다.
                 // Pub/Sub push 는 POST 만 보내므로 공유 카드 조회와 같은 이유로 메서드를 POST 로 못 박는다.
                 it.requestMatchers(HttpMethod.POST, "/api/webhooks/google").permitAll()
+                // App Store Server Notifications(#245). 본문의 Apple 서명을 서비스가 검증한다. Apple 도 POST 만 보낸다.
+                it.requestMatchers(HttpMethod.POST, "/api/webhooks/apple").permitAll()
                 // 백오피스 API는 관리자 토큰(ROLE_ADMIN)만 접근할 수 있다. 로그인만 공개다.
                 it.requestMatchers("/api/admin/**").hasRole("ADMIN")
                 it.anyRequest().authenticated()

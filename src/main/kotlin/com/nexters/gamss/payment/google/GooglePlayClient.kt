@@ -10,7 +10,8 @@ import java.time.Instant
  * Google 오류는 이 경계에서 우리 에러 코드로 바꿔 던진다. 잘못된 요청(400·404·410)은
  * [com.nexters.gamss.global.exception.ErrorCode.PURCHASE_INVALID], 나머지(인증 실패·429·5xx·네트워크·
  * 타임아웃)는 [com.nexters.gamss.global.exception.ErrorCode.PAYMENT_STORE_UNAVAILABLE] 이다. 구매 조회와 consume 의
- * 400·404·410 은 잘못된 토큰이고, 환불 목록 조회의 400 은 조회 구간이나 설정 문제다.
+ * 400·404·410 은 잘못된 토큰이고, 환불 목록 조회의 400 은 조회 구간이나 설정 문제다. 다만 404 중 `applicationNotFound` 는
+ * 토큰이 아니라 패키지명 설정 문제라 PAYMENT_STORE_UNAVAILABLE 이다.
  */
 interface GooglePlayClient {
     /** 자격증명이 있어 실제로 Google 을 부를 수 있는가. 아니면 스케줄러는 아무것도 하지 않는다. */

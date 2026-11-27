@@ -56,7 +56,7 @@ class GoogleRefundReclaimer(
                 ?: throw BusinessException(ErrorCode.PAYMENT_NOT_FOUND)
         val target =
             if (partial && payment.quantity > 1) {
-                partialTarget(purchaseToken, payment.grantedTokens, key)
+                partialTarget(purchaseToken, payment.grantedTokens, payment.quantity, key)
             } else {
                 payment.grantedTokens
             }
@@ -88,20 +88,26 @@ class GoogleRefundReclaimer(
     /**
      * `granted_tokens × (quantity - refundableQuantity) / quantity`. 나누어떨어지지 않으면 내림한다 - 덜 회수하는 쪽이
      * 사용자에게 불리하지 않다. 값을 읽을 수 없으면 회수량을 정할 수 없으므로 거부하고 ERROR 를 남긴다.
+     *
+     * 수량은 지급량을 계산한 결제의 수량을 쓴다. 응답에 수량이 빠졌을 때 1 로 보면 남은 수량 하나만으로 목표가 0 이 된다.
+     * 응답의 수량이 결제와 다르면 같은 구매로 볼 수 없으므로 거부한다.
      */
     private fun partialTarget(
         purchaseToken: String,
         grantedTokens: Long,
+        quantity: Int,
         key: StoreTransactionKey,
     ): Long {
         val item = client.getPurchase(purchaseToken).lineItems.singleOrNull()
-        val quantity = item?.quantity ?: 1
         val refundable = item?.refundableQuantity
-        if (refundable == null || quantity <= 0 || refundable !in 0..quantity) {
+        val reportedQuantity = item?.quantity
+        if (refundable == null || refundable !in 0..quantity || (reportedQuantity != null && reportedQuantity != quantity)) {
             log.error(
-                "부분 환불인데 환불 가능 수량을 읽을 수 없어 회수하지 않았습니다. 수동 처리가 필요합니다: key={}, quantity={}, refundableQuantity={}",
+                "부분 환불인데 환불 가능 수량을 읽을 수 없어 회수하지 않았습니다. 수동 처리가 필요합니다: " +
+                    "key={}, quantity={}, reportedQuantity={}, refundableQuantity={}",
                 key,
                 quantity,
+                reportedQuantity,
                 refundable,
             )
             throw BusinessException(ErrorCode.PURCHASE_INVALID)

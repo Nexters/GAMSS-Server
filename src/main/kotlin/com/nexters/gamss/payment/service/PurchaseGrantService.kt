@@ -1,6 +1,7 @@
 package com.nexters.gamss.payment.service
 
 import com.nexters.gamss.global.retry.ConflictRetry
+import com.nexters.gamss.payment.domain.Payment
 import com.nexters.gamss.payment.domain.PaymentPlatform
 import com.nexters.gamss.payment.domain.StoreTransactionKey
 import com.nexters.gamss.payment.domain.VerifiedPurchase
@@ -79,6 +80,17 @@ class PurchaseGrantService(
         return conflictRetry.execute {
             recordService.applyRefund(platform, storeTransactionKey, targetRefundedTokens, sourceId, allowReversal)
         }
+    }
+
+    /** 목표와 출처를 결제 행을 잠근 뒤 정한다([PaymentRecordService.applyRefund]). 나머지 계약은 위와 같다. */
+    fun applyRefund(
+        platform: PaymentPlatform,
+        storeTransactionKey: StoreTransactionKey,
+        allowReversal: Boolean,
+        goalOf: (Payment) -> RefundGoal?,
+    ): RefundResult? {
+        ensureOutsideTransaction()
+        return conflictRetry.execute { recordService.applyRefund(platform, storeTransactionKey, allowReversal, goalOf) }
     }
 
     private fun ensureOutsideTransaction() {

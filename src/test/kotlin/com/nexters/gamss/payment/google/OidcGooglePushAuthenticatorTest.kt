@@ -159,7 +159,7 @@ class OidcGooglePushAuthenticatorTest {
         val result = fetching.authenticate(bearer(raw("""{"alg":"ES256","kid":"unknown-key"}""", payload)))
 
         assertEquals(GooglePushAuthResult.REJECTED, result)
-        assertEquals(listOf(OidcGooglePushAuthenticator.GOOGLE_CERTS_URL), requested)
+        assertEquals(listOf("https://www.googleapis.com/oauth2/v3/certs"), requested)
     }
 
     @Test

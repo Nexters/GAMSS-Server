@@ -232,12 +232,17 @@ class PurchaseGrantServiceIntegrationTest {
         assertEquals(300_000, walletReader.balanceOf(BUYER))
     }
 
+    /** Sandbox 거래는 다른 환경에서 산 테스트 구매일 수 있어 WARN 이다(AppleNotificationIntegrationTest). 실제 결제만 ERROR 다. */
     @Test
     fun `스토어 알림의 계정 토큰이 발급한 적 없는 값이면 주인을 찾지 못하고 ERROR 로 남긴다`(output: CapturedOutput) {
         val error =
             assertFailsWith<BusinessException> {
                 grantService.grantFromStoreNotification(
-                    purchase(accountToken = "3f2b8c1e-7a4d-4e6b-9c0a-1d2e3f4a5b6c", storeOrderId = "GPA.2000"),
+                    purchase(
+                        accountToken = "3f2b8c1e-7a4d-4e6b-9c0a-1d2e3f4a5b6c",
+                        storeOrderId = "GPA.2000",
+                        environment = PaymentEnvironment.PRODUCTION,
+                    ),
                 )
             }
 
@@ -406,13 +411,14 @@ class PurchaseGrantServiceIntegrationTest {
         productId: String = "token_300k",
         quantity: Int = 1,
         storeOrderId: String? = null,
+        environment: PaymentEnvironment = PaymentEnvironment.SANDBOX,
     ) = VerifiedPurchase(
         platform = PaymentPlatform.APPLE,
         storeTransactionKey = StoreTransactionKey(key),
         accountToken = accountToken,
         productId = productId,
         quantity = quantity,
-        environment = PaymentEnvironment.SANDBOX,
+        environment = environment,
         purchasedAt = Instant.parse("2026-11-04T00:00:00Z"),
         storeOrderId = storeOrderId,
     )

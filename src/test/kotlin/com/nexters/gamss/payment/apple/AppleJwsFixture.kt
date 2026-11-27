@@ -96,6 +96,7 @@ class AppleJwsFixture(
             quantity: Int = 1,
             appAccountToken: String? = "7f1c2a4e-3b5d-4c6e-8f90-a1b2c3d4e5f6",
             revocationDate: Instant? = null,
+            revocationPercentage: Int? = null,
         ): Map<String, Any?> =
             mapOf(
                 "transactionId" to transactionId,
@@ -108,6 +109,7 @@ class AppleJwsFixture(
                 "purchaseDate" to SIGNED_AT.minusSeconds(5).toEpochMilli(),
                 "signedDate" to SIGNED_AT.toEpochMilli(),
                 "revocationDate" to revocationDate?.toEpochMilli(),
+                "revocationPercentage" to revocationPercentage,
                 "environment" to environment,
             )
 

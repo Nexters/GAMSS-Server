@@ -6,6 +6,7 @@ import com.nexters.gamss.payment.domain.StoreTransactionKey
 import com.nexters.gamss.payment.google.GooglePlayClient
 import com.nexters.gamss.payment.google.GoogleVoidedPurchase
 import com.nexters.gamss.payment.repository.GoogleRefundRecordRepository
+import com.nexters.gamss.payment.repository.PaymentJobCheckpointRepository
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
@@ -40,6 +41,7 @@ class GoogleVoidedPurchaseReconciler(
     private val client: GooglePlayClient,
     private val reclaimer: GoogleRefundReclaimer,
     private val recordRepository: GoogleRefundRecordRepository,
+    private val checkpointRepository: PaymentJobCheckpointRepository,
     meterRegistry: MeterRegistry,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -71,7 +73,7 @@ class GoogleVoidedPurchaseReconciler(
     @EventListener(ApplicationReadyEvent::class)
     fun loadLastSuccess() {
         // 여기서 예외가 나가면 기동이 실패한다. 게이지를 맞추는 일이 기동을 좌우할 일은 아니다.
-        runCatching { recordRepository.lastSucceededAt(JOB_NAME) }
+        runCatching { checkpointRepository.lastSucceededAt(JOB_NAME) }
             .onSuccess { it?.let { lastSuccess -> lastSuccessEpochSeconds.set(lastSuccess.epochSecond) } }
             .onFailure { log.warn("Google 환불 대사의 마지막 성공 시각을 읽지 못했습니다. 게이지는 기동 시각으로 둡니다", it) }
     }
@@ -94,7 +96,7 @@ class GoogleVoidedPurchaseReconciler(
             return
         }
         val earliest = now.minus(MAX_LOOKBACK)
-        val lastSucceededAt = recordRepository.lastSucceededAt(JOB_NAME)
+        val lastSucceededAt = checkpointRepository.lastSucceededAt(JOB_NAME)
         val start = lastSucceededAt?.minus(OVERLAP)?.coerceAtLeast(earliest) ?: earliest
         if (lastSucceededAt != null && lastSucceededAt.minus(OVERLAP).isBefore(earliest)) {
             log.error("마지막 대사 성공({})이 조회 가능 범위보다 오래돼 그 사이 환불을 볼 수 없습니다. 수동 확인이 필요합니다.", lastSucceededAt)
@@ -125,7 +127,7 @@ class GoogleVoidedPurchaseReconciler(
             pageToken = page.nextPageToken
         } while (pageToken != null)
         check(failed == 0) { "Google 환불 대사 항목 ${failed}건을 처리하지 못해 마지막 성공 시각을 갱신하지 않습니다." }
-        recordRepository.saveLastSucceededAt(JOB_NAME, now)
+        checkpointRepository.saveLastSucceededAt(JOB_NAME, now)
         lastSuccessEpochSeconds.set(now.epochSecond)
         log.info("Google 환불 대사 완료: from={}, to={}, 처리={}건", start, now, handled)
     }

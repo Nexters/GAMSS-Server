@@ -9,3 +9,9 @@ data class RefundResult(
     val refundedTokens: Long,
     val changedTokens: Long,
 )
+
+/** 회수 목표(지금까지 회수됐어야 할 총량)와 그 출처. */
+data class RefundGoal(
+    val targetRefundedTokens: Long,
+    val sourceId: String,
+)
