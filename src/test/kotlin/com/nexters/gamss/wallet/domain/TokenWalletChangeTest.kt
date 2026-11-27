@@ -21,6 +21,15 @@ class TokenWalletChangeTest {
     }
 
     @Test
+    fun `관리자 메모는 관리자 변동에만 붙일 수 있다`() {
+        val note = AdminNote("admin@gamss.kr", "장애 보상")
+        assertThrows<IllegalArgumentException> {
+            TokenWalletChange(SUBJECT, TokenLedgerType.PURCHASE, TokenAmount(1), LedgerRefId("purchase:1"), note)
+        }
+        assertDoesNotThrow { TokenWalletChange(SUBJECT, TokenLedgerType.ADMIN_GRANT, TokenAmount(1), LedgerRefId("admin:1"), note) }
+    }
+
+    @Test
     fun `주체 키는 소문자 hex 64자만 받는다`() {
         listOf("a".repeat(63), "a".repeat(65), "A".repeat(64), "g".repeat(64)).forEach { key ->
             assertThrows<IllegalArgumentException>(key) {

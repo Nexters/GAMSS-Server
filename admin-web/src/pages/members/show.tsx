@@ -22,6 +22,7 @@ import { PageHeader } from '@/components/page-header'
 import { StatusBadge } from '@/components/status-badge'
 import { cn } from '@/lib/utils'
 import { formatDateTime } from '@/lib/format'
+import { MemberPaidTokens } from './paid-tokens'
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -140,6 +141,12 @@ export function MemberShow() {
           )}
         </CardContent>
       </Card>
+
+      {member && (
+        <div className="max-w-4xl">
+          <MemberPaidTokens memberId={member.id} canAdjust={member.status === 'ACTIVE'} />
+        </div>
+      )}
     </div>
   )
 }

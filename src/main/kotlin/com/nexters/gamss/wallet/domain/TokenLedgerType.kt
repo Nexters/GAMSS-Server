@@ -10,13 +10,14 @@ enum class TokenLedgerType(
     val credit: Boolean,
     val stopsAtZero: Boolean,
     val requiresRefId: Boolean,
+    val byAdmin: Boolean = false,
 ) {
     PURCHASE(credit = true, stopsAtZero = false, requiresRefId = true),
     CONSUME(credit = false, stopsAtZero = true, requiresRefId = false),
     REFUND(credit = false, stopsAtZero = false, requiresRefId = true),
     REFUND_REVERSED(credit = true, stopsAtZero = false, requiresRefId = true),
-    ADMIN_GRANT(credit = true, stopsAtZero = false, requiresRefId = true),
-    ADMIN_REVOKE(credit = false, stopsAtZero = false, requiresRefId = true),
+    ADMIN_GRANT(credit = true, stopsAtZero = false, requiresRefId = true, byAdmin = true),
+    ADMIN_REVOKE(credit = false, stopsAtZero = false, requiresRefId = true, byAdmin = true),
     ;
 
     fun signed(amount: TokenAmount): Long {
