@@ -153,7 +153,7 @@ class AdminMemberController(
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +
-                "| INVALID_INPUT | 400 | 금액이 0 이하이거나 사유가 비어 있음 |\n" +
+                "| INVALID_INPUT | 400 | 금액이 0 이하이거나 1억 초과, 사유가 비었거나 500자 초과, 멱등 키 누락 |\n" +
                 "| MEMBER_NOT_FOUND | 404 | 존재하지 않는 회원 |\n" +
                 "| PAID_TOKEN_SUBJECT_NOT_FOUND | 409 | 토큰 주체 매핑이 없는 회원(탈퇴 등) |\n" +
                 "| IDEMPOTENCY_KEY_REUSED | 409 | 이 멱등 키가 다른 지급·회수에 이미 쓰임 |"
