@@ -149,7 +149,7 @@ class AdminMemberController(
 
     companion object {
         private const val ADJUST_DESCRIPTION =
-            "같은 idempotencyKey 로 다시 요청하면 새로 반영하지 않고 처음 결과를 돌려줍니다(replayed=true).\n\n" +
+            "같은 idempotencyKey 로 다시 요청하면 새로 반영하지 않고 처음 반영한 증감량과 지금 잔액을 돌려줍니다(replayed=true).\n\n" +
                 "**실패 응답**\n\n" +
                 "| error.code | HTTP | 설명 |\n" +
                 "|---|---|---|\n" +
