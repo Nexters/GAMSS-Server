@@ -2,15 +2,24 @@ package com.nexters.gamss.member.repository
 
 import com.nexters.gamss.member.domain.Member
 import com.nexters.gamss.member.domain.MemberStatus
+import jakarta.persistence.LockModeType
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Lock
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 import java.time.Instant
+import java.util.Optional
 
 interface MemberRepository : JpaRepository<Member, Long> {
     fun countByStatus(status: MemberStatus): Long
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select m from Member m where m.id = :id")
+    fun findByIdForUpdate(
+        @Param("id") id: Long,
+    ): Optional<Member>
 
     // 가입 추이 집계용. 기간이 짧아(최근 N일) 앱에서 날짜별로 묶는다(타임존 처리도 앱에서).
     @Query("select m.createdAt from Member m where m.createdAt >= :from")
